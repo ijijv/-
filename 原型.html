@@ -271,11 +271,11 @@ const KEYWORDS = [
   ['反击格挡','获得后持续 3 回合的独立格挡池：期间你获得的所有格挡都累计进来，回合结束不消失；受击时消耗它抵消伤害，并把被抵消伤害的 40% 反弹给攻击者；第 3 轮攻击后清零。'],
   ['记名','判官王在生死簿上记下你：期间记录你打出的伤害，并随机记下一条词缀。'],
   ['清算','判官王打出记下的词缀，并把记账伤害的 30%（上限 24）反弹给你。'],
-  ['业火','修罗王附体：期间你对它造成的伤害减半，且每次对它造成伤害，你损失 2 点生命。'],
+  ['业火','修罗王附体：期间你对它造成的伤害 -30%，每次对它造成伤害损失 1 点生命，它受到的【诅咒】层数翻倍。'],
   ['轮回','阎罗天子开局随机获得一种词缀；血条首次打空时进入第二阶段：回血、清除负面、力量增强。'],
-  ['忘忧','孟婆的汤：接下来两回合，每回合封印 1 张手牌（2 回合无法打出）。佛渡/金钟罩无法免疫或解除。'],
+  ['忘忧','孟婆的汤：接下来两回合，每回合开始可选 1 张手牌「饮下」（弃置），否则受 8 点真实伤害。'],
   ['开天眼','本回合你的攻击牌伤害提升（数值显示在顶部状态栏）。'],
-  ['佛渡','本回合免疫敌人的负面效果（虚弱/勾魂/缠绕/灼烧/业火）。孟婆的「忘忧」封印与夜王的「暗夜威压」无法免疫。'],
+  ['佛渡','本回合免疫敌人的负面效果（虚弱/勾魂/缠绕/灼烧/业火/暗夜威压）。'],
   ['血祭','下回合多摸牌；本回合若受伤，再多摸 1 张。'],
   ['渡魂','获得后若干回合内，你对敌人造成的伤害按比例转化为回复生命。'],
   ['卸甲','获得后若干回合内，格挡在回合结束不清零并持续累计；效果结束时剩余格挡转化为生命。'],
@@ -298,33 +298,35 @@ const CARDS = [
   {id:'jingang', name:'金刚符', type:'defense', rarity:'white', cost:1, t:(u)=>`获得 ${u?8:6} 点格挡`, eff:(u)=>gainBlock(u?8:6)},
   {id:'yinshen', name:'隐身符', type:'defense', rarity:'white', cost:1, t:(u)=>`获得 ${u?7:5} 点格挡，抽 1 张牌`, eff:(u)=>{ gainBlock(u?7:5); drawCards(1); }},
   {id:'jinguang', name:'金光罩', type:'defense', rarity:'blue', cost:2, t:(u)=>`获得 ${u?17:13} 点格挡`, eff:(u)=>gainBlock(u?17:13)},
-  {id:'jinzhong', name:'金钟罩', type:'defense', rarity:'purple', cost:2, t:(u)=>`获得 ${u?17:13} 点格挡，清除自身负面状态（忘忧封印无法解除）`, eff:(u)=>{ gainBlock(u?17:13); /* 注意：不清 pendingSeal / sealed —— 忘忧封印是孟婆专属特性，佛渡与金钟罩均无法免疫或解除 */ const had=(G.weak||G.gouhun||G.burn||G.karmaFire||G.pendingDiscard); G.weak=0; G.gouhun=0; G.burn=0; G.karmaFire=0; G.pendingDiscard=0; if(had) log('负面状态已清除（忘忧封印无法解除）'); }},
+  {id:'jinzhong', name:'金钟罩', type:'defense', rarity:'purple', cost:2, t:(u)=>`获得 ${u?17:13} 点格挡，清除自身负面状态`, eff:(u)=>{ gainBlock(u?17:13); const had=(G.weak||G.gouhun||G.burn||G.karmaFire||G.pendingDiscard); G.weak=0; G.gouhun=0; G.burn=0; G.karmaFire=0; G.pendingDiscard=0; if(had) log('负面状态已清除'); }},
   {id:'jingji', name:'荆棘符', type:'defense', rarity:'blue', cost:1, t:(u)=>`获得 ${u?7:5} 点格挡；本回合受攻击反弹 ${u?6:5} 点伤害`, eff:(u)=>{ gainBlock(u?7:5); G.thorns=(G.thorns||0)+(u?6:5); }},
-  {id:'fodu', name:'佛渡', type:'defense', rarity:'blue', cost:1, costU:0, t:(u)=>`本回合免疫敌人的负面效果（【虚弱】【勾魂】【缠绕】【灼烧】【业火】；【忘忧】封印无法免疫）`, eff:(u)=>{ G.debuffImmune=true; G.burn=0; floatMsg('佛渡 · 免疫负面'); }},
+  {id:'fodu', name:'佛渡', type:'defense', rarity:'blue', cost:1, costU:0, t:(u)=>`本回合免疫敌人的负面效果（【虚弱】【勾魂】【缠绕】【灼烧】【业火】【暗夜威压】）`, eff:(u)=>{ G.debuffImmune=true; G.burn=0; floatMsg('佛渡 · 免疫负面'); }},
   {id:'fenfu', name:'焚符', type:'skill', rarity:'purple', cost:0, t:(u)=>`弃 ${u?1:2} 张手牌，本回合 +1 符文`, eff:(u)=>{ G.energy+=1; floatMsg('符文 +1'); startDiscardSelect(u?1:2); }},
 
   /* —— 技能 —— */
   {id:'juling', name:'聚灵', type:'skill', rarity:'white', cost:0, t:(u)=>`抽 ${u?2:1} 张牌`, eff:(u)=>drawCards(u?2:1)},
-  {id:'huichun', name:'回春术', type:'skill', rarity:'white', cost:1, t:(u)=>`恢复 ${u?9:6} 点生命`, eff:(u)=>heal(u?9:6)},
-  {id:'sheshen', name:'舍身', type:'skill', rarity:'white', cost:0, hpCost:u=>u?1:6, t:(u)=>`失去 ${u?1:6} 点生命，抽 2 张牌`, eff:(u)=>{ loseHp(u?1:6); drawCards(2); }},
+  {id:'sheshen', name:'舍身', type:'skill', rarity:'blue', cost:0, hpCost:u=>u?3:6, t:(u)=>`失去 ${u?3:6} 点生命，抽 2 张牌，获得 1 点符文`, eff:(u)=>{ loseHp(u?3:6); drawCards(2); G.energy+=1; }},
+  {id:'shouyi', name:'守一', type:'skill', rarity:'white', cost:0, t:(u)=>`本回合保留 ${u?2:1} 张手牌（回合结束不弃）`, eff:(u)=>{ G.retain=(G.retain||0)+(u?2:1); floatMsg('守一 · 保留手牌'); }},
+  {id:'yiwu', name:'易物', type:'skill', rarity:'blue', cost:0, t:(u)=>`选择 1 张手牌，与牌堆随机 3 张中的 1 张交换${u?'（可进行 2 次）':''}`, eff:(u)=>startExchangeSelect(u?2:1)},
+  {id:'xueqi', name:'血契', type:'skill', rarity:'blue', cost:1, t:(u)=>`本回合你每失去 1 点生命，获得 ${u?2:1} 点格挡`, eff:(u)=>{ G.bloodPact=(G.bloodPact||0)+(u?2:1); floatMsg('血契 · 以血换盾'); }},
   {id:'tongling', name:'通灵', type:'skill', rarity:'white', cost:1, t:(u)=>`抽 ${u?3:2} 张牌`, eff:(u)=>drawCards(u?3:2)},
   {id:'jingxin', name:'静心诀', type:'skill', rarity:'blue', cost:1, costU:0, t:(u)=>u?'本回合 +1 符文（0 符文）':'下回合 +1 符文', eff:(u)=>{ if(u) G.energy+=1; else G.pendingEnergy+=1; }},
   {id:'ranxue', name:'燃血术', type:'skill', rarity:'purple', cost:0, hpCost:u=>u?6:10, t:(u)=>`失去 ${u?6:10} 点生命，获得 2 点符文`, eff:(u)=>{ loseHp(u?6:10); G.energy+=2; log('燃血：失去生命，+2 符文'); }},
   {id:'xisui', name:'洗髓经', type:'skill', rarity:'gold', cost:2, t:(u)=>`接下来 ${u?4:3} 回合，每回合 +1 符文（可叠加，下回合生效）`, eff:(u)=>{ const n=u?4:3; G.energyBonusTurns+=n; floatMsg('洗髓经 · 每回合+1符文'); }},
-  {id:'duhunguiji', name:'渡魂归己', type:'skill', rarity:'purple', cost:2, t:(u)=>`获得【渡魂】1 回合：你对敌人造成的伤害${u?'80%':'50%'}转化为回复生命（重复打出延长 1 回合）`, eff:(u)=>{ const ratio=u?0.8:0.5; if(G.duhun && G.duhun.turns>0){ G.duhun.turns+=1; G.duhun.ratio=Math.max(G.duhun.ratio, ratio); } else { G.duhun={turns:1, ratio}; } floatMsg('渡魂归己'); log(`渡魂归己：${Math.round(G.duhun.ratio*100)}% 伤害转回复（${G.duhun.turns} 回合）`); }},
+  {id:'duhunguiji', name:'渡魂归己', type:'skill', rarity:'purple', cost:1, t:(u)=>`获得【渡魂】2 回合：你对敌人造成的伤害${u?'80%':'50%'}转化为回复生命（重复打出延长 1 回合）`, eff:(u)=>{ const ratio=u?0.8:0.5; if(G.duhun && G.duhun.turns>0){ G.duhun.turns+=1; G.duhun.ratio=Math.max(G.duhun.ratio, ratio); } else { G.duhun={turns:2, ratio}; } floatMsg('渡魂归己'); log(`渡魂归己：${Math.round(G.duhun.ratio*100)}% 伤害转回复（${G.duhun.turns} 回合）`); }},
   {id:'xiejiashengyuan', name:'卸甲生元', type:'defense', rarity:'blue', cost:1, t:(u)=>`获得【卸甲】${u?3:2} 回合：格挡回合结束不清零并累计，结束时剩余格挡转化为生命（重复打出延长 1 回合）`, eff:(u)=>{ if(G.xiejia>0){ G.xiejia+=1; } else { G.xiejia=(u?3:2); } floatMsg('卸甲生元'); log(`卸甲生元：格挡保持 ${G.xiejia} 回合`); }},
 
   /* —— 鬼怪 —— */
   {id:'zhiren', name:'纸人', type:'spirit', rarity:'white', cost:1, t:(u)=>`召唤纸人：每回合末对随机敌人造成 ${u?3:2} 点伤害并施加 1 层【诅咒】（纸人持续3回合）`, eff:(u)=>G.summons.push({type:'zhiren', v:u?3:2, dur:3})},
-  {id:'zhouyin', name:'咒印', type:'spirit', rarity:'white', cost:1, t:(u)=>`对目标施加 ${u?3:2} 层【诅咒】`, eff:(u)=>{ const t=curEnemy(); if(t){ t.curse=(t.curse||0)+(u?3:2); floatMsg('诅咒 +'+(u?3:2)); } }},
+  {id:'zhouyin', name:'咒印', type:'spirit', rarity:'white', cost:1, t:(u)=>`对目标施加 ${u?3:2} 层【诅咒】`, eff:(u)=>{ const t=curEnemy(); if(t){ applyCurse(t,(u?3:2)); floatMsg('诅咒 +'+(u?3:2)); } }},
   {id:'xiaogui', name:'小鬼', type:'spirit', rarity:'white', cost:1, t:(u)=>`召唤小鬼：每回合末对随机敌人造成 ${u?4:3} 点伤害（3回合）`, eff:(u)=>G.summons.push({type:'xiaogui', v:u?4:3, dur:3})},
   {id:'huapi', name:'画皮', type:'spirit', rarity:'blue', cost:1, t:(u)=>`对目标施加【魅惑】：下回合伤害 -50%${u?'（持续3回合）':''}`, eff:(u)=>{ const t=curEnemy(); if(t){ t.charm=(t.charm||0)+(u?3:1); floatMsg('魅惑'); } }},
   {id:'wutong', name:'五通神', type:'spirit', rarity:'purple', cost:2, t:(u)=>`召唤五通神：每回合末你获得 ${u?7:5} 点格挡（3回合）`, eff:(u)=>G.summons.push({type:'wutong', v:u?7:5, dur:3})},
   {id:'zhongkui', name:'钟馗镇魂', type:'spirit', rarity:'gold', cost:3, t:(u)=>`对目标造成 ${u?29:20} 点伤害并施加【镇魂】`, eff:(u)=>{ const t=curEnemy(); if(t){ dealDamageTo(t,u?29:20); t.seal=true; floatMsg('镇魂'); } }},
   {id:'taomufu', name:'桃木符', type:'attack', rarity:'white', cost:1, t:(u)=>`造成 ${u?7:5} 点伤害，对鬼怪/僵尸 +3`, eff:(u)=>{ const t=curEnemy(); if(!t) return; const b=(t.kind==='ghost'||t.kind==='jiangshi')?3:0; dealDamageTo(t, (u?7:5)+b); }},
-  {id:'shihunzhou', name:'蚀魂咒', type:'attack', rarity:'blue', cost:1, t:(u)=>`造成 ${u?9:6} 点伤害，并施加 1 层【诅咒】`, eff:(u)=>{ const t=curEnemy(); if(!t) return; dealDamageTo(t, u?9:6); t.curse=(t.curse||0)+1; }},
-  {id:'shixue', name:'嗜血', type:'attack', rarity:'purple', cost:1, t:(u)=>`造成 ${u?8:6} 点伤害，本场每失去 4 点生命使伤害 +1（上限 +${u?12:10}）`, eff:(u)=>dealDamageToTarget((u?8:6)+Math.min(u?12:10, Math.floor((G.totalHpLost||0)/4)))},
-  {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:2, t:(u)=>`对所有敌人施加 ${u?2:1} 层【诅咒】`, eff:(u)=>aliveEnemies().forEach(e=>e.curse=(e.curse||0)+(u?2:1))},
+  {id:'shihunzhou', name:'蚀魂咒', type:'attack', rarity:'blue', cost:1, t:(u)=>`造成 ${u?9:6} 点伤害，并施加 1 层【诅咒】`, eff:(u)=>{ const t=curEnemy(); if(!t) return; dealDamageTo(t, u?9:6); applyCurse(t,1); }},
+  {id:'shixue', name:'嗜血', type:'attack', rarity:'purple', cost:1, t:(u)=>`造成 ${u?8:6} 点伤害，本场每失去 3 点生命使伤害 +1（上限 +${u?20:15}）`, eff:(u)=>dealDamageToTarget((u?8:6)+Math.min(u?20:15, Math.floor((G.totalHpLost||0)/3)))},
+  {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:2, t:(u)=>`对所有敌人施加 ${u?3:2} 层【诅咒】`, eff:(u)=>aliveEnemies().forEach(e=>applyCurse(e,(u?3:2)))},
   {id:'baigui', name:'百鬼夜行', type:'attack', rarity:'purple', cost:2, t:(u)=>`对全体敌人造成 ${u?9:7} 点伤害，每有 1 个召唤单位 +2`, eff:(u)=>dealDamageToAll((u?9:7)+G.summons.length*2)},
   {id:'tongpi', name:'铜皮铁骨', type:'defense', rarity:'blue', cost:2, t:(u)=>`获得 ${u?14:11} 点格挡，本回合受攻击反弹 ${u?8:6}`, eff:(u)=>{ gainBlock(u?14:11); G.thorns=(G.thorns||0)+(u?8:6); }},
   {id:'fanzhen', name:'反震', type:'defense', rarity:'blue', cost:1, t:(u)=>`本回合每次受攻击反弹 ${u?7:5} 点伤害`, eff:(u)=>{ G.thorns=(G.thorns||0)+(u?7:5); }},
@@ -332,14 +334,14 @@ const CARDS = [
   {id:'xueji', name:'血祭', type:'skill', rarity:'purple', cost:1, costU:0, t:(u)=>u?'0 符文：下回合多摸 1 张；本回合若受伤，再多摸 1 张':'下回合多摸 2 张；本回合若受伤，再多摸 1 张', eff:(u)=>{ G.xuejiBonus+=(u?1:2); G.xuejiArmed=true; }},
   {id:'ranhun', name:'燃魂', type:'skill', rarity:'purple', cost:0, hpCost:u=>u?4:6, t:(u)=>`失去 ${u?4:6} 点生命，抽 3 张`, eff:(u)=>{ loseHp(u?4:6); drawCards(3); }},
   {id:'kaitianyan', name:'开天眼', type:'skill', rarity:'blue', cost:1, t:(u)=>`本回合你的攻击牌伤害 +${u?6:4}`, eff:(u)=>{ G.turnAtkBuff=(G.turnAtkBuff||0)+(u?6:4); }},
-  {id:'yixing', name:'移形换影', type:'skill', rarity:'purple', cost:1, t:(u)=>`本回合【闪避】下一次攻击，并抽 ${u?2:1} 张牌`, eff:(u)=>{ G.dodge=(G.dodge||0)+1; drawCards(u?2:1); }},
+  {id:'yixing', name:'移形换影', type:'skill', rarity:'purple', cost:1, costU:0, t:(u)=>`本回合【闪避】下一次攻击；闪避成功时，下回合多摸 1 张牌${u?'（0 费）':''}`, eff:(u)=>{ G.dodge=(G.dodge||0)+1; floatMsg('移形换影 · 闪避'); }},
   {id:'fuling', name:'附灵术', type:'skill', rarity:'purple', cost:1, needs:'summon', t:(u)=>`立即触发一次所有召唤单位${u?'，并抽 1 张':''}`, eff:(u)=>{ triggerSummons(false); if(u) drawCards(1); }},
   {id:'yinbingguo', name:'阴兵过境', type:'spirit', rarity:'purple', cost:3, t:(u)=>`召唤 ${u?3:2} 只阴兵：每回合末对随机敌人造成 ${u?5:4} 点伤害（3回合）`, eff:(u)=>{ const n=u?3:2, v=u?5:4; for(let i=0;i<n;i++) G.summons.push({type:'yinbing', v, dur:3}); }},
   {id:'zhenyaoling', name:'镇妖铃', type:'spirit', rarity:'blue', cost:2, t:(u)=>`对目标造成 ${u?18:12} 点伤害并施加【镇魂】`, eff:(u)=>{ const t=curEnemy(); if(t){ dealDamageTo(t,u?18:12); t.seal=true; floatMsg('镇魂'); } }},
 ];
 const RCOLOR={white:'r-white',blue:'r-blue',purple:'r-purple',gold:'r-gold'};
 const RNAME={white:'白',blue:'蓝',purple:'紫',gold:'金'};
-const TNAME={attack:'攻击',defense:'防御',skill:'技能',spirit:'鬼怪'};
+const TNAME={attack:'攻击',defense:'防御',skill:'技能',spirit:'鬼怪',junk:'废牌'};
 function cardById(id){ const c=CARDS.find(x=>x.id===id); return {...c, up:false}; }
 /* 机制来源：某个关键词/流派由哪些牌提供（用于卡池过滤，避免出现"用不了"的牌） */
 const GRANTS = { curse:['zhouyin','zhiren','shihunzhou','zhouyu'], summon:['zhiren','xiaogui','wutong','yinbingguo'] };
@@ -350,23 +352,23 @@ const ARCH_CARDS = {
   curse:['zhouyin','zhiren','shihun','shihunzhou','zhanyaojian','zhouyu'],
   summon:['zhiren','xiaogui','wutong','yinbingguo','fuling','qungui','baigui'],
   block:['jingang','yinshen','jinguang','jinzhong','jingji','tongpi','fanzhen','fanzhifu','tiebushan','xiejiashengyuan','fodu'],
-  blood:['sheshen','ranxue','ranhun','shixue','xueji']
+  blood:['sheshen','ranxue','ranhun','shixue','xueji','xueqi']
 };
 const ARCH_BOOST = 3;
 
 /* ===================== 英雄（初始角色选择） ===================== */
 const HEROES = [
   {id:'tianshi', name:'符箓天师', desc:'精通符咒，用诅咒削弱并连锁击杀敌人。', passive:'每回合开始随机给 1 名敌人施加 1 层【诅咒】。',
-   deck:[['leifu',4],['jingang',3],['zhouyin',2],['huichun',1]]},
+   deck:[['leifu',4],['jingang',3],['zhouyin',3]]},
   {id:'ganshiren', name:'茅山赶尸人', desc:'役使鬼怪，靠召唤单位持续输出。', passive:'召唤单位每回合末效果 +1（纸人/小鬼/阴兵伤害 +1，五通神格挡 +1）。',
-   deck:[['leifu',4],['jingang',3],['xiaogui',2],['huichun',1]]},
+   deck:[['leifu',4],['jingang',3],['xiaogui',3]]},
   {id:'wuseng', name:'苦行武僧', desc:'以守为攻，格挡既是盾也是矛。', passive:'每回合开始获得 2 点格挡；回合结束未用完的格挡保留最多 3 点。',
-   deck:[['leifu',3],['jingang',4],['tiebushan',1],['jingji',1],['huichun',1]]},
-  {id:'yincha', name:'血祭阴差', desc:'以血为引，燃烧生命换取爆发。', passive:'打出扣血牌时少扣 3 点生命（至少 1）。',
-   deck:[['leifu',4],['jingang',2],['sheshen',2],['ranxue',1],['huichun',1]]},
+   deck:[['leifu',3],['jingang',5],['tiebushan',1],['jingji',1]]},
+  {id:'yincha', name:'血祭阴差', desc:'以血为引，燃烧生命换取爆发。', passive:'打出扣血牌时扣血量减半（至少 1），且每扣 1 点生命，本回合攻击牌伤害 +1。',
+   deck:[['leifu',4],['jingang',2],['sheshen',3],['ranxue',1]]},
 ];
-function bloodCost(n){ return G.hero==='yincha' ? Math.max(1, n-3) : n; }
-function loseHp(n){ const c=bloodCost(n); G.hp-=c; G.totalHpLost=(G.totalHpLost||0)+c; if(G.xuejiArmed) G.xuejiHurt=true; }
+function bloodCost(n){ return G.hero==='yincha' ? Math.max(1, Math.floor(n/2)) : n; }
+function loseHp(n){ const c=bloodCost(n); G.hp-=c; G.totalHpLost=(G.totalHpLost||0)+c; if(G.xuejiArmed) G.xuejiHurt=true; if(G.hero==='yincha'){ G.turnAtkBuff=(G.turnAtkBuff||0)+c; log(`阴差血祭：以血引煞，本回合攻击 +${c}`); } if(G.bloodPact){ gainBlock(c*G.bloodPact); log(`血契：以 ${c} 点生命换取 ${c*G.bloodPact} 点格挡`); } }
 const DYNAMIC_DMG = ['tiebushan','shihun','qungui','taomufu','shixue','baigui'];
 
 /* ===================== 遗物数据（8 个） ===================== */
@@ -386,6 +388,29 @@ const RELICS = [
 ];
 function hasRelic(id){ return G && G.relics.includes(id); }
 function relById(id){ return RELICS.find(r=>r.id===id); }
+
+/* ===================== 灵汁（战斗消耗品，类药水） ===================== */
+const POTIONS = [
+  {id:'huanyanglu', name:'还阳露', desc:'恢复 10 点生命', eff:()=>heal(10)},
+  {id:'huangquanjiu', name:'黄泉酒', desc:'获得 2 点符文', eff:()=>{ G.energy+=2; floatMsg('符文 +2'); }},
+  {id:'zhenhunshui', name:'镇魂水', desc:'获得 10 点格挡', eff:()=>gainBlock(10)},
+  {id:'mengpotang', name:'孟婆汤', desc:'抽 2 张牌', eff:()=>drawCards(2)},
+];
+function randomPotion(){ const p=POTIONS[Math.floor(Math.random()*POTIONS.length)]; return {...p}; }
+function showPotionSelect(){
+  if(!G.potions.length){ floatMsg('没有灵汁'); return; }
+  const html=G.potions.map((p,i)=>`<div class="relic r-blue" onclick="usePotion(${i})"><div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div>`).join('');
+  showOverlay(`<h2>使 用 灵 汁</h2><p>点击一瓶灵汁使用（战斗消耗，本局保留直到使用）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="hideOverlay()">返回</button>`);
+}
+function usePotion(i){
+  const p=G.potions[i]; if(!p) return;
+  p.eff(); G.potions.splice(i,1); sfx('heal');
+  log(`使用灵汁【${p.name}】`); hideOverlay(); render();
+}
+
+/* ===================== 废牌（敌人怨气机制） ===================== */
+function junkCard(){ return {id:'yuanqi', name:'怨气', type:'junk', rarity:'white', cost:0, t:()=>'废牌 · 打出时失去 3 点生命（若不打出，回合结束自动打出）', eff:()=>{ directDamage(3, '怨气噬心：失去 3 点生命'); }}; }
+function addJunkToHand(n){ for(let i=0;i<n;i++){ G.hand.push(junkCard()); } log('怨气缠身：一张【怨气】废牌塞入你的手牌'); }
 
 /* ===================== Hover 简介（tooltip） ===================== */
 function tooltipEl(){
@@ -484,7 +509,7 @@ const AFFIXES = [
   {id:'pingbi', name:'屏壁', desc:'进场自带格挡'},
   {id:'judu', name:'剧毒', desc:'攻击附带额外伤害'},
   {id:'shixue', name:'蚀血', desc:'攻击时回复自身生命'},
-  {id:'weiya', name:'威压', desc:'你每两回合少 1 点符文'}
+  {id:'feipai', name:'怨气缠身', desc:'攻击时往你手牌塞一张【怨气】废牌'}
 ];
 /* Boss 特色机制说明（tooltip 显示，标明各 Boss 的独有机制） */
 const BOSS_MECH = {
@@ -494,9 +519,9 @@ const BOSS_MECH = {
   xiebian:'血量低于 50% 时，分化为两个「必安」，击败全部才能获胜。',
   bian:'谢必安的一半，联手勾魂索命。',
   panguanwang:'生死簿：记名时记录你的伤害并随机记下一条词缀，清算时打出该词缀并反弹记录伤害的 30%。',
-  mengpowang:'忘忧让你接下来两回合各封印 1 张手牌；力量回合按被封印牌费用之和 ×5 回血。',
-  yewang:'力量回合对你施加【虚弱】（格挡/佛渡无法阻挡）。',
-  xiuluowang:'业火附体：你对它伤害减半，且每次对它造成伤害反噬 2 点生命。',
+  mengpowang:'忘忧让你接下来两回合各选 1 张手牌「饮下」（弃置）；力量回合按你饮下的牌数量 ×8 回血。',
+  yewang:'力量回合对你施加【虚弱】。',
+  xiuluowang:'业火附体：你对它伤害 -30%，反噬 1 点生命，它受到的诅咒层数翻倍。',
   yanluotianzi:'开局随机获得一种词缀；血条首次打空进入第二阶段（回血 + 强化）。',
 };
 function makeEnemy(def, key){
@@ -513,12 +538,7 @@ function rollAffixes(def){
   const act = G.act||1;
   // 难度靠「词缀叠加」而非数值翻倍：第三幕敌人携带更多（不同）词缀
   const count = act===1 ? (def.elite ? 1 : 0) : act===2 ? (def.elite ? 2 : 1) : (def.elite ? 3 : 2);
-  let pool = AFFIXES.slice();
-  // 威压会叠加到无法出牌：同一场战斗中最多一个敌人携带
-  if(G.weiyaUsed) pool = pool.filter(a=>a.id!=='weiya');
-  const picked = shuffle(pool).slice(0,count).map(a=>({id:a.id, tier:1}));
-  if(picked.some(a=>a.id==='weiya')) G.weiyaUsed=true;
-  return picked;
+  return shuffle(AFFIXES.slice()).slice(0,count).map(a=>({id:a.id, tier:1}));
 }
 /* 节点化 Run：三幕地图（Boss 不同，敌人靠幕间系数增强） */
 const ACT1 = [
@@ -566,7 +586,7 @@ function newState(){
     turnStats:{dmgTaken:0, blocked:0, dealt:0, kills:[]}, turnSummary:'',
     relics:[], skillsPlayedThisTurn:0, attackBuff:0, daoxinUsed:false, pendingRelic:false, relicPicks:[],
     revivedFree:false, goldDoubled:false, lastGold:0, battleGold:0, battleResult:null, openingPicks:[],
-    hero:'tianshi', totalHpLost:0, turnAtkBuff:0, dodge:0, debuffImmune:false, xuejiBonus:0, xuejiArmed:false, xuejiHurt:false, counterStance:0, counterBlock:0, discardSelect:null, burn:0, zombieDmg:0, pendingSeal:0, karmaFire:0, duhun:null, xiejia:0, weiyaUsed:false };
+    hero:'tianshi', totalHpLost:0, turnAtkBuff:0, dodge:0, debuffImmune:false, xuejiBonus:0, xuejiArmed:false, xuejiHurt:false, counterStance:0, counterBlock:0, discardSelect:null, burn:0, zombieDmg:0, pendingSeal:0, karmaFire:0, duhun:null, xiejia:0, bloodPact:0, retain:0, potions:[], score:0, wangyouTurns:0, wangyouDrunk:0 };
 }
 
 /* ===================== 敌人辅助 ===================== */
@@ -588,13 +608,13 @@ function dealDamageTo(e,n,ignoreBlock){
   if(e.kind==='yao' && hasRelic('tongqianjian')) d=Math.floor(d*1.25);
   if(G.weak>0 && !ignoreBlock) d=Math.floor(d*0.75);
   if(e.curse>0) d=Math.floor(d*(1+0.25*e.curse));
-  if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.5);
+  if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.7);
   if(!ignoreBlock && e.block>0){ const absorbed=Math.min(e.block,d); e.block-=absorbed; d-=absorbed; if(e.pingbi>0) e.pingbi=Math.min(e.pingbi, e.block); }
   if(e.ledgerActive && d>0) e.ledgerDmg=(e.ledgerDmg||0)+d;
   e.hp-=d; G.turnStats.dealt+=d; afterEnemyDamaged(e);
   if(G.duhun && G.duhun.turns>0 && d>0){ const h=Math.floor(d*G.duhun.ratio); if(h>0){ G.hp=Math.min(G.maxHp, G.hp+h); floatDamage('+'+h, 'heal', document.querySelector('#topbar .hpbar')); log(`渡魂归己：回复 ${h} 点生命`); } }
   if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.turnStats.dmgTaken+=r; log(`${e.name} 反震：反弹 ${r} 点伤害`); } }
-  if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ G.hp=Math.max(0,G.hp-2); G.totalHpLost=(G.totalHpLost||0)+2; G.turnStats.dmgTaken+=2; log('业火反噬：你对修罗王造成伤害，损失 2 点生命'); }
+  if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); }
   sfx('hit');
   const el=document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]');
   floatDamage('-'+d, '', el);
@@ -603,6 +623,7 @@ function dealDamageTo(e,n,ignoreBlock){
 }
 function dealDamageToTarget(n, ignoreBlock){ const e=curEnemy(); if(e) dealDamageTo(e,n,ignoreBlock); }
 function dealDamageToAll(n){ aliveEnemies().forEach(e=>dealDamageTo(e,n)); }
+function applyCurse(e, n){ let v=n; if(e.key==='xiuluowang' && (G.karmaFire||0)>0) v=v*2; e.curse=(e.curse||0)+v; return v; }
 /* 攻击牌基础伤害（手牌实时伤害预览用，u=是否升级；zhanyaojian 含诅咒加成） */
 const CARD_DMG = {
   leifu: u=>u?9:6,
@@ -616,7 +637,7 @@ const CARD_DMG = {
   shihun: u=>{ const t=curEnemy(); return (t?t.curse||0:0)*(u?8:6); },
   qungui: u=>G.summons.length*(u?7:5),
   taomufu: u=>{ const t=curEnemy(); const b=(t&&(t.kind==='ghost'||t.kind==='jiangshi'))?3:0; return (u?7:5)+b; },
-  shixue: u=>(u?8:6)+Math.min(u?12:10, Math.floor((G.totalHpLost||0)/4)),
+  shixue: u=>(u?8:6)+Math.min(u?20:15, Math.floor((G.totalHpLost||0)/3)),
   baigui: u=>(u?9:7)+G.summons.length*2,
   shihunzhou: u=>u?9:6
 };
@@ -647,11 +668,11 @@ function previewDamage(c){
   const ignoreWeak = c.id==='tianlei' && c.up;
   if(G.weak>0 && !ignoreWeak) d=Math.floor(d*0.75);
   if(e.curse>0 && c.id!=='shihun') d=Math.floor(d*(1+0.25*e.curse));
-  if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.5);
+  if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.7);
   return { raw, d, curse:e.curse||0, weak:G.weak>0 && !ignoreWeak, taomu, tongqian, zhusha, turnBuf, dynamic };
 }
 function dealDamageToPlayer(n, attacker){
-  if(G.dodge>0){ G.dodge--; log(`移形换影：闪避了 ${attacker.name} 的攻击`); return; }
+  if(G.dodge>0){ G.dodge--; G.dodgeDraw=(G.dodgeDraw||0)+1; log(`移形换影：闪避了 ${attacker.name} 的攻击（下回合多摸 1 张）`); return; }
   let d=n+(attacker.strength||0);
   if(attacker.affixes){ const jd=attacker.affixes.find(a=>a.id==='judu'); if(jd) d+=2*jd.tier; }
   if(attacker.charm>0){ d=Math.floor(d*0.5); attacker.charm--; }
@@ -679,6 +700,7 @@ function dealDamageToPlayer(n, attacker){
   if(attacker.affixes){
     const sx=attacker.affixes.find(a=>a.id==='shixue'); if(sx && loss>0){ attacker.hp=Math.min(attacker.maxHp, attacker.hp+3*sx.tier); log(`${attacker.name} 蚀血：回复 ${3*sx.tier} 点生命`); }
     if(attacker.affixes.some(a=>a.id==='gouhun') && !G.debuffImmune){ G.gouhun=1; log(`${attacker.name} 勾魂（下回合少抽 1 张）`); }
+    if(attacker.affixes.some(a=>a.id==='feipai')){ addJunkToHand(1); }
   }
 }
 function afterEnemyDamaged(e){
@@ -691,6 +713,7 @@ function splitBoss(e){
   const idx=G.enemies.indexOf(e);
   const b1=makeEnemy(ENEMIES['bian'], 'bian');
   const b2=makeEnemy(ENEMIES['bian'], 'bian');
+  b2.intentIndex=1; // 错开两个必安的意图循环，避免同时勾魂
   G.enemies.splice(idx,1,b1,b2);
   if(G.target>idx) G.target=idx;
   sfx('relic');
@@ -699,7 +722,7 @@ function splitBoss(e){
 }
 function onEnemyDeathCheck(e){
   if(e.phase && !e.phase2){ enterPhase2(e); }
-  else { G.turnStats.kills.push(e.name); unlockBestiary(e.key); }
+  else { G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; unlockBestiary(e.key); }
 }
 function enterPhase2(e){
   e.phase2=true;
@@ -728,6 +751,21 @@ function discardRandomHand(){ if(!G.hand.length) return; const i=Math.floor(Math
 function showDiscardChoice(){
   const cards=G.hand.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="doDiscardChoice(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>弃 牌</h2><p style="color:var(--red)">敌人的缠绕生效：你必须从手牌中选 1 张弃掉。</p><div class="reward-cards">${cards}</div>`);
+}
+function showWangyouChoice(){
+  const cards=G.hand.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="drinkWangyou(${i})">${cardBody(c)}</div>`).join('');
+  showOverlay(`<h2>忘 忧 汤</h2><p>孟婆的汤还萦绕在喉头——选择 1 张手牌「饮下」（弃置，进弃牌堆而非封印），或拒绝（受 <b style="color:var(--red)">8 点真实伤害</b>）。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="refuseWangyou()">拒绝 · 受 8 点真实伤害</button>`);
+}
+function drinkWangyou(i){
+  const c=G.hand.splice(i,1)[0]; G.discard.push(c);
+  G.wangyouDrunk=(G.wangyouDrunk||0)+1;
+  log(`饮下【${c.name}】——忘忧汤入喉，前尘如烟`);
+  hideOverlay(); render();
+}
+function refuseWangyou(){
+  const dead=directDamage(8, '你拒绝了忘忧汤，孟婆的怒火化作 8 点真实伤害');
+  if(dead) return;
+  hideOverlay(); render();
 }
 function doDiscardChoice(i){
   const c=G.hand.splice(i,1)[0]; G.discard.push(c);
@@ -764,6 +802,40 @@ function confirmDiscardSelect(){
   G.discardSelect=null;
   hideOverlay(); render();
 }
+function startExchangeSelect(times){
+  if(!G.hand.length){ floatMsg('没有手牌可交换'); return; }
+  G.exchange={ times, phase:'pickHand', handIndex:null, pool:null };
+  renderExchange();
+}
+function renderExchange(){
+  const ex=G.exchange; if(!ex) return;
+  if(ex.phase==='pickHand'){
+    const cards=G.hand.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickExchangeHand(${i})">${cardBody(c)}</div>`).join('');
+    showOverlay(`<h2>易物 · 选一张手牌</h2><p>选择一张要交换出去的手牌（还剩 <b>${ex.times}</b> 次交换）</p><div class="reward-cards">${cards}</div>`);
+  } else if(ex.phase==='pickNew'){
+    const cards=ex.pool.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickExchangeNew(${i})">${cardBody(c)}</div>`).join('');
+    showOverlay(`<h2>易物 · 牌堆随机三张</h2><p>选一张换入你的手牌</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="G.exchange=null; hideOverlay(); render();">放弃交换</button>`);
+  }
+}
+function pickExchangeHand(i){
+  const ex=G.exchange; if(!ex) return;
+  ex.handIndex=i;
+  const all=G.drawPile.concat(G.discard);
+  ex.pool=shuffle(all).slice(0,3).map(c=>cardById(c.id));
+  ex.phase='pickNew';
+  renderExchange();
+}
+function pickExchangeNew(i){
+  const ex=G.exchange; if(!ex) return;
+  const c=ex.pool[i]; if(!c) return;
+  const old=G.hand.splice(ex.handIndex,1)[0];
+  G.discard.push(old);
+  G.hand.push(c);
+  log(`易物：用【${old.name}】换入【${c.name}】`);
+  ex.times--;
+  if(ex.times>0 && G.hand.length){ ex.phase='pickHand'; ex.handIndex=null; ex.pool=null; renderExchange(); }
+  else { G.exchange=null; hideOverlay(); render(); }
+}
 
 function resetDeck(){ G.drawPile=shuffle([...G.deck]); G.hand=[]; G.discard=[]; }
 function drawCards(n){
@@ -776,12 +848,11 @@ function drawCards(n){
 
 /* ===================== 回合流程 ===================== */
 function startBattle(keys){
-  G.weiyaUsed=false;
   G.enemies = keys.map(k=>makeEnemy(ENEMIES[k], k));
   G.enemies.forEach((e,i)=>{ if(e.intents.length>1) e.intentIndex = i % e.intents.length; });
   G.target=0;
   G.block=0; G.weak=0; G.gouhun=0; G.thorns=0; G.energyBonusTurns=0; G.pendingEnergy=0; G.pendingDiscard=0; G.summons=[];
-  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.debuffImmune=false; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.counterStance=0; G.counterBlock=0; G.burn=0; G.zombieDmg=0; G.pendingSeal=0; G.karmaFire=0; G.duhun=null; G.xiejia=0;
+  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=false; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.counterStance=0; G.counterBlock=0; G.burn=0; G.zombieDmg=0; G.pendingSeal=0; G.karmaFire=0; G.duhun=null; G.xiejia=0;
   G.deck.forEach(c=>c.sealed=0);
   if(hasRelic('zhaohunfan')){ G.hp=Math.min(G.maxHp,G.hp+3); log('招魂幡：恢复 3 点生命'); }
   G.battleStartHp=G.hp;
@@ -792,12 +863,10 @@ function startTurn(){
   G.turn=(G.turn||0)+1;
   G.turnStats={dmgTaken:0, blocked:0, dealt:0, kills:[]};
   if(G.burn>0){ const bd=G.burn*2; G.hp=Math.max(0,G.hp-bd); G.turnStats.dmgTaken+=bd; log(`灼烧：失去 ${bd} 点生命（${G.burn} 层）`); if(G.hp<=0){ G.hp=0; loseGame(); return; } }
-  G.skillsPlayedThisTurn=0; G.attackBuff=0; G.turnAtkBuff=0;
+  G.skillsPlayedThisTurn=0; G.attackBuff=0; G.turnAtkBuff=0; G.bloodPact=0; G.retain=0;
   G.energy=3+G.pendingEnergy;
   if(G.energyBonusTurns>0){ G.energy+=1; G.energyBonusTurns--; }
   G.pendingEnergy=0;
-  const weiyaEnemies=aliveEnemies().filter(e=>e.affixes && e.affixes.some(a=>a.id==='weiya'));
-  if(weiyaEnemies.length){ const wl=weiyaEnemies.reduce((s,e)=>s+(e.affixes.find(a=>a.id==='weiya').tier||1),0); if(G.turn%2===1){ G.energy=Math.max(0,G.energy-wl); floatMsg('威压 · 符文 -'+wl); log(`威压：损失 ${wl} 点符文（每两回合触发一次）`); } else { log('威压：暗流涌动，下回合将压制你的符文'); } }
   if(G.counterStance>0){ G.counterStance--; if(G.counterStance===0){ G.counterBlock=0; log('反击格挡已消散'); } }
   tickSeals();
   if(G.karmaFire>0) G.karmaFire--;
@@ -807,24 +876,24 @@ function startTurn(){
   G.thorns=0; G.dodge=0; G.debuffImmune=false;
   if(hasRelic('hushenfu')){ gainBlock(2); log('护身符：+2 格挡'); }
   if(G.hero==='wuseng'){ gainBlock(2); log('苦行武僧：+2 格挡'); }
-  if(G.hero==='tianshi'){ const t=randomAlive(); if(t){ t.curse=(t.curse||0)+1; log('道心通明：随机敌人 +1 诅咒'); } }
+  if(G.hero==='tianshi'){ const t=randomAlive(); if(t){ applyCurse(t,1); log('道心通明：随机敌人 +1 诅咒'); } }
   aliveEnemies().forEach(e=>{
     if(G.turn===1 && !e.boss && !e.aggressive){ e.intent={type:'dormant'}; }
     else { e.intent=e.intents[e.intentIndex % e.intents.length]; e.intentIndex++; }
   });
-  let n=5; if(G.gouhun>0){ n-=1; G.gouhun=0; }
+  let n=5; if(G.gouhun>0){ n-=1; G.gouhun=0; } n=Math.max(1,n); if(G.dodgeDraw>0){ n+=G.dodgeDraw; log(`移形换影：闪避成功，额外摸 ${G.dodgeDraw} 张`); G.dodgeDraw=0; }
   if(hasRelic('yinyangjing')){ n+=1; log('阴阳镜：多抽 1 张'); }
   if(G.xuejiBonus>0){ n += G.xuejiBonus + (G.xuejiHurt?1:0); log(`血祭：额外摸 ${G.xuejiBonus+(G.xuejiHurt?1:0)} 张`); }
   G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false;
   drawCards(n); render();
-  if((G.pendingSeal||0)>0 && G.hand.length){ G.pendingSeal--; const targets=G.hand.filter(c=>(c.sealed||0)<=0); if(targets.length){ const c=targets[Math.floor(Math.random()*targets.length)]; c.sealed=2; const mw=G.enemies.find(en=>en.key==='mengpowang' && en.hp>0); if(mw) mw.sealedCost=(mw.sealedCost||0)+cardCost(c); log(`忘忧：封印了【${c.name}】（2 回合无法打出）`); } }
+  if(G.wangyouTurns>0){ G.wangyouTurns--; if(G.hand.length) showWangyouChoice(); else log('忘忧汤翻涌，但你手牌空空，躲过一劫'); }
   if(G.pendingDiscard>0 && G.hand.length){ G.pendingDiscard--; showDiscardChoice(); }
 }
 function triggerSummons(decay){
   const bonus = G.hero==='ganshiren' ? 1 : 0;
   for(const s of G.summons){
     if(s.dur<=0) continue;
-    if(s.type==='zhiren'){ const t=randomAlive(); if(t){ dealDamageTo(t, s.v+bonus); t.curse=(t.curse||0)+1; floatMsg('诅咒 +1'); log('纸人施加 1 层【诅咒】'); } }
+    if(s.type==='zhiren'){ const t=randomAlive(); if(t){ dealDamageTo(t, s.v+bonus); applyCurse(t,1); floatMsg('诅咒 +1'); log('纸人施加 1 层【诅咒】'); } }
     else if(s.type==='xiaogui'){ const t=randomAlive(); if(t) dealDamageTo(t, s.v+bonus); }
     else if(s.type==='yinbing'){ const t=randomAlive(); if(t) dealDamageTo(t, s.v+bonus); }
     else if(s.type==='wutong'){ gainBlock(s.v+bonus); log(`五通神：你获得 ${s.v+bonus} 点格挡`); }
@@ -833,7 +902,17 @@ function triggerSummons(decay){
   if(decay) G.summons=G.summons.filter(s=>s.dur>0);
 }
 function endTurn(){
-  G.discard=G.discard.concat(G.hand); G.hand=[];
+  // 废牌：未主动打出的自动打出
+  const junks=G.hand.filter(c=>c.type==='junk');
+  if(junks.length){ junks.forEach(c=>c.eff(c.up)); G.hand=G.hand.filter(c=>c.type!=='junk'); }
+  // 守一：保留手牌
+  if(G.retain>0 && G.hand.length){
+    const keep=Math.min(G.retain, G.hand.length);
+    const kept=G.hand.splice(G.hand.length-keep, keep);
+    G.discard=G.discard.concat(G.hand); G.hand=kept;
+  } else {
+    G.discard=G.discard.concat(G.hand); G.hand=[];
+  }
   aliveEnemies().forEach(e=>{ if(e.curse>0) e.curse--; });
   triggerSummons(true);
   if(G.hp<=0){ G.hp=0; loseGame(); return; }
@@ -855,7 +934,7 @@ function enemyAct(){
       case 'heal': e.hp=Math.min(e.maxHp, e.hp+e.intent.v); log(`${e.name} 恢复 ${e.intent.v} 点生命`); break;
       case 'weak': if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【虚弱】`); break;
       case 'gouhun': if(!G.debuffImmune){ G.gouhun=1; floatMsg('勾魂'); log(`${e.name} 勾魂：你下回合少抽 1 张`); } else log(`佛渡免疫了${e.name}的【勾魂】`); break;
-      case 'strength': { e.strength=(e.strength||0)+e.intent.v; log(`${e.name} 力量 +${e.intent.v}`); if(e.intent.weak){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】（格挡/佛渡无法阻挡）`); } if(e.intent.sealHeal){ const h=(e.sealedCost||0)*5; if(h>0){ e.hp=Math.min(e.maxHp, e.hp+h); log(`${e.name} 汲取忘忧汤的代价，回复 ${h} 点生命`); } e.sealedCost=0; } break; }
+      case 'strength': { e.strength=(e.strength||0)+e.intent.v; log(`${e.name} 力量 +${e.intent.v}`); if(e.intent.weak){ if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【暗夜威压】`); } if(e.intent.sealHeal){ const h=(G.wangyouDrunk||0)*8; if(h>0){ e.hp=Math.min(e.maxHp, e.hp+h); log(`${e.name} 汲取你饮下的忘忧汤，回复 ${h} 点生命`); } G.wangyouDrunk=0; } break; }
       case 'multi': for(let i=0;i<e.intent.n;i++){ if(G.hp<=0) break; dealDamageToPlayer(e.intent.v,e); } break;
       case 'discard': if(!G.debuffImmune){ G.pendingDiscard++; floatMsg('下回合弃 1 张牌'); log(`${e.name} 缠绕你：下回合开始需弃 1 张牌`); } else log(`佛渡免疫了${e.name}的【缠绕】`); break;
       case 'attackBlock': { dealDamageToPlayer(e.intent.v,e); e.block+=e.intent.block; log(`${e.name} 攻击并格挡 ${e.intent.block}`); break; }
@@ -864,8 +943,8 @@ function enemyAct(){
       case 'burn': if(!G.debuffImmune){ G.burn=(G.burn||0)+e.intent.v; floatMsg(`灼烧 +${e.intent.v}`); log(`${e.name} 对你施加灼烧（每回合 -${e.intent.v*2} 生命，可叠加）`); } else log(`佛渡免疫了${e.name}的【灼烧】`); break;
       case 'jiming': { e.ledgerActive=true; e.ledgerDmg=0; const avail=AFFIXES.filter(a=>!(e.affixes||[]).some(x=>x.id===a.id)); if(avail.length){ const a=avail[Math.floor(Math.random()*avail.length)]; e.ledgerAffix={id:a.id, tier:1}; log(`${e.name} 记下你的名字，并记下一条罪状【${a.name}】`); } else { e.ledgerAffix=null; log(`${e.name} 记下你的名字（罪状已记满）`); } floatMsg('生死簿 · 记名'); break; }
       case 'qingsuan': { const ledger=e.ledgerDmg||0; const dmg=Math.min(24, Math.floor(ledger*0.3)); if(e.ledgerAffix){ const a=AFFIXES.find(x=>x.id===e.ledgerAffix.id); if(a){ if(!e.affixes) e.affixes=[]; e.affixes.push({id:a.id, tier:1}); if(a.id==='pingbi'){ e.block+=8; e.pingbi=(e.pingbi||0)+8; } log(`${e.name} 清算：【${a.name}】生效——${a.desc}`); } } e.ledgerActive=false; e.ledgerDmg=0; e.ledgerAffix=null; if(dmg>0){ floatMsg('生死簿 · 清算'); const dead=directDamage(dmg, `${e.name} 清算生死簿：反弹 ${dmg} 点伤害`); if(dead) return; } else log(`${e.name} 翻开生死簿：无账可清`); break; }
-      case 'yehuo': if(!G.debuffImmune){ G.karmaFire=2; floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害减半，且每次对它造成伤害反噬 2 点生命`); } else log(`佛渡免疫了${e.name}的【业火】`); break;
-      case 'wangyou': /* 忘忧是孟婆的专属封印：佛渡无法免疫、金钟罩无法解除 */ G.pendingSeal=(G.pendingSeal||0)+2; floatMsg('忘忧 · 两回合封印'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合将封印 1 张手牌（佛渡/金钟罩无法解除）`); break;
+      case 'yehuo': if(!G.debuffImmune){ G.karmaFire=2; floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害 -30%，每次造成伤害反噬 1 点生命，它受到的诅咒层数翻倍`); } else log(`佛渡免疫了${e.name}的【业火】`); break;
+      case 'wangyou': G.wangyouTurns=2; G.wangyouDrunk=0; floatMsg('忘忧 · 两回合'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合开始时可选 1 张手牌「饮下」弃置，否则受 8 点真实伤害`); break;
       case 'dormant': log(`${e.name} 在观望`); break;
     }
     if(aliveEnemies().length===0){ winFight(); return; }
@@ -912,7 +991,7 @@ function doPlayCard(i){
   if(c.type==='skill') G.skillsPlayedThisTurn=(G.skillsPlayedThisTurn||0)+1;
   const prevBuff=G.attackBuff;
   G.attackBuff=(c.type==='attack' && hasRelic('zhushabi'))?2:0;
-  G.discard.push(c);
+  if(c.type!=='junk') G.discard.push(c);
   sfx('card');
   c.eff(c.up);
   if(c.type==='attack' && hasRelic('shehunling')){ G.hp=Math.min(G.maxHp, G.hp+2); log('摄魂铃：回复 2 点生命'); }
@@ -930,6 +1009,7 @@ function winFight(){
   track('battleWin');
   const hasElite=G.enemies.some(e=>e.elite);
   const isBoss=G.enemies.some(e=>e.boss);
+  if(hasElite){ const p=randomPotion(); G.potions.push(p); log(`击败精英，获得灵汁【${p.name}】`); }
   G.finalBoss = isBoss && G.act>=ACTS.length;
   let g=3; if(hasElite) g=6; if(isBoss) g=9;
   if(hasRelic('jubaopen')) g=Math.floor(g*1.5);
@@ -983,13 +1063,19 @@ function advanceAct(){
   G.mapRow=0; G.mapCol=-1; G.shopWares=null;
   showOverlay(`<h2>第 ${G.act} 幕 · ${ACT_NAMES[G.act-1]}</h2><p>更凶的妖魔盘踞在更高层。<br>敌人的生命与攻击都变强了。</p><button class="btn" onclick="hideOverlay(); showMap();">开始攀登</button>`);
 }
+function calcScore(){
+  const kills=G.totalKills||0;
+  return G.act*1000 + G.mapRow*50 + Math.max(0,G.hp)*5 + kills*10 + G.gold*2;
+}
 function loseGame(){
   sfx('lose');
   track('death');
+  G.score=calcScore();
   const reviveBtn = G.revivedFree
     ? `<button class="btn" onclick="reviveAd()">看广告 · 复活回满血继续</button>`
     : `<button class="btn" onclick="reviveFree()">免费复活 · 回满血继续</button>`;
   showOverlay(`<h2>妖气侵蚀了你</h2><p>你被击败了。<br>运气和牌组都还差一点。</p>
+    <p style="color:var(--gold)">本局得分 <b>${G.score}</b>　（第 ${G.act} 幕 · 第 ${G.mapRow+1} 层 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
     ${reviveBtn}
     <button class="btn ghost" onclick="startGame()">重新开始</button>`);
 }
@@ -1012,7 +1098,10 @@ function reviveAd(){
 function showVictory(){
   sfx('win');
   track('runWin');
-  showOverlay(`<h2>通 关 ！</h2><p>你一路打上了塔顶，镇服了百鬼。<br>剩余生命 ${G.hp} / ${G.maxHp}。</p><button class="btn" onclick="startGame()">再打一局</button>`);
+  G.score=calcScore()+5000;
+  showOverlay(`<h2>通 关 ！</h2><p>你一路打上了塔顶，镇服了百鬼。<br>剩余生命 ${G.hp} / ${G.maxHp}。</p>
+    <p style="color:var(--gold)">本局得分 <b>${G.score}</b>（含通关加成 +5000）　（第 ${G.act} 幕 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
+    <button class="btn" onclick="startGame()">再打一局</button>`);
 }
 
 /* ===================== 爬塔地图 ===================== */
@@ -1070,13 +1159,26 @@ function chooseNode(c){
 const ELITES_BY_ACT = { 1:['baiwuchang','heiwuchang','huapigui','yecha'], 2:['juhunshi','niumamian'], 3:['xiuluojiang','yecha'] };
 const BOSS_POOL = { 1:['jiangwang','hanba','xueshi'], 2:['xiebian','panguanwang','mengpowang'], 3:['yewang','xiuluowang','yanluotianzi'] };
 function showUnknown(){
-  const ev=['well','blackmarket','temple','ambush','forge','empty'][Math.floor(Math.random()*6)];
+  const pool=['well','blackmarket','temple','ambush','forge','empty','potion'];
+  const evs=shuffle(pool).slice(0,3);
+  const labels={well:'古井许愿', blackmarket:'鬼市黑商', temple:'无头古庙', ambush:'拦路恶鬼', forge:'废弃道观', empty:'荒坟', potion:'灵泉'};
+  const descs={well:'以 8 点生命许愿，换一件遗物', blackmarket:'神秘黑商塞给你一张牌', temple:'无头神像赐下随机祝福', ambush:'有恶鬼拦路（精英战）', forge:'免费锻造升级一张牌', empty:'什么也没有', potion:'饮一口灵泉，获得一瓶灵汁'};
+  const html=evs.map(ev=>`<div class="relic" onclick="doUnknown('${ev}')"><div class="cname">${labels[ev]}</div><div class="cdesc">${descs[ev]}</div></div>`).join('');
+  showOverlay(`<h2>⚠ 未知之地</h2><p>前方雾气弥漫，你隐约察觉有三条路可走，各有机缘或凶险。选一条吧。</p><div class="reward-cards">${html}</div>`);
+}
+function doUnknown(ev){
+  hideOverlay();
   if(ev==='well') unknownWell();
   else if(ev==='blackmarket') unknownBlackMarket();
   else if(ev==='temple') unknownTemple();
   else if(ev==='ambush') unknownAmbush();
   else if(ev==='forge') unknownForge();
+  else if(ev==='potion') unknownPotion();
   else unknownEmpty();
+}
+function unknownPotion(){
+  const p=randomPotion(); G.potions.push(p);
+  showOverlay(`<h2>灵 泉</h2><p>一泓清泉自石缝渗出，隐隐有灵光。<br>你取一瓢饮下，得了一瓶【${p.name}】。</p><div class="reward-cards"><div class="relic r-blue"><div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
 function unknownWell(){
   G.hp=Math.max(1,G.hp-8); sfx('hurt');
@@ -1199,6 +1301,7 @@ function renderShop(){
   showOverlay(`<h2>鬼 市</h2>${runStatusHTML()}<p>你带着 <b style="color:var(--gold)">${G.gold}</b> 金币。<br>点击卡牌购买（立即加入牌组），买不起的会变灰。</p>
     <div class="reward-cards">${cards}</div>
     <button class="btn ghost" onclick="removeCard()">删一张牌（${removeCost()} 金币${G.gold<removeCost()?' · <span style="color:var(--red)">金币不足</span>':''}）</button>
+    <button class="btn ghost" onclick="buyPotion()">买一瓶灵汁（10 金币${G.gold<10?' · <span style="color:var(--red)">金币不足</span>':''}）</button>
     <button class="btn ghost" onclick="hideOverlay(); showMap();">返回地图</button>
     <button class="btn" onclick="hideOverlay(); goNext();">继续前进</button>`);
 }
@@ -1206,6 +1309,12 @@ function buyCard(i){
   const c=G.shopWares[i]; const p=priceFor(c);
   if(G.gold<p){ floatMsg(`金币不足（需 ${p}）`); log(`金币不足（需 ${p}）`); return; }
   G.gold-=p; G.deck.push(c); G.shopWares.splice(i,1); G.shopMarkup=(G.shopMarkup||0)+2; sfx('gold'); log(`购买【${c.name}】，商店剩余卡牌价格 +2`); renderShop();
+}
+function buyPotion(){
+  const price=10;
+  if(G.gold<price){ floatMsg(`金币不足（需 ${price}）`); return; }
+  G.gold-=price; const p=randomPotion(); G.potions.push(p); sfx('gold');
+  log(`花费 ${price} 金币购买灵汁【${p.name}】`); renderShop();
 }
 function removeCard(){
   if(G.deck.length<=1){ log('牌组只剩一张了'); return; }
@@ -1472,8 +1581,8 @@ function intentText(e){
     case 'summon': return `召唤 ${e.intent.n} 只${ENEMIES[e.intent.unit||'xiaojianshi'].name}`;
     case 'jiming': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return lan?`记名（记录伤害 · 词缀「${lan}」）`:'记名（记录你打出的伤害）'; }
     case 'qingsuan': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return `清算（反弹 ${Math.min(24, Math.floor((e.ledgerDmg||0)*0.3))}${lan?` · 打出「${lan}」`:''}）`; }
-    case 'yehuo': return '业火附体（你伤害减半 · 反噬 2 血）';
-    case 'wangyou': return '忘忧（两回合各封印 1 张）';
+    case 'yehuo': return '业火附体（你伤害 -30% · 反噬 1 血 · 诅咒翻倍）';
+    case 'wangyou': return '忘忧（两回合各饮 1 张或受 8 伤）';
     case 'aoe': return `群体攻击 ${atk}（驱散召唤）`;
     case 'dormant': return '休眠（观望）';
     default: return '…';
@@ -1511,7 +1620,6 @@ function summonHTML(s){
 function render(){
   if(!G) return;
   const hpPct=Math.max(0,G.hp/G.maxHp*100);
-  const weiyaNow=aliveEnemies().some(e=>e.affixes && e.affixes.some(a=>a.id==='weiya'));
   document.getElementById('topbar').innerHTML=`
     <span class="stat" style="color:var(--gold)" data-tip="hero:${G.hero}">${(HEROES.find(h=>h.id===G.hero)||{}).name||''}</span>
     <span class="stat">第 <b>${G.act}</b> 幕 · <b>${G.mapRow+1}</b>/${MAP.length} 层</span>
@@ -1520,6 +1628,7 @@ function render(){
     <span class="stat">格挡 <b>${G.block}</b></span>
     <span class="stat">符文 <b>${G.energy}</b></span>
     <span class="stat">金币 <b>${G.gold}</b></span>
+    ${G.potions.length?`<span class="stat" style="color:#c86bd8;cursor:pointer" onclick="showPotionSelect()">🧪 灵汁 ×${G.potions.length}</span>`:''}
     ${G.thorns>0?`<span class="stat" style="color:#e06b6b">荆棘 ${G.thorns}</span>`:''}
     ${(G.counterStance>0||(G.counterBlock||0)>0)?`<span class="stat" style="color:#c98a5b">反击格挡 ${G.counterBlock||0}（${G.counterStance}回合）</span>`:''}
     ${G.energyBonusTurns>0?`<span class="stat" style="color:#7fb0d8">洗髓经 ${G.energyBonusTurns} 回合</span>`:''}
@@ -1532,7 +1641,6 @@ function render(){
     ${G.xuejiBonus>0?`<span class="stat" style="color:#c86bd8" data-tip="kw:血祭">血祭 +${G.xuejiBonus}摸</span>`:''}
     ${G.duhun && G.duhun.turns>0?`<span class="stat" style="color:#3fa060" data-tip="kw:渡魂">渡魂 ${G.duhun.turns}回合（${Math.round(G.duhun.ratio*100)}%）</span>`:''}
     ${G.xiejia>0?`<span class="stat" style="color:#7fb0d8" data-tip="kw:卸甲">卸甲 ${G.xiejia}回合</span>`:''}
-    ${weiyaNow?`<span class="stat" style="color:#c88a3a" data-tip="affix:weiya">威压（${G.turn%2===1?'本回合已压制':'下回合压制'}）</span>`:''}
     <span class="stat" style="color:var(--dim)">牌堆 ${G.drawPile.length} / 弃牌 ${G.discard.length}</span>
     ${G.relics.length?`<span class="stat" style="color:var(--gold)">遗物：${G.relics.map(id=>`<span class="kw" data-tip="relic:${id}">${relById(id).name}</span>`).join('、')}</span>`:''}`;
   document.getElementById('enemy-panel').innerHTML=aliveEnemies().map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
@@ -1620,4 +1728,3 @@ document.addEventListener('DOMContentLoaded', showStartScreen);
 </script>
 </body>
 </html>
-test
