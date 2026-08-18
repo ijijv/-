@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>志怪塔 · 原型 v0.31</title>
+<title>志怪塔 · 原型 v0.33</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -137,7 +137,7 @@
 <body>
 <div id="float-msg"></div>
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.31</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.33</small></h1>
   <div id="topbar"></div>
   <div id="enemy-panel"></div>
   <div id="summon-panel"></div>
@@ -274,7 +274,7 @@ const KEYWORDS = [
   ['轮回','阎罗天子开局随机获得一种词缀；血条首次打空时进入第二阶段：回血、清除负面、力量增强。'],
   ['忘忧','孟婆的汤：接下来两回合，每回合开始可选 1 张手牌「饮下」（弃置），否则受 8 点真实伤害。'],
   ['开天眼','本回合你的攻击牌伤害提升（数值显示在顶部状态栏）。'],
-  ['佛渡','本回合免疫敌人的负面效果（虚弱/勾魂/缠绕/灼烧/业火/暗夜威压）。'],
+  ['佛渡','免疫敌人的负面效果（虚弱/勾魂/缠绕/灼烧/业火/暗夜威压），并清除手中【怨气】废牌。'],
   ['血祭','下回合多摸牌；本回合若受伤，再多摸 1 张。'],
   ['渡魂','获得后若干回合内，你对敌人造成的伤害按比例转化为回复生命。'],
   ['卸甲','获得后若干回合内，格挡在回合结束不清零并持续累计；效果结束时剩余格挡转化为生命。'],
@@ -297,9 +297,9 @@ const CARDS = [
   {id:'jingang', name:'金刚符', type:'defense', rarity:'white', cost:1, t:(u)=>`获得 ${u?8:6} 点格挡`, eff:(u)=>gainBlock(u?8:6)},
   {id:'yinshen', name:'隐身符', type:'defense', rarity:'white', cost:1, t:(u)=>`获得 ${u?7:5} 点格挡，抽 1 张牌`, eff:(u)=>{ gainBlock(u?7:5); drawCards(1); }},
   {id:'jinguang', name:'金光罩', type:'defense', rarity:'blue', cost:2, t:(u)=>`获得 ${u?17:13} 点格挡`, eff:(u)=>gainBlock(u?17:13)},
-  {id:'jinzhong', name:'金钟罩', type:'defense', rarity:'purple', cost:2, t:(u)=>`获得 ${u?17:13} 点格挡，清除自身负面状态`, eff:(u)=>{ gainBlock(u?17:13); const had=(G.weak||G.gouhun||G.burn||G.karmaFire||G.pendingDiscard); G.weak=0; G.gouhun=0; G.burn=0; G.karmaFire=0; G.pendingDiscard=0; if(had) log('负面状态已清除'); }},
+  {id:'jinzhong', name:'金钟罩', type:'defense', rarity:'purple', cost:2, t:(u)=>`获得 ${u?17:13} 点格挡，清除自身负面状态与手中【怨气】废牌`, eff:(u)=>{ gainBlock(u?17:13); const had=(G.weak||G.gouhun||G.burn||G.karmaFire||G.pendingDiscard); G.weak=0; G.gouhun=0; G.burn=0; G.karmaFire=0; G.pendingDiscard=0; clearJunk(); if(had) log('负面状态已清除'); }},
   {id:'jingji', name:'荆棘符', type:'defense', rarity:'blue', cost:1, t:(u)=>`获得 ${u?7:5} 点格挡；本回合受攻击反弹 ${u?6:5} 点伤害`, eff:(u)=>{ gainBlock(u?7:5); G.thorns=(G.thorns||0)+(u?6:5); }},
-  {id:'fodu', name:'佛渡', type:'defense', rarity:'blue', cost:1, costU:0, t:(u)=>`本回合免疫敌人的负面效果（【虚弱】【勾魂】【缠绕】【灼烧】【业火】【暗夜威压】）`, eff:(u)=>{ G.debuffImmune=true; G.burn=0; floatMsg('佛渡 · 免疫负面'); }},
+  {id:'fodu', name:'佛渡', type:'defense', rarity:'blue', cost:1, t:(u)=>`获得【佛渡】${u?2:1} 回合：免疫敌人的负面效果（【虚弱】【勾魂】【缠绕】【灼烧】【业火】【暗夜威压】），并清除手中【怨气】废牌`, eff:(u)=>{ G.debuffImmune=(u?2:1); G.burn=0; clearJunk(); floatMsg('佛渡 · 免疫负面'); }},
   {id:'fenfu', name:'焚符', type:'skill', rarity:'purple', cost:0, t:(u)=>`弃 ${u?1:2} 张手牌，本回合 +1 符文`, eff:(u)=>{ G.energy+=1; floatMsg('符文 +1'); startDiscardSelect(u?1:2); }},
 
   /* —— 技能 —— */
@@ -310,7 +310,7 @@ const CARDS = [
   {id:'xueqi', name:'血契', type:'skill', rarity:'blue', cost:1, t:(u)=>`本回合你每失去 1 点生命，获得 ${u?2:1} 点格挡`, eff:(u)=>{ G.bloodPact=(G.bloodPact||0)+(u?2:1); floatMsg('血契 · 以血换盾'); }},
   {id:'tongling', name:'通灵', type:'skill', rarity:'white', cost:1, t:(u)=>`抽 ${u?3:2} 张牌`, eff:(u)=>drawCards(u?3:2)},
   {id:'jingxin', name:'静心诀', type:'skill', rarity:'blue', cost:1, costU:0, t:(u)=>u?'本回合 +1 符文（0 符文）':'下回合 +1 符文', eff:(u)=>{ if(u) G.energy+=1; else G.pendingEnergy+=1; }},
-  {id:'ranxue', name:'燃血术', type:'skill', rarity:'purple', cost:0, hpCost:u=>u?6:10, t:(u)=>`失去 ${u?6:10} 点生命，获得 2 点符文`, eff:(u)=>{ loseHp(u?6:10); G.energy+=2; log('燃血：失去生命，+2 符文'); }},
+  {id:'ranxue', name:'燃血术', type:'skill', rarity:'purple', cost:0, hpCost:()=>4, t:(u)=>`失去 4 点生命，获得 ${u?2:1} 点符文`, eff:(u)=>{ loseHp(4); G.energy+=(u?2:1); log('燃血：失去生命，+'+(u?2:1)+' 符文'); }},
   {id:'xisui', name:'洗髓经', type:'skill', rarity:'gold', cost:2, t:(u)=>`接下来 ${u?4:3} 回合，每回合 +1 符文（可叠加，下回合生效）`, eff:(u)=>{ const n=u?4:3; G.energyBonusTurns+=n; floatMsg('洗髓经 · 每回合+1符文'); }},
   {id:'duhunguiji', name:'渡魂归己', type:'skill', rarity:'purple', cost:1, t:(u)=>`获得【渡魂】2 回合：你对敌人造成的伤害${u?'80%':'50%'}转化为回复生命（重复打出延长 1 回合）`, eff:(u)=>{ const ratio=u?0.8:0.5; if(G.duhun && G.duhun.turns>0){ G.duhun.turns+=1; G.duhun.ratio=Math.max(G.duhun.ratio, ratio); } else { G.duhun={turns:2, ratio}; } floatMsg('渡魂归己'); log(`渡魂归己：${Math.round(G.duhun.ratio*100)}% 伤害转回复（${G.duhun.turns} 回合）`); }},
   {id:'xiejiashengyuan', name:'卸甲生元', type:'defense', rarity:'blue', cost:1, t:(u)=>`获得【卸甲】${u?3:2} 回合：格挡回合结束不清零并累计，结束时剩余格挡转化为生命（重复打出延长 1 回合）`, eff:(u)=>{ if(G.xiejia>0){ G.xiejia+=1; } else { G.xiejia=(u?3:2); } floatMsg('卸甲生元'); log(`卸甲生元：格挡保持 ${G.xiejia} 回合`); }},
@@ -395,9 +395,14 @@ function potionSummary(){
   G.potions.forEach(p=>{ m[p.name]=(m[p.name]||0)+1; });
   return Object.entries(m).map(([name,n])=>`🧪${name}×${n}`).join(' ');
 }
+function potionTooltipHTML(){
+  if(!G.potions.length) return '';
+  const m={}; G.potions.forEach(p=>{ m[p.name]=(m[p.name]||0)+1; });
+  return `<div class="tt-title">🧪 灵汁</div>`+Object.entries(m).map(([name,n])=>{ const p=G.potions.find(x=>x.name===name); return `<div class="tt-line">${name} ×${n}：${p?p.desc:''}</div>`; }).join('');
+}
 function showPotionSelect(){
   if(!G.potions.length){ floatMsg('没有灵汁'); return; }
-  const html=G.potions.map((p,i)=>`<div class="relic r-blue" onclick="usePotion(${i})"><div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div>`).join('');
+  const html=G.potions.map((p,i)=>`<div class="relic r-blue" data-tip="potion:${i}" onclick="usePotion(${i})"><div class="cname">${p.name}</div><div class="cdesc">点击使用 · 悬停查看效果</div></div>`).join('');
   showOverlay(`<h2>使 用 灵 汁</h2><p>点击一瓶灵汁使用（战斗消耗，本局保留直到使用）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="hideOverlay()">返回</button>`);
 }
 function usePotion(i){
@@ -409,6 +414,10 @@ function usePotion(i){
 /* ===================== 废牌（敌人怨气机制） ===================== */
 function junkCard(){ return {id:'yuanqi', name:'怨气', type:'junk', rarity:'white', cost:0, t:()=>'废牌 · 打出时失去 3 点生命（若不打出，回合结束自动打出）', eff:()=>{ directDamage(3, '怨气噬心：失去 3 点生命'); }}; }
 function addJunkToHand(n){ for(let i=0;i<n;i++){ G.hand.push(junkCard()); } log('怨气缠身：一张【怨气】废牌塞入你的手牌'); }
+function clearJunk(){
+  const n=G.hand.filter(c=>c.type==='junk').length;
+  if(n>0){ G.hand=G.hand.filter(c=>c.type!=='junk'); floatMsg('怨气驱散'); log(`驱散怨气缠身：${n} 张【怨气】废牌消失`); }
+}
 
 /* ===================== Hover 简介（tooltip） ===================== */
 function tooltipEl(){
@@ -441,6 +450,8 @@ function resolveTip(spec){
   if(type==='hero'){ const h=HEROES.find(x=>x.id===key); return h?`<div class="tt-title">${h.name}</div><div class="tt-line">${h.desc}</div><div class="tt-line" style="color:var(--gold)">被动 · ${h.passive}</div>`:''; }
   if(type==='kw'){ const kw=KEYWORDS.find(x=>x[0]===key); return kw?`<div class="tt-title">【${key}】</div><div class="tt-line">${kw[1]}</div>`:''; }
   if(type==='affix'){ const a=AFFIXES.find(x=>x.id===key); return a?`<div class="tt-title">词缀 · ${a.name}</div><div class="tt-line">${a.desc}</div>`:''; }
+  if(type==='potionbag') return potionTooltipHTML();
+  if(type==='potion'){ const p=G.potions[parseInt(key,10)]; return p?`<div class="tt-title">🧪 ${p.name}</div><div class="tt-line">${p.desc}</div>`:''; }
   return '';
 }
 function wrapKw(text){ return text.replace(/【([^】]+)】/g, (m,k)=>`<span class="kw" data-tip="kw:${k}">${m}</span>`); }
@@ -474,16 +485,16 @@ const ENEMIES = {
   heiwuchang:{name:'黑无常', hp:52, kind:'ghost', elite:true, aggressive:true, intents:[{type:'attack',v:12},{type:'strength',v:2}]},
   huapigui:{name:'画皮鬼', hp:46, kind:'ghost', elite:true, aggressive:true, intents:[{type:'attackBlock',v:8,block:6},{type:'attack',v:12}]},
   yecha:{name:'夜叉', hp:55, kind:'ghost', elite:true, aggressive:true, intents:[{type:'charge',v:8},{type:'attack',v:14}]},
-  jiangwang:{name:'僵王', hp:120, kind:'jiangshi', boss:true, intents:[{type:'attack',v:12},{type:'summon',n:2},{type:'attack',v:14},{type:'strength',v:3}]},
-  xiebian:{name:'谢必安', hp:180, kind:'ghost', boss:true, aggressive:true, split:true, intents:[{type:'attack',v:16},{type:'gouhun'},{type:'multi',n:2,v:9}]},
-  bian:{name:'必安', hp:90, kind:'ghost', boss:true, aggressive:true, intents:[{type:'attack',v:8},{type:'gouhun'},{type:'multi',n:2,v:4}]},
-  yewang:{name:'夜王', hp:220, kind:'ghost', boss:true, aggressive:true, intents:[{type:'attack',v:18},{type:'strength',v:3,weak:true}]},
-  hanba:{name:'旱魃', hp:110, kind:'jiangshi', boss:true, aggressive:true, intents:[{type:'attack',v:12},{type:'burn',v:1},{type:'attack',v:16},{type:'strength',v:2}]},
-  xueshi:{name:'血尸', hp:110, kind:'jiangshi', boss:true, aggressive:true, lifesteal:0.8, intents:[{type:'attack',v:13},{type:'charge',v:8},{type:'attack',v:20},{type:'strength',v:2}]},
-  panguanwang:{name:'判官王', hp:170, kind:'ghost', boss:true, aggressive:true, intents:[{type:'attack',v:12},{type:'jiming'},{type:'attack',v:14},{type:'qingsuan'}]},
-  mengpowang:{name:'孟婆', hp:155, kind:'ghost', boss:true, aggressive:true, intents:[{type:'attack',v:13},{type:'wangyou'},{type:'attack',v:15},{type:'strength',v:2,sealHeal:true}]},
-  xiuluowang:{name:'修罗王', hp:210, kind:'yao', boss:true, aggressive:true, intents:[{type:'attack',v:16},{type:'yehuo'},{type:'attack',v:18},{type:'strength',v:2}]},
-  yanluotianzi:{name:'阎罗天子', hp:230, kind:'ghost', boss:true, aggressive:true, phase:true, bossAffix:true, intents:[{type:'attack',v:15},{type:'summon',n:1,unit:'yinchai'},{type:'attack',v:18},{type:'strength',v:2}], intents2:[{type:'attack',v:20},{type:'multi',n:2,v:11},{type:'attack',v:22},{type:'strength',v:3}]},
+  jiangwang:{name:'僵王', hp:120, kind:'jiangshi', boss:true, intents:[{type:'multi',n:2,v:6},{type:'summon',n:2},{type:'multi',n:2,v:7},{type:'strength',v:3}]},
+  xiebian:{name:'谢必安', hp:180, kind:'ghost', boss:true, aggressive:true, split:true, intents:[{type:'multi',n:2,v:8},{type:'gouhun'},{type:'multi',n:2,v:9}]},
+  bian:{name:'必安', hp:90, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:4},{type:'gouhun'},{type:'multi',n:2,v:4}]},
+  yewang:{name:'夜王', hp:220, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:9},{type:'strength',v:3,weak:true}]},
+  hanba:{name:'旱魃', hp:110, kind:'jiangshi', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:6},{type:'burn',v:1},{type:'multi',n:2,v:8},{type:'strength',v:2}]},
+  xueshi:{name:'血尸', hp:110, kind:'jiangshi', boss:true, aggressive:true, lifesteal:0.8, intents:[{type:'multi',n:2,v:7},{type:'charge',v:8},{type:'multi',n:2,v:10},{type:'strength',v:2}]},
+  panguanwang:{name:'判官王', hp:170, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:6},{type:'jiming'},{type:'multi',n:2,v:7},{type:'qingsuan'}]},
+  mengpowang:{name:'孟婆', hp:155, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:7},{type:'wangyou'},{type:'multi',n:2,v:8},{type:'strength',v:2,sealHeal:true}]},
+  xiuluowang:{name:'修罗王', hp:210, kind:'yao', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:8},{type:'yehuo'},{type:'multi',n:2,v:9},{type:'strength',v:2}]},
+  yanluotianzi:{name:'阎罗天子', hp:230, kind:'ghost', boss:true, aggressive:true, phase:true, bossAffix:true, intents:[{type:'multi',n:2,v:8},{type:'summon',n:1,unit:'yinchai'},{type:'multi',n:2,v:9},{type:'strength',v:2}], intents2:[{type:'multi',n:2,v:10},{type:'multi',n:2,v:11},{type:'multi',n:2,v:11},{type:'strength',v:3}]},
   yinchai:{name:'阴差', hp:14, kind:'ghost', intents:[{type:'attack',v:8}]},
   xiaojianshi:{name:'小僵尸', hp:6, kind:'jiangshi', intents:[{type:'attack',v:6}]},
   niutou:{name:'牛头', hp:42, kind:'ghost', intents:[{type:'attack',v:10},{type:'block',v:10}]},
@@ -583,7 +594,7 @@ function newState(){
     turnStats:{dmgTaken:0, blocked:0, dealt:0, kills:[]}, turnSummary:'',
     relics:[], skillsPlayedThisTurn:0, attackBuff:0, daoxinUsed:false, pendingRelic:false, relicPicks:[],
     revivedFree:false, goldDoubled:false, lastGold:0, battleGold:0, battleResult:null, openingPicks:[],
-    hero:'tianshi', totalHpLost:0, turnAtkBuff:0, dodge:0, debuffImmune:false, xuejiBonus:0, xuejiArmed:false, xuejiHurt:false, discardSelect:null, burn:0, zombieDmg:0, pendingSeal:0, karmaFire:0, duhun:null, xiejia:0, bloodPact:0, retain:0, potions:[], score:0, wangyouTurns:0, wangyouDrunk:0 };
+    hero:'tianshi', totalHpLost:0, turnAtkBuff:0, dodge:0, debuffImmune:0, xuejiBonus:0, xuejiArmed:false, xuejiHurt:false, discardSelect:null, burn:0, zombieDmg:0, pendingSeal:0, karmaFire:0, duhun:null, xiejia:0, bloodPact:0, retain:0, potions:[], score:0, wangyouTurns:0, wangyouDrunk:0 };
 }
 
 /* ===================== 敌人辅助 ===================== */
@@ -801,7 +812,7 @@ function renderExchange(){
   const ex=G.exchange; if(!ex) return;
   if(ex.phase==='pickHand'){
     const cards=G.hand.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickExchangeHand(${i})">${cardBody(c)}</div>`).join('');
-    showOverlay(`<h2>易物 · 选一张手牌</h2><p>选择一张要交换出去的手牌（还剩 <b>${ex.times}</b> 次交换）</p><div class="reward-cards">${cards}</div>`);
+    showOverlay(`<h2>易物 · 选一张手牌</h2><p>选择一张要交换出去的手牌（还剩 <b>${ex.times}</b> 次交换）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="G.exchange=null; hideOverlay(); render();">放弃继续交易</button>`);
   } else if(ex.phase==='pickNew'){
     const cards=ex.pool.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickExchangeNew(${i})">${cardBody(c)}</div>`).join('');
     showOverlay(`<h2>易物 · 牌堆随机三张</h2><p>选一张换入你的手牌</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="G.exchange=null; hideOverlay(); render();">放弃交换</button>`);
@@ -870,7 +881,7 @@ function startBattle(keys){
   G.enemies.forEach((e,i)=>{ if(e.intents.length>1) e.intentIndex = i % e.intents.length; });
   G.target=0;
   G.block=0; G.weak=0; G.gouhun=0; G.thorns=0; G.energyBonusTurns=0; G.pendingEnergy=0; G.pendingDiscard=0; G.summons=[];
-  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=false; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.pendingSeal=0; G.karmaFire=0; G.duhun=null; G.xiejia=0;
+  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=0; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.pendingSeal=0; G.karmaFire=0; G.duhun=null; G.xiejia=0;
   G.deck.forEach(c=>c.sealed=0);
   if(hasRelic('zhaohunfan')){ G.hp=Math.min(G.maxHp,G.hp+3); log('招魂幡：恢复 3 点生命'); }
   G.battleStartHp=G.hp;
@@ -890,7 +901,7 @@ function startTurn(){
   if(G.duhun && G.duhun.turns>0) G.duhun.turns--;
   if(G.xiejia>0){ /* 卸甲生元：格挡不清零，累计 */ }
   else { G.block=(G.hero==='wuseng') ? Math.min(3, G.block) : 0; }
-  G.thorns=0; G.dodge=0; G.debuffImmune=false;
+  G.thorns=0; G.dodge=0; if(G.debuffImmune>0) G.debuffImmune--;
   if(hasRelic('hushenfu')){ gainBlock(2); log('护身符：+2 格挡'); }
   if(G.hero==='wuseng'){ gainBlock(2); log('苦行武僧：+2 格挡'); }
   if(G.hero==='tianshi'){ const t=randomAlive(); if(t){ applyCurse(t,1); log('道心通明：随机敌人 +1 诅咒'); } }
@@ -1098,9 +1109,9 @@ function calcScore(){
   const kills=G.totalKills||0;
   return G.act*1000 + G.mapRow*50 + Math.max(0,G.hp)*20 + kills*8 + G.gold*10 + G.potions.length*100;
 }
-function submitScore(score){
+function submitScore(score, act){
   if(!SAVE.highScores) SAVE.highScores=[];
-  SAVE.highScores.push({score, act:G.act, date:todayStr()});
+  SAVE.highScores.push({score, act:act!=null?act:G.act, date:todayStr()});
   SAVE.highScores.sort((a,b)=>b.score-a.score);
   SAVE.highScores=SAVE.highScores.slice(0,10);
   persistSave();
@@ -1108,14 +1119,20 @@ function submitScore(score){
 function loseGame(){
   sfx('lose');
   track('death');
-  G.score=calcScore(); submitScore(G.score);
+  G.score=calcScore();
   const reviveBtn = G.revivedFree
     ? `<button class="btn" onclick="reviveAd()">看广告 · 复活回满血继续</button>`
     : `<button class="btn" onclick="reviveFree()">免费复活 · 回满血继续</button>`;
   showOverlay(`<h2>妖气侵蚀了你</h2><p>你被击败了。<br>运气和牌组都还差一点。</p>
-    <p style="color:var(--gold)">本局得分 <b>${G.score}</b>　（第 ${G.act} 幕 · 第 ${G.mapRow+1} 层 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
+    <p style="color:var(--gold)">当前得分 <b>${G.score}</b>　（第 ${G.act} 幕 · 第 ${G.mapRow+1} 层 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
     ${reviveBtn}
-    <button class="btn ghost" onclick="startGame()">重新开始</button>`);
+    <button class="btn ghost" onclick="giveUp()">放弃 · 结束本局</button>`);
+}
+function giveUp(){
+  const sc=G.score||calcScore();
+  submitScore(sc);
+  clearRunSave();
+  showOverlay(`<h2>本局结束</h2><p style="color:var(--gold)">最终得分 <b>${sc}</b></p><p>已记入排行榜（第 ${G.act} 幕）。</p><button class="btn" onclick="showStartScreen()">返回主菜单</button>`);
 }
 function revive(){
   G.hp=G.maxHp; G.weak=0; G.gouhun=0; G.thorns=0; G.block=0; G.burn=0;
@@ -1148,18 +1165,20 @@ function saveRun(){
   if(!G || aliveEnemies().length>0) return;
   const data={ act:G.act, mapRow:G.mapRow, mapCol:G.mapCol, hero:G.hero, hp:G.hp, maxHp:G.maxHp, gold:G.gold,
     deck:G.deck.map(c=>({id:c.id, up:!!c.up})), relics:G.relics, potions:G.potions,
-    totalKills:G.totalKills||0, score:G.score||0, removeCount:G.removeCount||0,
+    totalKills:G.totalKills||0, score:calcScore(), removeCount:G.removeCount||0,
     shopMarkup:G.shopMarkup||0, potionBought:G.potionBought||0,
     shopWares:G.shopWares?G.shopWares.map(c=>({id:c.id, up:!!c.up})):null };
   try{ localStorage.setItem(RUN_KEY, JSON.stringify(data)); }catch(e){}
 }
 function hasRunSave(){ try{ return !!localStorage.getItem(RUN_KEY); }catch(e){ return false; } }
+function readRun(){ try{ return JSON.parse(localStorage.getItem(RUN_KEY)); }catch(e){ return null; } }
 function clearRunSave(){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} }
 function continueRun(){
   let d; try{ d=JSON.parse(localStorage.getItem(RUN_KEY)); }catch(e){}
   if(!d){ floatMsg('没有可继续的进度'); return; }
   G=newState();
   G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.hero=d.hero; G.hp=d.hp; G.maxHp=d.maxHp; G.gold=d.gold;
+  MAP=ACTS[G.act-1];
   G.deck=(d.deck||[]).map(x=>{ const c=cardById(x.id); c.up=!!x.up; return c; });
   G.relics=d.relics||[]; G.potions=d.potions||[];
   G.totalKills=d.totalKills||0; G.score=d.score||0; G.removeCount=d.removeCount||0;
@@ -1282,7 +1301,7 @@ function unknownTemple(){
 function unknownAmbush(){
   const pool=ELITES_BY_ACT[G.act]||['yecha'];
   const key=pool[Math.floor(Math.random()*pool.length)];
-  showOverlay(`<h2>拦路恶鬼</h2><p>黑影从暗处扑出——是 <b>${ENEMIES[key].name}</b>！</p><button class="btn" onclick="hideOverlay(); startBattle([key]);">迎战</button>`);
+  showOverlay(`<h2>拦路恶鬼</h2><p>黑影从暗处扑出——是 <b>${ENEMIES[key].name}</b>！</p><button class="btn" onclick="hideOverlay(); startBattle(['${key}']);">迎战</button>`);
 }
 function unknownForge(){
   if(!G.deck.length){ unknownEmpty(); return; }
@@ -1345,31 +1364,55 @@ function pickRelic(i){ const r=G.relicPicks[i]; if(!hasRelic(r.id)) G.relics.pus
 function skipRelic(){ hideOverlay(); goNext(); }
 
 function showCampfire(){
-  showOverlay(`<h2>篝 火</h2>${runStatusHTML()}<p>火光驱散寒意，你可以在这里稍作休整。</p>
-    <button class="btn" onclick="showForgePicker()">锻造（升级一张牌）</button>
-    <button class="btn ghost" onclick="restAtCamp()">休息（恢复 20 生命）</button>
-    <button class="btn ghost" onclick="campRemoveCard()">删牌（免费删一张）</button>`);
+  G.campRemoved=false; G.campActed=false;
+  renderCampfire();
 }
-function restAtCamp(){ G.hp=Math.min(G.maxHp,G.hp+20); log('在篝火旁休息，恢复 20 生命'); hideOverlay(); goNext(); }
+function renderCampfire(){
+  if(G.deck.length<=1 && !G.campRemoved){ G.campRemoved=true; }
+  const removeBtn = G.campRemoved
+    ? `<p style="color:var(--green)">✓ 已删牌</p>`
+    : `<button class="btn" onclick="campRemoveCard()">① 删牌 · 调整牌组（必经）</button>`;
+  const actionBtns = G.campActed
+    ? `<p style="color:var(--green)">✓ 已从锻造/休息中二选一</p>`
+    : (G.campRemoved
+        ? `<button class="btn" onclick="showForgePicker()">② 锻造（升级一张牌）</button>
+           <button class="btn ghost" onclick="showRestConfirm()">② 休息（恢复 20 生命）</button>`
+        : `<p style="color:var(--dim)">先完成删牌，再选择「锻造」或「休息」二选一。</p>`);
+  const leaveBtn = (G.campRemoved && G.campActed)
+    ? `<button class="btn" onclick="hideOverlay(); goNext();">离开篝火</button>`
+    : '';
+  showOverlay(`<h2>篝 火</h2>${runStatusHTML()}<p>火光驱散寒意。篝火分两步：<br>① 必经的删牌（调整牌组）　② 锻造/休息二选一。</p>
+    ${removeBtn}
+    ${actionBtns}
+    ${leaveBtn}`);
+}
+function restAtCamp(){ G.hp=Math.min(G.maxHp,G.hp+20); log('在篝火旁休息，恢复 20 生命'); G.campActed=true; renderCampfire(); }
+function showRestConfirm(){
+  showOverlay(`<h2>休息 · 恢复 20 生命</h2><p>当前生命 ${G.hp}/${G.maxHp}。确定休息恢复 20 点生命吗？（与锻造二选一）</p>
+    <button class="btn" onclick="restAtCamp()">确定 · 休息</button>
+    <button class="btn ghost" onclick="renderCampfire()">返回</button>`);
+}
 function campRemoveCard(){
-  if(G.deck.length<=1){ log('牌组只剩一张了'); return; }
+  if(G.deck.length<=1){ floatMsg('牌组只剩一张了'); return; }
   const cards=G.deck.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="doCampRemove(${i})">${cardBody(c)}</div>`).join('');
-  showOverlay(`<h2>篝火 · 删牌</h2><p>选择一张牌从牌组移除（仅限一张，免费）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="showCampfire()">返回</button>`);
+  showOverlay(`<h2>篝火 · 删牌</h2><p>选择一张牌从牌组移除（仅限一张，免费）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="renderCampfire()">返回</button>`);
 }
 function doCampRemove(i){
   const c=G.deck.splice(i,1)[0]; log(`删除一张【${c.name}】`); sfx('card');
-  hideOverlay(); goNext();
+  G.campRemoved=true; renderCampfire();
 }
 function showForgePicker(){
-  if(!G.deck.length){ restAtCamp(); return; }
+  if(!G.deck.length){ floatMsg('牌组已空'); return; }
+  G.forgeFrom='camp';
   const cards=G.deck.map((c,i)=>forgeCardHTML(c,i)).join('');
-  showOverlay(`<h2>锻造 · 点击一张牌升级</h2><p>红色字是升级后的效果（整局有效）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="showCampfire()">返回</button>`);
+  showOverlay(`<h2>锻造 · 点击一张牌升级</h2><p>红色字是升级后的效果（整局有效）。与休息二选一。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="G.forgeFrom=null; renderCampfire();">返回</button>`);
 }
 function forgeCard(i){
   const c=G.deck[i];
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   c.up=true; log(`锻造升级【${c.name}】`); sfx('relic');
-  hideOverlay(); goNext();
+  if(G.forgeFrom==='camp'){ G.campActed=true; G.forgeFrom=null; renderCampfire(); }
+  else { hideOverlay(); goNext(); }
 }
 
 /* ===================== 鬼市商店 ===================== */
@@ -1716,7 +1759,7 @@ function render(){
     <span class="stat">格挡 <b>${G.block}</b></span>
     <span class="stat">符文 <b>${G.energy}</b></span>
     <span class="stat">金币 <b>${G.gold}</b></span>
-    ${G.potions.length?`<span class="stat" style="color:#c86bd8;cursor:pointer" onclick="showPotionSelect()">${potionSummary()}</span>`:''}
+    ${G.potions.length?`<span class="stat" style="color:#c86bd8;cursor:pointer" data-tip="potionbag" onclick="showPotionSelect()">🧪灵汁 ×${G.potions.length}</span>`:''}
     ${G.thorns>0?`<span class="stat" style="color:#e06b6b">荆棘 ${G.thorns}</span>`:''}
     ${G.energyBonusTurns>0?`<span class="stat" style="color:#7fb0d8">洗髓经 ${G.energyBonusTurns} 回合</span>`:''}
     ${G.karmaFire>0?`<span class="stat" style="color:#e06b3a">业火 ${G.karmaFire} 回合</span>`:''}
@@ -1724,7 +1767,7 @@ function render(){
     ${G.burn>0?`<span class="stat" style="color:#e06b3a" data-tip="kw:灼烧">灼烧 ${G.burn}层</span>`:''}
     ${G.turnAtkBuff>0?`<span class="stat" style="color:#c86b1a" data-tip="kw:开天眼">开天眼 +${G.turnAtkBuff}</span>`:''}
     ${G.dodge>0?`<span class="stat" style="color:#8ab0d8" data-tip="kw:闪避">闪避 ${G.dodge}层</span>`:''}
-    ${G.debuffImmune?`<span class="stat" style="color:#3ac0c0" data-tip="kw:佛渡">佛渡免疫</span>`:''}
+    ${G.debuffImmune>0?`<span class="stat" style="color:#3ac0c0" data-tip="kw:佛渡">佛渡免疫${G.debuffImmune>1?' '+G.debuffImmune+'回合':''}</span>`:''}
     ${G.xuejiBonus>0?`<span class="stat" style="color:#c86bd8" data-tip="kw:血祭">血祭 +${G.xuejiBonus}摸</span>`:''}
     ${G.duhun && G.duhun.turns>0?`<span class="stat" style="color:#3fa060" data-tip="kw:渡魂">渡魂 ${G.duhun.turns}回合（${Math.round(G.duhun.ratio*100)}%）</span>`:''}
     ${G.xiejia>0?`<span class="stat" style="color:#7fb0d8" data-tip="kw:卸甲">卸甲 ${G.xiejia}回合</span>`:''}
@@ -1757,7 +1800,18 @@ function heroDeck(id){
 }
 function startGame(){
   ensureAudio();
-  clearRunSave();
+  const d=readRun();
+  if(d){
+    showOverlay(`<h2>有未完成的存档</h2><p>上次存档：第 ${d.act} 幕 · 第 ${(d.mapRow||0)+1} 层 · 得分 <b style="color:var(--gold)">${d.score||0}</b>。</p><p style="font-size:13px">开始新游戏将覆盖该存档，其得分会记入排行榜。</p>
+      <button class="btn" onclick="confirmNewGame()">确定 · 开始新游戏</button>
+      <button class="btn ghost" onclick="showStartScreen()">返回</button>`);
+    return;
+  }
+  confirmNewGame();
+}
+function confirmNewGame(){
+  const d=readRun();
+  if(d){ submitScore(d.score||0, d.act); clearRunSave(); }
   G=newState(); G.mapRow=0;
   track('runStart');
   if(SAVE.signInBonus>0){ G.gold=SAVE.signInBonus; SAVE.signInBonus=0; persistSave(); log(`开局携带签到奖励 ${G.gold} 金币`); }
@@ -1775,7 +1829,7 @@ function pickOpening(i){ const c=G.openingPicks[i]; G.deck.push(c); log(`获得�
 function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){ showMap(); }
 function showStartScreen(){
-  showOverlay(`<h2>志 怪 塔 · v0.32.01</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.33</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -1797,15 +1851,16 @@ function resumeGame(){
   else showMap();
 }
 function confirmRestart(){
-  showOverlay(`<h2>重新开始？</h2><p>当前本局进度将<b>丢失</b>，确定重新开始吗？</p>
-    <button class="btn" onclick="startGame()">确定 · 重新开始</button>
+  showOverlay(`<h2>重新开始？</h2><p>重新开始本局，当前进度将记入排行榜（若有存档）。</p>
+    <button class="btn" onclick="confirmNewGame()">确定 · 重新开始</button>
     <button class="btn ghost" onclick="openMenu()">返回</button>`);
 }
 function confirmQuit(){
-  showOverlay(`<h2>退出本局？</h2><p>退出到主菜单，当前本局进度将<b>丢失</b>。</p>
-    <button class="btn" onclick="showStartScreen()">确定 · 退出</button>
+  showOverlay(`<h2>退出本局？</h2><p>退出到主菜单，本局进度会<b style="color:var(--green)">自动保存</b>，可随时继续爬塔。</p>
+    <button class="btn" onclick="quitToMenu()">确定 · 退出</button>
     <button class="btn ghost" onclick="openMenu()">返回</button>`);
 }
+function quitToMenu(){ saveRun(); showStartScreen(); }
 document.getElementById('endTurn').addEventListener('click', endTurn);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
 document.getElementById('viewDeck').addEventListener('click', viewDeck);
