@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>志怪塔 · 原型 v0.35</title>
+<title>志怪塔 · 原型 v0.36</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -118,6 +118,11 @@
   .dmg-aoe{font-size:10px; color:#2b6ba0;}
   .dmg-flash{animation:dmgFlash .5s ease-out;}
   @keyframes dmgFlash{0%{background:rgba(224,179,65,.4); border-radius:3px;}100%{background:transparent;}}
+  /* —— 外置素材（有则增强，无则优雅回退） —— */
+  #bg{position:fixed; inset:0; z-index:-1; width:100%; height:100%; object-fit:cover;}
+  .eportrait{width:100%; height:88px; object-fit:cover; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.25);}
+  .cart{width:100%; height:40px; object-fit:cover; border-radius:4px; margin-bottom:4px; display:block;}
+  .ricon{width:100%; height:56px; object-fit:contain; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.2);}
   /* —— 战斗特效（juice） —— */
   #fx-layer{position:fixed; inset:0; pointer-events:none; z-index:5; overflow:hidden;}
   .fx-dmg{position:absolute; font-family:var(--font-kai); font-weight:bold; font-size:22px; color:#ff7b5a; text-shadow:0 0 8px rgba(0,0,0,.85), 0 2px 3px rgba(0,0,0,.6); animation:fxDmg .9s ease-out forwards; white-space:nowrap; letter-spacing:1px; transform:translate(-50%,-50%);}
@@ -147,8 +152,9 @@
 <body>
 <div id="float-msg"></div>
 <div id="turn-banner"></div>
+<img id="bg" alt="" style="display:none" onerror="this.style.display='none'">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.35</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.36</small></h1>
   <div id="topbar"></div>
   <div id="enemy-panel"></div>
   <div id="summon-panel"></div>
@@ -284,6 +290,71 @@ function sfx(name){
     case 'lose': boom(.4,.45,1500,120); [400,300,220,150].forEach((f,i)=>tone(f,.2,'sawtooth',.14,i*.13)); break;
   }
 }
+
+/* ===================== 外置素材（有则增强，无则优雅回退） ===================== */
+const ASSET_BASE = '素材/';
+function imgFail(el){ el.outerHTML = el.dataset.fallback || ''; }
+function artImg(src, fallback, cls){
+  return `<img class="${cls||''}" src="${ASSET_BASE}${src}" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
+}
+function cardArt(c){ return artImg('card/'+c.id+'.png', '', 'cart'); }
+function relicIcon(r){ return artImg('relic/'+r.id+'.png', '', 'ricon'); }
+function setBg(name){
+  const el=document.getElementById('bg'); if(!el) return;
+  el.style.display='block';
+  el.src=ASSET_BASE+'bg/'+name+'.png';
+}
+/* —— 背景音乐：优先 素材/music，缺失回退合成氛围音 —— */
+let BGM=null, BGM_TRACK=null, MUSIC_OK=null, CUR_BGM='menu';
+function clearSynthBGM(){ if(SYNTH_BGM_TIMER){ clearInterval(SYNTH_BGM_TIMER); SYNTH_BGM_TIMER=null; } }
+function stopBGM(){ if(BGM){ try{ BGM.pause(); }catch(e){} BGM=null; } BGM_TRACK=null; clearSynthBGM(); }
+let SYNTH_BGM_TIMER=null;
+function startSynthBGM(track){
+  if(SYNTH_BGM_TIMER) return;
+  ensureAudio();
+  const scale = track==='battle' ? [220,262,294,330,392] : [196,220,262,294,330];
+  let step=0;
+  SYNTH_BGM_TIMER=setInterval(()=>{
+    if(!SETTINGS.sound){ clearSynthBGM(); return; }
+    if(!AC) return;
+    const f=scale[step%scale.length];
+    tone(f, 2.2, 'sine', 0.05, 0);
+    if(track==='battle' && step%2===0) tone(f*2, .5, 'triangle', .03, .1);
+    step++;
+  }, 2600);
+}
+function startBGM(track){
+  if(!SETTINGS.sound){ stopBGM(); return; }
+  if(BGM_TRACK===track) return;
+  stopBGM();
+  BGM_TRACK=track; MUSIC_OK=null;
+  const exts=['.ogg','.mp3','.wav'];
+  let idx=0, active=true;
+  function tryNext(){
+    if(!active) return;
+    if(idx>=exts.length){ BGM=null; startSynthBGM(track); return; }
+    const a=new Audio(ASSET_BASE+'music/bgm_'+track+exts[idx++]);
+    a.loop=true; a.volume=0.32;
+    let resolved=false;
+    const resolve=(ok)=>{
+      if(resolved) return; resolved=true;
+      if(!active) return;
+      if(ok){ active=false; MUSIC_OK=true; clearSynthBGM(); a.play().catch(()=>{}); }
+      else { tryNext(); }
+    };
+    a.onerror=()=>resolve(false);
+    a.oncanplaythrough=()=>resolve(true);
+    a.load(); BGM=a;
+    a.play().catch(()=>{}); // 同步尝试播放：处于用户手势内即可绕过自动播放限制
+    setTimeout(()=>resolve(false), 1500);
+  }
+  tryNext();
+}
+function setBGM(track){ CUR_BGM=track; startBGM(track); }
+/* 首次交互解锁音频（浏览器禁止自动播放，需一次用户手势） */
+function unlockAudio(){ ensureAudio(); if(BGM && SETTINGS.sound){ try{ BGM.play().catch(()=>{}); }catch(e){} } }
+document.addEventListener('pointerdown', unlockAudio, {once:true});
+document.addEventListener('keydown', unlockAudio, {once:true});
 
 /* ===================== 关键词说明 ===================== */
 const KEYWORDS = [
@@ -948,6 +1019,7 @@ function drawCards(n){
 
 /* ===================== 回合流程 ===================== */
 function startBattle(keys){
+  setBg('act'+G.act); setBGM('battle');
   G.enemies = keys.map(k=>makeEnemy(ENEMIES[k], k));
   G.enemies.forEach((e,i)=>{ if(e.intents.length>1) e.intentIndex = i % e.intents.length; });
   G.target=0;
@@ -1301,6 +1373,7 @@ function runStatusHTML(){
 }
 function showMap(){
   saveRun();
+  setBg('act'+G.act); setBGM('map');
   let html=`<h2>${ACT_NAMES[G.act-1]}</h2>${runStatusHTML()}<p style="font-size:13px">第 ${G.mapRow+1}/${MAP.length} 层 · 只能走进相邻列的节点，规划好路线。</p>`;
   for(let r=MAP.length-1;r>=0;r--){
     const cls = r<G.mapRow ? 'past' : r===G.mapRow ? 'current' : 'future';
@@ -1447,7 +1520,7 @@ function showRelicReward(){
   if(!unowned.length){ goNext(); return; }
   const picks = shuffle([...unowned]).slice(0,3);
   G.relicPicks=picks;
-  const html=picks.map((r,i)=>`<div class="relic ${RCOLOR[r.rarity]}" onclick="pickRelic(${i})"><div class="cname" data-tip="relic:${r.id}">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype">遗物 · ${RNAME[r.rarity]}</div></div>`).join('');
+  const html=picks.map((r,i)=>`<div class="relic ${RCOLOR[r.rarity]}" onclick="pickRelic(${i})">${relicIcon(r)}<div class="cname" data-tip="relic:${r.id}">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype">遗物 · ${RNAME[r.rarity]}</div></div>`).join('');
   showOverlay(`<h2>获得遗物 · 三选一</h2><p>遗物本局永久生效，点击获得（或跳过）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="skipRelic()">跳过</button>`);
 }
 function pickRelic(i){ const r=G.relicPicks[i]; if(!hasRelic(r.id)) G.relics.push(r.id); sfx('relic'); log(`获得遗物【${r.name}】`); hideOverlay(); goNext(); }
@@ -1743,13 +1816,14 @@ function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }
 
 /* ===================== 渲染 ===================== */
 function cardBody(c){
-  return `<div class="cost">${cardCost(c)}</div><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
+  return `${cardArt(c)}<div class="cost">${cardCost(c)}</div><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
 }
 function forgeCardHTML(c,i){
   const body = c.up
     ? `<div class="cdesc">${wrapKw(c.t(true))}</div>`
     : `<div class="cdesc">${wrapKw(c.t(false))}<div class="upgrade-preview">升级 → ${wrapKw(c.t(true))}</div></div>`;
   return `<div class="card ${RCOLOR[c.rarity]}" onclick="forgeCard(${i})">
+    ${cardArt(c)}
     <div class="cost">${cardCost(c)}</div>
     <div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div>
     ${body}
@@ -1780,7 +1854,7 @@ function handCardHTML(c, disabled){
   }
   const sealed = c.sealed>0;
   const sealTag = sealed ? `<div class="exhaust-tag">忘忧封印 ${c.sealed} 回合</div>` : '';
-  return `<div class="card ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" onclick="playCard(${G.hand.indexOf(c)})">${costHtml}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div>${sealTag}${dmgHtml}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
+  return `<div class="card ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" onclick="playCard(${G.hand.indexOf(c)})">${cardArt(c)}${costHtml}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div>${sealTag}${dmgHtml}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
 }
 function intentText(e){
   const atk=e.intent.v+(e.pendingDamage||0)+(e.strength||0);
@@ -1819,6 +1893,7 @@ function enemyPanelHTML(e, idx){
   if(e.phase2) badges+=`<span class="badge affix" data-tip="kw:轮回" style="cursor:help">轮回·二阶段</span>`;
   if(e.affixes && e.affixes.length) e.affixes.forEach(a=>{ const af=AFFIXES.find(x=>x.id===a.id); badges+=`<span class="badge affix" data-tip="affix:${a.id}" style="cursor:help">${af?af.name:a.id}${a.tier>1?'·'+a.tier:''}</span>`; });
   return `<div class="enemy ${selected?'selected':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" onclick="selectTarget(${idx})">
+    ${artImg('enemy/'+e.key+'.png', '', 'eportrait')}
     <div class="ename" data-tip="enemy:${e.key}">${KIND_ICON[e.kind]||''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
     <span class="stat">生命 <b>${e.hp}</b>/${e.maxHp}</span>
     <span class="enemyhpbar"><i style="width:${ehp}%"></i></span>
@@ -1918,7 +1993,8 @@ function pickOpening(i){ const c=G.openingPicks[i]; G.deck.push(c); log(`获得�
 function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){ showMap(); }
 function showStartScreen(){
-  showOverlay(`<h2>志 怪 塔 · v0.35</h2>
+  setBg('menu'); setBGM('menu');
+  showOverlay(`<h2>志 怪 塔 · v0.36</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -1953,7 +2029,8 @@ function showSettings(){
 }
 function toggleSound(){
   SETTINGS.sound=!SETTINGS.sound; persistSettings();
-  if(SETTINGS.sound) sfx('relic');
+  if(SETTINGS.sound){ sfx('relic'); startBGM(CUR_BGM); }
+  else { stopBGM(); }
   showSettings();
 }
 /* ===================== 新手引导 ===================== */
