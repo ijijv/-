@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>志怪塔 · 原型 v0.36</title>
+<title>志怪塔 · 原型 v0.37</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -154,7 +154,7 @@
 <div id="turn-banner"></div>
 <img id="bg" alt="" style="display:none" onerror="this.style.display='none'">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.36</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.37</small></h1>
   <div id="topbar"></div>
   <div id="enemy-panel"></div>
   <div id="summon-panel"></div>
@@ -235,7 +235,7 @@ function shakeCard(i){
 }
 
 /* ===================== 音效（Web Audio，无外部资源） ===================== */
-let SETTINGS = { sound:true };
+let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1 };
 function loadSettings(){ try{ const r=localStorage.getItem('zhiguaitower_settings_v1'); if(r) SETTINGS=Object.assign(SETTINGS, JSON.parse(r)); }catch(e){} }
 function persistSettings(){ try{ localStorage.setItem('zhiguaitower_settings_v1', JSON.stringify(SETTINGS)); }catch(e){} }
 let AC=null, NOISE=null;
@@ -247,7 +247,7 @@ function tone(freq, dur, type, vol, when, slideTo){
   o.type=type||'sine'; o.frequency.setValueAtTime(freq, t);
   if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t+dur);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol||0.16, t+0.008);
+  g.gain.exponentialRampToValueAtTime((vol||0.16)*(SETTINGS.sfxVol||1), t+0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
   o.connect(g); g.connect(ac.destination);
   o.start(t); o.stop(t+dur+0.02);
@@ -269,7 +269,7 @@ function boom(dur, vol, from, to, when){
   f.frequency.setValueAtTime(from||1800, t);
   f.frequency.exponentialRampToValueAtTime(to||180, t+dur);
   const g=ac.createGain();
-  g.gain.setValueAtTime(vol||0.5, t);
+  g.gain.setValueAtTime((vol||0.5)*(SETTINGS.sfxVol||1), t);
   g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
   src.connect(f); f.connect(g); g.connect(ac.destination);
   src.start(t); src.stop(t+dur);
@@ -334,7 +334,7 @@ function startBGM(track){
     if(!active) return;
     if(idx>=exts.length){ BGM=null; startSynthBGM(track); return; }
     const a=new Audio(ASSET_BASE+'music/bgm_'+track+exts[idx++]);
-    a.loop=true; a.volume=0.32;
+    a.loop=true; a.volume=(SETTINGS.musicVol==null?0.32:SETTINGS.musicVol);
     let resolved=false;
     const resolve=(ok)=>{
       if(resolved) return; resolved=true;
@@ -1994,7 +1994,7 @@ function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){ showMap(); }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.36</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.37</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -2021,11 +2021,25 @@ function manualSave(){
 }
 function showSettings(){
   const on=SETTINGS.sound;
+  const mv=Math.round(SETTINGS.musicVol*100), sv=Math.round(SETTINGS.sfxVol*100);
   showOverlay(`<h2>设 置</h2>
     <p>音效：<b style="color:${on?'var(--green)':'var(--red)'}">${on?'开':'关'}</b></p>
     <button class="btn" onclick="toggleSound()">${on?'关闭音效':'开启音效'}</button>
+    <p style="margin-top:16px">音乐音量：<b id="musicVolLbl" style="color:var(--green)">${mv}%</b></p>
+    <input type="range" min="0" max="100" step="1" value="${mv}" oninput="setMusicVol(this.value)" style="width:100%">
+    <p>音效音量：<b id="sfxVolLbl" style="color:var(--green)">${sv}%</b></p>
+    <input type="range" min="0" max="100" step="1" value="${sv}" oninput="setSfxVol(this.value)" onchange="sfx('relic')" style="width:100%">
     <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
     <button class="btn ghost" onclick="openMenu()">返回菜单</button>`);
+}
+function setMusicVol(v){
+  SETTINGS.musicVol=+v/100; persistSettings();
+  if(BGM){ try{ BGM.volume=SETTINGS.musicVol; }catch(e){} }
+  const l=document.getElementById('musicVolLbl'); if(l) l.textContent=(+v)+'%';
+}
+function setSfxVol(v){
+  SETTINGS.sfxVol=+v/100; persistSettings();
+  const l=document.getElementById('sfxVolLbl'); if(l) l.textContent=(+v)+'%';
 }
 function toggleSound(){
   SETTINGS.sound=!SETTINGS.sound; persistSettings();
