@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>志怪塔 · 原型 v0.34</title>
+<title>志怪塔 · 原型 v0.35</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -60,7 +60,7 @@
   .card.disabled{filter:grayscale(.8) brightness(.7); cursor:not-allowed;}
   .card .cost{width:22px; height:22px; border-radius:50%; background:#2a2119; color:var(--gold); font-weight:bold; display:flex; align-items:center; justify-content:center; font-size:13px; margin-bottom:4px;}
   .card .cname{font-family:var(--font-kai); font-weight:bold; font-size:15px; margin-bottom:4px; letter-spacing:1px;}
-  .card .cdesc{flex:1; color:#4a3f2f; line-height:1.4; font-size:11px;}
+  .card .cdesc{flex:1; color:#4a3f2f; line-height:1.35; font-size:11px; overflow:hidden; word-break:break-word;}
   .card .ctype{font-size:10px; color:#7a6c52; margin-top:4px; letter-spacing:1px;}
   .card.r-white{border-color:#b9ad95;} .card.r-white .cname{color:#4a4232;}
   .card.r-blue{border-color:var(--blue);} .card.r-blue .cname{color:#2b6ba0;}
@@ -95,6 +95,9 @@
   #float-msg{position:fixed; left:50%; top:34%; transform:translate(-50%,-50%); font-family:var(--font-kai); font-size:26px; color:var(--gold); text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.8); pointer-events:none; opacity:0; z-index:20; letter-spacing:3px; white-space:nowrap;}
   #float-msg.show{animation:floatUp 1.15s ease-out forwards;}
   @keyframes floatUp{0%{opacity:0; transform:translate(-50%,-50%) translateY(10px);}12%{opacity:1;}100%{opacity:0; transform:translate(-50%,-50%) translateY(-32px);}}
+  #turn-banner{position:fixed; left:50%; top:18%; transform:translate(-50%,-50%); font-family:var(--font-kai); font-size:22px; color:var(--gold); text-shadow:0 0 12px rgba(0,0,0,.9); pointer-events:none; opacity:0; z-index:19; letter-spacing:4px; white-space:nowrap;}
+  #turn-banner.show{animation:turnBannerIn 1.2s ease-out forwards;}
+  @keyframes turnBannerIn{0%{opacity:0; transform:translate(-50%,-50%) scale(.9)}15%{opacity:1; transform:translate(-50%,-50%) scale(1)}70%{opacity:1}100%{opacity:0; transform:translate(-50%,-50%) translateY(-18px)}}
 
   #bestiary-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; text-align:left;}
   .bcard{background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:12px;}
@@ -126,6 +129,13 @@
   #hurt-vignette{position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at center, transparent 45%, rgba(178,59,46,.5) 100%); opacity:0; z-index:4;}
   #hurt-vignette.flash{animation:vignette .5s ease-out;}
   @keyframes vignette{0%{opacity:1}100%{opacity:0}}
+  .enemy.dying{animation:enemyDie .45s ease-out forwards; pointer-events:none;}
+  @keyframes enemyDie{0%{opacity:1; transform:scale(1)}100%{opacity:0; transform:scale(.55)}}
+  #app.shake{animation:screenShake .3s ease-out;}
+  @keyframes screenShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-2px)}60%{transform:translate(-3px,-2px)}80%{transform:translate(3px,2px)}}
+  .card.shake{animation:cardShake .28s ease;}
+  @keyframes cardShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  .fx-dmg.block{color:#7fb0d8;}
   #tooltip{position:fixed; z-index:9999; max-width:250px; padding:9px 11px; background:rgba(24,18,12,.96); border:1px solid var(--gold); border-radius:7px; color:#e8dcc0; font-size:12px; line-height:1.5; pointer-events:none; opacity:0; transform:translateY(3px); transition:opacity .12s ease, transform .12s ease; box-shadow:0 6px 18px rgba(0,0,0,.55);}
   #tooltip.show{opacity:1; transform:translateY(0);}
   #tooltip .tt-title{font-weight:bold; color:#f0e0b8; margin-bottom:3px;}
@@ -136,8 +146,9 @@
 </head>
 <body>
 <div id="float-msg"></div>
+<div id="turn-banner"></div>
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.34</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.35</small></h1>
   <div id="topbar"></div>
   <div id="enemy-panel"></div>
   <div id="summon-panel"></div>
@@ -152,7 +163,7 @@
     <button class="btn ghost" id="menuBtn">☰ 菜单</button>
     <button class="btn" id="endTurn">结束回合</button>
   </div>
-  <div class="hint">点击卡牌打出 · 点击敌人切换目标 · 召唤单位持续 3 回合 · 蓄力 = 下回合更狠</div>
+  <div class="hint">点击卡牌打出 · 点击敌人切换目标 · 空格=结束回合 · 数字键1-9=出牌 · 悬停金色词查看说明</div>
 </div>
 
 <div id="overlay" class="hidden">
@@ -201,8 +212,26 @@ function hurtVignette(){
   if(!v){ v=document.createElement('div'); v.id='hurt-vignette'; document.body.appendChild(v); }
   v.classList.remove('flash'); void v.offsetWidth; v.classList.add('flash');
 }
+function screenShake(){
+  const app=document.getElementById('app');
+  if(!app) return;
+  app.classList.remove('shake'); void app.offsetWidth; app.classList.add('shake');
+}
+function turnBanner(text){
+  const el=document.getElementById('turn-banner');
+  if(!el) return;
+  el.textContent=text;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
+function shakeCard(i){
+  const el=document.querySelectorAll('#hand .card')[i];
+  if(el){ el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+}
 
 /* ===================== 音效（Web Audio，无外部资源） ===================== */
+let SETTINGS = { sound:true };
+function loadSettings(){ try{ const r=localStorage.getItem('zhiguaitower_settings_v1'); if(r) SETTINGS=Object.assign(SETTINGS, JSON.parse(r)); }catch(e){} }
+function persistSettings(){ try{ localStorage.setItem('zhiguaitower_settings_v1', JSON.stringify(SETTINGS)); }catch(e){} }
 let AC=null, NOISE=null;
 function ensureAudio(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC && AC.state==='suspended') AC.resume(); return AC; }
 function tone(freq, dur, type, vol, when, slideTo){
@@ -240,8 +269,12 @@ function boom(dur, vol, from, to, when){
   src.start(t); src.stop(t+dur);
 }
 function sfx(name){
+  if(!SETTINGS.sound) return;
   switch(name){
     case 'card': tone(360,.06,'triangle',.18); boom(.04,.12,4000,800); break;
+    case 'error': tone(200,.12,'square',.18,0,120); break;
+    case 'block': tone(300,.09,'triangle',.16,0,500); break;
+    case 'death': boom(.3,.4,1200,100); tone(160,.18,'sawtooth',.18,0,60); break;
     case 'hit': boom(.14,.5,2000,160); tone(150,.12,'square',.2,0,70); break;
     case 'hurt': boom(.22,.6,1400,110); tone(110,.2,'sawtooth',.25,0,55); break;
     case 'heal': tone(520,.16,'sine',.14,0,760); break;
@@ -707,7 +740,7 @@ function previewDamage(c){
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.7);
   return { raw, d, curse:e.curse||0, weak:G.weak>0 && !ignoreWeak, taomu, tongqian, zhusha, turnBuf, dynamic };
 }
-function dealDamageToPlayer(n, attacker){
+function dealDamageToPlayer(n, attacker, floatDelay){
   if(G.dodge>0){ G.dodge--; G.dodgeDraw=(G.dodgeDraw||0)+1; log(`移形换影：闪避了 ${attacker.name} 的攻击（下回合多摸 1 张）`); return; }
   let d=n+(attacker.strength||0);
   if(attacker.affixes){ const jd=attacker.affixes.find(a=>a.id==='judu'); if(jd) d+=2*jd.tier; }
@@ -719,7 +752,10 @@ function dealDamageToPlayer(n, attacker){
   if(G.hp-dealt<=0 && hasRelic('daoxin') && !G.daoxinUsed){ loss=Math.max(0,G.hp-1); G.daoxinUsed=true; log('道心触发：抵挡致命伤，保留 1 点生命'); }
   G.hp-=loss;
   if(loss>0 && G.xuejiArmed) G.xuejiHurt=true;
-  if(loss>0){ sfx('hurt'); hurtVignette(); const bar=document.querySelector('#topbar .hpbar'); floatDamage('-'+loss, 'to-player', bar); }
+  if(loss>0){
+    const doFx=()=>{ sfx('hurt'); hurtVignette(); screenShake(); const bar=document.querySelector('#topbar .hpbar'); floatDamage('-'+loss, 'to-player', bar); };
+    if(floatDelay) setTimeout(doFx, floatDelay); else doFx();
+  }
   G.totalHpLost=(G.totalHpLost||0)+loss;
   G.turnStats.dmgTaken+=loss; G.turnStats.blocked+=absorbed;
   log(`${attacker.name} 对你造成 ${loss} 点伤害${absorbed>0?`（格挡吸收 ${absorbed}）`:''}`);
@@ -751,7 +787,11 @@ function splitBoss(e){
 }
 function onEnemyDeathCheck(e){
   if(e.phase && !e.phase2){ enterPhase2(e); }
-  else { G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; unlockBestiary(e.key); }
+  else {
+    G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; unlockBestiary(e.key);
+    e.dying=true; sfx('death');
+    setTimeout(()=>{ e.dying=false; render(); }, 450);
+  }
 }
 function enterPhase2(e){
   e.phase2=true;
@@ -768,13 +808,16 @@ function directDamage(n, msg){
   G.hp=Math.max(0, G.hp-n);
   G.totalHpLost=(G.totalHpLost||0)+n;
   G.turnStats.dmgTaken+=n;
-  if(n>0){ sfx('hurt'); hurtVignette(); floatDamage('-'+n, 'to-player', document.querySelector('#topbar .hpbar')); }
+  if(n>0){ sfx('hurt'); hurtVignette(); screenShake(); floatDamage('-'+n, 'to-player', document.querySelector('#topbar .hpbar')); }
   if(msg) log(msg);
   if(G.hp<=0){ G.hp=0; loseGame(); return true; }
   return false;
 }
 function tickSeals(){ [G.hand, G.drawPile, G.discard].forEach(pile=>pile.forEach(c=>{ if(c.sealed>0) c.sealed--; })); }
-function gainBlock(n){ G.block+=n; }
+function gainBlock(n){
+  G.block+=n;
+  if(n>0){ sfx('block'); floatDamage('+'+n, 'block', document.querySelector('#topbar .hpbar')); }
+}
 function heal(n){ G.hp=Math.min(G.maxHp, G.hp+n); sfx('heal'); const bar=document.querySelector('#topbar .hpbar'); floatDamage('+'+n, 'heal', bar); }
 function discardRandomHand(){ if(!G.hand.length) return; const i=Math.floor(Math.random()*G.hand.length); const c=G.hand.splice(i,1)[0]; if(c.type!=='junk') G.discard.push(c); log(`弃掉【${c.name}】`); }
 function showDiscardChoice(){
@@ -914,11 +957,14 @@ function startBattle(keys){
   if(hasRelic('zhaohunfan')){ G.hp=Math.min(G.maxHp,G.hp+3); log('招魂幡：恢复 3 点生命'); }
   G.battleStartHp=G.hp;
   log(`—— 遭遇 ${G.enemies.map(e=>e.name).join('、')} ——`);
-  resetDeck(); startTurn();
+  resetDeck();
+  if(!tutorialSeen()) showTutorial(1);
+  startTurn();
 }
 function startTurn(){
   G.turn=(G.turn||0)+1;
   G.turnStats={dmgTaken:0, blocked:0, dealt:0, kills:[]};
+  turnBanner('第 '+G.turn+' 回合');
   if(G.burn>0){ const bd=G.burn*2; G.hp=Math.max(0,G.hp-bd); G.turnStats.dmgTaken+=bd; log(`灼烧：失去 ${bd} 点生命（${G.burn} 层）`); if(G.hp<=0){ G.hp=0; loseGame(); return; } }
   G.skillsPlayedThisTurn=0; G.attackBuff=0; G.turnAtkBuff=0; G.bloodPact=0; G.retain=0;
   G.energy=3+G.pendingEnergy;
@@ -937,7 +983,7 @@ function startTurn(){
     if(G.turn===1 && !e.boss && !e.aggressive){ e.intent={type:'dormant'}; }
     else { e.intent=e.intents[e.intentIndex % e.intents.length]; e.intentIndex++; }
   });
-  let n=5; if(G.gouhun>0){ n-=1; G.gouhun=0; } n=Math.max(1,n); if(G.dodgeDraw>0){ n+=G.dodgeDraw; log(`移形换影：闪避成功，额外摸 ${G.dodgeDraw} 张`); G.dodgeDraw=0; }
+  let n=5; if(G.gouhun>0){ n-=1; log('勾魂：本回合少抽 1 张牌'); } n=Math.max(1,n); if(G.dodgeDraw>0){ n+=G.dodgeDraw; log(`移形换影：闪避成功，额外摸 ${G.dodgeDraw} 张`); G.dodgeDraw=0; }
   if(hasRelic('yinyangjing')){ n+=1; log('阴阳镜：多抽 1 张'); }
   if(G.xuejiBonus>0){ n += G.xuejiBonus + (G.xuejiHurt?1:0); log(`血祭：额外摸 ${G.xuejiBonus+(G.xuejiHurt?1:0)} 张`); }
   G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false;
@@ -973,6 +1019,7 @@ function showEndTurnRetain(){
   renderRetainSelect();
 }
 function finishEndTurn(){
+  G.gouhun=0; // 勾魂效果本回合已结算
   // 守一：保留被标记的手牌
   const kept=G.hand.filter(c=>c.retain);
   G.discard=G.discard.concat(G.hand.filter(c=>!c.retain));
@@ -1000,7 +1047,7 @@ function enemyAct(){
       case 'weak': if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【虚弱】`); break;
       case 'gouhun': if(!G.debuffImmune){ G.gouhun=1; floatMsg('勾魂'); log(`${e.name} 勾魂：你下回合少抽 1 张`); } else log(`佛渡免疫了${e.name}的【勾魂】`); break;
       case 'strength': { e.strength=(e.strength||0)+e.intent.v; log(`${e.name} 力量 +${e.intent.v}`); if(e.intent.weak){ if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【暗夜威压】`); } if(e.intent.sealHeal){ const h=(G.wangyouDrunk||0)*8; if(h>0){ e.hp=Math.min(e.maxHp, e.hp+h); log(`${e.name} 汲取你饮下的忘忧汤，回复 ${h} 点生命`); } G.wangyouDrunk=0; } break; }
-      case 'multi': for(let i=0;i<e.intent.n;i++){ if(G.hp<=0) break; dealDamageToPlayer(e.intent.v,e); } break;
+      case 'multi': for(let i=0;i<e.intent.n;i++){ if(G.hp<=0) break; dealDamageToPlayer(e.intent.v,e,i*140); } break;
       case 'discard': if(!G.debuffImmune){ G.pendingDiscard++; floatMsg('下回合弃 1 张牌'); log(`${e.name} 缠绕你：下回合开始需弃 1 张牌`); } else log(`佛渡免疫了${e.name}的【缠绕】`); break;
       case 'attackBlock': { dealDamageToPlayer(e.intent.v,e); e.block+=e.intent.block; log(`${e.name} 攻击并格挡 ${e.intent.block}`); break; }
       case 'summon': { const uk=e.intent.unit||'xiaojianshi'; const un=ENEMIES[uk].name; let added=0; for(let i=0;i<e.intent.n;i++){ if(G.enemies.length>=5) break; G.enemies.push(makeEnemy(ENEMIES[uk], uk)); added++; } log(`${e.name} 召唤了 ${added} 只${un}`); break; }
@@ -1038,7 +1085,7 @@ function playCard(i){
   const c=G.hand[i]; if(!c) return;
   if(c.sealed>0){ floatMsg('【'+c.name+'】被封印'); log('这张牌被忘忧封印，无法打出'); return; }
   const cost=effectiveCost(c);
-  if(G.energy<cost) return;
+  if(G.energy<cost){ sfx('error'); floatMsg('符文不足'); shakeCard(i); return; }
   const hpCost = c.hpCost ? bloodCost(c.hpCost(c.up)) : 0;
   if(hpCost>0 && G.hp<=hpCost){
     showOverlay(`<h2>⚠ 以命相搏</h2><p>打出【${c.name}】将损失 <b style="color:var(--red)">${hpCost}</b> 生命，<br>你当前只剩 <b style="color:var(--red)">${G.hp}</b> 点，会<b>直接阵亡</b>。</p>
@@ -1738,24 +1785,24 @@ function handCardHTML(c, disabled){
 function intentText(e){
   const atk=e.intent.v+(e.pendingDamage||0)+(e.strength||0);
   switch(e.intent.type){
-    case 'attack': return `攻击 ${atk}`;
-    case 'charge': return `蓄力（下回合 +${e.intent.v} 伤害）`;
-    case 'block': return `格挡 ${e.intent.v}`;
-    case 'heal': return `回血 ${e.intent.v}`;
-    case 'weak': return '施加虚弱';
-    case 'gouhun': return '勾魂（少抽1张）';
-    case 'burn': return `灼烧 +${e.intent.v}（每回合 -${e.intent.v*2} 生命）`;
-    case 'strength': return e.intent.weak ? `力量 +${e.intent.v} · 施加虚弱` : e.intent.sealHeal ? `力量 +${e.intent.v} · 回血` : `力量 +${e.intent.v}`;
-    case 'multi': return `连击 ${e.intent.n}×${atk}`;
-    case 'discard': return '下回合弃你 1 张牌';
-    case 'attackBlock': return `攻击 ${atk} · 格挡 ${e.intent.block}`;
-    case 'summon': return `召唤 ${e.intent.n} 只${ENEMIES[e.intent.unit||'xiaojianshi'].name}`;
-    case 'jiming': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return lan?`记名（记录伤害 · 词缀「${lan}」）`:'记名（记录你打出的伤害）'; }
-    case 'qingsuan': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return `清算（反弹 ${Math.min(24, Math.floor((e.ledgerDmg||0)*0.3))}${lan?` · 打出「${lan}」`:''}）`; }
-    case 'yehuo': return '业火附体（你伤害 -30% · 反噬 1 血 · 诅咒翻倍）';
-    case 'wangyou': return '忘忧（两回合各饮 1 张或受 8 伤）';
-    case 'aoe': return `群体攻击 ${atk}（驱散召唤）`;
-    case 'dormant': return '休眠（观望）';
+    case 'attack': return `⚔️ 攻击 ${atk}`;
+    case 'charge': return `⏳ 蓄力（下回合 +${e.intent.v} 伤害）`;
+    case 'block': return `🛡️ 格挡 ${e.intent.v}`;
+    case 'heal': return `❤️ 回血 ${e.intent.v}`;
+    case 'weak': return '🥀 施加虚弱';
+    case 'gouhun': return '🔗 勾魂（少抽1张）';
+    case 'burn': return `🔥 灼烧 +${e.intent.v}（每回合 -${e.intent.v*2} 生命）`;
+    case 'strength': return e.intent.weak ? `💪 力量 +${e.intent.v} · 施加虚弱` : e.intent.sealHeal ? `💪 力量 +${e.intent.v} · 回血` : `💪 力量 +${e.intent.v}`;
+    case 'multi': return `⚔️ 连击 ${e.intent.n}×${atk}`;
+    case 'discard': return '🗑️ 下回合弃你 1 张牌';
+    case 'attackBlock': return `⚔️ 攻击 ${atk} · 🛡️ 格挡 ${e.intent.block}`;
+    case 'summon': return `👥 召唤 ${e.intent.n} 只${ENEMIES[e.intent.unit||'xiaojianshi'].name}`;
+    case 'jiming': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return lan?`📜 记名（记录伤害 · 词缀「${lan}」）`:'📜 记名（记录你打出的伤害）'; }
+    case 'qingsuan': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return `⚖️ 清算（反弹 ${Math.min(24, Math.floor((e.ledgerDmg||0)*0.3))}${lan?` · 打出「${lan}」`:''}）`; }
+    case 'yehuo': return '🔥 业火附体（你伤害 -30% · 反噬 1 血 · 诅咒翻倍）';
+    case 'wangyou': return '🍵 忘忧（两回合各饮 1 张或受 8 伤）';
+    case 'aoe': return `💥 群体攻击 ${atk}（驱散召唤）`;
+    case 'dormant': return '💤 休眠（观望）';
     default: return '…';
   }
 }
@@ -1763,15 +1810,15 @@ function enemyPanelHTML(e, idx){
   const ehp=Math.max(0,e.hp/e.maxHp*100);
   const selected = (e===curEnemy());
   let badges='';
-  if(e.curse>0) badges+=`<span class="badge curse">诅咒 ×${e.curse}</span>`;
-  if(e.charm>0) badges+=`<span class="badge charm">魅惑 ×${e.charm}</span>`;
-  if(e.strength>0) badges+=`<span class="badge strength">力量 ×${e.strength}</span>`;
-  if(e.pendingDamage>0) badges+=`<span class="badge strength">蓄力 +${e.pendingDamage}</span>`;
-  if(e.seal) badges+=`<span class="badge seal">镇魂</span>`;
+  if(e.curse>0) badges+=`<span class="badge curse" data-tip="kw:诅咒" style="cursor:help">诅咒 ×${e.curse}</span>`;
+  if(e.charm>0) badges+=`<span class="badge charm" data-tip="kw:魅惑" style="cursor:help">魅惑 ×${e.charm}</span>`;
+  if(e.strength>0) badges+=`<span class="badge strength" data-tip="kw:力量" style="cursor:help">力量 ×${e.strength}</span>`;
+  if(e.pendingDamage>0) badges+=`<span class="badge strength" data-tip="kw:蓄力" style="cursor:help">蓄力 +${e.pendingDamage}</span>`;
+  if(e.seal) badges+=`<span class="badge seal" data-tip="kw:镇魂" style="cursor:help">镇魂</span>`;
   if(e.ledgerActive){ const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; badges+=`<span class="badge affix" ${la?`data-tip="affix:${la.id}" style="cursor:help"`:''}>生死簿·记名${lan?`·${lan}`:''}${e.ledgerDmg?`（${e.ledgerDmg}）`:''}</span>`; }
   if(e.phase2) badges+=`<span class="badge affix" data-tip="kw:轮回" style="cursor:help">轮回·二阶段</span>`;
   if(e.affixes && e.affixes.length) e.affixes.forEach(a=>{ const af=AFFIXES.find(x=>x.id===a.id); badges+=`<span class="badge affix" data-tip="affix:${a.id}" style="cursor:help">${af?af.name:a.id}${a.tier>1?'·'+a.tier:''}</span>`; });
-  return `<div class="enemy ${selected?'selected':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" onclick="selectTarget(${idx})">
+  return `<div class="enemy ${selected?'selected':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" onclick="selectTarget(${idx})">
     <div class="ename" data-tip="enemy:${e.key}">${KIND_ICON[e.kind]||''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
     <span class="stat">生命 <b>${e.hp}</b>/${e.maxHp}</span>
     <span class="enemyhpbar"><i style="width:${ehp}%"></i></span>
@@ -1805,6 +1852,7 @@ function render(){
     ${G.energyBonusTurns>0?`<span class="stat" style="color:#7fb0d8">洗髓经 ${G.energyBonusTurns} 回合</span>`:''}
     ${G.karmaFire>0?`<span class="stat" style="color:#e06b3a">业火 ${G.karmaFire} 回合</span>`:''}
     ${G.weak>0?`<span class="stat" style="color:#8ab0d8" data-tip="kw:虚弱">虚弱 ${G.weak}回合</span>`:''}
+    ${G.gouhun>0?`<span class="stat" style="color:#c86bd8" data-tip="kw:勾魂">勾魂</span>`:''}
     ${G.burn>0?`<span class="stat" style="color:#e06b3a" data-tip="kw:灼烧">灼烧 ${G.burn}层</span>`:''}
     ${G.turnAtkBuff>0?`<span class="stat" style="color:#c86b1a" data-tip="kw:开天眼">开天眼 +${G.turnAtkBuff}</span>`:''}
     ${G.dodge>0?`<span class="stat" style="color:#8ab0d8" data-tip="kw:闪避">闪避 ${G.dodge}层</span>`:''}
@@ -1814,7 +1862,7 @@ function render(){
     ${G.xiejia>0?`<span class="stat" style="color:#7fb0d8" data-tip="kw:卸甲">卸甲 ${G.xiejia}回合</span>`:''}
     <span class="stat" style="color:var(--dim)">牌堆 ${G.drawPile.length} / 弃牌 ${G.discard.length}</span>
     ${G.relics.length?`<span class="stat" style="color:var(--gold)">遗物：${G.relics.map(id=>`<span class="kw" data-tip="relic:${id}">${relById(id).name}</span>`).join('、')}</span>`:''}`;
-  document.getElementById('enemy-panel').innerHTML=aliveEnemies().map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
+  document.getElementById('enemy-panel').innerHTML=G.enemies.filter(e=>alive(e)||e.dying).map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
   document.getElementById('summon-panel').innerHTML=G.summons.length? G.summons.map(s=>summonHTML(s)).join('') : '';
   document.getElementById('turn-summary').innerHTML=G.turnSummary || '';
   document.getElementById('hand').innerHTML=G.hand.map(c=>handCardHTML(c, G.energy<effectiveCost(c))).join('') || '<div style="color:var(--dim)">（无手牌）</div>';
@@ -1870,22 +1918,63 @@ function pickOpening(i){ const c=G.openingPicks[i]; G.deck.push(c); log(`获得�
 function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){ showMap(); }
 function showStartScreen(){
-  showOverlay(`<h2>志 怪 塔 · v0.34</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.35</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
     ${hasRunSave()?`<button class="btn" onclick="continueRun()">继续上次爬塔</button>`:''}
+    <button class="btn" onclick="startGame()">开始爬塔</button>
     <button class="btn ghost" onclick="viewBestiary()">志怪图鉴 · 已收录 ${SAVE.unlocked.length}/${BESTIARY_ORDER.length}</button>
     <button class="btn ghost" onclick="viewStats()">数据统计</button>
     <button class="btn ghost" onclick="viewLeaderboard()">排行榜</button>
-    <button class="btn" onclick="startGame()">开始爬塔</button>`);
+    <button class="btn ghost" onclick="showTutorial(1)">新手引导</button>
+    <button class="btn ghost" onclick="showSettings()">设置</button>`);
 }
 /* ===================== 菜单 / 重开 / 退出 ===================== */
 function openMenu(){
   showOverlay(`<h2>☰ 菜 单</h2>
     <button class="btn" onclick="resumeGame()">继续游戏</button>
+    <button class="btn ghost" onclick="manualSave()">存档</button>
+    <button class="btn ghost" onclick="showSettings()">设置</button>
     <button class="btn ghost" onclick="confirmRestart()">重新开始本局</button>
     <button class="btn ghost" onclick="confirmQuit()">退出到主菜单</button>`);
+}
+function manualSave(){
+  if(aliveEnemies().length>0){ floatMsg('战斗中无法存档'); log('战斗中无法存档，请结束战斗后再存'); return; }
+  saveRun(); sfx('gold'); floatMsg('已存档');
+}
+function showSettings(){
+  const on=SETTINGS.sound;
+  showOverlay(`<h2>设 置</h2>
+    <p>音效：<b style="color:${on?'var(--green)':'var(--red)'}">${on?'开':'关'}</b></p>
+    <button class="btn" onclick="toggleSound()">${on?'关闭音效':'开启音效'}</button>
+    <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
+    <button class="btn ghost" onclick="openMenu()">返回菜单</button>`);
+}
+function toggleSound(){
+  SETTINGS.sound=!SETTINGS.sound; persistSettings();
+  if(SETTINGS.sound) sfx('relic');
+  showSettings();
+}
+/* ===================== 新手引导 ===================== */
+function tutorialSeen(){ try{ return localStorage.getItem('zhiguaitower_tutorial_v1')==='1'; }catch(e){ return false; } }
+function markTutorialSeen(){ try{ localStorage.setItem('zhiguaitower_tutorial_v1','1'); }catch(e){} }
+const TUTORIAL_STEPS = [
+  {t:'出牌', html:'点<b>手牌</b>打出，左上角数字是<b>符文费用</b>（出不起会提示「符文不足」）。<br>每回合 3 点符文，用完就点「结束回合」。'},
+  {t:'目标与意图', html:'点<b>敌人</b>切换攻击目标（金色边框 = 当前目标）。<br>敌人头顶 <b>⚠ 意图</b> 预告它下回合要做什么，先看清再决定。'},
+  {t:'关键词与状态', html:'文字里的<b>金色关键词</b>（如【诅咒】【虚弱】）悬停可看解释。<br>敌人身上的状态徽章（诅咒/力量等）也可悬停查看。'},
+  {t:'遗物与灵汁', html:'顶栏 <b>🧪灵汁</b> 点击直接使用；<b>遗物</b> 本局永久生效。<br>战斗外可点「☰ 菜单」存档、改设置。祝你好运，打上塔顶。'}
+];
+function showTutorial(i){
+  if(i>TUTORIAL_STEPS.length){ markTutorialSeen(); hideOverlay(); render(); return; }
+  const s=TUTORIAL_STEPS[i-1];
+  const last = i===TUTORIAL_STEPS.length;
+  const btn = last
+    ? `<button class="btn" onclick="markTutorialSeen(); hideOverlay();">完成</button>`
+    : `<button class="btn" onclick="showTutorial(${i+1})">下一步</button>`;
+  const back = i>1 ? `<button class="btn ghost" onclick="showTutorial(${i-1})">上一步</button>` : '';
+  const skip = `<button class="btn ghost" onclick="markTutorialSeen(); hideOverlay();">跳过引导</button>`;
+  showOverlay(`<h2>入门引导 · ${i}/${TUTORIAL_STEPS.length} · ${s.t}</h2><p style="text-align:left;line-height:2">${s.html}</p>${btn}${back}${skip}`);
 }
 function resumeGame(){
   if(aliveEnemies().length>0) hideOverlay();
@@ -1908,7 +1997,23 @@ document.getElementById('viewDeck').addEventListener('click', viewDeck);
 document.getElementById('viewKeywords').addEventListener('click', viewKeywords);
 document.getElementById('viewRelics').addEventListener('click', viewRelics);
 document.getElementById('viewBestiary').addEventListener('click', viewBestiary);
+document.addEventListener('keydown', function(e){
+  if(!G) return;
+  const overlay=document.getElementById('overlay');
+  const overlayOpen = overlay && !overlay.classList.contains('hidden');
+  if(e.key==='Escape'){
+    if(overlayOpen){ const x=document.getElementById('overlayCloseX'); if(x && x.style.display!=='none') closeOverlay(); }
+    else if(aliveEnemies().length>0) openMenu();
+    return;
+  }
+  if(overlayOpen) return;
+  if(aliveEnemies().length===0) return;
+  if(e.key===' '){ e.preventDefault(); endTurn(); return; }
+  const idx=parseInt(e.key,10);
+  if(idx>=1 && idx<=9 && G.hand[idx-1]) playCard(idx-1);
+});
 loadSave();
+loadSettings();
 trackLaunch();
 document.addEventListener('DOMContentLoaded', showStartScreen);
 </script>
