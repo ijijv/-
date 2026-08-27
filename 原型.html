@@ -143,7 +143,8 @@
   .dmg-flash{animation:dmgFlash .5s ease-out;}
   @keyframes dmgFlash{0%{background:rgba(224,179,65,.4); border-radius:3px;}100%{background:transparent;}}
   /* —— 外置素材（有则增强，无则优雅回退） —— */
-  #bg{position:fixed; inset:0; z-index:-1; width:100%; height:100%; object-fit:cover;}
+  #bg{position:fixed; inset:0; z-index:0; width:100%; height:100%; object-fit:cover; pointer-events:none;}
+  body.has-bg{background:transparent;}
   .eportrait{width:100%; height:88px; object-fit:cover; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.25);}
   .cart{display:block;}
   .ricon{width:100%; height:56px; object-fit:contain; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.2);}
@@ -287,7 +288,7 @@
 <div id="turn-banner"></div>
 <div id="boss-intro"></div>
 <div id="achieve-toast"></div>
-<img id="bg" alt="" style="display:none" onerror="this.style.display='none'">
+<img id="bg" alt="" style="display:none" onerror="this.style.display='none';document.body.classList.remove('has-bg')" onload="this.style.display='block';document.body.classList.add('has-bg')">
 <div id="app">
   <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.44</small></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
@@ -524,9 +525,11 @@ function setBg(name){
   const el=document.getElementById('bg'); if(!el) return;
   el.style.display='block';
   el.src=ASSET_BASE+'bg/'+name+'.png';
+  // onload above will add has-bg class; set a timeout fallback
+  clearTimeout(BG_TIMEOUT); BG_TIMEOUT=setTimeout(()=>{ if(!el.complete||!el.naturalWidth) el.onerror(); }, 4000);
 }
 /* —— 背景音乐：优先 素材/music，缺失回退合成氛围音 —— */
-let BGM=null, BGM_TRACK=null, MUSIC_OK=null, CUR_BGM='menu';
+let BGM=null, BGM_TRACK=null, MUSIC_OK=null, CUR_BGM='menu', BG_TIMEOUT=null;
 function clearSynthBGM(){ if(SYNTH_BGM_TIMER){ clearInterval(SYNTH_BGM_TIMER); SYNTH_BGM_TIMER=null; } }
 function stopBGM(){ if(BGM){ try{ BGM.pause(); }catch(e){} BGM=null; } BGM_TRACK=null; clearSynthBGM(); }
 let SYNTH_BGM_TIMER=null;
@@ -2605,9 +2608,15 @@ function startGame(){
   ensureAudio();
   const d=readRun();
   if(d){
+    hideOverlay();
     showOverlay(`<h2>有未完成的存档</h2><p>上次存档：第 ${d.act} 幕 · 第 ${(d.mapRow||0)+1} 层 · 得分 <b style="color:var(--gold)">${d.score||0}</b>。</p><p style="font-size:13px">开始新游戏将覆盖该存档，其得分会记入排行榜。</p>
-      <button class="btn" onclick="confirmNewGame()">确定 · 开始新游戏</button>
-      <button class="btn ghost" onclick="showStartScreen()">返回</button>`);
+      <button class="btn" id="btn-confirm-new">确定 · 开始新游戏</button>
+      <button class="btn ghost" id="btn-back-menu">返回</button>`);
+    // 直接绑定事件——比 onclick 属性更可靠，避免嵌套 innerHTML 导致的事件丢失
+    const btnC=document.getElementById('btn-confirm-new');
+    const btnB=document.getElementById('btn-back-menu');
+    if(btnC) btnC.addEventListener('click', confirmNewGame);
+    if(btnB) btnB.addEventListener('click', showStartScreen);
     return;
   }
   confirmNewGame();
@@ -2619,7 +2628,6 @@ function confirmNewGame(){
     G=newState(); G.mapRow=0;
     track('runStart');
     if(SAVE.signInBonus>0){ G.gold=SAVE.signInBonus; SAVE.signInBonus=0; persistSave(); log(`开局携带签到奖励 ${G.gold} 金币`); }
-    hideOverlay();
     showHeroSelect();
   } catch(e){ console.error('confirmNewGame error:', e); showStartScreen(); }
 }

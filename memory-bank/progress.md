@@ -10,6 +10,16 @@
 
 ## Update History
 
+### [Aug 27, 2026, 2:47 PM] 🐛 Fix: v0.44 补丁：背景图 z-index 修复 + 存档 bug 根治
+<!-- ID: p_2026-08-27_mtb5u7cs -->
+
+①背景图修复：z-index 从 -1 改 0（之前被 body 不透明渐变遮挡），body 加 .has-bg 类在图片加载成功时去背景色，onload 事件加类+显示，onerror 隐藏+去类，setBg 加 4 秒超时回退。②存档 bug 根治：startGame 确认对话框改用 hideOverlay 先关主菜单→再 showOverlay 确认框，按钮从 onclick 改为 addEventListener 直接绑定（id=btn-confirm-new/btn-back-menu），避免嵌套 innerHTML 导致 onclick 丢失。confirmNewGame 去掉 hideOverlay 调用（showHeroSelect 里的 showOverlay 会自动替换内容），保留 try-catch 兜底。
+
+**Tags:** `fix`, `background`, `save-bug`
+
+---
+
+
 ### [Aug 27, 2026, 10:28 AM] 🐛 Fix: v0.44：修手机适配+存档bug+补素材规格
 <!-- ID: p_2026-08-27_mtawm2ot -->
 
