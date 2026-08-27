@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.44</title>
+<title>志怪塔 · 原型 v0.45</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -33,11 +33,17 @@
   .hpbar i.hpfill,.enemyhpbar i.hpfill{background:var(--red);}
   .hpbar i.hpghost,.enemyhpbar i.hpghost{background:rgba(255,206,130,.45); transition:width .85s ease-out .15s;}
 
-  .battle{display:flex; gap:14px; align-items:flex-start; margin-bottom:10px;}
-  #player-panel{flex:0 0 190px; background:var(--ink2); border:1px solid var(--ink3); border-radius:12px; padding:12px; text-align:center;}
-  .hero-art-box{width:100%; height:150px; margin-bottom:8px; border-radius:8px; overflow:hidden; background:linear-gradient(160deg,#2a2119,#120e0b); display:flex; align-items:center; justify-content:center;}
-  .hero-art-box .hero-art{width:100%; height:100%; object-fit:cover; display:block;}
-  .hero-emoji{font-size:56px; opacity:.5;}
+  .battle{display:flex; gap:14px; align-items:flex-end; margin-bottom:10px;}
+  #player-panel{flex:0 0 200px; background:transparent; border:none; border-radius:0; padding:0; text-align:center; display:flex; flex-direction:column; align-items:center;}
+  .hero-art-box{width:100%; height:280px; margin-bottom:4px; border-radius:0; overflow:visible; background:transparent; display:flex; align-items:flex-end; justify-content:center; position:relative;}
+  .hero-art-box::after{content:''; position:absolute; bottom:-2px; left:8%; right:8%; height:3px; background:radial-gradient(ellipse at center, rgba(224,179,65,.28), transparent 80%); pointer-events:none; border-radius:50%;}
+  .hero-art-box .hero-art{width:auto; height:100%; max-width:100%; object-fit:contain; object-position:bottom center; display:block; filter:drop-shadow(0 8px 16px rgba(0,0,0,.55)); transition:transform .15s ease, filter .15s ease;}
+  /* 角色动画状态（为后续攻击/受击动画预留） */
+  .hero-art-box.hero-attack .hero-art{transform:translateX(18px) scale(1.05); filter:drop-shadow(0 8px 16px rgba(0,0,0,.55)) brightness(1.2);}
+  .hero-art-box.hero-hit .hero-art{animation:heroHit .35s ease;}
+  .hero-art-box.hero-cast .hero-art{filter:drop-shadow(0 0 22px rgba(224,179,65,.8)) brightness(1.3);}
+  @keyframes heroHit{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+  .hero-emoji{font-size:72px; opacity:.35;}
   .pname{font-family:var(--font-kai); font-size:19px; color:var(--gold); letter-spacing:2px; margin-bottom:8px;}
   .prow{font-size:13px; color:var(--dim); margin:3px 0;}
   .prow b{color:var(--gold); font-size:15px;}
@@ -257,7 +263,8 @@
     #bestiary-grid{grid-template-columns:1fr; gap:8px;}
     .run-status{font-size:11px; gap:6px; padding:6px 8px;}
     .battle{flex-direction:column; gap:8px;}
-    #player-panel{padding:8px;}
+    #player-panel{flex:0 0 auto;}
+    .hero-art-box{height:180px;}
     #enemy-panel .enemy{padding:6px 8px;}
     .enemy .eportrait{height:56px;}
     button.btn{padding:8px 18px; font-size:14px; letter-spacing:1px;}
@@ -288,7 +295,7 @@
 <div id="turn-banner"></div>
 <div id="boss-intro"></div>
 <div id="achieve-toast"></div>
-<img id="bg" alt="" style="display:none" onerror="this.style.display='none';document.body.classList.remove('has-bg')" onload="this.style.display='block';document.body.classList.add('has-bg')">
+<img id="bg" alt="" style="display:none">
 <div id="app">
   <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.44</small></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
@@ -357,6 +364,16 @@ function hurtVignette(){
   let v=document.getElementById('hurt-vignette');
   if(!v){ v=document.createElement('div'); v.id='hurt-vignette'; document.body.appendChild(v); }
   v.classList.remove('flash'); void v.offsetWidth; v.classList.add('flash');
+}
+function heroAnim(state){
+  var box=document.querySelector('.hero-art-box');
+  if(!box) return;
+  box.classList.remove('hero-attack','hero-hit','hero-cast');
+  if(state){
+    void box.offsetWidth;
+    box.classList.add('hero-'+state);
+    if(state==='hit'||state==='attack') setTimeout(function(){ box.classList.remove('hero-'+state); },350);
+  }
 }
 /* 全屏震屏 screenShake 已移除（见 CSS 注释） */
 function turnBanner(text){
@@ -522,14 +539,15 @@ function artImg(src, fallback, cls){
 function cardArt(c){ return `<div class="cart-wrap">${artImg('card/'+c.id+'.png', '', 'cart')}</div>`; }
 function relicIcon(r){ return artImg('relic/'+r.id+'.png', '', 'ricon'); }
 function setBg(name){
-  const el=document.getElementById('bg'); if(!el) return;
+  var el=document.getElementById('bg'); if(!el) return;
+  var path=ASSET_BASE+'bg/bg_'+name+'.png';
+  el.onload=function(){ document.body.classList.add('has-bg'); };
+  el.onerror=function(){ el.style.display='none'; document.body.classList.remove('has-bg'); };
+  el.src=path;
   el.style.display='block';
-  el.src=ASSET_BASE+'bg/'+name+'.png';
-  // onload above will add has-bg class; set a timeout fallback
-  clearTimeout(BG_TIMEOUT); BG_TIMEOUT=setTimeout(()=>{ if(!el.complete||!el.naturalWidth) el.onerror(); }, 4000);
 }
 /* —— 背景音乐：优先 素材/music，缺失回退合成氛围音 —— */
-let BGM=null, BGM_TRACK=null, MUSIC_OK=null, CUR_BGM='menu', BG_TIMEOUT=null;
+let BGM=null, BGM_TRACK=null, MUSIC_OK=null, CUR_BGM='menu';
 function clearSynthBGM(){ if(SYNTH_BGM_TIMER){ clearInterval(SYNTH_BGM_TIMER); SYNTH_BGM_TIMER=null; } }
 function stopBGM(){ if(BGM){ try{ BGM.pause(); }catch(e){} BGM=null; } BGM_TRACK=null; clearSynthBGM(); }
 let SYNTH_BGM_TIMER=null;
@@ -1087,7 +1105,7 @@ function dealDamageToPlayer(n, attacker, floatDelay){
   G.hp-=loss;
   if(loss>0 && G.xuejiArmed) G.xuejiHurt=true;
   if(loss>0){
-    const doFx=()=>{ sfx('hurt'); hurtVignette(); const bar=document.querySelector('#player-panel .hpbar'); floatDamage('-'+loss, 'to-player', bar); };
+    const doFx=()=>{ sfx('hurt'); hurtVignette(); heroAnim('hit'); const bar=document.querySelector('#player-panel .hpbar'); floatDamage('-'+loss, 'to-player', bar); };
     if(floatDelay) setTimeout(doFx, floatDelay); else doFx();
   }
   G.totalHpLost=(G.totalHpLost||0)+loss;
@@ -1471,6 +1489,7 @@ function doPlayCard(i){
   }
   sfx('card');
   cardPlayFx(c);
+  if(c.type==='attack') heroAnim('attack');
   log(`打出【${c.name}】${c.up?'（升级）':''}`);
   c.eff(c.up, c);
   if(TUT && TUT.step===1) advanceTut();
@@ -1577,7 +1596,7 @@ function submitScore(score, act){
   if(!SAVE.highScores) SAVE.highScores=[];
   const wk=weekKey();
   SAVE.highScores=SAVE.highScores.filter(h=>h.week===wk); // 周榜：每周一重置
-  SAVE.highScores.push({score, act:act!=null?act:G.act, mode:G.endless?'endless':'normal', floor:G.endless?G.endlessFloor:0, week:wk, date:todayStr()});
+  SAVE.highScores.push({score, act:act!=null?act:(G?G.act:1), mode:G&&G.endless?'endless':'normal', floor:G&&G.endless?G.endlessFloor:0, week:wk, date:todayStr()});
   SAVE.highScores.sort((a,b)=>b.score-a.score);
   SAVE.highScores=SAVE.highScores.slice(0,10);
   persistSave();
@@ -2615,7 +2634,7 @@ function startGame(){
 function confirmNewGame(){
   try {
     const d=readRun();
-    if(d){ submitScore(d.score||0, d.act); clearRunSave(); }
+    if(d){ G=d; submitScore(d.score||0, d.act); clearRunSave(); }
     G=newState(); G.mapRow=0;
     track('runStart');
     if(SAVE.signInBonus>0){ G.gold=SAVE.signInBonus; SAVE.signInBonus=0; persistSave(); log('开局携带签到奖励 '+G.gold+' 金币'); }
@@ -2644,7 +2663,7 @@ function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){ showMap(); }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.44</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.45</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
