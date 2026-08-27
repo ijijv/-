@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.45</title>
+<title>志怪塔 · 原型 v0.46</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -32,6 +32,29 @@
   .hpbar i,.enemyhpbar i{position:absolute; left:0; top:0; height:100%; display:block; transition:width .4s cubic-bezier(.22,1,.36,1);}
   .hpbar i.hpfill,.enemyhpbar i.hpfill{background:var(--red);}
   .hpbar i.hpghost,.enemyhpbar i.hpghost{background:rgba(255,206,130,.45); transition:width .85s ease-out .15s;}
+  /* 格挡时水晶蓝血条 */
+  #player-panel .hpbar.has-block .hpfill{background:linear-gradient(90deg,#5bb8d8,#3a9cc0,#7ad0f0); box-shadow:0 0 6px rgba(90,180,210,.4);}
+  #player-panel .hpbar.has-block .hpghost{background:rgba(160,210,240,.35);}
+  .hp-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.7); z-index:1; pointer-events:none;}
+  /* 血条下方数值（血量+格挡） */
+  .pstats{display:flex; gap:10px; justify-content:center; margin-top:3px; font-size:13px; font-weight:bold;}
+  .pstat-hp,.pstat-block{display:inline-flex; align-items:center; gap:3px;}
+  .pstat-hp i,.pstat-block i{display:inline-block; width:9px; height:9px; border-radius:50%;}
+  .pstat-hp{color:#e8d9c4;} .pstat-hp i{background:var(--red);}
+  .pstat-block{color:#bfe6f5;} .pstat-block i{background:#5bb8d8;}
+  /* 玩家面板遗物 */
+  .player-relics{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; justify-content:center;}
+  .prelic-chip{display:inline-flex; align-items:center; gap:3px; background:rgba(224,179,65,.08); border:1px solid var(--ink3); border-radius:6px; padding:2px 6px 2px 2px; cursor:default;}
+  .prelic-chip .ricon{width:24px; height:24px; margin:0; border-radius:4px;}
+  .prelic-chip .prelic-name{font-size:10px; color:var(--gold); white-space:nowrap;}
+  /* 顶栏 stat 图标替换 */
+  .stat-hp i,.stat-block i,.stat-gold i{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:2px; vertical-align:middle;}
+  .stat-hp i{background:var(--red);}
+  .stat-block i{background:#5bb8d8;}
+  .stat-gold i{background:var(--gold);}
+  .stat-level{color:var(--dim);}
+  .stat-deck{color:var(--dim);}
+  .stat-deck b{color:var(--dim);}
 
   .battle{display:flex; gap:14px; align-items:flex-end; margin-bottom:10px;}
   #player-panel{flex:0 0 200px; background:transparent; border:none; border-radius:0; padding:0; text-align:center; display:flex; flex-direction:column; align-items:center;}
@@ -75,6 +98,12 @@
   #log{min-height:72px; max-height:96px; overflow-y:auto; background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:8px 12px; margin-bottom:12px; font-size:12px; color:var(--dim); line-height:1.7;}
 
   #hand{display:flex; flex-wrap:nowrap; min-height:200px; align-items:flex-end; justify-content:center; padding:8px 0 16px; touch-action:none;}
+  .hand-area{display:flex; align-items:flex-end; gap:8px;}
+  .hand-area #hand{flex:1 1 auto; min-width:0;}
+  .rune-display{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; padding-bottom:14px; min-width:110px;}
+  .rune-icon{width:105px; height:105px; object-fit:contain; filter:drop-shadow(0 0 8px rgba(180,140,220,.45));}
+  .rune-fallback{font-size:90px; color:rgba(180,140,220,.6); line-height:1; display:none;}
+  .rune-count{font-size:22px; font-weight:bold; color:var(--gold);}
   .card{width:132px; height:200px; position:relative; background:var(--paper); color:#2a2119; border-radius:8px; display:flex; flex-direction:column; cursor:pointer; border:2px solid transparent; box-shadow:0 3px 8px rgba(0,0,0,.45); transition:transform .13s ease; text-align:left; font-size:11px; overflow:hidden; touch-action:none;}
   .card::before{content:""; position:absolute; top:0; left:0; right:0; height:5px; background:var(--cb, linear-gradient(90deg,var(--red2),var(--red),var(--red2))); border-radius:8px 8px 0 0; opacity:.8; z-index:1;}
   .card.disabled{filter:grayscale(.8) brightness(.7); cursor:not-allowed;}
@@ -271,6 +300,16 @@
     button.btn.ghost{padding:6px 12px; font-size:12px;}
     #turn-banner{font-size:18px; top:14%;}
     #float-msg{font-size:20px; top:30%;}
+    .rune-display{min-width:80px; padding-bottom:10px;}
+    .rune-icon{width:80px; height:80px;}
+    .rune-fallback{font-size:68px;}
+    .rune-count{font-size:17px;}
+    .hand-area{gap:4px;}
+    .player-relics{gap:4px;}
+    .prelic-chip{padding:1px 4px 1px 1px;}
+    .prelic-chip .ricon{width:20px; height:20px;}
+    .prelic-chip .prelic-name{font-size:9px;}
+    .hp-label{font-size:9px;}
   }
   @media (max-width:360px){
     .card{width:78px; height:136px; font-size:8px;}
@@ -297,17 +336,24 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.44</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.46</small></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div class="battle">
     <div id="player-panel"></div>
     <div id="enemy-panel"></div>
   </div>
-  <div id="hand"></div>
+  <div class="hand-area">
+    <div class="rune-display" id="rune-display">
+      <img src="素材/rune.png" class="rune-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+      <span class="rune-fallback">◆</span>
+      <span class="rune-count" id="rune-count">3</span>
+    </div>
+    <div id="hand"></div>
+  </div>
   <div id="actions">
-    <button class="btn ghost" id="viewDeck">🂠 牌库</button>
-    <button class="btn ghost" id="menuBtn">☰ 菜单</button>
-    <button class="btn" id="endTurn">⚔ 结束回合</button>
+    <button class="btn ghost" id="viewDeck">牌库</button>
+    <button class="btn ghost" id="menuBtn">菜单</button>
+    <button class="btn" id="endTurn">结束回合</button>
   </div>
   <div class="hint">点击/上拖出牌 · 攻击牌按住拖箭头指向敌人 · 长按卡牌放大描述 · 空格=结束回合 · 悬停金色词看说明</div>
   <div id="summon-panel"></div>
@@ -1755,7 +1801,7 @@ function nodeLabel(node){
   return node.e.length>1 ? `⚔ 战斗×${node.e.length}` : '⚔ 战斗';
 }
 function runStatusHTML(){
-  const relicNames = G.relics.length ? G.relics.map(id=>`<span class="kw" data-tip="relic:${id}">${relById(id).name}</span>`).join('、') : '无';
+  const relicNames = G.relics.length ? G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('') : '无';
   return `<div class="run-status">
     <span>生命 <b>${G.hp}</b>/${G.maxHp}</span>
     <span>金币 <b>${G.gold}</b></span>
@@ -1783,7 +1829,7 @@ function showMap(){
     }
     html+=`</div>`;
   }
-  html+=`<div style="margin-top:12px"><button class="btn ghost" onclick="openMenu()">☰ 菜单（重开 / 退出）</button></div>`;
+  html+=`<div style="margin-top:12px"><button class="btn ghost" onclick="openMenu()">菜单（重开 / 退出）</button></div>`;
   showOverlay(html);
 }
 function chooseNode(c){
@@ -2566,18 +2612,15 @@ function renderTopbar(){
   const el=document.getElementById('topbar');
   if(!el) return;
   let html=`
-    <span class="stat">❤️ <b>${G.hp}</b>/${G.maxHp}</span>
-    <span class="stat">🛡️ <b>${G.block}</b></span>
-    <span class="stat">🔮 <b>${G.energy}</b></span>
-    <span class="stat">💰 <b>${G.gold}</b></span>
+    <span class="stat stat-gold"><i></i><b>${G.gold}</b></span>
+    <span class="stat stat-level">${G.endless?`镇妖塔 · 第 <b>${G.endlessFloor}</b> 层`:`第 <b>${G.act}</b> 幕 · <b>${G.mapRow+1}</b>/${MAP.length} 层`}</span>
+    <span class="stat stat-deck">牌堆 <b>${G.drawPile.length}</b> / 弃牌 <b>${G.discard.length}</b></span>
     <button class="tb-toggle" onclick="event.stopPropagation();toggleTopbar()">${TOPBAR_OPEN?'▴ 收起详情':'▾ 详情'}</button>`;
   if(TOPBAR_OPEN){
     const buffs=playerBuffHTML();
     const relics=G.relics.length?`<div class="prelics">${G.relics.map(id=>`<span class="kw" data-tip="relic:${id}">${relById(id).name}</span>`).join(' · ')}</div>`:'';
     const potion=potionBagHTML();
     html+=`<div class="tb-detail">
-      <span class="stat">${G.endless?`镇妖塔 · 第 <b>${G.endlessFloor}</b> 层`:`第 <b>${G.act}</b> 幕 · <b>${G.mapRow+1}</b>/${MAP.length} 层`}</span>
-      <span class="stat" style="color:var(--dim)">牌堆 ${G.drawPile.length} / 弃牌 ${G.discard.length}</span>
       ${potion}
       ${buffs?`<div class="badges">${buffs}</div>`:''}
       ${relics}
@@ -2591,16 +2634,20 @@ function render(){
   const hpPrev=(PLAYER_HP_PREV===null)?hpPct:PLAYER_HP_PREV;
   PLAYER_HP_PREV=hpPct;
   const heroName=(HEROES.find(h=>h.id===G.hero)||{}).name||'';
+  const relicsRow=G.relics.length?`<div class="player-relics">${G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('')}</div>`:'';
   document.getElementById('player-panel').innerHTML=`
     <div class="hero-art-box">${artImg('hero/'+G.hero+'.png', `<div class="hero-emoji">🀄</div>`, 'hero-art')}</div>
     <div class="pname" data-tip="hero:${G.hero}">${heroName}</div>
-    <span class="hpbar"><i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>`;
+    <span class="hpbar${G.block>0?' has-block':''}"><i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>
+    <div class="pstats"><span class="pstat-hp"><i></i>${G.hp}/${G.maxHp}</span>${G.block>0?`<span class="pstat-block"><i></i>${G.block}</span>`:''}</div>
+    ${relicsRow}`;
   renderTopbar();
   document.getElementById('enemy-panel').innerHTML=G.enemies.filter(e=>alive(e)||e.dying).map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
   document.getElementById('summon-panel').innerHTML=G.summons.length? G.summons.map(s=>summonHTML(s)).join('') : '';
   document.getElementById('turn-summary').innerHTML=G.turnSummary || '';
   if(!G.discardSelect && !G.exchange && !G.retainSelect) groupHand();
   document.getElementById('hand').innerHTML=G.hand.map((c,i)=>handCardHTML(c, G.energy<effectiveCost(c), i, G.hand.length)).join('') || '<div style="color:var(--dim)">（无手牌）</div>';
+  const runeCount=document.getElementById('rune-count'); if(runeCount) runeCount.textContent=G.energy;
   document.getElementById('log').innerHTML=G.log.slice(-8).map(x=>'· '+x).join('<br>');
   HITFX.enemies.clear();
   animateHpBars();
@@ -2663,7 +2710,7 @@ function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){ showMap(); }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.45</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.46</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -2679,7 +2726,7 @@ function showStartScreen(){
 }
 /* ===================== 菜单 / 重开 / 退出 ===================== */
 function openMenu(){
-  showOverlay(`<h2>☰ 菜 单</h2>
+  showOverlay(`<h2>菜 单</h2>
     <button class="btn" onclick="resumeGame()">继续游戏</button>
     <button class="btn ghost" onclick="manualSave()">存档</button>
     <button class="btn ghost" onclick="showSettings()">设置</button>
@@ -2737,7 +2784,7 @@ function renderTutHint(){
   let el=document.getElementById('tut-hint');
   if(!TUT){ if(el) el.remove(); return; }
   if(!el){ el=document.createElement('div'); el.id='tut-hint'; document.body.appendChild(el); }
-  const msgs={1:'第一步 · 点一张<b>手牌</b>打出（左上角是符文费用）',2:'第二步 · 点<b>敌人</b>切换攻击目标（金色边框 = 当前目标）',3:'第三步 · 点底部<b>「⚔ 结束回合」</b>结束本回合'};
+  const msgs={1:'第一步 · 点一张<b>手牌</b>打出（左上角是符文费用）',2:'第二步 · 点<b>敌人</b>切换攻击目标（金色边框 = 当前目标）',3:'第三步 · 点底部<b>「结束回合」</b>结束本回合'};
   el.innerHTML='<span class="tut-tag">引导</span>'+msgs[TUT.step];
   el.classList.add('show');
 }
@@ -2750,7 +2797,7 @@ const TUTORIAL_STEPS = [
   {t:'出牌', html:'点<b>手牌</b>打出，左上角数字是<b>符文费用</b>（出不起会提示「符文不足」）。<br>每回合 3 点符文，用完就点「结束回合」。'},
   {t:'目标与意图', html:'点<b>敌人</b>切换攻击目标（金色边框 = 当前目标）。<br>敌人头顶 <b>⚠ 意图</b> 预告它下回合要做什么，先看清再决定。'},
   {t:'关键词与状态', html:'文字里的<b>金色关键词</b>（如【诅咒】【虚弱】）悬停可看解释。<br>敌人身上的状态徽章（诅咒/力量等）也可悬停查看。'},
-  {t:'遗物与灵汁', html:'顶栏 <b>🧪灵汁</b> 点击直接使用；<b>遗物</b> 本局永久生效。<br>战斗外可点「☰ 菜单」存档、改设置。祝你好运，打上塔顶。'}
+  {t:'遗物与灵汁', html:'顶栏 <b>🧪灵汁</b> 点击直接使用；<b>遗物</b> 本局永久生效。<br>战斗外可点「菜单」存档、改设置。祝你好运，打上塔顶。'}
 ];
 function showTutorial(i){
   if(i>TUTORIAL_STEPS.length){ markTutorialSeen(); hideOverlay(); render(); return; }
