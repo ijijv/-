@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.46</title>
+<title>志怪塔 · 原型 v0.47</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -180,7 +180,11 @@
   /* —— 外置素材（有则增强，无则优雅回退） —— */
   #bg{position:fixed; inset:0; z-index:0; width:100%; height:100%; object-fit:cover; pointer-events:none;}
   body.has-bg{background:transparent;}
-  .eportrait{width:100%; height:88px; object-fit:cover; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.25);}
+  .eportrait{width:100%; height:120px; object-fit:contain; object-position:bottom center; border-radius:0; margin-bottom:2px; background:transparent; display:block; filter:drop-shadow(0 6px 12px rgba(0,0,0,.55));}
+  .eportrait.e-summon{height:64px;}
+  .eportrait.e-normal{height:120px;}
+  .eportrait.e-elite{height:150px;}
+  .eportrait.e-boss{height:180px;}
   .cart{display:block;}
   .ricon{width:100%; height:56px; object-fit:contain; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.2);}
   /* —— 战斗特效（juice） —— */
@@ -295,7 +299,10 @@
     #player-panel{flex:0 0 auto;}
     .hero-art-box{height:180px;}
     #enemy-panel .enemy{padding:6px 8px;}
-    .enemy .eportrait{height:56px;}
+    .enemy .eportrait{height:80px;}
+    .enemy .eportrait.e-summon{height:48px;}
+    .enemy .eportrait.e-elite{height:110px;}
+    .enemy .eportrait.e-boss{height:130px;}
     button.btn{padding:8px 18px; font-size:14px; letter-spacing:1px;}
     button.btn.ghost{padding:6px 12px; font-size:12px;}
     #turn-banner{font-size:18px; top:14%;}
@@ -336,7 +343,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.46</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.47</small></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div class="battle">
     <div id="player-panel"></div>
@@ -2413,6 +2420,8 @@ function enemyPanelHTML(e, idx){
   const ehPrev=(ENEMY_HP_PREV[e.uid]===undefined)?ehp:ENEMY_HP_PREV[e.uid];
   ENEMY_HP_PREV[e.uid]=ehp;
   const selected = (e===curEnemy());
+  const edef=ENEMIES[e.key];
+  const eSize=e.boss?'e-boss':e.elite?'e-elite':(edef&&edef.summon)?'e-summon':'e-normal';
   let badges='';
   if(e.curse>0) badges+=`<span class="badge curse" data-tip="kw:诅咒" style="cursor:help">☠️诅咒 ×${e.curse}</span>`;
   if(e.charm>0) badges+=`<span class="badge charm" data-tip="kw:魅惑" style="cursor:help">💘魅惑 ×${e.charm}</span>`;
@@ -2423,7 +2432,7 @@ function enemyPanelHTML(e, idx){
   if(e.phase2) badges+=`<span class="badge affix" data-tip="kw:轮回" style="cursor:help">🔄轮回·二阶段</span>`;
   if(e.affixes && e.affixes.length) e.affixes.forEach(a=>{ const af=AFFIXES.find(x=>x.id===a.id); badges+=`<span class="badge affix" data-tip="affix:${a.id}" style="cursor:help">${af?af.name:a.id}${a.tier>1?'·'+a.tier:''}</span>`; });
   return `<div class="enemy ${selected?'selected':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" onclick="selectTarget(${idx})">
-    ${artImg('enemy/'+e.key+'.png', '', 'eportrait')}
+    ${artImg('enemy/'+e.key+'.png', '', 'eportrait '+eSize)}
     <div class="ename" data-tip="enemy:${e.key}">${KIND_ICON[e.kind]||''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
     <span class="stat">生命 <b>${e.hp}</b>/${e.maxHp}</span>
     <span class="enemyhpbar"><i class="hpghost" data-w="${ehp}" style="width:${ehPrev}%"></i><i class="hpfill" data-w="${ehp}" style="width:${ehPrev}%"></i></span>
@@ -2710,7 +2719,7 @@ function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){ showMap(); }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.46</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.47</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
