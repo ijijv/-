@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>志怪塔 - 动态稀有度概率系统测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>志怪塔 - 动态稀有度概率系统测试</h1>
+
+        <div class="test-section">
+            <h3>补偿值系统测试</h3>
+            <p>当前补偿值: <span id="compensationValue">-5.00%</span></p>
+            <p>当前调整后金卡概率 (普通战): <span id="adjustedGoldProbNormal">0.00%</span></p>
+            <p>当前调整后金卡概率 (精英战): <span id="adjustedGoldProbElite">5.00%</span></p>
+            <p>当前调整后金卡概率 (商店): <span id="adjustedGoldProbShop">5.00%</span></p>
+
+            <button onclick="incrementNoGold()">未获得金卡 (+1% 补偿)</button>
+            <button onclick="incrementWithGold()">获得金卡 (重置补偿)</button>
+            <button onclick="testRarityRolls()">测试稀有度抽取 (10次)</button>
+            <button onclick="resetCompensation()">重置补偿值</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // 动态稀有度概率系统代码（来自原型.html）
+        // 金卡补偿值变量（用于动态稀有度概率）
+        let goldCompensation = -0.05; // 初始值为-5%
+
+        // 基础概率配置表
+        const RARITY_BASE_PROBABILITIES = {
+          normal: { white: 0.60, blue: 0.37, purple: 0.03, gold: 0.00 },
+          elite: { white: 0.40, blue: 0.35, purple: 0.20, gold: 0.05 },
+          boss: { white: 0.00, blue: 0.00, purple: 0.40, gold: 0.60 },
+          shop: { white: 0.50, blue: 0.35, purple: 0.10, gold: 0.05 },
+          starter: { white: 0.60, blue: 0.35, purple: 0.05, gold: 0.00 }
+        };
+
+        /**
+         * 更新金卡补偿值
+         * @param {boolean} hasGold - 是否获得了金卡
+         */
+        function updateGoldCompensation(hasGold) {
+          if (hasGold) {
+            goldCompensation = -0.05; // 出现金卡时重置为-5%
+          } else {
+            goldCompensation = Math.min(goldCompensation + 0.01, 0.30); // 未出金卡时+1%，上限30%
+          }
+
+          // 限制补偿值在合理范围内 (-5% 到 30%)
+          goldCompensation = Math.max(-0.05, Math.min(0.30, goldCompensation));
+
+          updateDisplay();
+        }
+
+        /**
+         * 获取调整后的金卡概率
+         * @param {string} tier - 战斗类型 (normal, elite, boss, shop, starter)
+         * @returns {number} 调整后的金卡概率
+         */
+        function getAdjustedGoldProbability(tier) {
+          const baseGoldProb = RARITY_BASE_PROBABILITIES[tier]?.gold || 0;
+
+          // Boss战不受补偿值影响
+          if (tier === 'boss') {
+            return baseGoldProb;
+          }
+
+          // 计算调整后的概率
+          const adjustedProb = baseGoldProb + goldCompensation;
+
+          // 限制概率范围 [0, 0.95] (不能超过95%避免其他卡牌概率为负)
+          return Math.max(0, Math.min(adjustedProb, 0.95));
+        }
+
+        /**
+         * 滚动确定卡牌稀有度（支持动态补偿）
+         * @param {string} tier - 战斗类型 (normal, elite, boss, shop, starter)
+         * @returns {string} 稀有度 (white, blue, purple, gold)
+         */
+        function rollCardRarity(tier) {
+          const probs = RARITY_BASE_PROBABILITIES[tier];
+          if (!probs) {
+            return 'white'; // 默认返回白色
+          }
+
+          // 根据战斗类型计算实际概率
+          let whiteProb = probs.white;
+          let blueProb = probs.blue;
+          let purpleProb = probs.purple;
+          let goldProb = getAdjustedGoldProbability(tier);
+
+          // 如果不是Boss战，重新计算其他颜色的概率以确保总和为100%
+          if (tier !== 'boss' && goldProb > 0) {
+            // 调整后需要重新分配其他卡牌的概率，保证总数为1
+            const otherProbTotal = whiteProb + blueProb + purpleProb;
+            if (otherProbTotal + goldProb > 1.0) {
+              // 缩放其他概率，确保总和为1
+              const scaleFactor = (1.0 - goldProb) / otherProbTotal;
+              whiteProb *= scaleFactor;
+              blueProb *= scaleFactor;
+              purpleProb *= scaleFactor;
+            }
+          }
+
+          // 生成随机数
+          const rand = Math.random();
+
+          if (rand <= whiteProb) {
+            return 'white';
+          } else if (rand <= whiteProb + blueProb) {
+            return 'blue';
+          } else if (rand <= whiteProb + blueProb + purpleProb) {
+            return 'purple';
+          } else {
+            return 'gold';
+          }
+        }
+
+        // 辅助函数
+        function updateDisplay() {
+            document.getElementById('compensationValue').textContent = (goldCompensation * 100).toFixed(2) + '%';
+            document.getElementById('adjustedGoldProbNormal').textContent = (getAdjustedGoldProbability('normal') * 100).toFixed(2) + '%';
+            document.getElementById('adjustedGoldProbElite').textContent = (getAdjustedGoldProbability('elite') * 100).toFixed(2) + '%';
+            document.getElementById('adjustedGoldProbShop').textContent = (getAdjustedGoldProbability('shop') * 100).toFixed(2) + '%';
+        }
+
+        function incrementNoGold() {
+            updateGoldCompensation(false);
+        }
+
+        function incrementWithGold() {
+            updateGoldCompensation(true);
+        }
+
+        function resetCompensation() {
+            goldCompensation = -0.05;
+            updateDisplay();
+        }
+
+        function testRarityRolls() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="result"><h4>测试结果:</h4></div>';
+            const resultDiv = resultsDiv.firstChild;
+
+            // 测试普通战斗10次
+            const normalResults = {};
+            for (let i = 0; i < 10; i++) {
+                const rarity = rollCardRarity('normal');
+                normalResults[rarity] = (normalResults[rarity] || 0) + 1;
+            }
+
+            resultDiv.innerHTML += '<p><strong>普通战斗 (10次抽卡):</strong><br>';
+            for (const [rarity, count] of Object.entries(normalResults)) {
+                resultDiv.innerHTML += `${rarity}: ${count}次<br>`;
+            }
+            resultDiv.innerHTML += '</p>';
+
+            // 测试精英战斗10次
+            const eliteResults = {};
+            for (let i = 0; i < 10; i++) {
+                const rarity = rollCardRarity('elite');
+                eliteResults[rarity] = (eliteResults[rarity] || 0) + 1;
+            }
+
+            resultDiv.innerHTML += '<p><strong>精英战斗 (10次抽卡):</strong><br>';
+            for (const [rarity, count] of Object.entries(eliteResults)) {
+                resultDiv.innerHTML += `${rarity}: ${count}次<br>`;
+            }
+            resultDiv.innerHTML += '</p>';
+
+            // 测试商店10次
+            const shopResults = {};
+            for (let i = 0; i < 10; i++) {
+                const rarity = rollCardRarity('shop');
+                shopResults[rarity] = (shopResults[rarity] || 0) + 1;
+            }
+
+            resultDiv.innerHTML += '<p><strong>商店 (10次抽卡):</strong><br>';
+            for (const [rarity, count] of Object.entries(shopResults)) {
+                resultDiv.innerHTML += `${rarity}: ${count}次<br>`;
+            }
+            resultDiv.innerHTML += '</p>';
+        }
+
+        // 页面加载时更新显示
+        window.onload = function() {
+            updateDisplay();
+        };
+    </script>
+</body>
+</html>
