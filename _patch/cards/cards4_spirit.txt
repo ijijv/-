@@ -1,0 +1,59 @@
+  /* —— 召唤 / 秘法 41~48 —— */
+  {id:'zhiren', name:'纸人', type:'spirit', rarity:'white', cost:1,
+    t:(u)=>G.hero==='ganshiren'?`召唤纸人。每回合末造成 ${u?2:1} 伤害并施加 1 层【诅咒】。死亡时获得 2 点【尸气】（持续 2 回合）`
+      :G.hero==='wuseng'?`召唤纸人。每回合末造成 ${u?2:1} 伤害并施加 1 层【诅咒】。存活时每回合获得 2 点格挡（持续 2 回合）`
+      :G.hero==='yincha'?`召唤纸人。每回合末造成 ${u?2:1} 伤害并施加 1 层【诅咒】。攻击时恢复 1 点生命（持续 2 回合）`
+      :`召唤纸人。每回合末对随机敌人造成 ${u?2:1} 伤害；该敌人每有 1 层【诅咒】，伤害 +1（持续 2 回合）`,
+    eff:(u)=>{ addSummon({type:'zhiren', v:u?2:1, dur:2}); floatMsg('纸人 · 受命而起'); }},
+  {id:'zhouyin', name:'咒印', type:'spirit', rarity:'white', cost:1,
+    t:(u)=>G.hero==='tianshi'?`施加 ${u?3:2} 层【诅咒】。若目标已有【诅咒】，额外施加 1 层`
+      :`施加 ${u?3:2} 层【诅咒】`,
+    eff:(u)=>{ const t=curEnemy(); if(!t) return; let n=u?3:2;
+      if(G.hero==='tianshi' && (t.curse||0)>0){ n+=1; log('咒印：目标已有诅咒，额外 +1 层'); }
+      applyCurse(t,n); }},
+  {id:'xiaogui', name:'小鬼', type:'spirit', rarity:'white', cost:1,
+    t:(u)=>G.hero==='ganshiren'?`召唤小鬼。每回合末造成 ${u?3:2} 伤害。死亡时获得 2 点【尸气】（持续 2 回合）`
+      :G.hero==='wuseng'?`召唤小鬼。每回合末造成 ${u?3:2} 伤害。死亡时获得 6 点格挡（持续 2 回合）`
+      :G.hero==='yincha'?`召唤小鬼。每回合末造成 ${u?3:2} 伤害。死亡时恢复 4 点生命（持续 2 回合）`
+      :`召唤小鬼。每回合末对【诅咒】最高的敌人造成 ${u?4:3} 伤害（持续 2 回合）`,
+    eff:(u)=>{ const v=G.hero==='tianshi'?(u?4:3):(u?3:2); addSummon({type:'xiaogui', v, dur:2}); floatMsg('小鬼 · 奉命出巡'); }},
+  {id:'huapi', name:'画皮', type:'spirit', rarity:'blue', cost:1,
+    t:(u)=>`对目标施加 1 层【魅惑】（其下回合伤害 -${u?75:50}%）`,
+    eff:(u)=>{ const t=curEnemy(); if(!t) return; charmEnemy(t, u?0.25:0.5); }},
+  {id:'wutong', name:'五通神', type:'spirit', rarity:'purple', cost:2,
+    t:(u)=>G.hero==='ganshiren'?`召唤五通神。每回合开始获得 3 点格挡并获得 1 点【尸气】（持续 ${u?3:2} 回合）`
+      :G.hero==='wuseng'?`召唤五通神。立即获得 4 点格挡。之后每回合开始获得 3 点格挡（持续 ${u?3:2} 回合）`
+      :G.hero==='yincha'?`召唤五通神。立即恢复 4 点生命。之后每回合开始获得 3 点格挡（持续 ${u?3:2} 回合）`
+      :`召唤五通神。每回合开始获得 3 点格挡，并对随机敌人施加 1 层【诅咒】（永久）`,
+    eff:(u)=>{ if(G.hero==='wuseng'){ gainBlock(4); addSummon({type:'wutong', v:3, dur:u?3:2}); }
+      else if(G.hero==='yincha'){ heal(4); addSummon({type:'wutong', v:3, dur:u?3:2}); }
+      else if(G.hero==='tianshi'){ addSummon({type:'wutong', v:3, indefinite:true}); }
+      else { addSummon({type:'wutong', v:3, dur:u?3:2}); }
+      floatMsg('五通神 · 现形'); }},
+  {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:2,
+    t:(u)=>G.hero==='ganshiren'?`对所有敌人施加 ${u?3:2} 层【诅咒】。每名被诅咒的敌人死亡时，获得 2 点【尸气】`
+      :G.hero==='wuseng'?`对所有敌人施加 ${u?3:2} 层【诅咒】。每施加 1 层，获得 2 点格挡`
+      :G.hero==='yincha'?`对所有敌人施加 ${u?3:2} 层【诅咒】。每施加 1 层，恢复 2 点生命`
+      :`对所有敌人施加 ${u?2:1} 层【诅咒】。每名敌人每有 1 层【诅咒】，此牌费用 -1（最低 0）`,
+    eff:(u)=>{ if(G.hero==='ganshiren'){ aliveEnemies().forEach(e=>applyCurse(e,u?3:2)); G.zhouyuA=true; log('咒雨：被诅咒的敌人死亡时将获得 2 点【尸气】'); return; }
+      if(G.hero==='tianshi'){ aliveEnemies().forEach(e=>applyCurse(e,u?2:1)); return; }
+      let n=0; aliveEnemies().forEach(e=>{ n+=applyCurse(e,u?3:2); });
+      if(G.hero==='wuseng'){ gainBlock(n*2); log(`咒雨：施加 ${n} 层诅咒，获得 ${n*2} 点格挡`); }
+      else { heal(n*2); log(`咒雨：施加 ${n} 层诅咒，恢复 ${n*2} 点生命`); } }},
+  {id:'yinbingguo', name:'阴兵过境', type:'spirit', rarity:'gold', cost:3,
+    t:(u)=>G.hero==='ganshiren'?`召唤 ${u?3:2} 只阴兵。每回合末造成 ${u?5:4} 伤害。每只死亡时获得 1 点【尸气】（持续 3 回合）`
+      :G.hero==='wuseng'?`召唤 ${u?3:2} 只阴兵。每回合末造成 ${u?5:4} 伤害。存活时每回合获得 3 点格挡（持续 3 回合）`
+      :G.hero==='yincha'?`召唤 ${u?3:2} 只阴兵。每回合末造成 ${u?5:4} 伤害。攻击时恢复 ${u?2:1} 点生命（持续 3 回合）`
+      :`召唤 ${u?3:2} 只阴兵。每回合末优先攻击带【诅咒】的敌人，造成 ${u?5:4} 伤害（持续 3 回合）`,
+    eff:(u)=>{ const count=u?3:2; const v=u?5:4;
+      for(let i=0;i<count;i++) addSummon({type:'yinbing', v, dur:3, healV:u?2:1});
+      floatMsg(`阴兵过境 ×${count}`); log(`阴兵过境：召唤 ${count} 只阴兵`); }},
+  {id:'shi_wang', name:'尸王', type:'spirit', rarity:'gold', cost:0,
+    t:(u)=>`消耗 10 点【尸气】召唤尸王。每回合末对全体敌人造成 10 点伤害。在场时其他召唤单位伤害 +1。持续 5 回合。死亡时获得 2 点【尸气】（不消耗符文，不可升级）`,
+    eff:(u)=>{ if(G.hero!=='ganshiren') return false;
+      if(isSummon('shi_wang')){ floatMsg('已有尸王在场'); return false; }
+      if(!hasShiqi(10)){ floatMsg('尸气不足！需要 10 点'); return false; }
+      spendShiqi(10);
+      addSummon({type:'shi_wang', v:10, dur:5});
+      floatMsg('尸王 · 苏醒');
+      log('尸王：消耗 10 点【尸气】，召唤尸王（持续 5 回合）'); }},

@@ -10,6 +10,16 @@
 
 ## Update History
 
+### [Sep 8, 2026, 9:54 PM] ✨ Feature: 引擎机制改造（Task #11）全部完成，三批补丁 NODE_OK
+<!-- ID: p_2026-09-08_mtsqdy7i -->
+
+Batch A（新资源助手 gainShiqi/gainRage/rageSpend/addSummon/charmEnemy/sealEnemy/魅惑比例、newState 计数域 hpLostTurn/blockGainedTurn/summonsMadeTurn/CURSE_THIS_TURN、makeEnemy+序列化补全）。Batch B1（effectiveCost 按列减费、dealDamageToPlayer 逐英雄闪避奖励+命中骑手、焚符/守一/易物按英雄奖励、weightedCard 尸王过滤、saveRun/continueRun 补 shiqi/xuenu/xisuiTurns）。Batch B2（startTurn 整段重写：回合计数清零+洗髓经按列+xisuiTurns、triggerSummons 重写+summonAct/onSummonDeath 助手、finishEndTurn 血祭按列口径+#23卸甲生元按列、doPlayCard 移除自动烧血怒/尸王不进弃牌堆/燃魂泛化/守一boost）。node --check 全绿。遗留：kaitianyanTianshi 两处伤害骑手读(L1336/L1431)待 Batch D 按新开天眼效果保留或删；xuejiHurt 为无害残留。
+
+**Tags:** `engine`, `refactor`, `zhiguai-tower`
+
+---
+
+
 ### [Aug 27, 2026, 2:47 PM] 🐛 Fix: v0.44 补丁：背景图 z-index 修复 + 存档 bug 根治
 <!-- ID: p_2026-08-27_mtb5u7cs -->
 
