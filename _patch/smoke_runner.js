@@ -233,6 +233,204 @@
     });
   })();
 
+  // ===== 升级后 0 费（costU:0）真实出牌判定 =====
+  // 全部出牌/显示路径走 effectiveCost/cardCost；两者在 c.up && costU!=null 时返回 costU
+  (function () {
+    var zeroUp = ['tiebushan', 'tongling', 'jingxin', 'xueji', 'yixing'];
+    zeroUp.forEach(function (id) {
+      var cu = Object.assign({}, __card(id)); cu.up = true;
+      __ok('升级0费 costU=' + id, cardCost(cu) === 0 && effectiveCost(cu) === 0,
+        'cost=' + cu.cost + ' costU=' + cu.costU + ' cardCost=' + cardCost(cu) + ' eff=' + effectiveCost(cu));
+    });
+    // playCard 能量门槛（L2314 拦截条件 G.energy<cost）：energy=0/1 对 0 费升级牌均放行
+    ['ganshiren', 'wuseng', 'yincha', 'tianshi'].forEach(function (h) {
+      ['tongling', 'jingxin', 'xueji'].forEach(function (id) {
+        [0, 1].forEach(function (e) {
+          var g = __base(h); g.energy = e;
+          var cu = Object.assign({}, __card(id)); cu.up = true;
+          var eff = effectiveCost(cu);
+          __ok('0费升级可打 ' + h + '/' + id + ' e=' + e, eff === 0 && !(g.energy < eff),
+            'eff=' + eff + ' energy=' + g.energy);
+        });
+      });
+    });
+  })();
+
+  // ===== 尸王修复：eff 消耗口径 / 面板伤害与 summonAct 规则一致 =====
+  (function () {
+    // eff：10 尸气足额 → 召唤成功并扣光；重复召唤 → 拒绝且不再扣；不足 → 拒绝且分文不扣
+    var g1 = __base('ganshiren'); g1.尸气 = 10;
+    var sw = __card('shi_wang');
+    var r1 = sw.eff(false, sw, 0);
+    __ok('尸王成功：扣光 10 尸气并出召唤', r1 !== false && G.尸气 === 0 && G.summons.length === 1 && G.summons[0].type === 'shi_wang', 'r1=' + r1 + ' 尸气=' + G.尸气 + ' summons=' + G.summons.length);
+    var rA = sw.eff(false, sw, 0);
+    __ok('尸王重复在场被拒且不扣', rA === false && G.尸气 === 0 && G.summons.length === 1, 'rA=' + rA + ' 尸气=' + G.尸气);
+    var g2 = __base('ganshiren'); g2.尸气 = 5;
+    var r2 = sw.eff(false, sw, 0);
+    __ok('尸王尸气不足被拒且不扣', r2 === false && g2.尸气 === 5 && G.summons.length === 0, 'r2=' + r2 + ' 尸气=' + g2.尸气);
+    // 面板：有存活尸王时，尸王自己显示 10（不吃 +1）、纸人 +1；尸王消退后纸人回到本体；其他英雄恒本体
+    var g3 = __base('ganshiren');
+    var sz = { type: 'shi_wang', v: 10, dur: 5 };
+    var zr = { type: 'zhiren', v: 1, dur: 2 };
+    G.summons = [sz, zr];
+    __ok('面板 尸王不吃 +1', summonHTML(sz).indexOf('造成 10 点') >= 0 && summonHTML(sz).indexOf('造成 11 点') < 0, summonHTML(sz));
+    __ok('面板 纸人(有尸王) +1', summonHTML(zr).indexOf('造成 2 点') >= 0, summonHTML(zr));
+    G.summons = [zr];
+    __ok('面板 纸人(尸王已退) 不加', summonHTML(zr).indexOf('造成 1 点') >= 0, summonHTML(zr));
+    var g4 = __base('wuseng');
+    var zr4 = { type: 'zhiren', v: 1, dur: 2 };
+    G.summons = [zr4];
+    __ok('面板 武僧纸人 恒本体', summonHTML(zr4).indexOf('造成 1 点') >= 0, summonHTML(zr4));
+  })();
+
+  // ===== 易物修复：取消回退手牌（仿焚符），成交才消耗 =====
+  (function () {
+    // 取消发生在“选一张手牌”阶段：已打出并进弃牌堆的易物应回退到手牌，不吞牌
+    ['ganshiren', 'wuseng', 'yincha', 'tianshi'].forEach(function (h) {
+      var g = __base(h);
+      var yw = __card('yiwu'); var other = __card('leifu');
+      g.hand = [other]; g.discard = [yw]; // 模拟 doPlayCard 已把易物推入弃牌堆
+      yw.eff(false, yw);
+      cancelExchangeSelect();
+      __ok('易物取消(pickHand) ' + h + ' → 牌回手',
+        g.hand.indexOf(yw) >= 0 && g.discard.indexOf(yw) < 0,
+        'hand=' + g.hand.map(function (x) { return x.id; }).join(',') + ' discard=' + g.discard.map(function (x) { return x.id; }).join(','));
+    });
+    // 取消发生在“牌堆随机三张”阶段（已选待换手牌但未成交）：同样回退
+    var g3 = __base('ganshiren');
+    var yw3 = __card('yiwu'); var other3 = __card('leifu');
+    g3.hand = [other3]; g3.discard = [yw3];
+    g3.drawPile = [__card('zhiren'), __card('jingang'), __card('leifu')];
+    yw3.eff(false, yw3); pickExchangeHand(0); cancelExchangeSelect();
+    __ok('易物取消(pickNew) → 牌回手且牌堆未动',
+      g3.hand.indexOf(yw3) >= 0 && g3.discard.indexOf(yw3) < 0 && g3.drawPile.length === 3,
+      'hand=' + g3.hand.map(function (x) { return x.id; }).join(',') + ' draw=' + g3.drawPile.length);
+    // 真成交：易物留在弃牌堆（已消耗），换入的新牌进手
+    // 注：换入池 = drawPile+discard 洗牌取 3，可能含刚打出的易物本身 → 选首个非易物项，
+    //     保证“易物已消耗不回手”这一语义被确定性测到（避免随机池抽到易物造成的假阴性）
+    var g4 = __base('ganshiren');
+    var yw4 = __card('yiwu'); var other4 = __card('leifu');
+    g4.hand = [other4]; g4.discard = [yw4];
+    g4.drawPile = [__card('zhiren'), __card('jingang'), __card('leifu')];
+    yw4.eff(false, yw4); pickExchangeHand(0);
+    var ex4 = G.exchange, kk = 0;
+    while (ex4.pool[kk] && ex4.pool[kk] === yw4) kk++;
+    __ok('易物 换入池存在可换牌', kk < ex4.pool.length, JSON.stringify(ex4.pool.map(function (x) { return x.id; })));
+    pickExchangeNew(kk);
+    __ok('易物成交 → 易物留在弃牌堆',
+      g4.discard.indexOf(yw4) >= 0 && g4.hand.indexOf(yw4) < 0 && g4.hand.length === 1,
+      'hand=' + g4.hand.map(function (x) { return x.id; }).join(',') + ' discard=' + g4.discard.map(function (x) { return x.id; }).join(','));
+  })();
+
+  // ===== 噬魂术卡面预览修复：与 eff 逐列一致（不再按“非天师=诅咒×6/8”错算） =====
+  (function () {
+    var sh = __card('shihun');
+    function pv() { return previewDamage(sh); }
+    var g;
+    g = __base('ganshiren'); g.尸气 = 10; g.enemies[0].curse = 2;
+    __ok('噬魂术预览 赶尸人=固定14(诅咒不参与)', pv().d === 14 && !pv().miss, 'd=' + pv().d);
+    g = __base('wuseng'); g.enemies[0].curse = 2;
+    __ok('噬魂术预览 武僧=诅咒×5(非×6)', pv().d === 10, 'd=' + pv().d);
+    g = __base('wuseng'); g.blockGainedTurn = 10; g.enemies[0].curse = 0;
+    __ok('噬魂术预览 武僧=格挡加成5(无诅咒不落空)', pv().d === 5 && !pv().miss, JSON.stringify(pv()));
+    g = __base('wuseng'); g.enemies[0].curse = 0;
+    __ok('噬魂术预览 武僧=无诅咒落空', pv().miss === '无诅咒', JSON.stringify(pv()));
+    g = __base('yincha'); g.xuenu = 3; g.enemies[0].curse = 0;
+    __ok('噬魂术预览 阴差=10+血怒2×3(共16)', pv().d === 16, 'd=' + pv().d);
+    g = __base('tianshi'); g.enemies[0].curse = 2;
+    __ok('噬魂术预览 天师=诅咒×7', pv().d === 14, 'd=' + pv().d);
+    g = __base('tianshi'); g.enemies[0].curse = 0;
+    __ok('噬魂术预览 天师=无诅咒落空', pv().miss === '无诅咒', JSON.stringify(pv()));
+    var shU = Object.assign({}, sh); shU.up = true;
+    g = __base('ganshiren'); g.尸气 = 10; g.enemies[0].curse = 5;
+    __ok('噬魂术预览 升级赶尸人=18', previewDamage(shU).d === 18, 'd=' + previewDamage(shU).d);
+    g = __base('tianshi'); g.enemies[0].curse = 2;
+    __ok('噬魂术预览 升级天师=诅咒×9', previewDamage(shU).d === 18, 'd=' + previewDamage(shU).d);
+  })();
+
+  // ===== CARD_DMG 清理：预览与 eff 逐列一致（雷符 D 基数 6/9；召唤 v 对齐 summonAct） =====
+  (function () {
+    function lv(id, up) { var c = Object.assign({}, __card(id)); c.up = !!up; return previewDamage(c); }
+    var g;
+    g = __base('ganshiren'); g.summons = [{ type: 'zhiren', v: 1, dur: 2 }, { type: 'zhiren', v: 1, dur: 1 }];
+    __ok('雷符预览 A=4+2召唤=6', lv('leifu').d === 6, 'd=' + lv('leifu').d);
+    g = __base('wuseng'); g.block = 9;
+    __ok('雷符预览 B=4+min6,3=7', lv('leifu').d === 7, 'd=' + lv('leifu').d);
+    g = __base('yincha'); g.xuenu = 4;
+    __ok('雷符预览 C=5+血怒6=11', lv('leifu').d === 11, 'd=' + lv('leifu').d);
+    g = __base('tianshi'); g.enemies[0].curse = 1;
+    __ok('雷符预览 D=6+3=9', lv('leifu').d === 9, 'd=' + lv('leifu').d);
+    __ok('雷符预览 D升级=9+3=12', lv('leifu', true).d === 12, 'd=' + lv('leifu', true).d);
+    g = __base('tianshi'); g.enemies[0].curse = 2;
+    __ok('斩妖剑预览 D=8+引爆2×5=18', lv('zhanyaojian').d === 18, 'd=' + lv('zhanyaojian').d);
+    g = __base('ganshiren'); g.summons = [{ type: 'zhiren', v: 1, dur: 2 }];
+    __ok('百鬼预览 A=4+1×2=6', lv('baigui').d === 6, 'd=' + lv('baigui').d);
+    g = __base('wuseng'); g.block = 6;
+    __ok('百鬼预览 B=4+6/3=6', lv('baigui').d === 6, 'd=' + lv('baigui').d);
+    g = __base('yincha');
+    __ok('百鬼预览 C=5+0召唤=5', lv('baigui').d === 5, 'd=' + lv('baigui').d);
+    g = __base('tianshi'); g.enemies[0].curse = 3;
+    __ok('百鬼预览 D=4+1×3诅咒=7', lv('baigui').d === 7, 'd=' + lv('baigui').d);
+    g = __base('ganshiren'); g.block = 0; g.尸气 = 6;
+    __ok('铁布衫预览 A 无格挡有尸气(3) 非落空', lv('tiebushan').d === 3 && !lv('tiebushan').miss, 'd=' + lv('tiebushan').d);
+    g = __base('ganshiren');
+    __ok('纸人预览 每回合 v=1', lv('zhiren').d === 1, 'd=' + lv('zhiren').d);
+    g = __base('ganshiren'); G.summons = [{ type: 'shi_wang', v: 10, dur: 3 }];
+    __ok('纸人预览 尸王在场 +1', lv('zhiren').d === 2, 'd=' + lv('zhiren').d);
+    g = __base('tianshi');
+    __ok('小鬼预览 天师 v=3', lv('xiaogui').d === 3, 'd=' + lv('xiaogui').d);
+    g = __base('wuseng');
+    __ok('小鬼预览 武僧 v=2', lv('xiaogui').d === 2, 'd=' + lv('xiaogui').d);
+    __ok('阴兵过境预览 每只 v=4', lv('yinbingguo').d === 4, 'd=' + lv('yinbingguo').d);
+    __ok('energyBonusTurns 死字段已移除', G.energyBonusTurns === undefined);
+    __ok('bloodCost 死函数已移除', typeof bloodCost === 'undefined');
+    __ok('kaitianyanTianshi 死标志已移除', G.kaitianyanTianshi === undefined);
+    __ok('yinchaSummon 死函数已移除', typeof yinchaSummon === 'undefined');
+    var yp = HEROES.filter(function (h) { return h.id === 'yincha'; })[0].passive;
+    __ok('阴差 hero 文案去除小妖承诺', yp.indexOf('小妖') < 0 && yp.indexOf('血怒') >= 0, yp);
+  })();
+
+  // ===== 血祭阴差增强：以血引怒被动 + 整局累积 + KEYWORDS/徽章 =====
+  (function () {
+    var g;
+    cardPlayWindow = false;
+    __ok('KEYWORDS 新增【血怒】词条', KEYWORDS.some(function (k) { return k[0] === '血怒'; }),
+      JSON.stringify(KEYWORDS.filter(function (k) { return k[0] === '血怒'; })));
+    var yp = HEROES.filter(function (h) { return h.id === 'yincha'; })[0].passive;
+    __ok('阴差被动改整局累积(去跨战保留)+扣血牌产怒', yp.indexOf('整局累积') >= 0 && yp.indexOf('跨战保留') < 0 && yp.indexOf('扣血牌') >= 0, yp);
+
+    // loseHp 出牌窗口产怒 1:1（仅阴差、仅窗口内、上限 10）
+    g = __base('yincha'); var hp0 = g.hp;
+    cardPlayWindow = true; loseHp(3); cardPlayWindow = false;
+    __ok('阴差 窗口内失3血 → +3血怒', g.xuenu === 3 && g.hp === hp0 - 3, 'xuenu=' + g.xuenu + ' hp=' + g.hp);
+    g = __base('yincha'); g.xuenu = 9;
+    cardPlayWindow = true; loseHp(4); cardPlayWindow = false;
+    __ok('阴差 血怒上限封顶 10', g.xuenu === 10, 'xuenu=' + g.xuenu);
+    g = __base('wuseng');
+    cardPlayWindow = true; loseHp(5); cardPlayWindow = false;
+    __ok('非阴差 窗口内失血不加血怒', (g.xuenu || 0) === 0, 'xuenu=' + g.xuenu);
+    g = __base('yincha'); loseHp(2);
+    __ok('阴差 窗口外失血不加血怒', (g.xuenu || 0) === 0, 'xuenu=' + g.xuenu);
+
+    // 铁布衫 eff：已删卡面自带 gainRage，净由被动按失血 1:1 补（窗口内 +2）
+    g = __base('yincha'); g.block = 8; var hb = g.hp;
+    __card('tiebushan').eff(false);
+    __ok('铁布衫eff 窗口外只失2血不加怒', g.hp === hb - 2 && (g.xuenu || 0) === 0, 'hp=' + g.hp + ' xuenu=' + g.xuenu);
+    g = __base('yincha'); g.block = 8; hb = g.hp;
+    cardPlayWindow = true; __card('tiebushan').eff(false); cardPlayWindow = false;
+    __ok('铁布衫eff 窗口内失2血 → +2血怒(持平)', g.hp === hb - 2 && g.xuenu === 2, 'hp=' + g.hp + ' xuenu=' + g.xuenu);
+
+    // rageSpend 仍按“每层加成/上限”就地扣层
+    g = __base('yincha'); g.xuenu = 6;
+    __ok('rageSpend(2,20) 6层全烧→归0', rageSpend(2, 20) === 6 && (g.xuenu || 0) === 0, 'xuenu=' + g.xuenu);
+    g = __base('yincha'); g.xuenu = 10;
+    __ok('rageSpend(2,6) 只烧满+6所需3层', rageSpend(2, 6) === 3 && (g.xuenu || 0) === 7, 'xuenu=' + g.xuenu);
+
+    // 血怒无“每战斗清零”点：__base(每场初始化) 不触碰 xuenu
+    g = __base('yincha'); g.xuenu = 5;
+    __ok('__base 初始化不清血怒(整局累积依据)', (g.xuenu || 0) === 5, 'xuenu=' + g.xuenu);
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();
