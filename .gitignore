@@ -14,6 +14,11 @@ _patch/tmp/
 _patch/smoke_result.json
 smoke_result.json
 
+# ===== 打包产物 / 依赖 =====
+# dist/ 是 打包.py 的产物，可随时重新生成，不进版本库（发给朋友的也是它）
+dist/
+_build/node_modules/
+
 # ===== 编辑器 / 系统 =====
 .vscode/
 .idea/

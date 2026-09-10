@@ -5,7 +5,8 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 
-const P = path.resolve(__dirname, '..', '原型.html');
+// 默认跑开发源 原型.html；传入路径则跑该文件（用于验证单文件打包产物）
+const P = path.resolve(process.argv[2] || path.join(__dirname, '..', '原型.html'));
 const html = fs.readFileSync(P, 'utf8');
 const m = html.match(/<script>([\s\S]*?)<\/script>/);
 if (!m) { console.error('FAIL: 找不到 <script>'); process.exit(2); }
@@ -85,6 +86,14 @@ try {
   vm.runInContext(code, sandbox, { timeout: 90000, filename: 'zhiguaitower-smoke.js' });
 } catch (e) {
   sandbox.__boom = (e && e.stack) ? e.stack : String(e);
+}
+// 调试用：SMOKE_DUMP="表达式" 时在游戏作用域里求值并打印（用于打包校验取 id 清单）
+if (process.env.SMOKE_DUMP) {
+  try {
+    const v = vm.runInContext(process.env.SMOKE_DUMP, sandbox, { timeout: 15000 });
+    console.log('__DUMP__' + JSON.stringify(v));
+  } catch (e) { console.log('__DUMPERR__' + (e && e.message)); }
+  process.exit(0);
 }
 const rep = sandbox.__report || {};
 if (sandbox.__boom) { rep.ok = false; rep.bootError = sandbox.__boom; }
