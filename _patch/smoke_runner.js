@@ -133,7 +133,8 @@
 
     g = __base('ganshiren'); c = __card('xiejiashengyuan'); g.hand = [c]; c.eff(false, c);
     finishEndTurn();
-    __ok('A#23 卸甲 回合末5格挡→2尸气', g.尸气 === 2 && g.block === 0 && g.endBlockKind === null, '尸气=' + g.尸气 + ' block=' + g.block);
+    resolveEndBlock();
+    __ok('A#23 卸甲 敌后结算 5格挡→2尸气', g.尸气 === 2 && g.block === 0 && g.endBlockKind === null, '尸气=' + g.尸气 + ' block=' + g.block);
   })();
 
   /* —— B 苦行武僧 —— */
@@ -200,8 +201,8 @@
 
     g = __base('tianshi'); c = __card('xiejiashengyuan'); g.hand = [c]; c.eff(true, c); // 升级 8 格挡
     __ok('D#23 卸甲 置 endBlockKind=D(8盾)', g.endBlockKind === 'D' && g.block === 8, 'kind=' + g.endBlockKind + ' block=' + g.block);
-    g = __base('tianshi'); c = __card('xiejiashengyuan'); c.eff(true, c); finishEndTurn();
-    __ok('D#23 卸甲 回合末8格挡→4诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 4 && CURSE_THIS_TURN === 4, 'sumCurse=' + __sumCurse() + ' CURSE=' + CURSE_THIS_TURN);
+    g = __base('tianshi'); c = __card('xiejiashengyuan'); c.eff(true, c); finishEndTurn(); resolveEndBlock();
+    __ok('D#23 卸甲 敌后结算 8格挡→4诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 4 && CURSE_THIS_TURN === 4, 'sumCurse=' + __sumCurse() + ' CURSE=' + CURSE_THIS_TURN);
 
     g = __base('tianshi'); g.hand = [__card('leifu'), __card('leifu'), __card('leifu')];
     c = __card('fenfu'); c.eff(false, c); g.discardSelect.picked = [0, 2]; confirmDiscardSelect();
@@ -429,6 +430,223 @@
     // 血怒无“每战斗清零”点：__base(每场初始化) 不触碰 xuenu
     g = __base('yincha'); g.xuenu = 5;
     __ok('__base 初始化不清血怒(整局累积依据)', (g.xuenu || 0) === 5, 'xuenu=' + g.xuenu);
+  })();
+
+  /* ===== 2026-09-09 批 ①-⑧：封顶 / 诅咒牌 / 顶栏 / 天师溢出 / 卸甲时机 / 阴兵目标 / 纸人随机 ===== */
+  (function () {
+    var g, c, en, hp, e0, e1;
+    // 静默战斗特效，防 DOM 副作用（本块在所有既有断言之后，不影响前面）
+    try { floatDamage = __sil; } catch (e) {}
+    try { sfx = __sil; } catch (e) {}
+
+    /* ① 数值封顶 */
+    g = __base('ganshiren'); en = g.enemies[0];
+    addEnemyStrength(en, 6); addEnemyStrength(en, 4);
+    __ok('① 力量成长封顶 MAX=8', en.strength === 8 && MAX_ENEMY_STRENGTH === 8, 'str=' + en.strength);
+    g = __base('tianshi'); g.block = 0;
+    var xs = makeEnemy(ENEMIES['xueshi'], 'xueshi');
+    var cap = Math.floor((xs.maxHp || xs.hp) * 1.5);  // 150% 封顶（boss HP 有缩放，动态取）
+    xs.hp = cap - 10;                                  // 距封顶差 10；30 伤 ×0.8=24 会越帽
+    dealDamageToPlayer(30, xs);
+    __ok('① 吸血回复封顶 maxHp150%', xs.hp === cap, 'hp=' + xs.hp + ' cap=' + cap);
+
+    /* ② 术语：简称 + 悬停原解释 + 无残余 */
+    __ok('② KEYWORDS 含【诅咒牌】', KEYWORDS.some(function (k) { return k[0] === '诅咒牌'; }));
+    __ok('② 诅咒牌词条保留原解释', KEYWORDS.some(function (k) { return k[0] === '诅咒牌' && k[1].indexOf('可施加诅咒的牌') >= 0; }));
+    var res = [];
+    __HEROES.forEach(function (h) {
+      g = __base(h);
+      CARDS.forEach(function (card) {
+        try { if (card.t(false).indexOf('【可施加诅咒的牌】') >= 0 || card.t(true).indexOf('【可施加诅咒的牌】') >= 0) res.push(h + ':' + card.id); } catch (e2) {}
+      });
+    });
+    __ok('② 全卡文案无残留【可施加诅咒的牌】', res.length === 0, res.join(','));
+
+    /* ③ 顶栏：默认展开、无金卡补偿 */
+    __ok('③ 顶栏默认展开(TOPBAR_OPEN)', TOPBAR_OPEN === true);
+    g = __base('tianshi');
+    var capEl = { _html: '', set innerHTML(v) { this._html = String(v); }, get innerHTML() { return this._html; } };
+    var origById = document.getElementById;
+    document.getElementById = function (id) { if (id === 'topbar') return capEl; return origById(id); };
+    try { renderTopbar(); } catch (e3) {}
+    document.getElementById = origById;
+    __ok('③ 顶栏无「金卡补偿」且详情默认展开(tb-detail)', capEl._html.indexOf('金卡补偿') < 0 && capEl._html.indexOf('stat-compensation') < 0 && capEl._html.indexOf('tb-detail') >= 0, capEl._html.slice(0, 90));
+
+    /* ④ 天师溢出 → 每层 1 格挡 */
+    g = __base('tianshi'); en = g.enemies[0]; en.curse = 6; g.block = 0;
+    applyCurse(en, 1);
+    __ok('④ 天师施加溢出 满6再施→每层转1格挡', g.block === 1 && en.curse === 6 && g.ybTarget === en.uid, 'block=' + g.block + ' yb=' + g.ybTarget);
+    var tp = HEROES.filter(function (h) { return h.id === 'tianshi'; })[0].passive;
+    __ok('④ 天师被动文案=溢出每层转1格挡', tp.indexOf('溢出') >= 0 && tp.indexOf('每层转化为 1 点格挡') >= 0, tp);
+
+    /* ⑦ 卸甲生元 D：格挡先抵敌伤、敌后结算；目标满 6 层溢出转回格挡并保留 */
+    g = __base('tianshi'); en = g.enemies[0]; en.affixes = null; en.strength = 0;
+    c = __card('xiejiashengyuan'); c.eff(true, c); // 8 盾 + endBlockKind=D
+    dealDamageToPlayer(5, en);                     // 敌人打 5 → 格挡 8→3
+    __ok('⑦ 卸甲 D 敌攻先耗格挡(8→3) 未提前转化', g.block === 3 && g.endBlockKind === 'D' && g.hp === 60, 'block=' + g.block + ' hp=' + g.hp);
+    resolveEndBlock();
+    __ok('⑦ 卸甲 D 敌后结算 余3盾→1诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 1, 'block=' + g.block + ' sum=' + __sumCurse());
+
+    g = __base('tianshi'); en = g.enemies[0]; g.enemies[1].hp = 0; // 只剩 en：resolveEndBlock 的随机目标必然命中它
+    en.affixes = null; en.strength = 0; en.curse = 6;
+    c = __card('xiejiashengyuan'); c.eff(true, c);
+    dealDamageToPlayer(5, en);
+    resolveEndBlock();
+    __ok('⑦ 卸甲 D 满6溢出转回格挡(余1)不清零', g.block === 1 && g.endBlockKind === null && en.curse === 6, 'block=' + g.block);
+
+    /* ⑧b 阴兵过境：锁定“上一次施咒的敌人”+🎯标记 + 转移 + 死亡回落 */
+    g = __base('tianshi'); e0 = g.enemies[0]; e1 = g.enemies[1];
+    applyCurse(e0, 1);
+    __ok('⑧b 施咒 e0 → 标记 e0', g.ybTarget === e0.uid, 'yb=' + g.ybTarget);
+    applyCurse(e1, 1);
+    __ok('⑧b 再施咒 e1 → 标记转移 e1', g.ybTarget === e1.uid, 'yb=' + g.ybTarget);
+    var h0 = e0.hp, h1 = e1.hp;
+    G.summons = [{ type: 'yinbing', v: 4, dur: 2 }];
+    summonAct(G.summons[0]);
+    __ok('⑧b 回合末阴兵打中标记敌 e1', e1.hp === h1 - 4 && e0.hp === h0, 'e0=' + e0.hp + ' e1=' + e1.hp + '(was ' + h1 + ')');
+
+    g = __base('tianshi'); e0 = g.enemies[0]; e1 = g.enemies[1];
+    e0.hp = 0; e1.curse = 1; G.ybTarget = e0.uid; var h1b = e1.hp;
+    G.summons = [{ type: 'yinbing', v: 4, dur: 2 }];
+    summonAct(G.summons[0]);
+    __ok('⑧b 标记敌死亡 → 回落带诅咒随机(打中e1)', e1.hp === h1b - 4, 'e1=' + e1.hp);
+
+    g = __base('tianshi'); e0 = g.enemies[0]; e1 = g.enemies[1];
+    applyCurse(e1, 1); G.summons = [{ type: 'yinbing', v: 4, dur: 2 }];
+    __ok('⑧b 🎯徽章 只出现在标记敌 e1', enemyPanelHTML(e1, 1).indexOf('阴兵目标') >= 0 && enemyPanelHTML(e0, 0).indexOf('阴兵目标') < 0);
+    g = __base('tianshi'); G.summons = [{ type: 'yinbing', v: 4, dur: 3 }];
+    __ok('⑧b 阴兵召唤标签 天师注明🎯', summonHTML(G.summons[0]).indexOf('🎯') >= 0, summonHTML(G.summons[0]));
+    g = __base('wuseng'); G.summons = [{ type: 'yinbing', v: 4, dur: 3 }];
+    __ok('⑧b 阴兵召唤标签 武僧随机无🎯', summonHTML(G.summons[0]).indexOf('🎯') < 0, summonHTML(G.summons[0]));
+    __ok('⑧b KEYWORDS 含【阴兵目标】', KEYWORDS.some(function (k) { return k[0] === '阴兵目标'; }));
+
+    /* ⑧a 纸人：保持随机攻击（不被选中 / 最高诅咒锁死） */
+    g = __base('tianshi'); e0 = g.enemies[0]; e1 = g.enemies[1];
+    e0.curse = 6; e1.curse = 0; G.target = 0; e0.hp = 999; e1.hp = 999;
+    var cnt0 = 0, cnt1 = 0;
+    for (var t = 0; t < 60; t++) { var hh = e0.hp; summonAct({ type: 'zhiren', v: 1, dur: 2 }); if (e0.hp < hh) cnt0++; else cnt1++; }
+    __ok('⑧a 纸人 60试 两敌均被随机命中(未锁死)', cnt0 > 0 && cnt1 > 0 && cnt0 + cnt1 === 60, 'cnt0=' + cnt0 + ' cnt1=' + cnt1);
+  })();
+
+  /* ============ v0.50 新断言 ============ */
+  (function () {
+    var g, c, en, t, hp0, r, beforeHand, beforeEnergy;
+
+    /* ③ 渡魂归己：5 回合 + 消耗牌 */
+    g = __base('ganshiren'); c = __card('duhunguiji');
+    c.eff(true, c);
+    __ok('v0.50 ③ 渡魂归己 turns===5', g.duhun && g.duhun.turns === 5, 'turns=' + (g.duhun && g.duhun.turns));
+    __ok('v0.50 ③ 渡魂归己 升级比例 50%', g.duhun && g.duhun.ratio === 0.5, 'ratio=' + (g.duhun && g.duhun.ratio));
+    __ok('v0.50 ③ 渡魂归己 exhaust=true', c.exhaust === true, 'exhaust=' + c.exhaust);
+
+    /* ⑤ 灵化：不再免疫诅咒；仍挡镇魂/魅惑 */
+    g = __base('tianshi'); en = g.enemies[0];
+    en.affixes = [{ id: 'linghua', tier: 1 }];
+    r = applyCurse(en, 1);
+    __ok('v0.50 ⑤ 灵化敌人仍可被施加诅咒', r === 1 && en.curse === 1, 'r=' + r + ' curse=' + en.curse);
+    en.seal = false; en.charm = 0;
+    __ok('v0.50 ⑤ 灵化仍挡镇魂', sealEnemy(en, 1) === false && !en.seal, 'seal=' + en.seal);
+    __ok('v0.50 ⑤ 灵化仍挡魅惑', charmEnemy(en, 0.5) === false && (en.charm || 0) === 0, 'charm=' + en.charm);
+
+    /* ⑥ 嗜血(天师)：吸血 50% 实际扣血 */
+    g = __base('tianshi'); t = g.enemies[0]; t.hp = 10; hp0 = g.hp;
+    c = __card('shixue'); c.eff(false, c);
+    __ok('v0.50 ⑥ 嗜血(天师) 回复 3 点(6伤×50%)', g.hp === hp0 + 3 && t.hp === 4, 'hp0=' + hp0 + ' hp=' + g.hp + ' t.hp=' + t.hp);
+
+    /* ⑦ 吸血按实际扣血：敌剩 3 血、渡魂 50%、打 20 → 回 1 而非 10 */
+    g = __base('ganshiren'); g.duhun = { turns: 5, ratio: 0.5 };
+    en = g.enemies[0]; en.hp = 3; hp0 = g.hp;
+    dealDamageTo(en, 20);
+    __ok('v0.50 ⑦ 渡魂按实际扣血回 1(而非10)', g.hp === hp0 + 1, 'hp0=' + hp0 + ' hp=' + g.hp);
+
+    /* ⑧ 火符：仅 1 张手牌禁止打出 */
+    g = __base('ganshiren'); G.hand = [__card('huofu')]; G.energy = 9;
+    beforeHand = G.hand.length; beforeEnergy = G.energy;
+    playCard(0);
+    __ok('v0.50 ⑧ 火符 仅1手牌被拦(手牌/符文不变)', G.hand.length === beforeHand && G.energy === beforeEnergy, 'hand=' + G.hand.length + ' energy=' + G.energy);
+  })();
+
+  /* ============ v0.51 五通神：现形即结算首回合 + 天师回合限制 ============ */
+  (function () {
+    var g, c, s;
+
+    // 武僧：立即 4 点（卡）+ 首次触发 3 点（召唤）= 当回合 7 格挡
+    g = __base('wuseng'); G.block = 0; c = __card('wutong'); c.eff(false, c);
+    __ok('v0.51 五通神(武僧) 当回合 +7 格挡', g.block === 7, 'block=' + g.block);
+    __ok('v0.51 五通神(武僧) 现形即耗 1 回合(剩1)', g.summons.length === 1 && g.summons[0].dur === 1, JSON.stringify(g.summons));
+
+    // 赶尸人：立即 +3 格挡 +1 尸气
+    g = __base('ganshiren'); G.block = 0; G.尸气 = 0; c = __card('wutong'); c.eff(false, c);
+    __ok('v0.51 五通神(赶尸人) 当回合 +3格挡+1尸气', g.block === 3 && (g.尸气 || 0) === 1, 'block=' + g.block + ' 尸气=' + g.尸气);
+
+    // 阴差：立即 +4 生命 +3 格挡
+    g = __base('yincha'); G.block = 0; c = __card('wutong'); c.eff(false, c);
+    __ok('v0.51 五通神(阴差) 当回合 +4生命+3格挡', g.hp === 64 && g.block === 3, 'hp=' + g.hp + ' block=' + g.block);
+
+    // 天师：不再是「永久」——有 2/3 回合限制；当回合 +3 格挡 +1 诅咒
+    g = __base('tianshi'); G.block = 0; c = __card('wutong'); c.eff(false, c);
+    s = g.summons[0];
+    __ok('v0.51 五通神(天师) 非永久(有回合限制)', s.indefinite !== true && typeof s.dur === 'number', 'indefinite=' + s.indefinite + ' dur=' + s.dur);
+    __ok('v0.51 五通神(天师) 基础剩1回合(共2)', s.dur === 1, 'dur=' + s.dur);
+    __ok('v0.51 五通神(天师) 当回合 +3格挡+1诅咒', g.block === 3 && __sumCurse() === 1, 'block=' + g.block + ' curse=' + __sumCurse());
+
+    g = __base('tianshi'); c = __card('wutong'); c.eff(true, c);
+    __ok('v0.51 五通神(天师) 升级剩2回合(共3)', g.summons[0].dur === 2, 'dur=' + g.summons[0].dur);
+  })();
+
+  /* ============ v0.52 锻造置灰（升级无变化不可锻造） + 遗物/召唤物进详情页 ============ */
+  (function () {
+    __base('ganshiren');
+    // ① 不可升级判定：升级前后文案一致、且无费用减免
+    __ok('v0.52 燃血术 判定为不可升级', canUpgrade(__card('ranxue')) === false);
+    __ok('v0.52 易物 判定为不可升级', canUpgrade(__card('yiwu')) === false);
+    __ok('v0.52 附灵术 判定为不可升级', canUpgrade(__card('fuling')) === false);
+    __ok('v0.52 尸王 判定为不可升级', canUpgrade(__card('shi_wang')) === false);
+    // 反例：血祭是真升级（符文 1→0），雷符/五通神文案有变
+    __ok('v0.52 血祭 可升级(费用 1→0)', canUpgrade(__card('xueji')) === true);
+    __ok('v0.52 雷符 可升级(文案变化)', canUpgrade(__card('leifu')) === true);
+    __ok('v0.52 五通神(赶尸人) 可升级', canUpgrade(__card('wutong')) === true);
+
+    // ② 锻造卡面：不可升级的置灰 + 「不可升级」角标，且不显示升级预览
+    var hRan = forgeCardHTML(__card('ranxue'), 0);
+    __ok('v0.52 锻造页 燃血术 置灰(locked)', hRan.indexOf('locked') >= 0, hRan.slice(0, 80));
+    __ok('v0.52 锻造页 燃血术 标「不可升级」', hRan.indexOf('不可升级') >= 0);
+    __ok('v0.52 锻造页 燃血术 无升级预览', hRan.indexOf('upgrade-preview') < 0);
+    var hLei = forgeCardHTML(__card('leifu'), 0);
+    __ok('v0.52 锻造页 雷符 不置灰', hLei.indexOf('locked') < 0);
+    __ok('v0.52 锻造页 雷符 有升级预览', hLei.indexOf('upgrade-preview') >= 0);
+
+    // ③ forgeCard 拦截：不可升级的牌点击后不置 up
+    G.deck = [__card('ranxue')]; G.forgeFrom = null;
+    forgeCard(0);
+    __ok('v0.52 锻造 燃血术 被拦截(up 仍 falsy)', !G.deck[0].up, 'up=' + G.deck[0].up);
+    G.deck = [__card('ranxue')]; G.forgeFrom = 'camp';
+    forgeCard(0);
+    __ok('v0.52 锻造 燃血术(camp) 同样被拦截', !G.deck[0].up && !G.campActed, 'up=' + G.deck[0].up + ' campActed=' + G.campActed);
+
+    // ④ 遗物/召唤物进顶栏详情页（玩家面板下方不再有）
+    G.relics = ['zhaohunfan'];
+    __ok('v0.52 relicIcon 仍可用(插图)', typeof relicIcon(relById('zhaohunfan')) === 'string' && relicIcon(relById('zhaohunfan')).length > 0);
+
+    var _cap = null, _og = document.getElementById;
+    document.getElementById = function (id) { if (id === 'topbar') { if (!_cap) { _cap = _og(id); } return _cap; } return _og(id); };
+    try {
+      SCENE = 'battle'; G.summons = [{ type: 'wutong', v: 3, dur: 2 }];
+      try { renderTopbar(); } catch (e) { __ok('v0.52 renderTopbar 不抛异常', false, e && e.message); }
+      var tb = _cap ? _cap.innerHTML : '';
+      __ok('v0.52 详情页 遗物带插图 chip', tb.indexOf('prelic-chip') >= 0 && tb.indexOf('ricon') >= 0, tb.length);
+      __ok('v0.52 详情页 遗物名可见', tb.indexOf('招魂幡') >= 0);
+      __ok('v0.52 详情页 含召唤物', tb.indexOf('tb-summons') >= 0, tb.length);
+
+      SCENE = 'map';   // 地图场景：召唤物不显示（G.summons 到下一场战斗才清空，避免残留）
+      if (_cap) _cap.innerHTML = '';
+      try { renderTopbar(); } catch (e) { __ok('v0.52 renderTopbar(map) 不抛异常', false, e && e.message); }
+      var tm = _cap ? _cap.innerHTML : '';
+      __ok('v0.52 地图场景 详情页无召唤物', tm.indexOf('tb-summons') < 0, tm.length);
+      __ok('v0.52 地图场景 遗物仍在详情页', tm.indexOf('prelic-chip') >= 0);
+      SCENE = 'battle';
+    } finally { document.getElementById = _og; }
+
   })();
 
   rep.pass = _p; rep.fail = _f;
