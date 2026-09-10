@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.55</title>
+<title>志怪塔 · 原型 v0.56</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -380,7 +380,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.55</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.56</small></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>
@@ -814,12 +814,12 @@ const CARDS = [
       if(d>0) dealDamageTo(t,d); else log('铁布衫：当前没有格挡，落空'); }},
   {id:'shihun', name:'噬魂术', type:'attack', rarity:'blue', cost:2,
     t:(u)=>G.hero==='ganshiren'?`消耗 4 点【尸气】，对目标造成 ${u?18:14} 伤害。若本回合召唤过单位，费用 -1`
-      :G.hero==='wuseng'?`消耗目标全部【诅咒】，每层造成 ${u?7:5} 伤害。若本回合获得过 7 点以上格挡，额外造成 ${u?7:5} 伤害`
+      :G.hero==='wuseng'?`消耗目标全部【诅咒】，每层造成 ${u?6:5} 伤害。若本回合获得过 7 点以上格挡，额外造成 ${u?6:5} 伤害`
       :G.hero==='yincha'?`对目标造成 ${u?13:10} 伤害。每层【血怒】使此牌伤害 +2（上限 +20），打出时消耗对应层数（非消耗牌）`
       :`消耗目标全部【诅咒】，每层造成 ${u?6:5} 伤害`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='ganshiren'){ if(!hasShiqi(4)){ floatMsg('尸气不足'); return false; } spendShiqi(4); dealDamageTo(t,u?18:14); return; }
-      if(G.hero==='wuseng'){ const c=t.curse||0; const extra=((G.blockGainedTurn||0)>7)?(u?7:5):0; if(c<=0 && !extra){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; dealDamageTo(t,c*(u?7:5)+extra); return; }
+      if(G.hero==='wuseng'){ const c=t.curse||0; const extra=((G.blockGainedTurn||0)>7)?(u?6:5):0; if(c<=0 && !extra){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; dealDamageTo(t,c*(u?6:5)+extra); return; }
       if(G.hero==='yincha'){ dealDamageTo(t,(u?13:10)+2*rageSpend(2,20)); return; }
       const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; dealDamageTo(t,c*(u?6:5)); }},
   {id:'qungui', name:'群鬼乱舞', type:'attack', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
@@ -1777,7 +1777,7 @@ const CARD_DMG = {
     return d; },
   shihun: u=>{ const t=curEnemy(); if(!t) return 0; // 四列：预览须与 eff 逐列一致
     if(G.hero==='ganshiren') return u?18:14; // 赶尸人：耗4尸气固定伤，不吃诅咒
-    if(G.hero==='wuseng'){ const extra=((G.blockGainedTurn||0)>7)?(u?7:5):0; return ((t.curse||0)*(u?7:5))+extra; } // 武僧：每层5/7+格挡加成
+    if(G.hero==='wuseng'){ const extra=((G.blockGainedTurn||0)>7)?(u?6:5):0; return ((t.curse||0)*(u?6:5))+extra; } // 武僧：每层5/6+格挡加成
     if(G.hero==='yincha') return (u?13:10)+2*Math.min(10,rageLayers()); // 阴差：血怒每层+2(至多10层=+20)，打出时消耗
     return (t.curse||0)*(u?6:5); },
   qungui: u=>{ const t=curEnemy();
@@ -3926,7 +3926,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.55</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.56</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>

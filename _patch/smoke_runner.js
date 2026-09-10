@@ -331,7 +331,7 @@
     g = __base('ganshiren'); g.尸气 = 10; g.enemies[0].curse = 2;
     __ok('噬魂术预览 赶尸人=固定14(诅咒不参与)', pv().d === 14 && !pv().miss, 'd=' + pv().d);
     g = __base('wuseng'); g.enemies[0].curse = 2;
-    __ok('噬魂术预览 武僧=诅咒×5(非×6)', pv().d === 10, 'd=' + pv().d);
+    __ok('噬魂术预览 武僧=基础诅咒×5', pv().d === 10, 'd=' + pv().d);
     g = __base('wuseng'); g.blockGainedTurn = 10; g.enemies[0].curse = 0;
     __ok('噬魂术预览 武僧=格挡加成5(无诅咒不落空)', pv().d === 5 && !pv().miss, JSON.stringify(pv()));
     g = __base('wuseng'); g.enemies[0].curse = 0;
@@ -723,6 +723,36 @@
     __ok('v0.55 噬魂术(天师) 打出后诅咒清零', G.enemies[0].curse === 0, 'curse=' + G.enemies[0].curse);
     __ok('v0.55 噬魂术(天师) 不进本关消耗区', (G.exhausted || []).length === 0);
     __ok('v0.55 噬魂术(天师) 正常进弃牌堆', G.discard.indexOf(shT) >= 0);
+  })();
+
+  /* ============ v0.56 噬魂术(武僧) 每层 7→6，与天师统一为 5/6 ============ */
+  (function () {
+    __base('wuseng');
+    var shW = __card('shihun'), shWU = Object.assign({}, shW, { up: true });
+    var txtW = shW.t(false), txtWU = shW.t(true);
+    __ok('v0.56 噬魂术(武僧) 卡面每层5', txtW.indexOf('每层造成 5') >= 0, txtW);
+    __ok('v0.56 噬魂术(武僧) 升级卡面每层6', txtWU.indexOf('每层造成 6') >= 0, txtWU);
+    __ok('v0.56 噬魂术(武僧) 升级卡面额外6', txtWU.indexOf('额外造成 6') >= 0, txtWU);
+    __ok('v0.56 噬魂术(武僧) 卡面不再出现 7', txtWU.indexOf('7 伤害') < 0, txtWU);
+
+    // 升级态预览：2 层诅咒 → 12
+    G.enemies[0].curse = 2; G.enemies[0].block = 0; G.blockGainedTurn = 0;
+    __ok('v0.56 噬魂术(武僧) 升级预览 2层诅咒 → 12', previewDamage(shWU).d === 12, 'd=' + previewDamage(shWU).d);
+    // 升级态 + 格挡加成：无诅咒也打 6 且不落空
+    G.enemies[0].curse = 0; G.blockGainedTurn = 10;
+    __ok('v0.56 噬魂术(武僧) 升级预览 格挡加成6', previewDamage(shWU).d === 6 && !previewDamage(shWU).miss,
+      JSON.stringify(previewDamage(shWU)));
+
+    // 实测升级态：3 层诅咒 → 18 伤，诅咒清零
+    G.blockGainedTurn = 0;
+    G.enemies[0].curse = 3; G.enemies[0].block = 0;
+    G.enemies[0].maxHp = 300; G.enemies[0].hp = 300;
+    var hw0 = G.enemies[0].hp;
+    G.hand = [shWU]; G.deck = [shWU]; G.drawPile = []; G.discard = []; G.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.56 噬魂术(武僧) 升级 3层诅咒 → 18 伤害', hw0 - G.enemies[0].hp === 18, 'dealt=' + (hw0 - G.enemies[0].hp));
+    __ok('v0.56 噬魂术(武僧) 打出后诅咒清零', G.enemies[0].curse === 0, 'curse=' + G.enemies[0].curse);
+    __ok('v0.56 噬魂术(武僧) 非消耗牌 正常进弃牌堆', (G.exhausted || []).length === 0 && G.discard.indexOf(shWU) >= 0);
   })();
 
   rep.pass = _p; rep.fail = _f;
