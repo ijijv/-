@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.52</title>
+<title>志怪塔 · 原型 v0.53</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -152,6 +152,9 @@
   .card.r-gold{border-color:var(--gold);} .card.r-gold .cname{color:#b8860b;}
   .upgrade-preview{color:#8c2b21; margin-top:5px; padding-top:5px; border-top:1px dashed #c9a; font-weight:bold;}
   .exhaust-tag{display:inline-block; font-size:10px; color:#fff; background:var(--red2); border-radius:4px; padding:1px 6px; margin:4px 0 2px; letter-spacing:1px;}
+  /* 消耗牌标记：左侧红条（扇形手牌只露左缘，靠它一眼认出）+ 右上角「消耗」角标 */
+  .card .oneuse-bar{position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--red2); z-index:3;}
+  .card .oneuse{position:absolute; top:5px; right:5px; z-index:3; font-size:9px; line-height:1.35; color:#fff; background:var(--red2); border-radius:4px; padding:1px 5px; letter-spacing:1px; box-shadow:0 1px 3px rgba(0,0,0,.55); cursor:help;}
   .relic{width:150px; min-height:110px; background:var(--ink2); color:var(--text); border-radius:8px; padding:10px; display:flex; flex-direction:column; cursor:pointer; border:2px solid var(--ink3); text-align:left; font-size:12px; transition:border .1s;}
   .relic:hover{border-color:var(--gold);}
   .relic .cname{font-family:var(--font-kai); font-weight:bold; font-size:15px; margin-bottom:6px; color:var(--gold); letter-spacing:1px;}
@@ -377,7 +380,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.52</small></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.53</small></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>
@@ -717,7 +720,7 @@ const KEYWORDS = [
   ['血怒','阴差专属资源，上限 10 层、整局累积。打出扣血牌每失去 1 点生命 +1 层；「每层 +N」类牌打出时消耗实际用到的层数。'],
   ['渡魂','接下来 5 回合内，你对敌人造成的伤害按比例转化为回复生命。'],
   ['卸甲','获得后若干回合内，格挡在回合结束不清零并持续累计；效果结束时剩余格挡转化为生命。'],
-  ['消耗','一次性牌：打出后从本局牌组中移除，本局不再循环出现。'],
+  ['消耗','每场战斗限用一次：打出后本关不再出现，战斗结束后回到牌库，下场战斗可以再用。'],
   ['灵化','敌人词缀：免疫负面效果（镇魂、魅惑等）。诅咒仍可叠加。'],
 ];
 
@@ -1660,7 +1663,8 @@ function newState(){
     // ===== 全卡重做：新增通用状态 =====
     hpLostTurn:0, blockGainedTurn:0, summonsMadeTurn:0, lastDrawnCards:[],
     retainHeal:0, pendingBlockStart:0, boostCurse:0, xisuiTurns:0,
-    shiWangCard:null, ranhunType:null, ranhunSelf:null, endBlockKind:null };
+    shiWangCard:null, ranhunType:null, ranhunSelf:null, endBlockKind:null,
+    exhausted:[] };   // 本关已消耗的牌（战斗结束清空回牌库）
 }
 
 /* ===================== 敌人辅助 ===================== */
@@ -2131,7 +2135,7 @@ function startBattle(keys){
   G.ybTarget=-1; // 阴兵索敌标记：本场战斗从头锁（-1=无目标，落到带诅咒随机）
   PLAYER_HP_PREV=null; ENEMY_HP_PREV={};
   G.block=0; G.weak=0; G.gouhun=0; G.thorns=0; G.pendingEnergy=0; G.pendingDiscard=0; G.summons=[];
-  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=0; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.pendingSeal=0; G.karmaFire=0; G.duhun=null; G.xiejia=0; G.zhouyuA=false; G.尸气=0;
+  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=0; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.pendingSeal=0; G.karmaFire=0; G.duhun=null; G.xiejia=0; G.zhouyuA=false; G.尸气=0; G.exhausted=[];
   G.deck.forEach(c=>c.sealed=0);
   if(hasRelic('zhaohunfan')){ G.hp=Math.min(G.maxHp,G.hp+3); log('招魂幡：恢复 3 点生命'); }
   G.battleStartHp=G.hp;
@@ -2428,8 +2432,7 @@ function doPlayCard(i){
   const c=G.hand[i]; if(!c) return;
   const cost=effectiveCost(c);
   // 记录可回退信息（以防 eff 返回 false 需要回滚）
-  const exNow = c.exhaust || (c.heroExhaust && c.heroExhaust===G.hero);
-  const deckIndex = (c.type!=='junk' && exNow) ? G.deck.indexOf(c) : -1;
+  const exNow = isOneUse(c);
   const wasSkill = (c.type==='skill');
   const prevSkillsPlayed = G.skillsPlayedThisTurn || 0;
   const prevBuff=G.attackBuff;
@@ -2442,7 +2445,7 @@ function doPlayCard(i){
 
   G.attackBuff=(c.type==='attack' && hasRelic('zhushabi'))?2:0;
   if(c.type!=='junk'){
-    if(exNow){ if(deckIndex>=0){ G.deck.splice(deckIndex,1); } log(`【${c.name}】已消耗（本局不再出现）`); }
+    if(exNow){ (G.exhausted=G.exhausted||[]).push(c); log(`【${c.name}】已消耗（本关不再出现，战斗结束后回归牌库）`); }
     else if(c.id==='shi_wang' && G.hero==='ganshiren'){ /* 尸王：召唤物存活期间不进弃牌堆（成功后记 G.shiWangCard） */ }
     else G.discard.push(c);
   }
@@ -2463,7 +2466,7 @@ function doPlayCard(i){
     // 回退弃牌/消耗
     if(c.type!=='junk'){
       if(exNow){
-        if(deckIndex>=0 && !G.deck.includes(c)) G.deck.splice(Math.min(deckIndex, G.deck.length), 0, c);
+        const ei=(G.exhausted||[]).lastIndexOf(c); if(ei>=0) G.exhausted.splice(ei,1);
       } else {
         const di = G.discard.lastIndexOf(c); if(di>=0) G.discard.splice(di,1);
       }
@@ -2498,6 +2501,7 @@ function winFight(){
   HITFX.enemies.clear();
   log('击败了所有敌人！');
   if(G.shiWangCard) returnShiWangCard(); // 尸王：战斗结束消散，牌回到弃牌堆
+  if(G.exhausted && G.exhausted.length){ const _n=G.exhausted.length; G.exhausted=[]; log(`本关结束，${_n} 张消耗牌回归牌库`); }
   track('battleWin');
   const hasElite=G.enemies.some(e=>e.elite);
   const isBoss=G.enemies.some(e=>e.boss);
@@ -2671,6 +2675,7 @@ function saveRun(scene){
     enemies:G.enemies.map(serializeEnemy), target:G.target, turn:G.turn, battleStartHp:G.battleStartHp,
     summons:G.summons.map(x=>({type:x.type, v:x.v, dur:x.dur})),
     shiWangOut: !!G.shiWangCard,
+    exhaustedIdx:(G.exhausted||[]).map(c=>G.deck.indexOf(c)).filter(i=>i>=0),
     weak:G.weak||0, gouhun:G.gouhun||0, thorns:G.thorns||0, burn:G.burn||0, dodge:G.dodge||0, debuffImmune:G.debuffImmune||0,
     pendingEnergy:G.pendingEnergy||0, pendingDiscard:G.pendingDiscard||0,
     turnAtkBuff:G.turnAtkBuff||0, karmaFire:G.karmaFire||0, bloodPact:G.bloodPact||0, retain:G.retain||0, xiejia:G.xiejia||0,
@@ -2714,6 +2719,8 @@ function continueRun(){
     const sw = G.deck.find(x=>x.id==='shi_wang' && !G.hand.includes(x) && !G.drawPile.includes(x) && !G.discard.includes(x));
     if(sw) G.shiWangCard = sw;
   }
+  // 消耗牌：读档后按存档下标重新挂回本关消耗区
+  G.exhausted=(d.exhaustedIdx||[]).map(i=>G.deck[i]).filter(Boolean);
   G.weak=d.weak||0; G.gouhun=d.gouhun||0; G.thorns=d.thorns||0; G.burn=d.burn||0; G.dodge=d.dodge||0; G.debuffImmune=d.debuffImmune||0;
   G.pendingEnergy=d.pendingEnergy||0; G.pendingDiscard=d.pendingDiscard||0;
   G.turnAtkBuff=d.turnAtkBuff||0; G.karmaFire=d.karmaFire||0; G.bloodPact=d.bloodPact||0; G.retain=d.retain||0; G.xiejia=d.xiejia||0;
@@ -3426,7 +3433,7 @@ function viewDeck(){
     if(!rows.length) continue;
     html+=`<div style="color:var(--gold);margin:8px 0 2px">— ${label} —</div>`;
     html+=rows.map(id=>{ const {card,total,up}=m[id];
-      return `<div><span style="color:var(--dim)">${cardCost(card)}符文</span> <b>${card.name}</b> ×${total}${up>0?` <span style="color:var(--green)">（升级 ${up}）</span>`:''} <span style="color:var(--dim)">· ${wrapKw(card.t(false))}</span>${up>0?`<div style="color:var(--green);font-size:12px;margin-left:12px">↳ 升级后：${wrapKw(card.t(true))}</div>`:''}</div>`;
+      return `<div><span style="color:var(--dim)">${cardCost(card)}符文</span> <b>${card.name}</b>${exhaustChip(card)} ×${total}${up>0?` <span style="color:var(--green)">（升级 ${up}）</span>`:''} <span style="color:var(--dim)">· ${wrapKw(card.t(false))}</span>${up>0?`<div style="color:var(--green);font-size:12px;margin-left:12px">↳ 升级后：${wrapKw(card.t(true))}</div>`:''}</div>`;
     }).join('');
   }
   html+=`</div>`;
@@ -3439,8 +3446,20 @@ function hideOverlay(){ document.getElementById('overlay').classList.add('hidden
 function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }
 
 /* ===================== 渲染 ===================== */
+/* 消耗牌判定：牌自带 exhaust，或该英雄专属消耗（如噬魂术仅天师） */
+function isOneUse(c){ return !!(c && (c.exhaust || (c.heroExhaust && c.heroExhaust===G.hero))); }
+/* 卡面标记（图形式卡） */
+function exhaustMark(c){
+  if(!isOneUse(c)) return '';
+  return `<div class="oneuse-bar"></div><div class="oneuse" data-tip="kw:消耗">消耗</div>`;
+}
+/* 文字列表用的小标签（牌库 / 放大镜等） */
+function exhaustChip(c){
+  if(!isOneUse(c)) return '';
+  return ` <span data-tip="kw:消耗" style="cursor:help;color:#fff;background:var(--red2);border-radius:4px;padding:0 5px;font-size:11px;letter-spacing:1px">消耗</span>`;
+}
 function cardBody(c){
-  return `${cardArt(c)}<div class="cost">${cardCost(c)}</div><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
+  return `${cardArt(c)}${exhaustMark(c)}<div class="cost">${cardCost(c)}</div><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
 }
 function forgeCardHTML(c,i){
   const lock = !c.up && !canUpgrade(c);   // 升级无变化的牌：置灰、不可锻造
@@ -3448,7 +3467,7 @@ function forgeCardHTML(c,i){
     ? `<div class="cdesc">${wrapKw(c.t(c.up))}</div>`
     : `<div class="cdesc">${wrapKw(c.t(false))}<div class="upgrade-preview">升级 → ${wrapKw(c.t(true))}</div></div>`;
   return `<div class="card ${RCOLOR[c.rarity]}${lock?' locked':''}" onclick="forgeCard(${i})">
-    ${cardArt(c)}
+    ${cardArt(c)}${exhaustMark(c)}
     <div class="cost">${cardCost(c)}</div>
     <div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${lock?'<span class="noup">不可升级</span>':''}</div>
     ${body}
@@ -3487,7 +3506,7 @@ function handCardHTML(c, disabled, i, n){
   const sealed = c.sealed>0;
   const sealTag = sealed ? `<div class="exhaust-tag">忘忧封印 ${c.sealed} 回合</div>` : '';
   const rot=((i-(n-1)/2)*3).toFixed(1);
-  return `<div class="card ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardArt(c)}${costHtml}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div>${sealTag}${dmgHtml}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
+  return `<div class="card ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div>${sealTag}${dmgHtml}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
 }
 function intentText(e){
   const atk=e.intent.v+(e.pendingDamage||0)+2*(e.strength||0);
@@ -3717,6 +3736,7 @@ function showCardZoom(i){
     <h2>${c.name}${c.up?' <span style="color:var(--green)">↑</span>':''} <small style="color:var(--dim);font-size:13px">${TNAME[c.type]} · ${RNAME[c.rarity]}</small></h2>
     <div style="font-size:17px;line-height:1.9;text-align:left;padding:14px 20px;color:#e8dcc0;background:rgba(0,0,0,.22);border-radius:8px;margin:12px 0">${wrapKw(c.t(c.up))}</div>
     ${effectiveCost(c)>0?`<p style="color:var(--gold)">符文费用：${effectiveCost(c)}</p>`:''}
+    ${isOneUse(c)?`<p style="color:var(--red2);font-weight:bold">消耗 · 每场战斗限用一次，战斗结束后回到牌库</p>`:''}
     <button class="btn ghost" onclick="hideOverlay()">收起</button>`;
   document.getElementById('overlay').classList.remove('hidden');
   const x=document.getElementById('overlayCloseX'); if(x) x.style.display='';
@@ -3902,7 +3922,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.52</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.53</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>

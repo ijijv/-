@@ -649,6 +649,53 @@
 
   })();
 
+  /* ============ v0.53 消耗牌：一关一次（而非一局一次） + 卡面显著提示 ============ */
+  (function () {
+    // ① 消耗牌判定：牌自带 exhaust，或该英雄专属消耗（噬魂术仅天师）
+    __base('tianshi');
+    __ok('v0.53 镇妖铃 是消耗牌', isOneUse(__card('zhenyaoling')) === true);
+    __ok('v0.53 钟馗镇魂 是消耗牌', isOneUse(__card('zhongkui')) === true);
+    __ok('v0.53 渡魂归己 是消耗牌', isOneUse(__card('duhunguiji')) === true);
+    __ok('v0.53 雷符 非消耗牌', isOneUse(__card('leifu')) === false);
+    __ok('v0.53 噬魂术(天师) 是消耗牌', isOneUse(__card('shihun')) === true);
+    __base('wuseng');
+    __ok('v0.53 噬魂术(武僧) 非消耗牌', isOneUse(__card('shihun')) === false);
+
+    // ② 卡面标记：红色左条 + 「消耗」角标
+    __base('tianshi');
+    var hz = handCardHTML(__card('zhenyaoling'), false, 0, 1);
+    __ok('v0.53 手牌 镇妖铃 有左红条', hz.indexOf('oneuse-bar') >= 0, hz.slice(0, 100));
+    __ok('v0.53 手牌 镇妖铃 有「消耗」角标', hz.indexOf('>消耗<') >= 0);
+    var hl = handCardHTML(__card('leifu'), false, 0, 1);
+    __ok('v0.53 手牌 雷符 无消耗标记', hl.indexOf('oneuse') < 0);
+    __ok('v0.53 cardBody 镇妖铃 有标记', cardBody(__card('zhenyaoling')).indexOf('oneuse-bar') >= 0);
+    __ok('v0.53 forgeCardHTML 镇妖铃 有标记', forgeCardHTML(__card('zhenyaoling'), 0).indexOf('oneuse-bar') >= 0);
+    __ok('v0.53 噬魂术(天师) 手牌有标记', handCardHTML(__card('shihun'), false, 0, 1).indexOf('oneuse-bar') >= 0);
+    __base('wuseng');
+    __ok('v0.53 噬魂术(武僧) 手牌无标记', handCardHTML(__card('shihun'), false, 0, 1).indexOf('oneuse') < 0);
+
+    // ③ 机制：打出后本关消失，但牌库仍保留（关键——此前是直接从 G.deck 删除＝一局一次）
+    __base('ganshiren');
+    var zl = __card('zhenyaoling');
+    G.hand = [zl]; G.deck = [zl]; G.drawPile = []; G.discard = []; G.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.53 打出后进入本关消耗区', G.exhausted.length === 1 && G.exhausted[0] === zl, 'n=' + G.exhausted.length);
+    __ok('v0.53 打出后不进弃牌堆', G.discard.indexOf(zl) < 0);
+    __ok('v0.53 打出后牌库仍保留（不再是一局一次）', G.deck.indexOf(zl) >= 0);
+
+    // ④ 战斗结束：消耗区清空，牌回牌库；下一场能再抽到
+    try { winFight(); } catch (e) { __ok('v0.53 winFight 不抛异常', false, e && e.message); }
+    __ok('v0.53 战斗结束后消耗区清空', (G.exhausted || []).length === 0);
+    __ok('v0.53 战斗结束后牌库仍含镇妖铃', G.deck.indexOf(zl) >= 0);
+    G.hand = []; G.discard = [];
+    resetDeck();
+    __ok('v0.53 下一场战斗 镇妖铃回到抽牌堆', G.drawPile.indexOf(zl) >= 0, 'draw=' + G.drawPile.length);
+
+    // ⑤ 关键词文案已改成一关一次
+    var kwX = KEYWORDS.find(function (k) { return k[0] === '消耗'; });
+    __ok('v0.53 【消耗】关键词文案已更新', !!kwX && kwX[1].indexOf('每场战斗限用一次') >= 0, kwX && kwX[1]);
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();
