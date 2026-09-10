@@ -1,0 +1,23 @@
+# ===== 临时产物 / 中间文件 =====
+__pycache__/
+*.pyc
+_test_out/
+/_thumb_*
+/_t.png
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# 补丁脚本的临时输出
+_patch/tmp/
+_patch/smoke_result.json
+smoke_result.json
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
