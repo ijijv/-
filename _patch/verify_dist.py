@@ -114,8 +114,9 @@ def main():
     print('\n[5] 结构')
     check(html.count('<script>') == 1, '只有 1 个 <script> 标签（实际 %d）' % html.count('<script>'))
     check(html.count('</script>') == 1, '只有 1 个 </script> 标签（实际 %d）' % html.count('</script>'))
-    # ASSET_BASE 常量的字面量也被混淆进字符串表了，产物里连素材目录名都不以明文出现
-    check('素材/' not in html, '产物中无明文的 素材/ 引用（回退常量已进字符串表）')
+    # 提示项，不作断言：stringArrayThreshold=0.75 意味着约 1/4 的字符串保留明文，
+    # 哪些字符串被编码随输入变化（同样输入 + 固定 seed 才稳定），命中与否都不影响功能与隐私。
+    print('  注: 产物中 %s "%s" 明文' % ('存在' if '素材/' in html else '不存在', '素材/'))
 
     unused = sorted(keys - set(want))
     if unused:

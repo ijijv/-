@@ -339,14 +339,14 @@
     g = __base('yincha'); g.xuenu = 3; g.enemies[0].curse = 0;
     __ok('噬魂术预览 阴差=10+血怒2×3(共16)', pv().d === 16, 'd=' + pv().d);
     g = __base('tianshi'); g.enemies[0].curse = 2;
-    __ok('噬魂术预览 天师=诅咒×7', pv().d === 14, 'd=' + pv().d);
+    __ok('噬魂术预览 天师=诅咒×5', pv().d === 10, 'd=' + pv().d);
     g = __base('tianshi'); g.enemies[0].curse = 0;
     __ok('噬魂术预览 天师=无诅咒落空', pv().miss === '无诅咒', JSON.stringify(pv()));
     var shU = Object.assign({}, sh); shU.up = true;
     g = __base('ganshiren'); g.尸气 = 10; g.enemies[0].curse = 5;
     __ok('噬魂术预览 升级赶尸人=18', previewDamage(shU).d === 18, 'd=' + previewDamage(shU).d);
     g = __base('tianshi'); g.enemies[0].curse = 2;
-    __ok('噬魂术预览 升级天师=诅咒×9', previewDamage(shU).d === 18, 'd=' + previewDamage(shU).d);
+    __ok('噬魂术预览 升级天师=诅咒×6', previewDamage(shU).d === 12, 'd=' + previewDamage(shU).d);
   })();
 
   // ===== CARD_DMG 清理：预览与 eff 逐列一致（雷符 D 基数 6/9；召唤 v 对齐 summonAct） =====
@@ -657,7 +657,7 @@
     __ok('v0.53 钟馗镇魂 是消耗牌', isOneUse(__card('zhongkui')) === true);
     __ok('v0.53 渡魂归己 是消耗牌', isOneUse(__card('duhunguiji')) === true);
     __ok('v0.53 雷符 非消耗牌', isOneUse(__card('leifu')) === false);
-    __ok('v0.53 噬魂术(天师) 是消耗牌', isOneUse(__card('shihun')) === true);
+    __ok('v0.55 噬魂术(天师) 非消耗牌', isOneUse(__card('shihun')) === false);
     __base('wuseng');
     __ok('v0.53 噬魂术(武僧) 非消耗牌', isOneUse(__card('shihun')) === false);
 
@@ -670,7 +670,7 @@
     __ok('v0.53 手牌 雷符 无消耗标记', hl.indexOf('oneuse') < 0);
     __ok('v0.53 cardBody 镇妖铃 有标记', cardBody(__card('zhenyaoling')).indexOf('oneuse-bar') >= 0);
     __ok('v0.53 forgeCardHTML 镇妖铃 有标记', forgeCardHTML(__card('zhenyaoling'), 0).indexOf('oneuse-bar') >= 0);
-    __ok('v0.53 噬魂术(天师) 手牌有标记', handCardHTML(__card('shihun'), false, 0, 1).indexOf('oneuse-bar') >= 0);
+    __ok('v0.55 噬魂术(天师) 手牌无标记', handCardHTML(__card('shihun'), false, 0, 1).indexOf('oneuse') < 0);
     __base('wuseng');
     __ok('v0.53 噬魂术(武僧) 手牌无标记', handCardHTML(__card('shihun'), false, 0, 1).indexOf('oneuse') < 0);
 
@@ -694,6 +694,35 @@
     // ⑤ 关键词文案已改成一关一次
     var kwX = KEYWORDS.find(function (k) { return k[0] === '消耗'; });
     __ok('v0.53 【消耗】关键词文案已更新', !!kwX && kwX[1].indexOf('每场战斗限用一次') >= 0, kwX && kwX[1]);
+  })();
+
+  /* ============ v0.55 噬魂术：取消消耗牌 + 天师版降到 5/6 ============ */
+  (function () {
+    // 四个英雄都不再是消耗牌
+    ['ganshiren', 'wuseng', 'yincha', 'tianshi'].forEach(function (h) {
+      __base(h);
+      __ok('v0.55 噬魂术(' + h + ') 非消耗牌', isOneUse(__card('shihun')) === false);
+      __ok('v0.55 噬魂术(' + h + ') 卡面无消耗标记', handCardHTML(__card('shihun'), false, 0, 1).indexOf('oneuse') < 0);
+    });
+
+    // 天师版卡面：每层 5（升级 6），且不再出现「消耗牌」字样
+    __base('tianshi');
+    var shT = __card('shihun');
+    var txtB = shT.t(false), txtU = shT.t(true);
+    __ok('v0.55 噬魂术(天师) 卡面每层5', txtB.indexOf('每层造成 5') >= 0, txtB);
+    __ok('v0.55 噬魂术(天师) 升级卡面每层6', txtU.indexOf('每层造成 6') >= 0, txtU);
+    __ok('v0.55 噬魂术(天师) 卡面不再写「消耗牌」', txtB.indexOf('消耗牌') < 0, txtB);
+
+    // 天师版机制：消耗目标全部诅咒，每层 5；不是消耗牌，正常进弃牌堆
+    G.enemies[0].curse = 3; G.enemies[0].block = 0;
+    G.enemies[0].maxHp = 300; G.enemies[0].hp = 300;
+    G.hand = [shT]; G.deck = [shT]; G.drawPile = []; G.discard = []; G.exhausted = [];
+    var hp0 = G.enemies[0].hp;
+    doPlayCard(0);
+    __ok('v0.55 噬魂术(天师) 3层诅咒 → 15 伤害', hp0 - G.enemies[0].hp === 15, 'dealt=' + (hp0 - G.enemies[0].hp));
+    __ok('v0.55 噬魂术(天师) 打出后诅咒清零', G.enemies[0].curse === 0, 'curse=' + G.enemies[0].curse);
+    __ok('v0.55 噬魂术(天师) 不进本关消耗区', (G.exhausted || []).length === 0);
+    __ok('v0.55 噬魂术(天师) 正常进弃牌堆', G.discard.indexOf(shT) >= 0);
   })();
 
   rep.pass = _p; rep.fail = _f;
