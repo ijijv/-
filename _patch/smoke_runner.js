@@ -25,6 +25,7 @@
   try { ensureAudio = __sil; } catch (e) {}
   try { startGuidedTutorial = __sil; } catch (e) {}
   try { bossIntro = function (cb) { if (typeof cb === 'function') cb(); }; } catch (e) {}
+  var __realEnemyAct = enemyAct; // 保留真实引用（默认 stub 掉，避免 enemyAct->startTurn 连锁）
   try { enemyAct = __sil; } catch (e) {} // 免触发 enemyAct->startTurn 连锁；finishEndTurn 骑乘结算仍原样执行
 
   var rep = { ok: true, errors: [], cardsTotal: 0, heroes: {}, pass: 0, fail: 0 };
@@ -301,9 +302,33 @@
   (function () {
     var g = __base('wuseng');
     var c = __card('xiejiashengyuan'); c.eff(false, c);
-    __ok('B#23 卸甲 只置 xiejia 不清格挡', g.xiejia === 2 && g.endBlockKind === null && g.block >= 6, 'xiejia=' + g.xiejia + ' endBlockKind=' + g.endBlockKind);
+    __ok('B#23 卸甲 只置 xiejia 不清格挡', g.xiejia === 2 && g.endBlockKind === null && g.block === 5, 'xiejia=' + g.xiejia + ' endBlockKind=' + g.endBlockKind + ' block=' + g.block);
     g = __base('wuseng'); c = __card('xiejiashengyuan'); c.eff(false, c); finishEndTurn();
-    __ok('B#23 卸甲 回合末格挡保留', g.block === 6 && g.xiejia === 2, 'block=' + g.block);
+    __ok('B#23 卸甲 回合末格挡保留', g.block === 5 && g.xiejia === 2, 'block=' + g.block);
+
+    // ---- v0.58 防御牌（15~23）按《武僧版卡池.md》 ----
+    function blk(id, up) { var g2 = __base('wuseng'); var cc = Object.assign({}, __card(id), { up: !!up }); cc.eff(!!up, cc); return g2.block; }
+    __ok('B#15 金刚符 6/9', blk('jingang') === 6 && blk('jingang', true) === 9, blk('jingang') + '/' + blk('jingang', true));
+    __ok('B#16 隐身符 4/6', blk('yinshen') === 4 && blk('yinshen', true) === 6, blk('yinshen') + '/' + blk('yinshen', true));
+    __ok('B#17 金光罩 14/19', blk('jinguang') === 14 && blk('jinguang', true) === 19, blk('jinguang') + '/' + blk('jinguang', true));
+    __ok('B#18 金钟罩 12/17', blk('jinzhong') === 12 && blk('jinzhong', true) === 17, blk('jinzhong') + '/' + blk('jinzhong', true));
+    __ok('B#19 荆棘符 4/7 + 反弹 4/5', blk('jingji') === 4 && blk('jingji', true) === 7,
+      'blk=' + blk('jingji') + '/' + blk('jingji', true) + ' 反弹=' + (function () { var g2 = __base('wuseng'); var cc = __card('jingji'); cc.eff(false, cc); return g2.thorns; })() +
+      '/' + (function () { var g2 = __base('wuseng'); var cc = Object.assign({}, __card('jingji'), { up: true }); cc.eff(true, cc); return g2.thorns; })());
+    __ok('B#20 佛渡 升级 +4 格挡', blk('fodu') === 0 && blk('fodu', true) === 4, blk('fodu') + '/' + blk('fodu', true));
+    __ok('B#21 铜皮铁骨 10/15 + 反弹 6/8',
+      blk('tongpi') === 10 && blk('tongpi', true) === 15 &&
+      (function () { var g2 = __base('wuseng'); var cc = __card('tongpi'); cc.eff(false, cc); return g2.thorns === 6; })() &&
+      (function () { var g2 = __base('wuseng'); var cc = Object.assign({}, __card('tongpi'), { up: true }); cc.eff(true, cc); return g2.thorns === 8; })(),
+      blk('tongpi') + '/' + blk('tongpi', true));
+    var fz = __card('fanzhen');
+    g = __base('wuseng'); __card('fanzhen').eff(false, __card('fanzhen'));
+    __ok('B#22 反震 反弹 4/5 且不再给下回合格挡',
+      G.thorns === 4 && (G.nextBlock || 0) === 0 && cardCost(fz) === 1 && cardCost(Object.assign({}, fz, { up: true })) === 0,
+      'thorns=' + G.thorns + ' nextBlock=' + G.nextBlock + ' cost=' + cardCost(fz) + ' costU=' + cardCost(Object.assign({}, fz, { up: true })));
+    __ok('B#22 反震 升级反弹 5', (function () { var g2 = __base('wuseng'); var cc = Object.assign({}, __card('fanzhen'), { up: true }); cc.eff(true, cc); return g2.thorns === 5; })());
+    __ok('B#23 卸甲生元 5/8', blk('xiejiashengyuan') === 5 && blk('xiejiashengyuan', true) === 8,
+      blk('xiejiashengyuan') + '/' + blk('xiejiashengyuan', true));
 
     g = __base('wuseng'); c = __card('jingji'); c.eff(false, c);
     __ok('B#19 荆棘符 thorns>=4', (g.thorns || 0) >= 4, 'thorns=' + g.thorns);
@@ -313,7 +338,7 @@
 
     g = __base('wuseng'); g.hand = [__card('leifu'), __card('leifu'), __card('leifu')];
     c = __card('fenfu'); c.eff(false, c); g.discardSelect.picked = [0, 2]; confirmDiscardSelect();
-    __ok('B#34 焚符 弃2张→6格挡', (g.blockGainedTurn || 0) === 6, 'blockTurn=' + g.blockGainedTurn);
+    __ok('B#34 焚符 弃2张→8格挡(每张4)', (g.blockGainedTurn || 0) === 8, 'blockTurn=' + g.blockGainedTurn);
 
     g = __base('wuseng'); g.hand = [__card('jingang'), __card('leifu')];
     g.drawPile = [__card('leifu'), __card('leifu'), __card('leifu')];
@@ -397,7 +422,7 @@
   // ===== 升级后 0 费（costU:0）真实出牌判定 =====
   // 全部出牌/显示路径走 effectiveCost/cardCost；两者在 c.up && costU!=null 时返回 costU
   (function () {
-    var zeroUp = ['tiebushan', 'tongling', 'jingxin', 'xueji', 'yixing'];
+    var zeroUp = ['tongling', 'jingxin', 'xueji', 'yixing']; // tiebushan 已按列取费（B 0 费不可升级）
     zeroUp.forEach(function (id) {
       var cu = Object.assign({}, __card(id)); cu.up = true;
       __ok('升级0费 costU=' + id, cardCost(cu) === 0 && effectiveCost(cu) === 0,
@@ -491,9 +516,9 @@
     g = __base('ganshiren'); g.尸气 = 10; g.enemies[0].curse = 2;
     __ok('噬魂术预览 赶尸人=固定14(诅咒不参与)', pv().d === 14 && !pv().miss, 'd=' + pv().d);
     g = __base('wuseng'); g.enemies[0].curse = 2;
-    __ok('噬魂术预览 武僧=基础诅咒×5', pv().d === 10, 'd=' + pv().d);
+    __ok('噬魂术预览 武僧=诅咒×2=4', pv().d === 4, 'd=' + pv().d);
     g = __base('wuseng'); g.blockGainedTurn = 10; g.enemies[0].curse = 0;
-    __ok('噬魂术预览 武僧=格挡加成5(无诅咒不落空)', pv().d === 5 && !pv().miss, JSON.stringify(pv()));
+    __ok('噬魂术预览 武僧=格挡不参与伤害(无诅咒落空)', pv().miss === '无诅咒', JSON.stringify(pv()));
     g = __base('wuseng'); g.enemies[0].curse = 0;
     __ok('噬魂术预览 武僧=无诅咒落空', pv().miss === '无诅咒', JSON.stringify(pv()));
     g = __base('yincha'); g.xuenu = 3; g.enemies[0].curse = 0;
@@ -527,7 +552,7 @@
     g = __base('ganshiren'); g.summons = [{ type: 'zhiren', v: 1, dur: 2 }];
     __ok('百鬼预览 A=4+1×2=6', lv('baigui').d === 6, 'd=' + lv('baigui').d);
     g = __base('wuseng'); g.block = 6;
-    __ok('百鬼预览 B=4+6/3=6', lv('baigui').d === 6, 'd=' + lv('baigui').d);
+    __ok('百鬼预览 B=5+min(8,6/2)=8', lv('baigui').d === 8, 'd=' + lv('baigui').d);
     g = __base('yincha');
     __ok('百鬼预览 C=5+0召唤=5', lv('baigui').d === 5, 'd=' + lv('baigui').d);
     g = __base('tianshi'); g.enemies[0].curse = 3;
@@ -730,9 +755,9 @@
   (function () {
     var g, c, s;
 
-    // 武僧：立即 4 点（卡）+ 首次触发 3 点（召唤）= 当回合 7 格挡
+    // 武僧：基础 1 点（卡）+ 首次触发 4 点（召唤）= 当回合 5 格挡
     g = __base('wuseng'); G.block = 0; c = __card('wutong'); c.eff(false, c);
-    __ok('v0.51 五通神(武僧) 当回合 +7 格挡', g.block === 7, 'block=' + g.block);
+    __ok('v0.58 五通神(武僧) 当回合 1+4=5 格挡', g.block === 5, 'block=' + g.block);
     __ok('v0.51 五通神(武僧) 现形即耗 1 回合(剩1)', g.summons.length === 1 && g.summons[0].dur === 1, JSON.stringify(g.summons));
 
     // 赶尸人：立即 +3 格挡 +1 尸气
@@ -885,34 +910,191 @@
     __ok('v0.55 噬魂术(天师) 正常进弃牌堆', G.discard.indexOf(shT) >= 0);
   })();
 
-  /* ============ v0.56 噬魂术(武僧) 每层 7→6，与天师统一为 5/6 ============ */
+  /* ============ v0.58 噬魂术(武僧) 按《武僧版卡池.md》重做：每层 2/3 伤 + 每层 1/2 格挡 ============ */
   (function () {
     __base('wuseng');
     var shW = __card('shihun'), shWU = Object.assign({}, shW, { up: true });
     var txtW = shW.t(false), txtWU = shW.t(true);
-    __ok('v0.56 噬魂术(武僧) 卡面每层5', txtW.indexOf('每层造成 5') >= 0, txtW);
-    __ok('v0.56 噬魂术(武僧) 升级卡面每层6', txtWU.indexOf('每层造成 6') >= 0, txtWU);
-    __ok('v0.56 噬魂术(武僧) 升级卡面额外6', txtWU.indexOf('额外造成 6') >= 0, txtWU);
-    __ok('v0.56 噬魂术(武僧) 卡面不再出现 7', txtWU.indexOf('7 伤害') < 0, txtWU);
+    __ok('v0.58 噬魂术(武僧) 卡面每层2', txtW.indexOf('每层造成 2') >= 0, txtW);
+    __ok('v0.58 噬魂术(武僧) 升级卡面每层3', txtWU.indexOf('每层造成 3') >= 0, txtWU);
+    __ok('v0.58 噬魂术(武僧) 卡面含「获得 1 点格挡」', txtW.indexOf('获得 1 点格挡') >= 0, txtW);
+    __ok('v0.58 噬魂术(武僧) 升级卡面含「获得 2 点格挡」', txtWU.indexOf('获得 2 点格挡') >= 0, txtWU);
 
-    // 升级态预览：2 层诅咒 → 12
-    G.enemies[0].curse = 2; G.enemies[0].block = 0; G.blockGainedTurn = 0;
-    __ok('v0.56 噬魂术(武僧) 升级预览 2层诅咒 → 12', previewDamage(shWU).d === 12, 'd=' + previewDamage(shWU).d);
-    // 升级态 + 格挡加成：无诅咒也打 6 且不落空
-    G.enemies[0].curse = 0; G.blockGainedTurn = 10;
-    __ok('v0.56 噬魂术(武僧) 升级预览 格挡加成6', previewDamage(shWU).d === 6 && !previewDamage(shWU).miss,
-      JSON.stringify(previewDamage(shWU)));
+    G.enemies[0].curse = 2; G.enemies[0].block = 0;
+    __ok('v0.58 噬魂术(武僧) 升级预览 2层诅咒 → 6', previewDamage(shWU).d === 6, 'd=' + previewDamage(shWU).d);
+    G.enemies[0].curse = 0;
+    __ok('v0.58 噬魂术(武僧) 无诅咒落空', previewDamage(shWU).miss === '无诅咒', JSON.stringify(previewDamage(shWU)));
 
-    // 实测升级态：3 层诅咒 → 18 伤，诅咒清零
-    G.blockGainedTurn = 0;
+    // 实测升级态：3 层诅咒 → 9 伤 + 6 格挡，诅咒清零
     G.enemies[0].curse = 3; G.enemies[0].block = 0;
     G.enemies[0].maxHp = 300; G.enemies[0].hp = 300;
+    G.block = 0;
     var hw0 = G.enemies[0].hp;
     G.hand = [shWU]; G.deck = [shWU]; G.drawPile = []; G.discard = []; G.exhausted = [];
     doPlayCard(0);
-    __ok('v0.56 噬魂术(武僧) 升级 3层诅咒 → 18 伤害', hw0 - G.enemies[0].hp === 18, 'dealt=' + (hw0 - G.enemies[0].hp));
-    __ok('v0.56 噬魂术(武僧) 打出后诅咒清零', G.enemies[0].curse === 0, 'curse=' + G.enemies[0].curse);
-    __ok('v0.56 噬魂术(武僧) 非消耗牌 正常进弃牌堆', (G.exhausted || []).length === 0 && G.discard.indexOf(shWU) >= 0);
+    __ok('v0.58 噬魂术(武僧) 升级 3层诅咒 → 9 伤害', hw0 - G.enemies[0].hp === 9, 'dealt=' + (hw0 - G.enemies[0].hp));
+    __ok('v0.58 噬魂术(武僧) 升级 3层诅咒 → 6 格挡', G.block === 6, 'block=' + G.block);
+    __ok('v0.58 噬魂术(武僧) 打出后诅咒清零', G.enemies[0].curse === 0, 'curse=' + G.enemies[0].curse);
+    __ok('v0.58 噬魂术(武僧) 非消耗牌 正常进弃牌堆', (G.exhausted || []).length === 0 && G.discard.indexOf(shWU) >= 0);
+  })();
+
+  /* ============ v0.58 武僧攻击牌（1~14）按文档重做 ============ */
+  (function () {
+    function up(id) { return Object.assign({}, __card(id), { up: true }); }
+    var g;
+    // #1 雷符 / #2 火符：升级后每 2 点格挡 +1
+    g = __base('wuseng'); g.block = 4;
+    __ok('v0.58 雷符(武僧) 升级 4 格挡 → 6+2=8', previewDamage(up('leifu')).d === 8, 'd=' + previewDamage(up('leifu')).d);
+    g = __base('wuseng'); g.block = 4;
+    __ok('v0.58 火符(武僧) 升级 4 格挡 → 7+2=9', previewDamage(up('huofu')).d === 9, 'd=' + previewDamage(up('huofu')).d);
+
+    // #5 天雷正法：20 伤 + 获得等量格挡
+    g = __base('wuseng'); g.block = 0;
+    g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    var tlU = up('tianlei');
+    g.hand = [tlU]; g.drawPile = []; g.discard = []; g.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.58 天雷正法(武僧) 升级 20 伤 + 20 格挡', g.enemies[0].hp === 280 && G.block === 20,
+      'hp=' + g.enemies[0].hp + ' block=' + G.block);
+    __ok('v0.58 天雷正法(武僧) 预览=20(不含格挡)', previewDamage(tlU).d === 20, 'd=' + previewDamage(tlU).d);
+
+    // #6 万剑归宗：全体 9/14 + 获得 10/12 格挡 + 斩杀刷新 0 费万剑
+    g = __base('wuseng'); g.block = 0;
+    g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    g.enemies[1].hp = 4; g.enemies[1].maxHp = 60;
+    g.hand = [__card('wanjian')]; g.drawPile = []; g.discard = []; g.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.58 万剑归宗(武僧) 全体 9 伤', g.enemies[0].hp === 291, 'hp=' + g.enemies[0].hp);
+    __ok('v0.58 万剑归宗(武僧) 获得 10 格挡', G.block === 10, 'block=' + G.block);
+    var zc = G.hand.filter(function (x) { return x.id === 'wanjian' && cardCost(x) === 0; });
+    __ok('v0.58 万剑归宗(武僧) 斩杀 1 名 → 手牌多 1 张 0 费万剑', zc.length === 1,
+      'hand=' + G.hand.map(function (x) { return x.id + '@' + cardCost(x); }).join(','));
+
+    // #7 铁布衫：B 0 费不可升级；A/C 1→0；D 1 不可升级
+    var tb = __card('tiebushan');
+    g = __base('wuseng');
+    __ok('v0.58 铁布衫(武僧) 0 费且不可升级', cardCost(tb) === 0 && canUpgrade(tb) === false, 'cost=' + cardCost(tb));
+    g = __base('ganshiren');
+    __ok('v0.58 铁布衫(赶尸人) 1 费 → 升级 0 费', cardCost(tb) === 1 && cardCost(Object.assign({}, tb, { up: true })) === 0);
+    g = __base('tianshi');
+    __ok('v0.58 铁布衫(天师) 1 费不可升级', cardCost(tb) === 1 && canUpgrade(tb) === false, 'cost=' + cardCost(tb));
+
+    // #11 蚀魂咒：耗 2 格挡，施 1/2 层诅咒
+    g = __base('wuseng'); g.block = 5; g.enemies[0].curse = 0;
+    g.hand = [__card('shihunzhou')]; g.drawPile = []; g.discard = []; g.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.58 蚀魂咒(武僧) 耗 2 格挡施 1 层诅咒', G.block === 3 && G.enemies[0].curse === 1,
+      'block=' + G.block + ' curse=' + G.enemies[0].curse);
+
+    // #12 嗜血：升级后每 2 点格挡 +1（上限 5）
+    g = __base('wuseng'); g.block = 6;
+    __ok('v0.58 嗜血(武僧) 升级 6 格挡 → 6+min(5,3)=9', previewDamage(up('shixue')).d === 9, 'd=' + previewDamage(up('shixue')).d);
+
+    // #13 百鬼夜行：升级 6 伤、每 1 点格挡 +1（上限 +11）
+    g = __base('wuseng'); g.block = 10;
+    __ok('v0.58 百鬼夜行(武僧) 升级 10 格挡 → 6+10=16', previewDamage(up('baigui')).d === 16, 'd=' + previewDamage(up('baigui')).d);
+
+    // #14 钟馗镇魂：减费门槛 12/15/21
+    var zk = __card('zhongkui');
+    g = __base('wuseng');
+    g.block = 11; var c11 = effectiveCost(zk);
+    g.block = 12; var c12 = effectiveCost(zk);
+    g.block = 15; var c15 = effectiveCost(zk);
+    g.block = 21; var c21 = effectiveCost(zk);
+    __ok('v0.58 钟馗镇魂(武僧) 减费门槛 12/15/21', c11 === 3 && c12 === 2 && c15 === 1 && c21 === 0,
+      [c11, c12, c15, c21].join('/'));
+    __ok('v0.58 钟馗镇魂(武僧) 卡面门槛 12/15/21', zk.t(false).indexOf('12/15/21') >= 0, zk.t(false));
+  })();
+
+  /* ============ v0.58 武僧功能牌（24~40）按《武僧版卡池.md》重做 ============ */
+  (function () {
+    var g, cc;
+
+    // #24 聚灵：B 只抽牌（去掉「获得过格挡再抽 1 张」）
+    g = __base('wuseng'); __fill();
+    __card('juling').eff(false, __card('juling'));
+    __ok('v0.58 B#24 聚灵 只抽 1 张', g.hand.length === 1, 'hand=' + g.hand.length);
+
+    // #25 舍身：3/5 格挡
+    g = __base('wuseng'); __fill(); __card('sheshen').eff(false, __card('sheshen'));
+    var s3 = g.block;
+    g = __base('wuseng'); __fill(); cc = Object.assign({}, __card('sheshen'), { up: true }); cc.eff(true, cc);
+    __ok('v0.58 B#25 舍身 3/5 格挡', s3 === 3 && g.block === 5, s3 + '/' + g.block);
+
+    // #26 守一：保留 1 张防御牌 3/4 格挡
+    g = __base('wuseng'); g.block = 0;
+    __card('shouyi').eff(false, __card('shouyi'));
+    g.hand = [__card('jingang')]; g.retainSelect = { need: 1, picked: [0] };
+    confirmRetainSelect();
+    var sy3 = g.block;
+    g = __base('wuseng'); g.block = 0;
+    cc = Object.assign({}, __card('shouyi'), { up: true }); cc.eff(true, cc);
+    var syUp = g.shouyiUp === true;
+    g.hand = [__card('jingang')]; g.retainSelect = { need: 1, picked: [0] };
+    confirmRetainSelect();
+    __ok('v0.58 B#26 守一 保留防御牌 3/4 格挡', sy3 === 3 && g.block === 4 && syUp,
+      sy3 + '/' + g.block + ' shouyiUp=' + syUp);
+
+    // #28 血契：1/0(U:0)，把当前格挡全部转化为生命
+    var xq = __card('xueqi');
+    g = __base('wuseng'); g.block = 7; g.hp = 40;
+    xq.eff(false, xq);
+    __ok('v0.58 B#28 血契 格挡 7 全转血（格挡清零）', g.block === 0 && g.hp === 47, 'block=' + g.block + ' hp=' + g.hp);
+    __ok('v0.58 B#28 血契 1 费升级 0 费', cardCost(xq) === 1 && cardCost(Object.assign({}, xq, { up: true })) === 0,
+      cardCost(xq) + '/' + cardCost(Object.assign({}, xq, { up: true })));
+    g = __base('wuseng'); g.block = 0; g.hp = 40;
+    xq.eff(false, xq);
+    __ok('v0.58 B#28 血契 无格挡时不变', g.block === 0 && g.hp === 40, 'hp=' + g.hp);
+    g = __base('ganshiren');
+    __ok('v0.58 B#28 血契 赶尸人仍是血转盾文案', xq.t(false).indexOf('转化为血量') < 0 && xq.t(false).indexOf('失去 1 点生命') >= 0, xq.t(false));
+
+    // #31 燃血术：B 失去 6
+    g = __base('wuseng'); cc = __card('ranxue'); cc.eff(false, cc);
+    __ok('v0.58 B#31 燃血术 失去 6 点生命', g.hp === 54 && g.energy === 11, 'hp=' + g.hp + ' energy=' + g.energy);
+    __ok('v0.58 B#31 燃血术 卡面写 6', __card('ranxue').t(false).indexOf('失去 6 点生命') >= 0, __card('ranxue').t(false));
+
+    // #36 燃魂：B 抽 3、每防御牌回 2/3
+    g = __base('wuseng'); __fill(); cc = __card('ranhun'); cc.eff(false, cc);
+    __ok('v0.58 B#36 燃魂 抽 3 且回血档位 2', g.hand.length === 3 && g.ranhunHeal === 2 && g.energy === 9,
+      'hand=' + g.hand.length + ' heal=' + g.ranhunHeal + ' energy=' + g.energy);
+    g = __base('wuseng'); __fill(); cc = Object.assign({}, __card('ranhun'), { up: true }); cc.eff(true, cc);
+    __ok('v0.58 B#36 燃魂 升级回血档位 3', g.ranhunHeal === 3, 'heal=' + g.ranhunHeal);
+    __ok('v0.58 B#36 燃魂 卡面 2/3 同步', __card('ranhun').t(false).indexOf('恢复 2 点生命') >= 0 &&
+      Object.assign({}, __card('ranhun'), { up: true }).t(true).indexOf('恢复 3 点生命') >= 0,
+      __card('ranhun').t(false));
+
+    // #37 开天眼：+2/+4，每 3/2 点格挡 +1（上限 +5）
+    g = __base('wuseng'); g.block = 4;
+    cc = Object.assign({}, __card('kaitianyan'), { up: true }); cc.eff(true, cc);
+    __ok('v0.58 B#37 开天眼 升级 4 格挡 → 4+2=6', g.turnAtkBuff === 6, 'buff=' + g.turnAtkBuff);
+    g = __base('wuseng'); g.block = 100; cc = __card('kaitianyan'); cc.eff(false, cc);
+    __ok('v0.58 B#37 开天眼 上限 +5（2+5=7）', g.turnAtkBuff === 7, 'buff=' + g.turnAtkBuff);
+
+    // #39 附灵术：每触发 1 个召唤单位 3/4 格挡
+    g = __base('wuseng'); g.block = 0;
+    g.summons = [{ type: 'zhiren', v: 1, dur: 2 }, { type: 'xiaogui', v: 1, dur: 2 }];
+    cc = __card('fuling'); cc.eff(false, cc);
+    var fl3 = g.block;
+    g = __base('wuseng'); g.block = 0;
+    g.summons = [{ type: 'zhiren', v: 1, dur: 2 }];
+    cc = Object.assign({}, __card('fuling'), { up: true }); cc.eff(true, cc);
+    __ok('v0.58 B#39 附灵术 2 个→6 / 升级 1 个→4', fl3 === 6 && g.block === 4, fl3 + '/' + g.block);
+
+    // #40 镇妖铃：10/15 +（格挡 ≥10 时）+8/+11，且不再消耗格挡
+    g = __base('wuseng'); g.block = 12; g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    cc = __card('zhenyaoling'); cc.eff(false, cc);
+    __ok('v0.58 B#40 镇妖铃 格挡12 → 18 伤且格挡不动', g.enemies[0].hp === 282 && g.block === 12,
+      'hp=' + g.enemies[0].hp + ' block=' + g.block);
+    g = __base('wuseng'); g.block = 9; g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    cc = __card('zhenyaoling'); cc.eff(false, cc);
+    __ok('v0.58 B#40 镇妖铃 格挡9 → 只有 10 伤', g.enemies[0].hp === 290, 'hp=' + g.enemies[0].hp);
+    g = __base('wuseng'); g.block = 12;
+    __ok('v0.58 B#40 镇妖铃 预览 15+11=26', previewDamage(Object.assign({}, __card('zhenyaoling'), { up: true })).d === 26,
+      'd=' + previewDamage(Object.assign({}, __card('zhenyaoling'), { up: true })).d);
+    g = __base('ganshiren');
+    __ok('v0.58 B#40 镇妖铃 赶尸人预览仍 10/16',
+      previewDamage(__card('zhenyaoling')).d === 10 && previewDamage(Object.assign({}, __card('zhenyaoling'), { up: true })).d === 16,
+      previewDamage(__card('zhenyaoling')).d + '/' + previewDamage(Object.assign({}, __card('zhenyaoling'), { up: true })).d);
   })();
 
   /* ============ Block6 复核修正（按《赶尸人版卡池.md》补齐） ============ */
@@ -993,6 +1175,147 @@
     __ok('⑤ 预览 尸王 = 10 且标注每回合',
       (function () { var p = previewDamage(__card('shi_wang')); return !!p && p.d === 10 && p.perTurn === true; })(),
       JSON.stringify(previewDamage(__card('shi_wang'))));
+  })();
+
+  /* ============ v0.58 Block8a：武僧（苦僧 B 列） ============ */
+  (function () {
+    // ---- ① 格挡结算顺序：先由敌人攻击消耗，再算存留最多 3 点 ----
+    g = __base('wuseng');
+    __fill();
+    g.enemies = [g.enemies[0]];
+    var _e0 = g.enemies[0]; _e0.hp = 200; _e0.maxHp = 200; _e0.intent = { type: 'attack', v: 6 };
+    g.block = 10; g.hp = 60;
+    __realEnemyAct();
+    // 正确顺序：10 格挡挡下 6 → 剩 4 → 存留压到 3 → 下回合开始 +2 = 5，且没有掉血
+    // 旧顺序（bug）：先压到 3 → 6 点攻击打穿 → 掉 3 血 → 下回合开始 +2 = 2
+    __ok('B① 苦僧格挡「先消耗后存留」', G.block === 5 && G.hp === 60, 'block=' + G.block + ' hp=' + G.hp);
+
+    // 同场对照：格挡不足以全挡时，多余伤害照常进血
+    g = __base('wuseng'); __fill();
+    g.enemies = [g.enemies[0]];
+    var _e1 = g.enemies[0]; _e1.hp = 200; _e1.maxHp = 200; _e1.intent = { type: 'attack', v: 14 };
+    g.block = 10; g.hp = 60;
+    __realEnemyAct();
+    __ok('B① 苦僧格挡不足时超出部分进血', G.block === 2 && G.hp === 56, 'block=' + G.block + ' hp=' + G.hp);
+
+    // ---- ③ 初始卡池 10 张 ----
+    var _wh = HEROES.filter(function (h) { return h.id === 'wuseng'; })[0];
+    __ok('B③ 武僧初始卡池 10 张（雷符2 金刚2 金钟罩1 铁布衫1 血契1 反震1 咒雨1 守一1）',
+      JSON.stringify(_wh.deck) === JSON.stringify([['leifu', 2], ['jingang', 2], ['jinzhong', 1], ['tiebushan', 1], ['xueqi', 1], ['fanzhen', 1], ['zhouyu', 1], ['shouyi', 1]]),
+      JSON.stringify(_wh.deck));
+  })();
+
+  /* ============ v0.58 武僧召唤牌（41~48）按《武僧版卡池.md》重做 ============ */
+  (function () {
+    var g, c;
+    // #41 纸人：2/3 伤害、不再附带诅咒；存活时每回合开始 2/3 格挡
+    g = __base('wuseng'); c = __card('zhiren'); c.eff(false, c);
+    var zv = g.summons[0].v, zup = g.summons[0].up;
+    g = __base('wuseng'); c = Object.assign({}, __card('zhiren'), { up: true }); c.eff(true, c);
+    __ok('v0.58 B#41 纸人 2/3 伤害且带升级标记', zv === 2 && g.summons[0].v === 3 && zup === false && g.summons[0].up === true,
+      zv + '/' + g.summons[0].v + ' up=' + zup + '/' + g.summons[0].up);
+    __ok('v0.58 B#41 纸人存活 → 回合开始 2/3 格挡',
+      summonTurnBlock({ type: 'zhiren', v: 2, dur: 2, up: false }) === 2 &&
+      summonTurnBlock({ type: 'zhiren', v: 3, dur: 2, up: true }) === 3);
+    g = __base('wuseng'); G.summons = [{ type: 'zhiren', v: 2, dur: 2 }];
+    summonAct(G.summons[0]);
+    __ok('v0.58 B#41 纸人攻击不再附带诅咒', __sumCurse() === 0, 'curse=' + __sumCurse());
+
+    // #43 小鬼：2/3 伤害；死亡 5/7 格挡
+    g = __base('wuseng'); c = __card('xiaogui'); c.eff(false, c);
+    var xv = g.summons[0].v;
+    g = __base('wuseng'); c = Object.assign({}, __card('xiaogui'), { up: true }); c.eff(true, c);
+    var xvU = g.summons[0].v;
+    g = __base('wuseng'); g.block = 0; onSummonDeath({ type: 'xiaogui', up: false });
+    var xb = g.block;
+    g = __base('wuseng'); g.block = 0; onSummonDeath({ type: 'xiaogui', up: true });
+    __ok('v0.58 B#43 小鬼 2/3 伤害 + 死亡 5/7 格挡', xv === 2 && xvU === 3 && xb === 5 && g.block === 7,
+      xv + '/' + xvU + ' 死亡格挡 ' + xb + '/' + g.block);
+
+    // #45 五通神：立即 1/2 + 首次 4 = 5/6，之后每回合开始 4
+    g = __base('wuseng'); g.block = 0; c = __card('wutong'); c.eff(false, c);
+    var wb = g.block, wv = g.summons[0].v;
+    g = __base('wuseng'); g.block = 0; c = Object.assign({}, __card('wutong'), { up: true }); c.eff(true, c);
+    __ok('v0.58 B#45 五通神 立即 5/6，之后每回合 4', wb === 5 && g.block === 6 && wv === 4 && g.summons[0].v === 4,
+      wb + '/' + g.block + ' v=' + wv + '/' + g.summons[0].v);
+
+    // #46 咒雨：0 费 / 格挡全转血 / 无伤害预览
+    g = __base('wuseng'); g.block = 12; g.hp = 40; c = __card('zhouyu'); c.eff(false, c);
+    __ok('v0.58 B#46 咒雨 12 格挡 → 12 生命且格挡清零', g.block === 0 && g.hp === 52, 'block=' + g.block + ' hp=' + g.hp);
+    __ok('v0.58 B#46 咒雨(武僧) 0 费', cardCost(__card('zhouyu')) === 0 &&
+      cardCost(Object.assign({}, __card('zhouyu'), { up: true })) === 0, 'cost=' + cardCost(__card('zhouyu')));
+    g = __base('ganshiren');
+    __ok('v0.58 B#46 咒雨(赶尸人) 仍 2 费', cardCost(__card('zhouyu')) === 2, 'cost=' + cardCost(__card('zhouyu')));
+    g = __base('wuseng');
+    __ok('v0.58 B#46 咒雨(武僧) 无伤害预览', previewDamage(__card('zhouyu')) === null);
+
+    // #47 阴兵过境：2/3 只、4/5 伤害；存活时每回合开始 3/4 格挡
+    g = __base('wuseng'); c = __card('yinbingguo'); c.eff(false, c);
+    var n2 = g.summons.length, yv = g.summons[0].v, yup = g.summons[0].up;
+    g = __base('wuseng'); c = Object.assign({}, __card('yinbingguo'), { up: true }); c.eff(true, c);
+    __ok('v0.58 B#47 阴兵 2/3 只、4/5 伤害、带升级标记',
+      n2 === 2 && g.summons.length === 3 && yv === 4 && g.summons[0].v === 5 && yup === false && g.summons[0].up === true,
+      n2 + '/' + g.summons.length + ' v=' + yv + '/' + g.summons[0].v);
+    __ok('v0.58 B#47 阴兵存活 → 回合开始 3/4 格挡',
+      summonTurnBlock({ type: 'yinbing', v: 4, dur: 3, up: false }) === 3 &&
+      summonTurnBlock({ type: 'yinbing', v: 5, dur: 3, up: true }) === 4);
+
+    // #42 咒印：招咒魂 → 本回合下一张攻击牌 100% 吸血，且武僧视为消耗牌
+    g = __base('wuseng'); var zy = __card('zhouyin'); zy.eff(false, zy);
+    __ok('v0.58 B#42 咒印 咒魂待发', g.zhouhunSteal === 1, 'steal=' + g.zhouhunSteal);
+    g = __base('wuseng'); g.hand = [__card('leifu')]; g.hp = 40;
+    g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    zy.eff(false, zy); doPlayCard(0);
+    var dealt = 300 - g.enemies[0].hp;
+    __ok('v0.58 B#42 咒印 攻击牌吸血（实际伤害 = 回血量）',
+      dealt === 4 && g.hp === 40 + dealt && g.zhouhunSteal === 0,
+      'hp=' + g.hp + ' ehp=' + g.enemies[0].hp + ' dealt=' + dealt + ' steal=' + g.zhouhunSteal);
+    __ok('v0.58 B#42 咒印 武僧视为消耗牌、赶尸人不', isOneUse(__card('zhouyin')) === true &&
+      (function () { __base('ganshiren'); return isOneUse(__card('zhouyin')); })() === false);
+  })();
+
+  /* ============ v0.58 武僧卡面预伤害徽章（格挡/诅咒浮动牌恒显实时值） ============ */
+  (function () {
+    function pv(id, block, curse, up) {
+      var g2 = __base('wuseng'); g2.block = block || 0;
+      g2.enemies[0].curse = curse || 0; g2.enemies[0].hp = 500; g2.enemies[0].maxHp = 500;
+      return previewDamage(Object.assign({}, __card(id), { up: !!up }));
+    }
+    var p;
+    p = pv('leifu', 6);
+    __ok('v0.58 B 预伤害 雷符 格挡6 → 4+2=6 且恒显', p.d === 6 && p.dynamic === true, 'd=' + p.d + ' dyn=' + p.dynamic);
+    p = pv('huofu', 6);
+    __ok('v0.58 B 预伤害 火符 格挡6 → 5+2=7 / 升级 7+3=10',
+      p.d === 7 && pv('huofu', 6, 0, true).d === 10, p.d + '/' + pv('huofu', 6, 0, true).d);
+    p = pv('jianfu', 6);
+    __ok('v0.58 B 预伤害 剑符 格挡6 → 6+3=9', p.d === 9 && p.dynamic === true, 'd=' + p.d);
+    p = pv('shixue', 6);
+    __ok('v0.58 B 预伤害 嗜血 格挡6 → 4+2=6', p.d === 6, 'd=' + p.d);
+    p = pv('baigui', 6);
+    __ok('v0.58 B 预伤害 百鬼夜行 格挡6 → 5+3=8', p.d === 8, 'd=' + p.d);
+    p = pv('zhenyaoling', 12);
+    __ok('v0.58 B 预伤害 镇妖铃 格挡12 → 10+8=18', p.d === 18 && p.dynamic === true, 'd=' + p.d);
+    p = pv('zhanyaojian', 0, 3);
+    __ok('v0.58 B 预伤害 斩妖剑 带诅咒 8+6=14 且挂诅咒标签', p.d === 14 && p.curse === 3, 'd=' + p.d + ' curse=' + p.curse);
+    p = pv('leifu', 6, 3);
+    __ok('v0.58 B 预伤害 雷符 不吃诅咒（不挂诅咒标签）', p.curse === 0, 'curse=' + p.curse);
+    p = pv('tianlei', 6);
+    __ok('v0.58 B 预伤害 天雷正法 无浮动 → 不挂徽章', p.dynamic === false && p.d === p.raw, 'dyn=' + p.dynamic);
+
+    // 关键词悬停：B 列文案里的【】括注必须都有词条
+    __ok('v0.58 B 关键词 含【尸气】【吸血】', KEYWORDS.some(function (k) { return k[0] === '尸气'; }) &&
+      KEYWORDS.some(function (k) { return k[0] === '吸血'; }));
+    var kwsAll = KEYWORDS.map(function (k) { return k[0]; });
+    var missing = [];
+    ['zhiren','xiaogui','wutong','yinbingguo','zhouyin','zhouyu','huapi','shi_wang'].forEach(function (id) {
+      [__card(id).t(false), __card(id).t(true)].forEach(function (t) {
+        (t.match(/【([^】]+)】/g) || []).forEach(function (x) {
+          var k = x.slice(1, -1); if (kwsAll.indexOf(k) < 0) missing.push(id + ':' + k);
+        });
+      });
+    });
+    __ok('v0.58 B 召唤/咒印牌【】括注均有词条', missing.length === 0, missing.join(','));
+    __ok('v0.58 B 咒印文案挂【吸血】', __card('zhouyin').t(false).indexOf('【吸血】') >= 0, __card('zhouyin').t(false));
   })();
 
   rep.pass = _p; rep.fail = _f;

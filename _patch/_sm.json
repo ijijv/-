@@ -1,0 +1,25 @@
+{
+ "ok": true,
+ "errors": [],
+ "cardsTotal": 48,
+ "heroes": {
+  "ganshiren": {
+   "textFail": [],
+   "effFail": []
+  },
+  "wuseng": {
+   "textFail": [],
+   "effFail": []
+  },
+  "yincha": {
+   "textFail": [],
+   "effFail": []
+  },
+  "tianshi": {
+   "textFail": [],
+   "effFail": []
+  }
+ },
+ "pass": 412,
+ "fail": 0
+}

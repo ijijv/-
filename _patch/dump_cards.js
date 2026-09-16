@@ -59,7 +59,7 @@ vm.createContext(sandbox);
 
 const DUMP = `
 G = newState();
-G.hero='ganshiren'; G.act=1; G.endless=false; G.relics=[]; G.summons=[]; G.尸气=0; G.block=0;
+G.hero='${process.env.HERO || 'ganshiren'}'; G.act=1; G.endless=false; G.relics=[]; G.summons=[]; G.尸气=0; G.block=0;
 G.maxShiQi = 12;
 try{ render=function(){}; }catch(e){}
 var __cards = CARDS.map(function(c){
