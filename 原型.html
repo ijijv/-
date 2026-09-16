@@ -2144,7 +2144,15 @@ function startBattle(keys){
   if(hasRelic('zhaohunfan')){ G.hp=Math.min(G.maxHp,G.hp+3); log('招魂幡：恢复 3 点生命'); }
   G.battleStartHp=G.hp;
   log(`—— 遭遇 ${G.enemies.map(e=>e.name).join('、')} ——`);
-  const beginBattle=()=>{ resetDeck(); if(!tutorialSeen()) startGuidedTutorial(); startTurn(); };
+  const beginBattle=()=>{
+    resetDeck();
+    // 尸王（赶尸人）：每关开始必然在手牌。洗牌后把它从抽牌堆取回手牌（本关若还没打出召唤，牌在循环里）
+    if(G.hero==='ganshiren'){
+      const _sw = G.drawPile.find(c=>c.id==='shi_wang');
+      if(_sw){ G.drawPile = G.drawPile.filter(c=>c!==_sw); G.hand.push(_sw); log('【尸王】已在手牌，随时可召唤'); }
+    }
+    if(!tutorialSeen()) startGuidedTutorial(); startTurn();
+  };
   if(G.enemies.some(e=>e.boss)) bossIntro(beginBattle);
   else beginBattle();
 }
@@ -2325,8 +2333,9 @@ function showEndTurnRetain(){
 function finishEndTurn(){
   G.gouhun=0; // 勾魂效果本回合已结算
   // 守一：保留被标记的手牌
-  const kept=G.hand.filter(c=>c.retain);
-  G.discard=G.discard.concat(G.hand.filter(c=>!c.retain));
+  // 守一保留 + 尸王（赶尸人）：未打出的【尸王】留手，不弃（打出/死亡后才入循环）
+  const kept=G.hand.filter(c=>c.retain || (G.hero==='ganshiren' && c.id==='shi_wang'));
+  G.discard=G.discard.concat(G.hand.filter(c=>!c.retain && !(G.hero==='ganshiren' && c.id==='shi_wang')));
   kept.forEach(c=>c.retain=false);
   G.hand=kept;
   aliveEnemies().forEach(e=>{ if(e.curse>0) e.curse--; });
@@ -2843,7 +2852,9 @@ function unknownRemove(){
   showOverlay(`<h2>净 坛</h2><p>一座祭坛，香火缭绕。你可以焚掉一张牌，净化牌组。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`);
 }
 function doUnknownRemove(i){
-  const c=G.deck.splice(i,1)[0]; log(`焚符净坛：删除【${c.name}】`);
+  const c=G.deck[i];
+  if(c && c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
+  const cc=G.deck.splice(i,1)[0]; log(`焚符净坛：删除【${cc.name}】`);
   hideOverlay(); goNext();
 }
 function unknownPotion(){
@@ -3110,7 +3121,9 @@ function campRemoveCard(){
   showOverlay(`<h2>篝火 · 删牌</h2><p>选择一张牌从牌组移除（仅限一张，免费）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="renderCampfire()">返回</button>`);
 }
 function doCampRemove(i){
-  const c=G.deck.splice(i,1)[0]; log(`删除一张【${c.name}】`); sfx('card');
+  const c=G.deck[i];
+  if(c && c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
+  const cc=G.deck.splice(i,1)[0]; log(`删除一张【${cc.name}】`); sfx('card');
   G.campRemoved=true; saveRun(); renderCampfire();
 }
 function showForgePicker(from){
@@ -3188,6 +3201,8 @@ function renderRemoveList(){
 }
 function doRemove(i){
   const p=removeCost();
+  const tc=G.deck[i];
+  if(tc && tc.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
   if(G.gold<p){ floatMsg(`金币不足（需 ${p}）`); log(`金币不足（需 ${p}）`); return; }
   G.gold-=p; G.deck.splice(i,1); G.removeCount++; log('删除一张牌'); saveRun(); renderRemoveList();
 }
