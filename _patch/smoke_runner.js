@@ -1924,6 +1924,34 @@
       'd=' + previewDamage(__card('jianfu')).d);
   })();
 
+  /* ============ v0.60 战斗区下移（后排错落净空，别顶到顶部栏） ============ */
+  (function () {
+    // 单敌：无后排上抬 → 不预留净空
+    var g = __base('tianshi'); g.enemies = [g.enemies[0]];
+    __ok('v0.60 战斗区净空 单敌=0（不浪费纵向空间）', battleHeadroom() === 0, 'hr=' + battleHeadroom());
+
+    // 双敌：idx1 抬 42
+    g = __base('tianshi');
+    __ok('v0.60 战斗区净空 双敌=42', battleHeadroom() === 42, 'hr=' + battleHeadroom());
+
+    // 四敌：idx0..3 → 0/42/20/60 → 取最大 60
+    g = __base('tianshi');
+    var b0 = g.enemies[0], b1 = g.enemies[1];
+    g.enemies = [Object.assign({}, b0, { uid: 901 }), Object.assign({}, b1, { uid: 902 }),
+                 Object.assign({}, b0, { uid: 903 }), Object.assign({}, b1, { uid: 904 })];
+    __ok('v0.60 战斗区净空 四敌=60（RISE_LIFT 最大振幅）', battleHeadroom() === 60, 'hr=' + battleHeadroom());
+
+    // 死敌不占净空：idx1/idx3 阵亡 → 只剩 idx0(0)/idx2(20) → 20
+    g.enemies[1].hp = 0; g.enemies[3].hp = 0;
+    __ok('v0.60 战斗区净空 阵亡敌人不计入（只剩 0/20 → 20）', battleHeadroom() === 20, 'hr=' + battleHeadroom());
+
+    // 净空恒 ≥ 该场面实际最大上抬（这就是「不遮挡顶部栏」的保证式）
+    g = __base('tianshi');
+    var worst = 0, i;
+    for (i = 0; i < g.enemies.length; i++) worst = Math.max(worst, RISE_LIFT[i % RISE_LIFT.length]);
+    __ok('v0.60 战斗区净空 ≥ 实际最大上抬', battleHeadroom() === worst, 'hr=' + battleHeadroom() + ' worst=' + worst);
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();

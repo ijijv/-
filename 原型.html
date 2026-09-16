@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.60</title>
+<title>志怪塔 · 原型 v0.60.01</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -385,7 +385,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.60</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.60.01</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>
@@ -3707,12 +3707,21 @@ function intentText(e){
     default: return '…';
   }
 }
+// 纵深错落：idx 0 最低(0)、右→左逐级抬高；liftY 越大越靠后（见 enemyPanelHTML）
+const RISE_LIFT=[0,42,20,60,30];
+// 当前场上「后排上抬」的最大幅度 —— 用作 #enemy-panel 的 padding-top，
+// 保证被抬起的后排敌人不会越过 .battle 上沿去盖住 #topbar（v0.60 修）
+function battleHeadroom(){
+  let mx=0;
+  (G.enemies||[]).forEach((e,i)=>{ if(alive(e)||e.dying) mx=Math.max(mx, RISE_LIFT[i%RISE_LIFT.length]); });
+  return mx;
+}
 function enemyPanelHTML(e, idx){
   const ehp=Math.max(0,e.hp/e.maxHp*100);
   const ehPrev=(ENEMY_HP_PREV[e.uid]===undefined)?ehp:ENEMY_HP_PREV[e.uid];
   ENEMY_HP_PREV[e.uid]=ehp;
   const selected = (e===curEnemy());
-  const RISE=[0,42,20,60,30]; const liftY=(idx>=0?RISE[idx%RISE.length]:0); // 纵深错落：Boss/首敌最低(0)，右→左逐级抬高；liftY 越大越靠后
+  const liftY=(idx>=0?RISE_LIFT[idx%RISE_LIFT.length]:0); // 纵深错落（振幅见 RISE_LIFT）
   const edef=ENEMIES[e.key];
   const eSize=e.boss?'e-boss':e.elite?'e-elite':(edef&&edef.summon)?'e-summon':'e-normal';
   let badges='';
@@ -3998,7 +4007,9 @@ function render(){
     <span class="hpbar${G.block>0?' has-block':''}"><i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>
     <div class="pstats"><span class="pstat-hp"><i></i>${G.hp}/${G.maxHp}</span>${(G.block>0||preBlock>0)?`<span class="pstat-block"><i></i>${G.block}</span>`:''}${preBlock>0?`<span class="pstat-preblock" data-tip="kw:预格挡"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0 L10 6.5 H6.8 V12 H3.2 V6.5 H0 Z" fill="#4aa8ff"/></svg>${preBlock}</span>`:''}</div>`;
   renderTopbar();
-  document.getElementById('enemy-panel').innerHTML=G.enemies.filter(e=>alive(e)||e.dying).map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
+  const _epEl=document.getElementById('enemy-panel');
+  _epEl.innerHTML=G.enemies.filter(e=>alive(e)||e.dying).map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
+  _epEl.style.paddingTop=(2+battleHeadroom())+'px'; // v0.60：给后排错落留出净空，别顶到顶部栏
   document.getElementById('turn-summary').innerHTML=G.turnSummary || '';
   if(!G.discardSelect && !G.exchange && !G.retainSelect) groupHand();
   document.getElementById('hand').innerHTML=G.hand.map((c,i)=>handCardHTML(c, G.energy<effectiveCost(c), i, G.hand.length)).join('') || '<div style="color:var(--dim)">（无手牌）</div>';
@@ -4102,7 +4113,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.60</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.60.01</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
