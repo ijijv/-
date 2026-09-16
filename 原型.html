@@ -1088,43 +1088,54 @@ const CARDS = [
       sealEnemy(t, (t.curse||0)>0?2:1); dealDamageTo(t,u?16:10); }},
 /* —— 召唤 / 秘法 41~48 —— */
   {id:'zhiren', name:'纸人', type:'spirit', rarity:'white', cost:1,
-    t:(u)=>G.hero==='ganshiren'?`召唤纸人。每回合末造成 ${u?2:1} 伤害并施加 1 层【诅咒】。死亡时获得 2 点【尸气】（持续 2 回合）`
+    t:(u)=>G.hero==='ganshiren'?`召唤纸人。每回合末造成 ${u?4:2} 伤害。若打出时【尸气】≥4，消耗 4 点【尸气】强化：每回合末造成 ${u?7:5} 伤害。死亡时获得 2 点【尸气】（持续 2 回合）`
       :G.hero==='wuseng'?`召唤纸人。每回合末造成 ${u?2:1} 伤害并施加 1 层【诅咒】。存活时每回合获得 2 点格挡（持续 2 回合）`
       :G.hero==='yincha'?`召唤纸人。每回合末造成 ${u?2:1} 伤害并施加 1 层【诅咒】。攻击时恢复 1 点生命（持续 2 回合）`
       :`召唤纸人。每回合末对随机敌人造成 ${u?2:1} 伤害；该敌人每有 1 层【诅咒】，伤害 +1（持续 2 回合）`,
-    eff:(u)=>{ addSummon({type:'zhiren', v:u?2:1, dur:2}); floatMsg('纸人 · 受命而起'); }},
+    eff:(u)=>{ let v=u?4:2;
+      if(G.hero==='ganshiren' && hasShiqi(4)){ spendShiqi(4); v=u?7:5; log('纸人：消耗 4 点【尸气】强化'); }
+      addSummon({type:'zhiren', v, dur:2}); floatMsg('纸人 · 受命而起'); }},
   {id:'zhouyin', name:'咒印', type:'spirit', rarity:'white', cost:1,
-    t:(u)=>G.hero==='tianshi'?`施加 ${u?3:2} 层【诅咒】。若目标已有【诅咒】，额外施加 1 层`
+    t:(u)=>G.hero==='ganshiren'?`召唤咒魂。立即获得 ${u?5:3} 点【尸气】`
+      :G.hero==='tianshi'?`施加 ${u?3:2} 层【诅咒】。若目标已有【诅咒】，额外施加 1 层`
       :`施加 ${u?3:2} 层【诅咒】`,
-    eff:(u)=>{ const t=curEnemy(); if(!t) return; let n=u?3:2;
+    eff:(u)=>{ if(G.hero==='ganshiren'){ addSummon({type:'zhouhun', v:0, dur:3}); gainShiqi(u?5:3); log(`咒印：召唤咒魂，获得 ${u?5:3} 点【尸气】`); return; }
+      const t=curEnemy(); if(!t) return; let n=u?3:2;
       if(G.hero==='tianshi' && (t.curse||0)>0){ n+=1; log('咒印：目标已有诅咒，额外 +1 层'); }
       applyCurse(t,n); }},
   {id:'xiaogui', name:'小鬼', type:'spirit', rarity:'white', cost:1,
-    t:(u)=>G.hero==='ganshiren'?`召唤小鬼。每回合末造成 ${u?3:2} 伤害。死亡时获得 2 点【尸气】（持续 2 回合）`
+    t:(u)=>G.hero==='ganshiren'?`召唤小鬼。每回合末造成 ${u?4:2} 伤害。死亡时获得 ${u?3:2} 点【尸气】（持续 2 回合）`
       :G.hero==='wuseng'?`召唤小鬼。每回合末造成 ${u?3:2} 伤害。死亡时获得 6 点格挡（持续 2 回合）`
       :G.hero==='yincha'?`召唤小鬼。每回合末造成 ${u?3:2} 伤害。死亡时恢复 4 点生命（持续 2 回合）`
       :`召唤小鬼。每回合末对【诅咒】最高的敌人造成 ${u?4:3} 伤害（持续 2 回合）`,
-    eff:(u)=>{ const v=G.hero==='tianshi'?(u?4:3):(u?3:2); addSummon({type:'xiaogui', v, dur:2}); floatMsg('小鬼 · 奉命出巡'); }},
+    eff:(u)=>{ const v=G.hero==='tianshi'?(u?4:3):(u?4:2); addSummon({type:'xiaogui', v, dur:2, up:!!u}); floatMsg('小鬼 · 奉命出巡'); }},
   {id:'huapi', name:'画皮', type:'spirit', rarity:'blue', cost:1,
     t:(u)=>`对目标施加 1 层【魅惑】（其下回合伤害 -${u?75:50}%）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return; charmEnemy(t, u?0.25:0.5); }},
   {id:'wutong', name:'五通神', type:'spirit', rarity:'purple', cost:2,
-    t:(u)=>G.hero==='ganshiren'?`召唤五通神。立即获得 3 点格挡与 1 点【尸气】，之后每回合开始重复一次（持续 ${u?3:2} 回合）`
+    t:(u)=>G.hero==='ganshiren'?`召唤五通神。立即获得 5 点格挡，之后每回合开始重复一次（持续 ${u?3:2} 回合）。若打出时【尸气】≥5，消耗 5 点【尸气】强化：立即获得 6 点格挡，之后每回合开始重复一次（持续 ${u?4:3} 回合）`
       :G.hero==='wuseng'?`召唤五通神。立即获得 7 点格挡；之后每回合开始获得 3 点格挡（持续 ${u?3:2} 回合）`
       :G.hero==='yincha'?`召唤五通神。立即恢复 4 点生命并获得 3 点格挡；之后每回合开始获得 3 点格挡（持续 ${u?3:2} 回合）`
       :`召唤五通神。立即获得 3 点格挡并对随机敌人施加 1 层【诅咒】，之后每回合开始重复一次（持续 ${u?3:2} 回合）`,
     eff:(u)=>{ // 现形即结算首回合：第一次「回合开始」效果落在当前回合（武僧 = 立即 4 + 首次 3 = 7 格挡）
       if(G.hero==='wuseng'){ gainBlock(4); }
       else if(G.hero==='yincha'){ heal(4); }
-      const s=addSummon({type:'wutong', v:3, dur:u?3:2});
+      let wv=3, wdur=u?3:2;
+      if(G.hero==='ganshiren'){ if(hasShiqi(5)){ spendShiqi(5); wv=6; wdur=u?4:3; log('五通神：消耗 5 点【尸气】强化'); } else { wv=5; } }
+      const s=addSummon({type:'wutong', v:wv, dur:wdur});
       wutongTick(s);
       floatMsg('五通神 · 现形'); }},
-  {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:2,
-    t:(u)=>G.hero==='ganshiren'?`对所有敌人施加 ${u?3:2} 层【诅咒】。每名被诅咒的敌人死亡时，获得 2 点【尸气】`
+  {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:2, exhaust:true,
+    t:(u)=>G.hero==='ganshiren'?`引爆当前所有【尸气】：清零尸气，每层尸气转化为 ${u?7:6} 点伤害，随机分配给所有敌人。消耗（一次性）`
       :G.hero==='wuseng'?`对所有敌人施加 ${u?3:2} 层【诅咒】。每施加 1 层，获得 2 点格挡`
       :G.hero==='yincha'?`对所有敌人施加 ${u?3:2} 层【诅咒】。每施加 1 层，恢复 2 点生命`
       :`对所有敌人施加 ${u?2:1} 层【诅咒】。每名敌人每有 1 层【诅咒】，此牌费用 -1（最低 0）`,
-    eff:(u)=>{ if(G.hero==='ganshiren'){ aliveEnemies().forEach(e=>applyCurse(e,u?3:2)); G.zhouyuA=true; log('咒雨：被诅咒的敌人死亡时将获得 2 点【尸气】'); return; }
+    eff:(u)=>{ if(G.hero==='ganshiren'){ const q=G.尸气||0; if(q<=0){ floatMsg('没有尸气可引爆'); log('咒雨：没有尸气可引爆'); return; }
+        G.尸气=0; const total=q*(u?7:6); const al=aliveEnemies(); if(!al.length) return;
+        const dist=al.map(()=>0);
+        for(let i=0;i<total;i++){ dist[Math.floor(Math.random()*al.length)]++; }
+        al.forEach((e,i)=>{ if(dist[i]>0) dealDamageTo(e,dist[i]); });
+        log(`咒雨：引爆 ${q} 点【尸气】，造成 ${total} 点伤害随机分配`); floatMsg(`咒雨 · 引爆 ${q} 尸气`); return; }
       if(G.hero==='tianshi'){ aliveEnemies().forEach(e=>applyCurse(e,u?2:1)); return; }
       let n=0; aliveEnemies().forEach(e=>{ n+=applyCurse(e,u?3:2); });
       if(G.hero==='wuseng'){ gainBlock(n*2); log(`咒雨：施加 ${n} 层诅咒，获得 ${n*2} 点格挡`); }
@@ -1138,7 +1149,7 @@ const CARDS = [
       for(let i=0;i<count;i++) addSummon({type:'yinbing', v, dur:3, healV:u?2:1});
       floatMsg(`阴兵过境 ×${count}`); log(`阴兵过境：召唤 ${count} 只阴兵`); }},
   {id:'shi_wang', name:'尸王', type:'spirit', rarity:'gold', cost:0,
-    t:(u)=>`消耗 10 点【尸气】召唤尸王。每回合末对全体敌人造成 10 点伤害。在场时其他召唤单位伤害 +1。持续 5 回合。死亡时获得 2 点【尸气】（不消耗符文，不可升级）`,
+    t:(u)=>`消耗 10 点【尸气】召唤尸王。每回合末对全体敌人造成 10 点伤害。在场时其他召唤单位伤害 +1。持续 5 回合。召唤物存活期间此牌不进入弃牌堆，死亡后才回到弃牌堆（不消耗符文，不可升级）`,
     eff:(u)=>{ if(G.hero!=='ganshiren') return false;
       if(isSummon('shi_wang')){ floatMsg('已有尸王在场'); return false; }
       if(!hasShiqi(10)){ floatMsg('尸气不足！需要 10 点'); return false; }
@@ -1218,10 +1229,11 @@ function rageSpend(per, cap){ const layers=Math.floor(cap/per); const use=Math.m
 function addSummon(o){ G.summonsMadeTurn=(G.summonsMadeTurn||0)+1; G.summons.push(o); return o; }
 /* 五通神「回合开始」效果（现形当回合立即结算一次，之后每个回合开始再触发；寿命 -1） */
 function wutongTick(s){
-  gainBlock(3);
-  if(G.hero==='ganshiren'){ gainShiqi(1); log('五通神：获得 3 点格挡与 1 点【尸气】'); }
-  else if(G.hero==='tianshi'){ const wt=randomAlive(); if(wt) applyCurse(wt,1); log('五通神：获得 3 点格挡并对随机敌人施加 1 层【诅咒】'); }
-  else log('五通神：获得 3 点格挡');
+  const b=s.v||3;
+  gainBlock(b);
+  if(G.hero==='ganshiren'){ log(`五通神：获得 ${b} 点格挡`); }
+  else if(G.hero==='tianshi'){ const wt=randomAlive(); if(wt) applyCurse(wt,1); log(`五通神：获得 ${b} 点格挡并对随机敌人施加 1 层【诅咒】`); }
+  else log(`五通神：获得 ${b} 点格挡`);
   if(!s.indefinite) s.dur--;
 }
 function isSummon(type){ return G.summons.some(s=>s.type===type && s.dur>0); }
@@ -1811,9 +1823,10 @@ const CARD_DMG = {
     if(G.hero==='yincha') return (u?7:5)+n*(u?3:2);
     const t=curEnemy(); return t?4+(u?2:1)*(t.curse||0):0; }, // D 每目标按自身诅咒独立
   shihunzhou: u=>G.hero==='ganshiren'?(u?6:3):(G.hero==='tianshi'?(u?6:4):(u?7:5)),
-  zhiren: u=>{ const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
-    return (u?2:1)+(isSummon('shi_wang')?1:0)+bleed; }, // 每回合末 v（+尸王在场 / +阴差群鬼流血）
-  xiaogui: u=>{ const v=G.hero==='tianshi'?(u?4:3):(u?3:2);
+  zhiren: u=>{ const base = G.hero==='ganshiren' ? (hasShiqi(4)?(u?7:5):(u?4:2)) : (u?2:1);
+    const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
+    return base+(isSummon('shi_wang')?1:0)+bleed; }, // 每回合末 v（+尸王在场 / +阴差群鬼流血）
+  xiaogui: u=>{ const v=G.hero==='tianshi'?(u?4:3):(G.hero==='ganshiren'?(u?4:2):(u?3:2));
     const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
     return v+(isSummon('shi_wang')?1:0)+bleed; },
   yinbingguo: u=>{ const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
@@ -1921,7 +1934,6 @@ function splitBoss(e){
 function onEnemyDeathCheck(e){
   if(e.phase && !e.phase2){ enterPhase2(e); }
   else {
-    if((G.zhouyuA||0)>0 && (e.curse||0)>0){ gainShiqi(2); log('咒雨：被诅咒的敌人死亡，获得 2 点【尸气】'); }
     G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; if(G.totalKills>=100) unlockAchievement('baizhan'); unlockBestiary(e.key);
     e.dying=true; sfx('death');
     setTimeout(()=>{ e.dying=false; render(); }, 450);
@@ -2263,8 +2275,11 @@ function summonAct(s){
       // 天师：#41D 对随机敌人造成伤害，该敌人每有 1 层诅咒纸人伤害 +1
       const t=randomAlive();
       if(t){ dealDamageTo(t, v + (t.curse||0)); log(`纸人：因敌人 ${t.curse||0} 层诅咒，伤害 +${t.curse||0}`); }
+    } else if(G.hero==='ganshiren'){
+      // 赶尸人 #41A：每回合末造成伤害（不叠诅咒）
+      const t=randomAlive(); if(t) dealDamageTo(t, v);
     } else {
-      // 赶尸人/武僧/阴差：#41A/B/C 造成伤害并施加 1 层诅咒；阴差额外回 1 血
+      // 武僧/阴差：#41B/C 造成伤害并施加 1 层诅咒；阴差额外回 1 血
       const t=randomAlive();
       if(t){ dealDamageTo(t, v); applyCurse(t,1); if(G.hero==='yincha'){ heal(1); log('纸人攻击，恢复 1 点生命'); } }
     }
@@ -2291,13 +2306,13 @@ function onSummonDeath(s){
   if(s.type==='zhiren'){
     if(G.hero==='ganshiren'){ gainShiqi(2); log('纸人死亡，获得 2 点【尸气】'); }
   } else if(s.type==='xiaogui'){
-    if(G.hero==='ganshiren'){ gainShiqi(2); log('小鬼死亡，获得 2 点【尸气】'); }
+    if(G.hero==='ganshiren'){ const q=s.up?3:2; gainShiqi(q); log(`小鬼死亡，获得 ${q} 点【尸气】`); }
     else if(G.hero==='wuseng'){ gainBlock(6); log('小鬼死亡，获得 6 点格挡'); }
     else if(G.hero==='yincha'){ heal(4); log('小鬼死亡，恢复 4 点生命'); }
   } else if(s.type==='yinbing'){
     if(G.hero==='ganshiren'){ gainShiqi(1); log('阴兵死亡，获得 1 点【尸气】'); }
   } else if(s.type==='shi_wang'){
-    gainShiqi(2); returnShiWangCard(); log('尸王消散，获得 2 点【尸气】，【尸王】回到弃牌堆');
+    returnShiWangCard(); log('尸王消散，【尸王】回到弃牌堆');
   }
 }
 function triggerSummons(decay){
@@ -3596,7 +3611,8 @@ function enemyPanelHTML(e, idx){
 function summonHTML(s){
   // 尸王在场时其他召唤单位伤害 +1（与 summonAct 结算一致：尸王自身不吃、无尸王不加）
   const v = s.v + ((s.type!=='shi_wang' && G.summons.some(x=>x.type==='shi_wang' && x.dur>0)) ? 1 : 0);
-  const label = s.type==='zhiren'?`纸人：每回合末对随机敌人造成 ${v} 点伤害 +1诅咒`
+  const label = s.type==='zhiren'?(G.hero==='ganshiren'?`纸人：每回合末对随机敌人造成 ${v} 点伤害`:`纸人：每回合末对随机敌人造成 ${v} 点伤害 +1诅咒`)
+    : s.type==='zhouhun'?`咒魂：携带尸气`
     : s.type==='xiaogui'?`小鬼：每回合末对随机敌人造成 ${v} 点伤害`
     : s.type==='yinbing'?`阴兵：每回合末${G.hero==='tianshi'?'优先攻击🎯标记敌（上一次施咒的敌人）':'对随机敌人'}造成 ${v} 点伤害`
     : s.type==='shi_wang'?`尸王：每回合末对全体敌人造成 ${v} 点伤害`
