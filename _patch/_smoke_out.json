@@ -1,13 +1,6 @@
 {
- "ok": false,
- "errors": [
-  "D#15u 金刚符 升级7格+2尸气 | block=11 尸气=3",
-  "D#16u 隐身符 升级6格挡 | block=9",
-  "D#18u 金钟罩 升级16格挡 | block=26",
-  "D#19u 荆棘符 升级6格+反弹6 | block=9 thorns=10",
-  "D#21u 铜皮 升级12格+反弹6+召唤1 | block=21 thorns=12",
-  "D#23u 卸甲 升级7格+xiejiaUp | block=11 up=true"
- ],
+ "ok": true,
+ "errors": [],
  "cardsTotal": 48,
  "heroes": {
   "ganshiren": {
@@ -27,6 +20,6 @@
    "effFail": []
   }
  },
- "pass": 293,
- "fail": 6
+ "pass": 309,
+ "fail": 0
 }

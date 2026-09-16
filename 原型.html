@@ -969,22 +969,22 @@ const CARDS = [
       else { gainBlock(u?8:6); G.endBlockKind='D'; floatMsg('敌人攻击后格挡将转为诅咒'); } }},
 /* —— 功能 24~40 —— */
   {id:'juling', name:'聚灵', type:'skill', rarity:'white', cost:0,
-    t:(u)=>G.hero==='ganshiren'?`抽 ${u?2:1} 张牌。若抽到【鬼怪牌】，获得 1 点【尸气】`
+    t:(u)=>G.hero==='ganshiren'?`抽 ${u?2:1} 张牌。若抽到【鬼怪牌】，获得 ${u?2:1} 点【尸气】`
       :G.hero==='wuseng'?`抽 ${u?2:1} 张牌。若本回合获得过格挡，再抽 1 张`
       :G.hero==='yincha'?`抽 ${u?2:1} 张牌。若本回合失去过生命，再抽 1 张`
       :`抽 ${u?2:1} 张牌。若抽到【诅咒牌】，获得 1 点符文`,
     eff:(u)=>{ const n=u?2:1; drawCards(n); const drew=G.lastDrawnCards||[];
-      if(G.hero==='ganshiren'){ if(drew.some(x=>isGhostCard(x))){ gainShiqi(1); log('聚灵：抽到鬼怪牌，获得 1 点【尸气】'); } }
+      if(G.hero==='ganshiren'){ if(drew.some(x=>isGhostCard(x))){ gainShiqi(u?2:1); log(`聚灵：抽到鬼怪牌，获得 ${u?2:1} 点【尸气】`); } }
       else if(G.hero==='wuseng'){ if((G.blockGainedTurn||0)>0){ drawCards(1); log('聚灵：本回合获得过格挡，再抽 1 张'); } }
       else if(G.hero==='yincha'){ if((G.hpLostTurn||0)>0){ drawCards(1); log('聚灵：本回合失去过生命，再抽 1 张'); } }
       else if(drew.some(x=>isCanCurse(x))){ G.energy+=1; log('聚灵：抽到【诅咒牌】，获得 1 点符文'); } }},
   {id:'sheshen', name:'舍身', type:'skill', rarity:'blue', cost:0, hpCost:()=>4,
-    t:(u)=>G.hero==='ganshiren'?`失去 4 点生命。抽 ${u?2:1} 张牌。获得 1 点【尸气】`
+    t:(u)=>G.hero==='ganshiren'?`失去 4 点生命。抽 ${u?2:1} 张牌。获得 ${u?2:1} 点【尸气】`
       :G.hero==='wuseng'?`失去 4 点生命。获得 3 点格挡，抽 ${u?2:1} 张牌`
       :G.hero==='yincha'?`失去 4 点生命。抽 ${u?3:2} 张牌`
       :`失去 4 点生命，抽 ${u?2:1} 张牌。对随机敌人施加 ${u?2:1} 层【诅咒】`,
     eff:(u)=>{ loseHp(4); const n=G.hero==='yincha'?(u?3:2):(u?2:1); drawCards(n);
-      if(G.hero==='ganshiren'){ gainShiqi(1); log('舍身：获得 1 点【尸气】'); }
+      if(G.hero==='ganshiren'){ gainShiqi(u?2:1); log(`舍身：获得 ${u?2:1} 点【尸气】`); }
       else if(G.hero==='wuseng'){ gainBlock(3); }
       else if(G.hero==='tianshi'){ const re=randomAlive(); if(re){ applyCurse(re,u?2:1); log(`舍身：对 ${re.name} 施加 ${u?2:1} 层【诅咒】`); } } }},
   {id:'shouyi', name:'守一', type:'skill', rarity:'purple', cost:0,
@@ -1000,8 +1000,8 @@ const CARDS = [
       :`选择 1 张手牌与弃牌堆交换。若换出的是攻击牌，额外抽 1 张牌`,
     eff:(u,c)=>{ startExchangeSelect(1, c); }},
   {id:'xueqi', name:'血契', type:'skill', rarity:'blue', cost:1,
-    t:(u)=>`本回合每失去 1 点生命，获得 ${u?2:1} 点格挡`,
-    eff:(u)=>{ G.bloodPact=(G.bloodPact||0)+(u?2:1); floatMsg('血契：以血换盾'); log(`血契：本回合每失去 1 点生命，获得 ${G.bloodPact} 点格挡`); }},
+    t:(u)=>`本回合每失去 1 点生命，获得 ${u?3:2} 点格挡`,
+    eff:(u)=>{ G.bloodPact=(G.bloodPact||0)+(u?3:2); floatMsg('血契：以血换盾'); log(`血契：本回合每失去 1 点生命，获得 ${G.bloodPact} 点格挡`); }},
   {id:'tongling', name:'通灵', type:'skill', rarity:'white', cost:1, costU:0,
     t:(u)=>`抽 2 张牌${u?'（0 符文）':''}`,
     eff:(u)=>{ drawCards(2); }},
@@ -1027,17 +1027,17 @@ const CARDS = [
       :`弃任意张手牌：每弃 1 张，对随机敌人施加 1 层【诅咒】并获得 ${u?3:2} 点格挡`,
     eff:(u,c)=>{ startDiscardSelect(G.hand.length, c); }},
   {id:'xueji', name:'血祭', type:'skill', rarity:'purple', cost:1, costU:0, hpCost:(u)=>G.hero==='yincha'?4:3,
-    t:(u)=>G.hero==='ganshiren'?`失去 3 点生命。本回合每召唤 1 个单位，下回合多摸 1 张牌（上限 +4）${u?'（0 符文）':''}`
+    t:(u)=>G.hero==='ganshiren'?`失去 3 点生命。本回合每召唤 1 个单位，下回合多摸 1 张牌（上限 3张）${u?'（0 符文）':''}`
       :G.hero==='wuseng'?`失去 3 点生命。本回合每获得 5 点格挡，下回合多摸 1 张牌（上限 +4）${u?'（0 符文）':''}`
       :G.hero==='yincha'?`失去 4 点生命。本回合每失去 2 点生命，下回合多摸 1 张牌（上限 +4）${u?'（0 符文）':''}`
       :`失去 3 点生命。本回合每施加 1 层【诅咒】，下回合多摸 1 张牌（上限 +4）${u?'（0 符文）':''}`,
     eff:(u)=>{ loseHp(G.hero==='yincha'?4:3); G.xuejiArmed=true; floatMsg('血祭：回合末结算，下回合多摸牌'); }},
   {id:'ranhun', name:'燃魂', type:'skill', rarity:'purple', cost:0, hpCost:(u)=>G.hero==='yincha'?(u?5:7):(u?4:6),
-    t:(u)=>G.hero==='ganshiren'?`失去 ${u?4:6} 点生命。抽 3 张牌。本回合每打出 1 张【鬼怪牌】，恢复 2 点生命`
+    t:(u)=>G.hero==='ganshiren'?`失去 ${u?4:6} 点生命。抽 2 张牌。本回合每打出 1 张【鬼怪牌】，恢复 ${u?4:2} 点生命。获得 1 点符文`
       :G.hero==='wuseng'?`失去 ${u?4:6} 点生命。抽 3 张牌。本回合每打出 1 张防御牌，恢复 2 点生命`
       :G.hero==='yincha'?`失去 ${u?5:7} 点生命。抽 3 张牌。本回合每打出 1 张技能牌，恢复 2 点生命`
       :`失去 ${u?4:6} 点生命。抽 3 张牌。本回合每打出 1 张攻击牌，恢复 2 点生命`,
-    eff:(u,c)=>{ loseHp(G.hero==='yincha'?(u?5:7):(u?4:6)); drawCards(3);
+    eff:(u,c)=>{ loseHp(G.hero==='yincha'?(u?5:7):(u?4:6)); drawCards(2); G.energy+=1;
       G.ranhunType = G.hero==='ganshiren'?'ghost' : G.hero==='wuseng'?'defense' : G.hero==='yincha'?'skill' : 'attack';
       G.ranhunSelf=c; floatMsg('燃魂 · 已点燃'); }},
   {id:'kaitianyan', name:'开天眼', type:'skill', rarity:'blue', cost:1,
@@ -1053,12 +1053,12 @@ const CARDS = [
       G.turnAtkBuff=(G.turnAtkBuff||0)+val;
       log(`开天眼：本回合攻击牌伤害 +${val}`); }},
   {id:'yixing', name:'移形换影', type:'skill', rarity:'purple', cost:1, costU:0,
-    t:(u)=>G.hero==='ganshiren'?`闪避下一次攻击。闪避成功后，获得 1 点【尸气】${u?'（0 符文）':''}`
+    t:(u)=>G.hero==='ganshiren'?`闪避下一次攻击。闪避成功后，获得 2 点【尸气】`
       :G.hero==='wuseng'?`闪避下一次攻击。闪避成功后，下一回合获得 5 点格挡${u?'（0 符文）':''}`
       :G.hero==='yincha'?`闪避下一次攻击。闪避成功后，恢复 4 点生命并获得 1 层【血怒】${u?'（0 符文）':''}`
       :`闪避下一次攻击。闪避成功后，对攻击者施加 1 层【诅咒】${u?'（0 符文）':''}`,
     eff:(u)=>{ G.dodge+=1;
-      if(G.hero==='ganshiren'){ G.dodgeShiqi=1; }
+      if(G.hero==='ganshiren'){ G.dodgeShiqi=2; }
       else if(G.hero==='wuseng'){ G.dodgeNextBlock=5; }
       else if(G.hero==='yincha'){ G.dodgeHealRage=4; }
       else { G.dodgeCurse=1; }
@@ -1077,12 +1077,12 @@ const CARDS = [
         else log(`附灵术：触发 ${n} 个召唤单位`);
       } else log('附灵术：没有召唤单位可触发'); }},
   {id:'zhenyaoling', name:'镇妖铃', type:'spirit', rarity:'purple', cost:2, exhaust:true, hpCost:(u)=>G.hero==='yincha'?3:0,
-    t:(u)=>G.hero==='ganshiren'?`造成 ${u?16:10} 伤害并【镇魂】。若目标此前已被【镇魂】，获得 3 点【尸气】（消耗）`
+    t:(u)=>G.hero==='ganshiren'?`造成 ${u?16:10} 伤害并【镇魂】。获得 3 点【尸气】。消耗牌（一次性）`
       :G.hero==='wuseng'?`造成 ${u?16:10} 伤害并【镇魂】。消耗 5 点格挡，伤害 +10（消耗）`
       :G.hero==='yincha'?`造成 ${u?16:10} 伤害并【镇魂】。失去 3 点生命，每层【血怒】使此牌伤害 +2（上限 +20）（消耗）`
       :`造成 ${u?16:10} 伤害并【镇魂】。若目标带【诅咒】，镇魂持续 2 回合（消耗）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
-      if(G.hero==='ganshiren'){ const was=wasSealedBefore(t); sealEnemy(t,1); dealDamageTo(t,u?16:10); if(was){ gainShiqi(3); log('镇妖铃：目标曾被镇魂，获得 3 点【尸气】'); } return; }
+      if(G.hero==='ganshiren'){ sealEnemy(t,1); dealDamageTo(t,u?16:10); gainShiqi(3); log('镇妖铃：造成 ${u?16:10} 伤害并获得 3 点【尸气】'); return; }
       if(G.hero==='wuseng'){ if((G.block||0)>=5){ G.block-=5; dealDamageTo(t,(u?16:10)+10); log('镇妖铃：消耗 5 点格挡，伤害 +10'); } else dealDamageTo(t,u?16:10); sealEnemy(t,1); return; }
       if(G.hero==='yincha'){ loseHp(3); sealEnemy(t,1); dealDamageTo(t,(u?16:10)+2*rageSpend(2,20)); return; }
       sealEnemy(t, (t.curse||0)>0?2:1); dealDamageTo(t,u?16:10); }},
