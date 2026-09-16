@@ -242,7 +242,11 @@
       __ok('S#41d 纸人(赶尸人) 攻击不叠诅咒', __sumCurse() === 0, 'curse=' + __sumCurse()); })();
     g = __base('ganshiren');
     (function () { var cc = __card('zhouyin'); cc.eff(false, cc);
-      __ok('S#42 咒印 召唤咒魂+获3尸气', g.summons.some(function (x) { return x.type === 'zhouhun'; }) && g.尸气 === 3, '尸气=' + g.尸气); })();
+      // v0.60.02：「咒魂」只是氛围说法，不产生任何召唤单位，只结算 +3 尸气
+      __ok('S#42 咒印 只获3尸气、不召唤咒魂',
+        g.尸气 === 3 && g.summons.length === 0 &&
+        !g.summons.some(function (x) { return x.type === 'zhouhun'; }),
+        '尸气=' + g.尸气 + ' summons=' + g.summons.length); })();
     g = __base('ganshiren');
     (function () { var cc = __card('zhouyin'); cc.eff(true, cc);
       __ok('S#42u 咒印 升级获5尸气', g.尸气 === 5, '尸气=' + g.尸气); })();
@@ -1661,12 +1665,37 @@
     }
     var g, c, e, s;
 
-    /* —— 初始卡池：A 列改为雷符×3 金刚符×1 佛渡×1 聚灵×1 渡魂归己×1 咒印×1 画皮×1 守一×1 = 10 张 —— */
-    var ha = HEROES.filter(function (x) { return x.id === 'ganshiren'; })[0];
-    var ga = ha.deck.map(function (p) { return p[0] + 'x' + p[1]; }).join(' ');
-    var ca = ha.deck.reduce(function (a, p) { return a + p[1]; }, 0);
-    __ok('v0.60 赶尸人初始卡池 10 张且组成正确', ca === 10 &&
-      ga === 'leifux3 jingangx1 fodux1 julingx1 duhunguijix1 zhouyinx1 huapix1 shouyix1', ga);
+    /* —— 初始卡池（v0.60.02 修正：此前把两人的名单发反了）
+          天师 D   ：雷符×3 金刚符×1 佛渡×1 聚灵×1 渡魂归己×1 咒印×1 画皮×1 守一×1 = 10 张
+          赶尸人 A ：雷符×2 金刚符×2 佛渡×1 舍身×1 血契×1 纸人×1 尸王×1 守一×1 小鬼×1 = 9 张 —— */
+    function deckOf(id) {
+      var h = HEROES.filter(function (x) { return x.id === id; })[0];
+      return { s: h.deck.map(function (p) { return p[0] + 'x' + p[1]; }).join(' '),
+               n: h.deck.reduce(function (a, p) { return a + p[1]; }, 0) };
+    }
+    var dt_ = deckOf('tianshi'), ga_ = deckOf('ganshiren');
+    __ok('v0.60.02 天师初始卡池 10 张且组成正确', dt_.n === 10 &&
+      dt_.s === 'leifux3 jingangx1 fodux1 julingx1 duhunguijix1 zhouyinx1 huapix1 shouyix1',
+      dt_.n + ' 张 | ' + dt_.s);
+    __ok('v0.60.02 赶尸人初始卡池 11 张且组成正确', ga_.n === 11 &&
+      ga_.s === 'leifux2 jingangx2 fodux1 sheshenx1 xueqix1 zhirenx1 shi_wangx1 shouyix1 xiaoguix1',
+      ga_.n + ' 张 | ' + ga_.s);
+    __ok('v0.60.02 尸王只在赶尸人起始牌组（天师无）',
+      ga_.s.indexOf('shi_wang') >= 0 && dt_.s.indexOf('shi_wang') < 0, ga_.s);
+    __ok('v0.60.02 咒印/画皮/聚灵/渡魂归己归天师，纸人/小鬼/舍身归赶尸人',
+      dt_.s.indexOf('zhouyin') >= 0 && dt_.s.indexOf('huapi') >= 0 && dt_.s.indexOf('juling') >= 0 &&
+      dt_.s.indexOf('duhunguiji') >= 0 && ga_.s.indexOf('zhiren') >= 0 &&
+      ga_.s.indexOf('xiaogui') >= 0 && ga_.s.indexOf('sheshen') >= 0, dt_.s + ' || ' + ga_.s);
+
+    /* —— 端到端：拿 HEROES 里真实的赶尸人牌组开局，尸王必须在手（激活 2275 的取牌逻辑） —— */
+    var gA = __base('ganshiren');
+    gA.deck = HEROES.filter(function (x) { return x.id === 'ganshiren'; })[0]
+      .deck.reduce(function (a, p) { for (var i = 0; i < p[1]; i++) a.push(cardById(p[0])); return a; }, []);
+    try {
+      startBattle(['youhun']);
+      __ok('v0.60.02 赶尸人真实牌组开局：尸王必在手', gA.hand.some(function (c) { return c.id === 'shi_wang'; }),
+        'hand=' + gA.hand.map(function (c) { return c.id; }).join(','));
+    } catch (err) { __ok('v0.60.02 赶尸人真实牌组开局：尸王必在手', false, err.message); }
 
     /* —— 【诅咒】每回合末掉 2 层 —— */
     g = __base('tianshi'); g.hp = 200; g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
