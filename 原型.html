@@ -743,18 +743,18 @@ const CARDS = [
       dealDamageTo(t,d);
       if(G.hero==='ganshiren' && before>0 && t.hp<=0){ gainShiqi(2); log('雷符：击杀敌人，获得 2 点【尸气】'); } }},
   {id:'huofu', name:'火符', type:'attack', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?1:0,
-    t:(u)=>G.hero==='ganshiren'?`造成 ${u?8:5} 伤害。随机弃 1 张手牌；若弃掉的是【鬼怪牌】，获得 ${u?2:1} 点【尸气】`
+    t:(u)=>G.hero==='ganshiren'?`造成 ${u?8:5} 伤害。挑选弃 1 张手牌；若弃掉的是【鬼怪牌】，获得 ${u?2:1} 点【尸气】`
       :G.hero==='wuseng'?`造成 ${u?7:5} 伤害。每有 3 点当前格挡，伤害 +1（上限 +6），随机弃 1 张手牌`
       :G.hero==='yincha'?`造成 ${u?9:7} 伤害。失去 1 点生命，随机弃 1 张手牌`
       :`造成 ${u?7:5} 伤害。施加 1 层【诅咒】，随机弃 1 张手牌`,
-    eff:(u)=>{ const t=curEnemy(); if(!t) return; let d=(u?7:5);
+    eff:(u,c)=>{ const t=curEnemy(); if(!t) return; let d=(u?7:5);
       if(G.hero==='ganshiren') d=(u?8:5);
       if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/3));
       if(G.hero==='yincha'){ d=(u?9:7); loseHp(1); }
       dealDamageTo(t,d);
       if(G.hero==='tianshi') applyCurse(t,1);
-      const dropped=discardRandomHand();
-      if(dropped && G.hero==='ganshiren' && isGhostCard(dropped)){ gainShiqi(u?2:1); log(`火符：弃掉鬼怪牌，获得 ${u?2:1} 点【尸气】`); } }},
+      if(G.hero==='ganshiren'){ startHuofuSelect(c, u); return; } // A 列：由玩家挑选要弃的手牌
+      discardRandomHand(); }},
   {id:'jianfu', name:'剑符', type:'attack', rarity:'white', cost:2,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?13:8} 伤害。消耗 2 点【尸气】，伤害翻倍`
       :G.hero==='wuseng'?`造成 ${u?10:6} 伤害。消耗全部格挡，每消耗 2 点格挡此牌伤害 +1（无上限）`
@@ -1051,7 +1051,7 @@ const CARDS = [
       G.turnAtkBuff=(G.turnAtkBuff||0)+val;
       log(`开天眼：本回合攻击牌伤害 +${val}`); }},
   {id:'yixing', name:'移形换影', type:'skill', rarity:'purple', cost:1, costU:0,
-    t:(u)=>G.hero==='ganshiren'?`闪避下一次攻击。闪避成功后，获得 2 点【尸气】`
+    t:(u)=>G.hero==='ganshiren'?`闪避下一次攻击。闪避成功后，获得 2 点【尸气】${u?'（0 符文）':''}`
       :G.hero==='wuseng'?`闪避下一次攻击。闪避成功后，下一回合获得 5 点格挡${u?'（0 符文）':''}`
       :G.hero==='yincha'?`闪避下一次攻击。闪避成功后，恢复 4 点生命并获得 1 层【血怒】${u?'（0 符文）':''}`
       :`闪避下一次攻击。闪避成功后，对攻击者施加 1 层【诅咒】${u?'（0 符文）':''}`,
@@ -1061,11 +1061,11 @@ const CARDS = [
       else if(G.hero==='yincha'){ G.dodgeHealRage=4; }
       else { G.dodgeCurse=1; }
       floatMsg('移形换影：闪避下一次攻击'); }},
-  {id:'fuling', name:'附灵术', type:'skill', rarity:'purple', cost:2, needs:'summon',
-    t:(u)=>G.hero==='ganshiren'?`立即触发所有召唤单位。`
-      :G.hero==='wuseng'?`立即触发所有召唤单位。每触发 1 个，获得 2 点格挡`
-      :G.hero==='yincha'?`立即触发所有召唤单位。每触发 1 个，恢复 2 点生命`
-      :`立即触发所有召唤单位。每触发 1 个，对随机敌人施加 1 层【诅咒】`,
+  {id:'fuling', name:'附灵术', type:'skill', rarity:'purple', cost:0, exhaust:true, needs:'summon',
+    t:(u)=>G.hero==='ganshiren'?`立即触发所有召唤单位。消耗牌（一次性）`
+      :G.hero==='wuseng'?`立即触发所有召唤单位。每触发 1 个，获得 2 点格挡（消耗）`
+      :G.hero==='yincha'?`立即触发所有召唤单位。每触发 1 个，恢复 2 点生命（消耗）`
+      :`立即触发所有召唤单位。每触发 1 个，对随机敌人施加 1 层【诅咒】（消耗）`,
     eff:(u)=>{ const n=G.summons.filter(s=>s.dur>0).length;
       triggerSummons(false);
       if(n>0){
@@ -1207,7 +1207,7 @@ function loseHp(n){
     log(`血契：以 ${c} 点生命换取 ${c*G.bloodPact} 点格挡`);
   }
 }
-const DYNAMIC_DMG = ['tiebushan','shihun','qungui','taomufu','shixue','baigui'];
+const DYNAMIC_DMG = ['tiebushan','shihun','qungui','taomufu','shixue','baigui','zhouyu'];
 /* ===================== 全卡重做：流派 / 资源 / 召唤 / 状态 助手 ===================== */
 const COL_A='ganshiren', COL_B='wuseng', COL_C='yincha', COL_D='tianshi';
 const GHOST_IDS = ['zhiren','xiaogui','wutong','yinbingguo','zhongkui','shi_wang'];      // 【鬼怪牌】白名单（6 张）
@@ -1828,9 +1828,15 @@ const CARD_DMG = {
     const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
     return v+(isSummon('shi_wang')?1:0)+bleed; },
   yinbingguo: u=>{ const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
-    return (u?5:4)+(isSummon('shi_wang')?1:0)+bleed; } // 每只阴兵 v
+    return (u?5:4)+(isSummon('shi_wang')?1:0)+bleed; }, // 每只阴兵 v
+  zhenyaoling: u=>{ const t=curEnemy(); if(!t) return 0; const base=u?16:10;
+    if(G.hero==='wuseng') return base+(((G.block||0)>=5)?10:0);   // 耗 5 格挡 → +10
+    if(G.hero==='yincha') return base+2*Math.min(10,rageLayers()); // 血怒每层 +2（至多 10 层）
+    return base; },
+  zhouyu: u=>(G.尸气||0)*(u?7:6), // 每层尸气换算伤害（引爆总伤）
+  shi_wang: ()=>10                // 尸王自身每回合末全体 10（不吃自身 +1）
 };
-const PER_TURN_SUMMONS = ['zhiren','xiaogui','yinbingguo'];
+const PER_TURN_SUMMONS = ['zhiren','xiaogui','yinbingguo','shi_wang'];
 function previewDamage(c){
   const rawFn = CARD_DMG[c.id];
   if(!rawFn) return null;
@@ -1843,7 +1849,7 @@ function previewDamage(c){
   const dynamic = DYNAMIC_DMG.includes(c.id);
   if(dynamic){
     if(raw<=0){
-      const why = c.id==='tiebushan' ? '无格挡' : c.id==='shihun' ? '无诅咒' : '无召唤';
+      const why = c.id==='tiebushan' ? '无格挡' : c.id==='shihun' ? '无诅咒' : c.id==='zhouyu' ? '无尸气' : '无召唤';
       return { raw:0, d:0, miss:why, dynamic:true };
     }
   } else if(raw==null || raw<=0){
@@ -2041,6 +2047,27 @@ function cancelDiscardSelect(){
   if(s.card){ const di=G.discard.lastIndexOf(s.card); if(di>=0) G.discard.splice(di,1); G.hand.push(s.card); log('放弃【焚符】，未弃牌、未获得符文'); }
   G.discardSelect=null;
   hideOverlay(); render();
+}
+/* 火符(#2，赶尸人 A 列)：挑选弃 1 张手牌；弃到鬼怪牌额外获得尸气（其余三列仍为随机弃） */
+function startHuofuSelect(srcCard, up){
+  if(!G.hand.length){ log('火符：没有可弃的手牌'); return; }
+  G.huofuSelect={ card:srcCard||null, up:!!up };
+  renderHuofuSelect();
+}
+function renderHuofuSelect(){
+  const s=G.huofuSelect; if(!s) return;
+  const cards=G.hand.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickHuofuDiscard(${i})">${cardBody(c)}</div>`).join('');
+  showOverlay(`<h2>火 符 · 弃 牌</h2><p style="color:var(--red)">挑选 <b>1</b> 张手牌弃掉；若弃掉的是【鬼怪牌】，获得 ${s.up?2:1} 点【尸气】</p><div class="reward-cards">${cards}</div>`);
+}
+function pickHuofuDiscard(i){
+  const s=G.huofuSelect; if(!s) return;
+  const c=G.hand.splice(i,1)[0]; if(!c){ renderHuofuSelect(); return; }
+  if(c.type!=='junk') G.discard.push(c);
+  log(`弃掉【${c.name}】`);
+  let gain=0;
+  if(isGhostCard(c)){ gain=s.up?2:1; gainShiqi(gain); log(`火符：弃掉鬼怪牌，获得 ${gain} 点【尸气】`); }
+  G.huofuSelect=null; hideOverlay(); render();
+  floatMsg(gain>0?`+${gain} 尸气`:'已弃牌');
 }
 function startExchangeSelect(times, srcCard){
   if(!G.hand.length){ floatMsg('没有手牌可交换'); return; }
