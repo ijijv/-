@@ -74,7 +74,8 @@
   CARDS.forEach(function (c) {
     __ok('card:' + c.id + ' 结构合法',
       c && typeof c.name === 'string' && typeof c.t === 'function' && typeof c.eff === 'function' &&
-      okType.indexOf(c.type) >= 0 && okRar.indexOf(c.rarity) >= 0 && typeof c.cost === 'number');
+      okType.indexOf(c.type) >= 0 && okRar.indexOf(c.rarity) >= 0 &&
+      (typeof c.cost === 'number' || (c.cost && typeof c.cost === 'object'))); // cost 可为按英雄对象（_costPick）
   });
 
   /* ============ 2) 全卡 x 全英雄：t(false)/t(true)/eff(false) 冒烟 ============ */
@@ -945,11 +946,30 @@
     g = __base('ganshiren');
     __ok('#2 火符A 文案为「挑选弃 1 张手牌」', __card('huofu').t(false).indexOf('挑选弃') >= 0, __card('huofu').t(false));
 
-    // ---- #39 附灵术：0 费 + 消耗牌 ----
-    g = __base('ganshiren');
+    // ---- #39 附灵术：按列取费 + 按列消耗（A 免费且消耗；B/C 2 费非消耗；D 2 费/升级 1 费）----
     var fl = __card('fuling');
-    __ok('#39 附灵术 0 费 + 消耗牌', fl.cost === 0 && fl.exhaust === true, 'cost=' + fl.cost + ' exhaust=' + fl.exhaust);
+    g = __base('ganshiren');
+    __ok('#39 附灵术(赶尸人) 0 费 + 消耗牌',
+      cardCost(fl) === 0 && isOneUse(fl) === true && canUpgrade(fl) === false,
+      'cost=' + cardCost(fl) + ' oneUse=' + isOneUse(fl) + ' canUp=' + canUpgrade(fl));
     __ok('#39 附灵术 A 文案含「消耗牌（一次性）」', fl.t(false).indexOf('消耗牌（一次性）') >= 0, fl.t(false));
+
+    g = __base('yincha');
+    __ok('#39 附灵术(阴差) 2 费 + 非消耗牌',
+      cardCost(fl) === 2 && isOneUse(fl) === false, 'cost=' + cardCost(fl) + ' oneUse=' + isOneUse(fl));
+
+    g = __base('wuseng');
+    __ok('#39 附灵术(武僧) 2 费 + 非消耗牌',
+      cardCost(fl) === 2 && isOneUse(fl) === false, 'cost=' + cardCost(fl) + ' oneUse=' + isOneUse(fl));
+
+    g = __base('tianshi');
+    var flU = Object.assign({}, __card('fuling'), { up: true }); // 不改共享卡对象
+    __ok('#39 附灵术(天师) 2 费 / 升级 1 费',
+      cardCost(fl) === 2 && cardCost(flU) === 1 && isOneUse(fl) === false,
+      'cost=' + cardCost(fl) + ' up=' + cardCost(flU) + ' oneUse=' + isOneUse(fl));
+
+    g = __base('ganshiren');
+    __ok('#39 附灵术(赶尸人) 不可升级', canUpgrade(__card('fuling')) === false);
 
     // ---- #38 移形换影：A 列升级补「（0 符文）」----
     g = __base('ganshiren');

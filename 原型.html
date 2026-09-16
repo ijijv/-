@@ -1061,11 +1061,11 @@ const CARDS = [
       else if(G.hero==='yincha'){ G.dodgeHealRage=4; }
       else { G.dodgeCurse=1; }
       floatMsg('移形换影：闪避下一次攻击'); }},
-  {id:'fuling', name:'附灵术', type:'skill', rarity:'purple', cost:0, exhaust:true, needs:'summon',
+  {id:'fuling', name:'附灵术', type:'skill', rarity:'purple', cost:{ganshiren:0, default:2}, costU:{tianshi:1}, exhaustOnly:['ganshiren'], needs:'summon',
     t:(u)=>G.hero==='ganshiren'?`立即触发所有召唤单位。消耗牌（一次性）`
-      :G.hero==='wuseng'?`立即触发所有召唤单位。每触发 1 个，获得 2 点格挡（消耗）`
-      :G.hero==='yincha'?`立即触发所有召唤单位。每触发 1 个，恢复 2 点生命（消耗）`
-      :`立即触发所有召唤单位。每触发 1 个，对随机敌人施加 1 层【诅咒】（消耗）`,
+      :G.hero==='wuseng'?`立即触发所有召唤单位。每触发 1 个，获得 2 点格挡`
+      :G.hero==='yincha'?`立即触发所有召唤单位。每触发 1 个，恢复 2 点生命`
+      :`立即触发所有召唤单位。每触发 1 个，对随机敌人施加 1 层【诅咒】${u?'（1 符文）':''}`,
     eff:(u)=>{ const n=G.summons.filter(s=>s.dur>0).length;
       triggerSummons(false);
       if(n>0){
@@ -1395,7 +1395,9 @@ document.addEventListener('click', function(e){
   if(!(e.target && e.target.closest && e.target.closest('[data-tip]'))) hideTip();
 });
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') hideTip(); });
-function cardCost(c){ return c.up && c.costU!=null ? c.costU : c.cost; }
+/* 按英雄取费用：数值＝全英雄通用；对象＝{ganshiren:0, default:2}（如附灵术 A 列免费、D 列升级 1 费） */
+function _costPick(v){ if(v==null) return null; if(typeof v!=='object') return v; return v[G.hero]!=null?v[G.hero]:(v.default!==undefined?v.default:null); }
+function cardCost(c){ const u=_costPick(c.costU); return c.up && u!=null ? u : _costPick(c.cost); }
 function effectiveCost(c){
   let cost=cardCost(c);
   if(c.type==='skill' && hasRelic('jifengfu') && (G.skillsPlayedThisTurn||0)===0){
@@ -3192,7 +3194,8 @@ function showForgePicker(from){
 function canUpgrade(c){
   try{
     if(String(c.t(false))!==String(c.t(true))) return true;
-    return c.costU!=null && c.costU!==c.cost;
+    const _u=_costPick(c.costU);
+    return _u!=null && _u!==_costPick(c.cost);
   }catch(e){ return true; }
 }
 function forgeCard(i){
@@ -3524,7 +3527,11 @@ function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }
 
 /* ===================== 渲染 ===================== */
 /* 消耗牌判定：牌自带 exhaust，或 heroExhaust 指定的英雄专属消耗 */
-function isOneUse(c){ return !!(c && (c.exhaust || (c.heroExhaust && c.heroExhaust===G.hero))); }
+function isOneUse(c){
+  if(!c) return false;
+  if(c.exhaustOnly) return c.exhaustOnly.indexOf(G.hero)>=0; // 仅指定英雄视为消耗牌（如附灵术：只有赶尸人是消耗牌）
+  return !!(c.exhaust || (c.heroExhaust && c.heroExhaust===G.hero));
+}
 /* 卡面标记（图形式卡） */
 function exhaustMark(c){
   if(!isOneUse(c)) return '';
@@ -3559,7 +3566,7 @@ function groupHand(){
 }
 function handCardHTML(c, disabled, i, n){
   const eff=effectiveCost(c);
-  const costHtml = eff<c.cost ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
+  const costHtml = eff<cardCost(c) ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
   const pv = previewDamage(c);
   let dmgHtml = '';
   if(pv){
