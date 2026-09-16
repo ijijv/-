@@ -1,0 +1,3 @@
+导出 48 张 → C:\Users\HP\Desktop\志怪塔\_patch\_cards_dump.json
+尸气上限 maxShiQi=12 / 初始卡池 11 张: leifux5 jingangx4 fodux1 zhouyinx1
+无 CARD_DMG 预览键的卡: jingang, yinshen, jinguang, jinzhong, jingji, fodu, tongpi, fanzhen, xiejiashengyuan, juling, sheshen, shouyi, yiwu, xueqi, tongling, jingxin, ranxue, xisui, duhunguiji, fenfu, xueji, ranhun, kaitianyan, yixing, fuling, zhouyin, huapi, wutong
