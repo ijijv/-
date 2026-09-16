@@ -953,11 +953,11 @@ const CARDS = [
       else if(G.hero==='yincha'){ G.thorns+=u?5:4; G.hitRage=Math.max(G.hitRage||0,u?2:1); }
       else { G.hitBlock=Math.max(G.hitBlock||0,u?2:1); G.hitCurse=Math.max(G.hitCurse||0,u?2:1); } }},
   {id:'xiejiashengyuan', name:'卸甲生元', type:'defense', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?3:0,
-    t:(u)=>G.hero==='ganshiren'?`获得 ${u?7:5} 点格挡。敌人攻击后若还有剩余格挡，每保留 2 点，获得 1 点【尸气】`
+    t:(u)=>G.hero==='ganshiren'?`获得 ${u?7:5} 点格挡。回合结束自动将剩余格挡换算为【尸气】：每保留 2 点，获得 ${u?2:1} 点（无论敌人是否攻击）`
       :G.hero==='wuseng'?`获得 ${u?8:6} 点格挡。使【卸甲】持续 ${u?3:2} 回合：期间格挡不清零，到期后剩余格挡转为生命`
       :G.hero==='yincha'?`获得 ${u?7:5} 点格挡。失去 3 点生命。敌人攻击后每保留 1 点格挡，恢复 1 点生命`
       :`获得 ${u?8:6} 点格挡。敌人攻击后，将剩余格挡转为对随机敌人施加【诅咒】（每 2 格挡 = 1 层，上限 6 层；敌人满 6 层时溢出部分会转回格挡）`,
-    eff:(u)=>{ if(G.hero==='ganshiren'){ gainBlock(u?7:5); G.endBlockKind='A'; floatMsg('敌人攻击后格挡将转为尸气'); }
+    eff:(u)=>{ if(G.hero==='ganshiren'){ gainBlock(u?7:5); G.endBlockKind='A'; G.xiejiaUp=!!u; floatMsg('回合结束格挡将自动转为尸气'); }
       else if(G.hero==='wuseng'){ gainBlock(u?8:6); G.xiejia=u?3:2; floatMsg('【卸甲】已启动，格挡不再清零'); }
       else if(G.hero==='yincha'){ loseHp(3); gainBlock(u?7:5); G.endBlockKind='C'; floatMsg('敌人攻击后格挡将转为生命'); }
       else { gainBlock(u?8:6); G.endBlockKind='D'; floatMsg('敌人攻击后格挡将转为诅咒'); } }},
@@ -1667,7 +1667,7 @@ function newState(){
     // ===== 全卡重做：新增通用状态 =====
     hpLostTurn:0, blockGainedTurn:0, summonsMadeTurn:0, lastDrawnCards:[],
     retainHeal:0, pendingBlockStart:0, boostCurse:0, xisuiTurns:0,
-    shiWangCard:null, ranhunType:null, ranhunSelf:null, endBlockKind:null,
+    shiWangCard:null, ranhunType:null, ranhunSelf:null, endBlockKind:null, xiejiaUp:false,
     exhausted:[] };   // 本关已消耗的牌（战斗结束清空回牌库）
 }
 
@@ -2348,6 +2348,12 @@ function finishEndTurn(){
     G.block = Math.min(3, G.block);
   }
   if(G.weak>0) G.weak--;
+  // 卸甲生元 A 列（赶尸人）：回合结束自动把剩余格挡换算成【尸气】，无论敌人是否攻击
+  if(G.endBlockKind==='A' && G.block>0){
+    const _bk=G.block; const _q=Math.floor(_bk/2)*(G.xiejiaUp?2:1);
+    G.block=0; G.endBlockKind=null; G.xiejiaUp=false;
+    if(_q>0){ gainShiqi(_q); log(`卸甲生元：${_bk} 点格挡转为 ${_q} 点【尸气】`); floatMsg(`尸气 +${_q}`); }
+  }
   enemyAct();
 }
 /* 卸甲生元(#23 A/C/D)：敌人攻击全部结算之后，把没被消耗的剩余格挡转为英雄收益。
