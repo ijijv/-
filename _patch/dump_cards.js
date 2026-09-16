@@ -71,7 +71,7 @@ var __cards = CARDS.map(function(c){
            dmg: (typeof CARD_DMG!=='undefined' && CARD_DMG[c.id]) ? 'Y' : '-',
            t0:t0, t1:t1 };
 });
-var __hero = HEROES.filter(function(h){ return h.id==='ganshiren'; })[0] || {};
+var __hero = HEROES.filter(function(h){ return h.id==='${process.env.HERO||'ganshiren'}'; })[0] || {};
 __out = {
   shiqiMax: (typeof G.maxShiQi!=='undefined' ? G.maxShiQi : 'undef'),
   gainShiqiCapDefault: 12,
