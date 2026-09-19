@@ -44,12 +44,19 @@ function randomAlive(){ const a=aliveEnemies(); return a.length? a[Math.floor(rn
 function selectTarget(i){ if(TUT && TUT.step===2) advanceTut(); G.target=i; render(); document.querySelectorAll('#hand .dmg-buff,#hand .dmg-nerf,#hand .dmg-plain,#hand .dmg-miss').forEach(el=>{ el.classList.remove('dmg-flash'); void el.offsetWidth; el.classList.add('dmg-flash'); }); }
 
 /* ===================== 战斗函数 ===================== */
-function dealDamageTo(e,n,ignoreBlock){
-  let d=n+(G.attackBuff||0)+(G.turnAtkBuff||0);
-  if((e.kind==='ghost'||e.kind==='jiangshi') && hasRelic('taomujian')) d=Math.floor(d*1.25);
-  if(e.kind==='yao' && hasRelic('tongqianjian')) d=Math.floor(d*1.25);
-  if(G.weak>0 && !ignoreBlock) d=Math.floor(d*0.75);
-  if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.7);
+/* floatDelay：>0 时把「音效 / 飘字 / 受击闪 / 日志」推迟到该毫秒 —— 伤害本体照旧同步结算，
+   只有演出错开（多段攻击的连击演出用；敌人 multi 走的是 dealDamageToPlayer，同一套手法）。
+   point：true 表示「这是调用方预结算好的 1 点」，跳过按整张牌口径设计的加成/减伤
+   （攻击力、桃木剑、钱剑、虚弱、业火），只走逐击反应。见 咒雨·武僧。 */
+function dealDamageTo(e,n,ignoreBlock,floatDelay,point){
+  let d=n;
+  if(!point){
+    d+=(G.attackBuff||0)+(G.turnAtkBuff||0);
+    if((e.kind==='ghost'||e.kind==='jiangshi') && hasRelic('taomujian')) d=Math.floor(d*1.25);
+    if(e.kind==='yao' && hasRelic('tongqianjian')) d=Math.floor(d*1.25);
+    if(G.weak>0 && !ignoreBlock) d=Math.floor(d*0.75);
+    if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.7);
+  }
   if(!ignoreBlock && e.block>0){ const absorbed=Math.min(e.block,d); e.block-=absorbed; d-=absorbed; if(e.pingbi>0) e.pingbi=Math.min(e.pingbi, e.block); }
   if(e.ledgerActive && d>0) e.ledgerDmg=(e.ledgerDmg||0)+Math.min(d, e.hp); // v0.61 B9：记账含斩杀溢出会让清算反弹系统性虚高 → 按实际可扣血量截断
   const hpBefore=e.hp; const actual=Math.min(d, hpBefore); // 实际扣除血量：d 可能溢出击杀，回血按 actual 而非打出伤害
@@ -58,13 +65,14 @@ function dealDamageTo(e,n,ignoreBlock){
   if(G.duhun && G.duhun.turns>0 && actual>0){ const h=Math.floor(actual*G.duhun.ratio); if(h>0){ G.hp=Math.min(G.maxHp, G.hp+h); floatDamage('+'+h, 'heal', document.querySelector('#player-panel .hpbar')); log(`渡魂归己：回复 ${h} 点生命`); } }
   if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; log(`${e.name} 反震：反弹 ${r} 点伤害`); } }
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.hpLostTurn=(G.hpLostTurn||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); }
-  sfx('hit');
-  const el=document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]');
-  floatDamage('-'+d, '', el);
-  HITFX.enemies.add(e);
-  if(e.boss) inkBurst(el);
-  else if(e.elite) screenMicroShake();
-  log(`对 ${e.name} 造成 ${d} 点伤害`);
+  const viz=()=>{ sfx('hit');
+    const el=document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]');
+    floatDamage('-'+d, '', el);
+    HITFX.enemies.add(e);
+    if(e.boss) inkBurst(el);
+    else if(e.elite) screenMicroShake();
+    log(`对 ${e.name} 造成 ${d} 点伤害`); };
+  if(floatDelay) setTimeout(viz, floatDelay); else viz();
   return actual;
 }
 function dealDamageToTarget(n, ignoreBlock){ const e=curEnemy(); if(e) dealDamageTo(e,n,ignoreBlock); }
@@ -495,7 +503,13 @@ function pickExchangeNew(i){
   const old=G.hand.splice(ex.handIndex,1)[0];
   if(old.type!=='junk') G.discard.push(old);
   removeCardFromPiles(c);
-  G.hand.push(c);
+  /* v0.61.10(P11)：换入的牌本回合费用 -1。
+     不能直接给 c 打标记 —— cardById() 返回的是 CARDS 里的**共享对象**，同一张牌的 3 张副本
+     会一起被减费。所以往手牌放一个副本，并让它在 G.deck 里**顶替原对象**
+     （保住 indexOf 语义：消耗牌本关结束要靠 G.deck.indexOf 回牌库）。 */
+  const cNew=Object.assign({}, c); cNew.tempCostCut=1;
+  const _di=G.deck.indexOf(c); if(_di>=0) G.deck[_di]=cNew;
+  G.hand.push(cNew);
   ex.done=(ex.done||0)+1; // 已完成一次交换：此后取消不再把易物回退
   // 易物(#27)：若换出的是特定类型，按英雄给奖
   if(G.hero==='ganshiren' && isGhostCard(old)){ gainShiqi(1); log('易物：换出鬼怪牌，获得 1 点【尸气】'); }
@@ -599,6 +613,9 @@ function startTurn(){
   G.thorns=0; G.hitHeal=0; G.hitCurse=0; G.hitShiqi=0; G.hitRage=0; G.hitBlock=0; G.nextBlock=0;
   G.dodgeShiqi=0; G.dodgeNextBlock=0; G.dodgeHealRage=0; G.dodgeCurse=0;
   G.bleedSummons=false; G.bleedSummonsBonus=1;
+  // v0.61.10(P11)：易物换入牌的「本回合 -1 费」到期。手里、抽牌堆、弃牌堆、牌库都扫一遍
+  // （牌可能已被弃掉，只在手牌上清会漏，下回合再抽回来就白赚一次减费）。
+  [G.hand,G.drawPile,G.discard,G.deck].forEach(p=>(p||[]).forEach(c=>{ if(c&&c.tempCostCut) delete c.tempCostCut; }));
   if(G.burn>0){ const bd=G.burn*2; G.hp=Math.max(0,G.hp-bd); G.turnStats.dmgTaken+=bd; log(`灼烧：失去 ${bd} 点生命（${G.burn} 层）`); if(G.hp<=0){ G.hp=0; loseGame(); return; } }
   G.skillsPlayedThisTurn=0; G.attackBuff=0; G.turnAtkBuff=0; G.bloodPact=0; G.retain=0;
   G.energy=3+G.pendingEnergy;

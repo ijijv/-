@@ -20,7 +20,8 @@ function winFight(){
   const isBoss=G.enemies.some(e=>e.boss);
   if(hasElite){ const p=randomPotion(); G.potions.push(p); log(`击败精英，获得灵汁【${p.name}】`); }
   G.finalBoss = isBoss && G.act>=ACTS.length && !G.endless;
-  let g=3; if(hasElite) g=6; if(isBoss) g=9;
+  // v0.61.10(P7)：战后金币 3/6/9 → 4/8/12（普通/精英/Boss）。Boss 血量与篝火密度均不动。
+  let g=4; if(hasElite) g=8; if(isBoss) g=12;
   if(hasRelic('jubaopen')) g=Math.floor(g*1.5);
   G.gold+=g; log(`获得 ${g} 金币`);
   const hpLost = Math.max(0, G.battleStartHp - G.hp);

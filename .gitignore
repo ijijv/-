@@ -21,6 +21,10 @@ _patch/_sm.err
 _patch/_smoke_out.json
 _patch/_dom.html
 _patch/_dom.err
+_patch/_*.json      # 仿真器/冒烟的运行产物一律不进库（sim_baseline_v06106.json 是刻意留的基线，不以 _ 开头）
+_patch/_*.err
+_patch/_pre/        # 由 git 现场还原的「改前树」，可随时重建：for f in js/*.js; do git show <rev>:$f > _patch/_pre/$f; done
+_patch/*.check.js
 
 # ===== 打包产物 / 依赖 =====
 # dist/ 是 打包.py 的产物，可随时重新生成，不进版本库（发给朋友的也是它）
