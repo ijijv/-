@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.61</title>
+<title>志怪塔 · 原型 v0.61.01</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -386,7 +386,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.01</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>
@@ -712,7 +712,7 @@ const KEYWORDS = [
   ['虚弱','你造成的伤害 -25%，持续 2 回合。'],
   ['灼烧','每回合开始扣除 2 点生命（每层），永久持续、可叠加。可被「佛渡」「金钟罩」一次清除全部层数。'],
   ['力量','每点使该单位的攻击伤害 +1（永久叠加，上限 8 点）。'],
-  ['蓄力','敌人本回合不攻击，但下回合的伤害会额外增加。'],
+  ['蓄力','敌人本回合不攻击，下回合的单体「攻击」额外加伤。连击/群体攻击不吃这份加值。'],
   ['荆棘','本回合你每受到一次攻击，就反弹固定伤害给攻击你的敌人。'],
   ['勾魂','你下回合少抽 1 张牌。'],
   ['召唤','场上的友方单位，每回合末自动触发效果（纸人/小鬼/阴兵打伤害，阴差列还会按卡面为你回血；五通神按英雄给格挡或回血）。各牌持续时间不同，结束后消失。'],
@@ -2555,12 +2555,14 @@ function enemyAct(){
     if(e.seal){ if(e.sealTurn>1){ e.sealTurn--; } else { e.seal=false; e.sealTurn=0; } log(`${e.name} 被镇魂，无法行动`); }
     else switch(e.intent.type){
       case 'attack': { const d=e.intent.v+(e.pendingDamage||0); e.pendingDamage=0; dealDamageToPlayer(d,e); break; }
-      case 'charge': e.pendingDamage=(e.pendingDamage||0)+e.intent.v; log(`${e.name} 蓄力（下回合伤害 +${e.intent.v}）`); break;
+      // v0.61.01：蓄力只被单体 attack 消费（见 case 'attack'），连击 multi / 群体 aoe 不叠加 —— 用户拍板口径
+      case 'charge': e.pendingDamage=(e.pendingDamage||0)+e.intent.v; log(`${e.name} 蓄力（下回合单体攻击 +${e.intent.v}）`); break;
       case 'block': e.block+=e.intent.v; log(`${e.name} 获得 ${e.intent.v} 点格挡`); break;
       case 'heal': e.hp=Math.min(e.maxHp, e.hp+e.intent.v); log(`${e.name} 恢复 ${e.intent.v} 点生命`); break;
       case 'weak': if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【虚弱】`); break;
       case 'gouhun': if(!G.debuffImmune){ G.gouhun=1; floatMsg('勾魂'); log(`${e.name} 勾魂：你下回合少抽 1 张`); } else log(`佛渡免疫了${e.name}的【勾魂】`); break;
       case 'strength': { const _sB4=e.strength||0; addEnemyStrength(e, e.intent.v); const _sGot=(e.strength||0)-_sB4; if(_sGot>0) log(`${e.name} 力量 +${_sGot}`); if(e.intent.weak){ if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【暗夜威压】`); } if(e.intent.sealHeal){ const h=(G.wangyouDrunk||0)*8; if(h>0){ e.hp=Math.min(e.maxHp, e.hp+h); log(`${e.name} 汲取你饮下的忘忧汤，回复 ${h} 点生命`); } G.wangyouDrunk=0; } break; }
+      // v0.61.01：连击不吃蓄力加值，也不消耗已存的蓄力（用户拍板口径）
       case 'multi': for(let i=0;i<e.intent.n;i++){ if(G.hp<=0) break; dealDamageToPlayer(e.intent.v,e,i*140); } break;
       case 'discard': if(!G.debuffImmune){ G.pendingDiscard++; floatMsg('下回合随机弃 1 张牌'); log(`${e.name} 缠绕你：下回合开始随机弃 1 张牌`); } else log(`佛渡免疫了${e.name}的【缠绕】`); break;
       case 'attackBlock': { dealDamageToPlayer(e.intent.v,e); e.block+=e.intent.block; log(`${e.name} 攻击并格挡 ${e.intent.block}`); break; }
@@ -3730,19 +3732,20 @@ function handCardHTML(c, disabled, i, n){
 }
 function intentText(e){
   const st=(e.strength||0); // v0.61 C2：力量每点 +1
-  const atk=e.intent.v+(e.pendingDamage||0)+st;
+  const atkPlain=e.intent.v+st; // v0.61.01：不吃蓄力的意图（连击 / 群体 / 攻击并格挡）
+  const atk=e.intent.v+(e.pendingDamage||0)+st; // v0.61.01：只有单体「攻击」会消费蓄力
   switch(e.intent.type){
     case 'attack': return `⚔️ 攻击 ${atk}`;
-    case 'charge': return `⏳ 蓄力（下回合 +${e.intent.v} 伤害）`;
+    case 'charge': return `⏳ 蓄力（下回合单体攻击 +${e.intent.v}）`;
     case 'block': return `🛡️ 格挡 ${e.intent.v}`;
     case 'heal': return `❤️ 回血 ${e.intent.v}`;
     case 'weak': return '🥀 施加虚弱';
     case 'gouhun': return '🔗 勾魂（少抽1张）';
     case 'burn': return `🔥 灼烧 +${e.intent.v}（每回合 -${e.intent.v*2} 生命）`;
     case 'strength': return e.intent.weak ? `💪 力量 +${e.intent.v} · 施加虚弱` : e.intent.sealHeal ? `💪 力量 +${e.intent.v} · 回血` : `💪 力量 +${e.intent.v}`;
-    case 'multi': return `⚔️ 连击 ${e.intent.n}×${e.intent.v+st}`; // v0.61 C2：连击不吃蓄力加值（与实际结算一致，原先预览偏高）
+    case 'multi': return `⚔️ 连击 ${e.intent.n}×${atkPlain}`; // v0.61 C2/C2.01：连击不吃蓄力加值（与实际结算一致，原先预览偏高）
     case 'discard': return '🗑️ 下回合随机弃你 1 张牌';
-    case 'attackBlock': return `⚔️ 攻击 ${atk} · 🛡️ 格挡 ${e.intent.block}`;
+    case 'attackBlock': return `⚔️ 攻击 ${atkPlain} · 🛡️ 格挡 ${e.intent.block}`; // v0.61.01：该意图既不叠加也不消耗蓄力（原预览虚高）
     case 'summon': return `👥 召唤 ${e.intent.n} 只${ENEMIES[e.intent.unit||'xiaojianshi'].name}`;
     case 'jiming': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return lan?`📜 记名（记录伤害 · 词缀「${lan}」）`:'📜 记名（记录你打出的伤害）'; }
     case 'qingsuan': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return `⚖️ 清算（反弹 ${Math.min(24, Math.floor((e.ledgerDmg||0)*0.3))}${lan?` · 打出「${lan}」`:''}）`; }
@@ -4158,7 +4161,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.61</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.61.01</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>

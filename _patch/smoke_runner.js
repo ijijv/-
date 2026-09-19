@@ -2160,6 +2160,66 @@
     __ok('v0.61 C2 关键词已改为每点 +1', __kwStr.indexOf('+1') >= 0 && __kwStr.indexOf('+2') < 0, __kwStr);
   })();
 
+  /* ============ v0.61.01 蓄力口径：只惠及单体攻击 ============ */
+  (function () {
+    function seg(src, key) { var i = src.indexOf(key); return i < 0 ? '' : src.slice(i, i + 260); }
+    var src = __realEnemyAct.toString();
+    var mMulti = seg(src, "case 'multi'"), mAoe = seg(src, "case 'aoe'"), mAtk = seg(src, "case 'attack'"), mChg = seg(src, "case 'charge'");
+    __ok('v0.61.01 连击结算不含蓄力（multi 分支不读 pendingDamage）', mMulti.indexOf('pendingDamage') < 0, mMulti.slice(0, 80));
+    __ok('v0.61.01 群体攻击结算不含蓄力（aoe 分支不读 pendingDamage）', mAoe.indexOf('pendingDamage') < 0, mAoe.slice(0, 80));
+    __ok('v0.61.01 单体攻击既叠加又清空蓄力',
+      mAtk.indexOf('e.pendingDamage||0') >= 0 && mAtk.indexOf('e.pendingDamage=0') >= 0, mAtk.slice(0, 90));
+    __ok('v0.61.01 蓄力只累加不消费', mChg.indexOf('e.pendingDamage=(e.pendingDamage||0)+e.intent.v') >= 0, mChg.slice(0, 90));
+
+    /* 动态：单体攻击吃满蓄力并清账 */
+    var g = __base('tianshi'); G.hp = 60; G.block = 0;
+    var e = makeEnemy(ENEMIES['youhun'], 'youhun');
+    e.charm = 0; e.charmUsed = false; e.strength = 0; e.pendingDamage = 5; e.affixes = null;
+    e.intent = { type: 'attack', v: 10 };
+    G.enemies = [e]; G.target = 0;
+    __realEnemyAct();
+    __ok('v0.61.01 单体攻击 = 10 + 蓄力 5 = 15 伤害，且蓄力清零',
+      (60 - G.hp) === 15 && e.pendingDamage === 0, 'lost=' + (60 - G.hp) + ' pend=' + e.pendingDamage);
+
+    /* 动态：连击不吃蓄力、也不清账 */
+    g = __base('tianshi'); G.hp = 60; G.block = 0;
+    e = makeEnemy(ENEMIES['youhun'], 'youhun');
+    e.charm = 0; e.charmUsed = false; e.strength = 0; e.pendingDamage = 5; e.affixes = null;
+    e.intent = { type: 'multi', n: 2, v: 6 };
+    G.enemies = [e]; G.target = 0;
+    __realEnemyAct();
+    __ok('v0.61.01 连击 2×6 = 12 伤害（不叠加蓄力 5），且蓄力原样保留',
+      (60 - G.hp) === 12 && e.pendingDamage === 5, 'lost=' + (60 - G.hp) + ' pend=' + e.pendingDamage);
+
+    /* 动态：群体攻击同理 */
+    g = __base('tianshi'); G.hp = 60; G.block = 0;
+    e = makeEnemy(ENEMIES['youhun'], 'youhun');
+    e.charm = 0; e.charmUsed = false; e.strength = 0; e.pendingDamage = 5; e.affixes = null;
+    e.intent = { type: 'aoe', v: 7 };
+    G.enemies = [e]; G.target = 0;
+    __realEnemyAct();
+    __ok('v0.61.01 群体攻击 7 伤害（不叠加蓄力），蓄力保留',
+      (60 - G.hp) === 7 && e.pendingDamage === 5, 'lost=' + (60 - G.hp) + ' pend=' + e.pendingDamage);
+
+    /* 预览与实际一致 */
+    var p = makeEnemy(ENEMIES['youhun'], 'youhun');
+    p.strength = 2; p.pendingDamage = 5;
+    p.intent = { type: 'attack', v: 10 };
+    __ok('v0.61.01 预览·攻击 含蓄力（10+5+2=17）', intentText(p).indexOf('攻击 17') >= 0, intentText(p));
+    p.intent = { type: 'multi', n: 3, v: 6 };
+    __ok('v0.61.01 预览·连击 不含蓄力（3×8）', intentText(p).indexOf('连击 3×8') >= 0, intentText(p));
+    p.intent = { type: 'attackBlock', v: 6, block: 4 };
+    __ok('v0.61.01 预览·攻击并格挡 不含蓄力（攻击 8 · 格挡 4）',
+      intentText(p).indexOf('攻击 8') >= 0 && intentText(p).indexOf('攻击 13') < 0, intentText(p));
+
+    /* 文案 */
+    var kw = KEYWORDS.filter(function (k) { return k[0] === '蓄力'; }).map(function (k) { return k[1]; }).join('');
+    __ok('v0.61.01 关键词写明「只加单体攻击、连击/群体不吃」',
+      kw.indexOf('单体') >= 0 && kw.indexOf('连击') >= 0 && kw.indexOf('群体') >= 0, kw);
+    var __chg = seg(__realEnemyAct.toString(), '蓄力（下回合');
+    __ok('v0.61.01 蓄力行动日志写明「单体攻击」', __chg.indexOf('下回合单体攻击 +') >= 0, __chg.slice(0, 60));
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();
