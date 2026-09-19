@@ -5,6 +5,7 @@ _test_out/
 /_thumb_*
 /_t.png
 *.tmp
+~$*          # Office 打开文档时的锁文件（如 ~$xxx.md）
 *.bak
 *.orig
 *.rej
