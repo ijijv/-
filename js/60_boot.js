@@ -67,10 +67,12 @@ function onDragMove(ev){
     if(idx>=0){
       const eel=document.querySelector('#enemy-panel .enemy[data-uid="'+G.enemies[idx].uid+'"]');
       setDragTarget(eel);
+      showDragPreview(idx);   // v0.61.20(P3)：箭头锁定了谁，就把预计伤害浮在谁头上
       const r2=eel.getBoundingClientRect();
       aimAt(d.ox, d.oy, r2.left+r2.width/2, r2.top+r2.height/2, true);
     } else {
       setDragTarget(null);
+      hideDragPreview();
       aimAt(d.ox, d.oy, ev.clientX, ev.clientY, false);
     }
   } else {
@@ -97,7 +99,35 @@ function onDragUp(ev){
   hideDragArrow();
   ARROW_TIP=null;
   setDragTarget(null);
+  hideDragPreview();
   if(play) playCard(d.i);
+}
+/* v0.61.20(P3)：拖拽受击预览 —— 箭头锁定目标时，目标头顶浮出这张牌的预计伤害。
+   数字直接取自卡面徽章那套 previewDamage()，不另开口径（徽章不显示的「平伤牌」这里也照样给数）。 */
+function hideDragPreview(){
+  const el=document.getElementById('drag-dmg');
+  if(el) el.classList.add('off');
+}
+function showDragPreview(idx){
+  if(!G || !DRAG) return hideDragPreview();
+  const c=G.hand[DRAG.i]; const e=G.enemies[idx];
+  if(!c || !e) return hideDragPreview();
+  const eel=document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]');
+  const pv=previewDamage(c);
+  if(!eel || !pv) return hideDragPreview();
+  let el=document.getElementById('drag-dmg');
+  if(!el){ el=document.createElement('div'); el.id='drag-dmg'; document.body.appendChild(el); }
+  if(pv.miss){ el.textContent='⚠ '+pv.miss+' · 落空'; el.className='weak'; }
+  else {
+    const aoe=(c.id==='wanjian'||c.id==='baigui')?' 全体':'';
+    const per=pv.perTurn?' 每回合':'';
+    el.textContent='-'+pv.d+aoe+per;
+    el.className = pv.weak ? 'weak' : '';
+  }
+  const r=eel.getBoundingClientRect();
+  el.style.left=(r.left+r.width/2)+'px';
+  el.style.top=r.top+'px';
+  el.classList.remove('off');
 }
 /* 长按卡牌放大查看描述（小屏字小的解决） */
 function showCardZoom(i){
@@ -105,7 +135,7 @@ function showCardZoom(i){
   if(DRAG){ DRAG.el.classList.remove('dragging','lift','pressed'); DRAG.el.style.transform=''; DRAG.el.style.pointerEvents=''; DRAG=null; hideDragArrow(); ARROW_TIP=null; setDragTarget(null); }
   document.getElementById('overlayContent').innerHTML=`
     <h2>${c.name}${c.up?' <span style="color:var(--green)">↑</span>':''} <small style="color:var(--dim);font-size:13px">${TNAME[c.type]} · ${RNAME[c.rarity]}</small></h2>
-    <div style="font-size:17px;line-height:1.9;text-align:left;padding:14px 20px;color:#e8dcc0;background:rgba(0,0,0,.22);border-radius:8px;margin:12px 0">${wrapKw(c.t(c.up))}</div>
+    <div style="font-size:17px;line-height:1.9;text-align:left;padding:14px 20px;color:#e8dcc0;background:rgba(0,0,0,.22);border-radius:8px;margin:12px 0">${wrapKw(c.t(c.up))}${(!c.up && canUpgrade(c))?`<div class="upgrade-preview">升级后 → ${wrapKw(c.t(true))}</div>`:''}</div>
     ${effectiveCost(c)>0?`<p style="color:var(--gold)">符文费用：${effectiveCost(c)}</p>`:''}
     ${isOneUse(c)?`<p style="color:var(--red2);font-weight:bold">消耗 · 每场战斗限用一次，战斗结束后回到牌库</p>`:''}
     <button class="btn ghost" onclick="hideOverlay()">收起</button>`;
@@ -197,13 +227,55 @@ function render(){
   if(!G.discardSelect && !G.exchange && !G.retainSelect) groupHand();
   document.getElementById('hand').innerHTML=G.hand.map((c,i)=>handCardHTML(c, G.energy<effectiveCost(c), i, G.hand.length)).join('') || '<div style="color:var(--dim)">（无手牌）</div>';
   const runeCount=document.getElementById('rune-count'); if(runeCount) runeCount.textContent=G.energy;
-  const _logBox=document.getElementById('log');
-  if(_logBox){ _logBox.innerHTML='<div class="log-head">⚔ 战报</div>'+G.log.slice(-600).map(x=>x.indexOf('——')===0?('<div class="log-sep">'+x+'</div>'):x).join(''); _logBox.scrollTop=_logBox.scrollHeight; }
+  renderLogBox();   // v0.61.20(P5)：筛选 chip + 每行独立成块（原先各行直接 join('') 会挤成一坨）
+  renderEndTurnHint(); // v0.61.20(P1)
   HITFX.enemies.clear();
   animateHpBars();
 }
 
 /* ===================== 开局 ===================== */
+/* ===================== 战报筛选（v0.61.20 P5） =====================
+ * 三类 chip：伤害 / 获得 / 状态。一个都不选 = 全部。
+ * 分类是**按文本启发式**判的 —— log() 有两百多个调用点，逐点打标签太重且容易漏改；
+ * 代价是「一句话里既造成伤害又施加诅咒」只会归到伤害。**认不出的行永远显示**：
+ * 宁可多留一条，也不要把关键信息藏掉。 */
+let LOG_FILTER = {};
+const LOG_CATS = [['dmg','伤害'],['gain','获得'],['buff','状态']];
+function logCat(x){
+  if(x.indexOf('——')===0) return 'sep';
+  if(/伤害|受到|扣血|流血|业火|反噬|引爆|阵亡|倒下|击杀/.test(x)) return 'dmg';
+  if(/诅咒|中毒|虚弱|灼烧|咒印|尸气|召唤|力量|缠绕|僵直|封印|标记/.test(x)) return 'buff';
+  if(/获得|回复|回血|格挡|金币|遗物|抽到|弃掉|灵气|痊愈|升级/.test(x)) return 'gain';
+  return '';
+}
+function toggleLogFilter(k){ LOG_FILTER[k]=!LOG_FILTER[k]; renderLogBox(); }
+function renderLogBox(){
+  const el=document.getElementById('log'); if(!el || !G) return;
+  const keys=LOG_CATS.map(p=>p[0]).filter(k=>LOG_FILTER[k]);
+  const chips=`<div class="log-chips">${LOG_CATS.map(p=>`<span class="log-chip${LOG_FILTER[p[0]]?' on':''}" onclick="toggleLogFilter('${p[0]}')">${p[1]}</span>`).join('')}</div>`;
+  el.innerHTML='<div class="log-head">⚔ 战报'+chips+'</div>'+G.log.slice(-600).map(x=>{
+    if(x.indexOf('——')===0) return '<div class="log-sep">'+x+'</div>';
+    const cat=logCat(x);
+    const hide = keys.length>0 && cat!=='' && keys.indexOf(cat)<0;
+    return '<div class="log-line'+(cat?' log-'+cat:'')+'"'+(hide?' style="display:none"':'')+'>'+x+'</div>';
+  }).join('');
+  el.scrollTop=el.scrollHeight;
+}
+
+/* ===================== 结束回合软提示（v0.61.20 P1） =====================
+ * 能量没用完、手里还有打得出的牌时，结束回合按钮左侧浮一枚小气泡。不是弹窗、不挡手牌。
+ * 「打得出」= 没被忘忧封印 且 当前能量够。设置里可关。 */
+function playableCount(){
+  if(!G || SCENE!=='battle' || G.dead) return 0;
+  return G.hand.filter(c=>c && !(c.sealed>0) && G.energy>=effectiveCost(c)).length;
+}
+function renderEndTurnHint(){
+  const el=document.getElementById('end-turn-hint'); if(!el) return;
+  const n = SETTINGS.endTurnHint===false ? 0 : playableCount();
+  if(n>0){ el.innerHTML=`还有 <b>${n}</b> 张可打`; el.classList.remove('off'); }
+  else el.classList.add('off');
+}
+
 function showHeroSelect(){
   const cards=HEROES.map(h=>`<div class="relic" onclick="pickHero('${h.id}')"><div class="cname" data-tip="hero:${h.id}">${h.name}</div><div class="cdesc">${h.desc}</div><div class="cdesc" style="color:var(--gold);margin-top:6px">被动 · ${h.passive}</div><div class="ctype">选择英雄</div></div>`).join('');
   showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="reward-cards">${cards}</div>`);
@@ -245,7 +317,7 @@ function startEndless(){
   seedRng(rngSeedNow());      // v0.61.06：本局种子
   G.endless=true; G.endlessFloor=0; G.act=4;
   MAP=genEndlessMap();
-  G.mapRow=0; G.mapCol=-1;
+  G.mapRow=0; G.mapCol=-1; G.mapPath=[];
   track('endlessStart');
   showHeroSelect();
 }
@@ -298,7 +370,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.61.10</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.61.20</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -342,6 +414,8 @@ function showSettings(){
     <input type="range" min="0" max="100" step="1" value="${sv}" oninput="setSfxVol(this.value)" onchange="sfx('relic')" style="width:100%">
     <p style="margin-top:16px">流畅模式（低配机）：<b style="color:${SETTINGS.lowSpec?'var(--green)':'var(--red)'}">${SETTINGS.lowSpec?'开':'关'}</b></p>
     <button class="btn ghost" onclick="toggleLowSpec()">${SETTINGS.lowSpec?'关闭流畅模式':'开启流畅模式'}</button>
+    <p style="margin-top:16px">结束回合软提示：<b style="color:${SETTINGS.endTurnHint!==false?'var(--green)':'var(--red)'}">${SETTINGS.endTurnHint!==false?'开':'关'}</b></p>
+    <button class="btn ghost" onclick="toggleEndTurnHint()">${SETTINGS.endTurnHint!==false?'关闭软提示':'开启软提示'}</button>
     <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
     <button class="btn ghost" onclick="openMenu()">返回菜单</button>`);
 }
@@ -362,6 +436,9 @@ function toggleSound(){
 }
 function toggleLowSpec(){
   SETTINGS.lowSpec=!SETTINGS.lowSpec; persistSettings(); applyLowSpec(); showSettings();
+}
+function toggleEndTurnHint(){ // v0.61.20(P1)
+  SETTINGS.endTurnHint = (SETTINGS.endTurnHint===false); persistSettings(); renderEndTurnHint(); showSettings();
 }
 /* ===================== 新手引导 ===================== */
 function tutorialSeen(){ try{ return Store.get('zhiguaitower_tutorial_v1')==='1'; }catch(e){ return false; } }

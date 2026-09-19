@@ -11,7 +11,7 @@ let G = null;
 function newState(){
   return { log:[], deck:[], drawPile:[], hand:[], discard:[],
     hp:80, maxHp:80, block:0, energy:3, weak:0, gouhun:0, thorns:0, act:1,
-    pendingEnergy:0, pendingDiscard:0, summons:[], enemies:[], target:0, mapRow:0, mapCol:-1, rewardPicks:[],
+    pendingEnergy:0, pendingDiscard:0, summons:[], enemies:[], target:0, mapRow:0, mapCol:-1, mapPath:[], rewardPicks:[], // v0.61.20(P2)：mapPath 记走过的 (层,列)，地图连线的「已走」靠它
     gold:0, removeCount:0, shopWares:[], shopMarkup:0, turn:0, battleStartHp:80,
     turnStats:{dmgTaken:0, blocked:0, dealt:0, kills:[]}, turnSummary:'',
     relics:[], skillsPlayedThisTurn:0, attackBuff:0, daoxinUsed:false, pendingRelic:false, relicPicks:[],
@@ -79,6 +79,7 @@ function dealDamageToTarget(n, ignoreBlock){ const e=curEnemy(); if(e) dealDamag
 function dealDamageToAll(n){ aliveEnemies().forEach(e=>dealDamageTo(e,n)); }
 function isLinghua(e){ return !!(e && e.affixes && e.affixes.some(a=>a.id==='linghua')); }
 function applyCurse(e, n){
+  if(n>0) tipOnce('curse', '<b>【诅咒】</b>是你在敌人身上累积的印记，本身不掉血 —— 要靠【蚀魂咒】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成伤害。符箓天师整套牌都围着它转。');
   let v=n;
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0) v=v*2;
   // 守一(天师)强化：本张被强化的可施咒牌额外 +1 层（仅持续一次施加）
@@ -318,6 +319,7 @@ function enterPhase2(e){
   e.intentIndex=0;
   sfx('relic');
   floatMsg('轮回 · 第二阶段');
+  bossPhaseIntro(e.name||'阎罗天子'); // v0.61.20(P4)：裂印 + 红目的二阶段转场（非阻塞，见该函数注释）
   log('阎罗天子堕入轮回，阴气更盛——进入第二阶段！');
 }
 function directDamage(n, msg){
@@ -332,6 +334,7 @@ function directDamage(n, msg){
 }
 function tickSeals(){ [G.hand, G.drawPile, G.discard].forEach(pile=>pile.forEach(c=>{ if(c.sealed>0) c.sealed--; })); }
 function gainBlock(n){
+  if(n>0) tipOnce('block', '<b>格挡</b>先替你挨打 —— 敌人打过来时先扣格挡、再扣血。但它在<b>回合结束时清零</b>（苦行武僧除外），所以能挡就这回合挡完。');
   G.block+=n;
   if(n>0){ G.blockGainedTurn=(G.blockGainedTurn||0)+n; sfx('block'); floatDamage('+'+n, 'block', document.querySelector('#player-panel .hpbar')); }
 }

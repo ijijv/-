@@ -7,7 +7,7 @@
  * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
  * ============================================================================ */
 /* ===================== 音效（Web Audio，无外部资源） ===================== */
-let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1, lowSpec:false };
+let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1, lowSpec:false, endTurnHint:true }; // v0.61.20(P1)：endTurnHint 结束回合软提示开关
 function loadSettings(){ try{ const r=Store.getJSON('zhiguaitower_settings_v1'); if(r) SETTINGS=Object.assign(SETTINGS, r); }catch(e){} }
 function persistSettings(){ try{ Store.setJSON('zhiguaitower_settings_v1', SETTINGS); }catch(e){} }
 function fx(){ return !SETTINGS.lowSpec; }   // 流畅模式：关闭震屏/抖动/飘字等重特效

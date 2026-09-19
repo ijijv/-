@@ -31,6 +31,8 @@ function showMap(){
   SCENE='map'; saveRun();
   setBg(G.endless?'act3':'act'+G.act); setBGM('map');
   let html=`<h2>${ACT_NAMES[G.act-1]}</h2>${runStatusHTML()}<p style="font-size:13px">第 ${G.mapRow+1}/${MAP.length} 层 · 只能走进相邻列的节点，规划好路线。</p>`;
+  // v0.61.20(P2)：路径连线画在这层 svg 里（绝对定位铺满 .map-wrap，行本身仍是普通按钮）
+  html+=`<div class="map-wrap"><svg class="map-lines" id="map-lines" aria-hidden="true"></svg>`;
   for(let r=MAP.length-1;r>=0;r--){
     const cls = r<G.mapRow ? 'past' : r===G.mapRow ? 'current' : 'future';
     html+=`<div class="map-row ${cls}">`;
@@ -47,11 +49,70 @@ function showMap(){
     }
     html+=`</div>`;
   }
+  html+=`</div>`; // 收 .map-wrap
   html+=`<div style="margin-top:12px"><button class="btn ghost" onclick="openMenu()">菜单（重开 / 退出）</button></div>`;
   showOverlay(html);
+  // 行布局完成后才有坐标可量，所以推到下一帧再画
+  try{ requestAnimationFrame(drawMapLinks); }catch(e){ drawMapLinks(); }
+}
+/* v0.61.20(P2)：地图路径连线。
+   三种线：暗线 = 所有合法连边（|列差|≤1，看得见「地图是张网」）；
+           金虚线 = 现在这一步能走到的；金实线 = 已经走过的。
+   锚点用 (mapRow-1, mapCol) 而不是只看 mapPath —— 这样**没有 mapPath 的老存档**也画得出「可达」。 */
+let _mapLinkBound=false;
+function drawMapLinks(){
+  const svg=document.getElementById('map-lines');
+  if(!svg || !svg.parentNode || !svg.parentNode.querySelectorAll) return;
+  const wrap=svg.parentNode;
+  const rows=Array.prototype.slice.call(wrap.querySelectorAll('.map-row'));
+  if(!rows.length || !rows[0].getBoundingClientRect) return;
+  const wb=wrap.getBoundingClientRect();
+  svg.setAttribute('viewBox','0 0 '+wb.width+' '+wb.height);
+  svg.setAttribute('width',wb.width); svg.setAttribute('height',wb.height);
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  // DOM 顺序自上而下 = 层号自高而低，所以第 k 行是 MAP[MAP.length-1-k]
+  function nodeAt(r,c){
+    const row=rows[MAP.length-1-r]; if(!row) return null;
+    const cells=row.querySelectorAll('.map-node');
+    const el=cells[c]; if(!el || (el.classList && el.classList.contains('empty'))) return null;
+    const b=el.getBoundingClientRect();
+    if(!b.width && !b.height) return null;
+    return { x:b.left-wb.left+b.width/2, y:b.top-wb.top+b.height/2 };
+  }
+  function seg(a,b,cls){
+    if(!a||!b) return;
+    const my=(a.y+b.y)/2;
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',`M ${a.x} ${a.y} C ${a.x} ${my}, ${b.x} ${my}, ${b.x} ${b.y}`);
+    p.setAttribute('class',cls);
+    svg.appendChild(p);
+  }
+  for(let r=0;r<MAP.length-1;r++){
+    for(let c=0;c<MAP[r].length;c++){
+      if(!MAP[r][c]) continue;
+      for(let c2=0;c2<MAP[r+1].length;c2++){
+        if(!MAP[r+1][c2] || Math.abs(c2-c)>1) continue;
+        seg(nodeAt(r,c), nodeAt(r+1,c2), 'link-dim');
+      }
+    }
+  }
+  const path=G.mapPath||[];
+  for(let i=0;i<path.length-1;i++) seg(nodeAt(path[i].r,path[i].c), nodeAt(path[i+1].r,path[i+1].c), 'link-past');
+  if(G.mapRow>0){
+    const a=nodeAt(G.mapRow-1, G.mapCol);
+    for(let c=0;c<MAP[G.mapRow].length;c++){
+      if(!MAP[G.mapRow][c] || Math.abs(c-G.mapCol)>1) continue;
+      seg(a, nodeAt(G.mapRow,c), 'link-reach');
+    }
+  }
+  if(!_mapLinkBound && typeof window!=='undefined' && window.addEventListener){
+    _mapLinkBound=true;
+    window.addEventListener('resize',()=>{ if(document.getElementById('map-lines')) drawMapLinks(); });
+  }
 }
 function chooseNode(c){
   const node=MAP[G.mapRow][c];
+  (G.mapPath=G.mapPath||[]).push({r:G.mapRow, c:c}); // v0.61.20(P2)：记下这一步，地图连线据此画「已走」
   G.mapCol=c;
   hideOverlay();
   if(node.t==='fight') startBattle(node.e);

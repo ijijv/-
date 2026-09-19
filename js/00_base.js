@@ -74,6 +74,48 @@ function floatMsg(msg){
   setTimeout(()=>{ if(item.parentNode && item.parentNode.removeChild) item.parentNode.removeChild(item); }, 1700);
 }
 
+/* ===================== 条件引导气泡（v0.61.20 P8） =====================
+ * 首次遇到「诅咒 / 格挡 / 召唤物 / 尸气」各弹一次，讲清它是什么。
+ * 和 floatMsg（战斗飘字，1.6s 就散）不同：气泡是**可读的**——停到你看完，点一下收起，7 秒自动收。
+ * 看过就记在 Store 里（zhiguaitower_tips_v1），换局不重弹；清掉存档即重置。
+ * 只在真正的战斗场景里触发（SCENE==='battle'），免得在菜单/商店/仿真里乱冒。
+ * 注意：tipOnce 的返回值与「是否真的画了 DOM」解耦 —— 冒烟环境没有 DOM，仍要能断言触发过。 */
+const TIPS_KEY = 'zhiguaitower_tips_v1';
+let TIPS_SEEN = null;
+function tipsSeen(){ if(!TIPS_SEEN){ TIPS_SEEN = Store.getJSON(TIPS_KEY) || {}; } return TIPS_SEEN; }
+function inBattleScene(){
+  try{ return typeof SCENE==='string' && SCENE==='battle' && typeof G!=='undefined' && !!G && !G.dead; }catch(e){ return false; }
+}
+function hideTipBubble(){
+  try{
+    const el=document.getElementById('tip-bubble');
+    if(el){ el.classList.remove('show'); setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 300); }
+  }catch(e){}
+}
+function showTipBubble(html){
+  if(!document || !document.body || !document.createElement) return;
+  try{
+    hideTipBubble();
+    const el=document.createElement('div');
+    el.id='tip-bubble';
+    el.innerHTML='<span class="tip-tag">提示</span>'+html;
+    el.onclick=hideTipBubble;
+    document.body.appendChild(el);
+    try{ requestAnimationFrame(()=>{ el.classList.add('show'); }); }catch(e){ el.classList.add('show'); }
+    setTimeout(()=>{ const x=document.getElementById('tip-bubble'); if(x===el) hideTipBubble(); }, 7000);
+  }catch(e){}
+}
+/* 返回 true 表示「这次真的弹了」（冒烟用它断言，别依赖 DOM） */
+function tipOnce(key, html){
+  try{
+    const s=tipsSeen();
+    if(s[key]) return false;
+    s[key]=1; Store.setJSON(TIPS_KEY, s);
+    if(inBattleScene()) showTipBubble(html);
+    return true;
+  }catch(e){ return false; }
+}
+
 /* ===================== 战斗特效（juice：伤害飘字 / 受击震屏 / 敌人抖动） ===================== */
 let HITFX = { enemies: new Set() };
 let PLAYER_HP_PREV = null;
@@ -207,5 +249,21 @@ function bossIntro(onDone){
   b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
   sfx('boss');
   setTimeout(()=>{ b.classList.remove('show'); b.innerHTML=''; if(onDone) onDone(); }, 1150);
+}
+/* v0.61.20(P4)：Boss 二阶段转场 —— 复用同一枚印章，换成「裂印 + 红目」变体。
+   与 bossIntro 的关键区别：**不阻塞流程**。二阶段是从「血条打空」的同步路径里触发的，
+   卡住等动画会把「死亡→复活→回合收尾」的时序搅乱，所以这里只铺 1.4 秒视觉，游戏在背后照常推进。 */
+function bossPhaseIntro(name){
+  if(!document || !document.body) return;
+  try{
+    let b=document.getElementById('boss-intro');
+    if(!b){ b=document.createElement('div'); b.id='boss-intro'; document.body.appendChild(b); }
+    if(b.classList.contains('show')) return;   // 别和战前过场打架
+    b.classList.add('phase2');
+    b.innerHTML=(fx()?`<div class="boss-ink"></div>`:'')+`<div class="boss-seal"><span class="bs-eyes">◉◉</span><span class="bs-name">${name}</span><span class="bs-sub">轮 回 再 临</span></div>`;
+    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    sfx('boss');
+    setTimeout(()=>{ b.classList.remove('show','phase2'); b.innerHTML=''; }, 1400);
+  }catch(e){}
 }
 

@@ -603,7 +603,9 @@ const CAN_CURSE_IDS = ['huofu','wanjian','taomufu','shihunzhou','sheshen','fenfu
 const isGhostCard = c => !!(c && c.type==='spirit' && GHOST_IDS.includes(c.id));
 const isCanCurse  = c => !!(c && CAN_CURSE_IDS.includes(c.id));
 /* —— 尸气 —— */
-function gainShiqi(n){ if(!n || n<=0) return; G.尸气 = Math.min(G.maxShiQi||12, (G.尸气||0)+n); }
+function gainShiqi(n){ if(!n || n<=0) return;
+  tipOnce('shiqi', '<b>【尸气】</b>是茅山赶尸人的专属资源：上限 12 点、<b>整局累积不清零</b>。场上每有 1 个召唤物，回合开始就 +1；攒着可以强化【五通神】，或用【咒雨】一次引爆。');
+  G.尸气 = Math.min(G.maxShiQi||12, (G.尸气||0)+n); }
 function hasShiqi(n){ return (G.尸气||0) >= n; }
 function spendShiqi(n){ if(!hasShiqi(n)) return false; G.尸气 -= n; return true; }
 /* —— 血怒（不自动烧；只在使用“每层+N”效果时消耗实际用到的层数） —— */
@@ -618,6 +620,7 @@ function rageSpend(per, cap){ const layers=Math.floor(cap/per); const use=Math.m
 const SUMMON_LIFE_TYPES = ['zhiren','xiaogui','wutong','yinbing'];
 function addSummon(o){ G.summonsMadeTurn=(G.summonsMadeTurn||0)+1;
   if(G.hero==='ganshiren' && SUMMON_LIFE_TYPES.indexOf(o.type)>=0) o.dur=(o.dur||0)+1;
+  tipOnce('summon', '<b>召唤物</b>不算「敌人」—— 它站在你这边，每回合结束自动结算一次自己的效果（打人 / 给你格挡 / 回血），寿命归零就消散。敌人血条下面那排小字就是它们的剩余回合数。');
   G.summons.push(o); return o; }
 /* 五通神「回合开始」效果（现形当回合立即结算一次，之后每个回合开始再触发；寿命 -1） */
 function wutongTick(s){

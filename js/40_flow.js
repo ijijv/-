@@ -89,12 +89,12 @@ function advanceAct(){
   if(G.act>=ACTS.length){ showVictory(); return; }
   G.act++;
   MAP=ACTS[G.act-1];
-  G.mapRow=0; G.mapCol=-1; G.shopWares=null;
+  G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
   showOverlay(`<h2>第 ${G.act} 幕 · ${ACT_NAMES[G.act-1]}</h2><p>更凶的妖魔盘踞在更高层。<br>敌人的生命与攻击都变强了。</p><button class="btn" onclick="hideOverlay(); showMap();">开始攀登</button>`);
 }
 function nextEndlessLap(){
   MAP=genEndlessMap();
-  G.mapRow=0; G.mapCol=-1; G.shopWares=null;
+  G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
   showOverlay(`<h2>第 ${G.endlessFloor} 层 · 镇妖塔</h2><p>塔身继续向上延伸，妖魔愈发凶戾。<br>敌人属性与词缀随层数继续攀升。</p><button class="btn" onclick="hideOverlay(); showMap();">继续攀登</button>`);
 }
 function calcScore(){
@@ -184,7 +184,7 @@ function saveRun(scene){
   const s=scene || SCENE || 'map';
   const data={
     v:2, scene:s,
-    act:G.act, mapRow:G.mapRow, mapCol:G.mapCol,
+    act:G.act, mapRow:G.mapRow, mapCol:G.mapCol, mapPath:(G.mapPath||[]).slice(),
     hero:G.hero, hp:G.hp, maxHp:G.maxHp, gold:G.gold, energy:G.energy, block:G.block,
     deck:G.deck.map(cardSnap), hand:G.hand.map(cardSnap), drawPile:G.drawPile.map(cardSnap), discard:G.discard.map(cardSnap),
     enemies:G.enemies.map(serializeEnemy), target:G.target, turn:G.turn, battleStartHp:G.battleStartHp,
@@ -216,7 +216,7 @@ function continueRun(){
   if(!d){ floatMsg('没有可继续的进度'); return; }
   G=newState();
   rngRestore(d.rng);          // v0.61.06：先恢复随机态，再重放后续判定
-  G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.hero=d.hero; G.hp=d.hp; G.maxHp=d.maxHp; G.gold=d.gold;
+  G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.mapPath=Array.isArray(d.mapPath)?d.mapPath:[]; G.hero=d.hero; // 老存档没 mapPath → 空数组，连线退化成只有「可达」 G.hp=d.hp; G.maxHp=d.maxHp; G.gold=d.gold;
   G.energy=d.energy!=null?d.energy:3; G.block=d.block||0;
   MAP=ACTS[G.act-1];
   G.deck=(d.deck||[]).map(cardRestore);
