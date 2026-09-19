@@ -84,10 +84,15 @@ def main():
 
     # ---- 3. 内联处理器依赖的全局名在混淆后仍存在 ----
     print('\n[3] 内联 onclick 全局名存活')
+    # 处理器名从**产物**里抓（真正会被浏览器调用的那批）；
+    # 顶层声明从**拆分后的 js/*.js 源码**里抓 —— 自 v0.61.05 起 原型.html 已无内联脚本体
+    # （只有 <script src="js/xx.js">），旧的 re.search('<script>…</script>', src) 必然返回 None。
     names = set()
-    for attr in re.findall(r'\son[a-z]+\s*=\s*"([^"]*)"', src):
+    for attr in re.findall(r'\son[a-z]+\s*=\s*"([^"]*)"', html):
         names |= set(re.findall(r'[A-Za-z_$][\w$]*', attr))
-    js_src = re.search(r'<script>([\s\S]*?)</script>', src).group(1)
+    _jsdir = os.path.join(ROOT, 'js')
+    js_src = '\n'.join(io.open(os.path.join(_jsdir, f), 'r', encoding='utf-8').read()
+                       for f in sorted(os.listdir(_jsdir)) if f.endswith('.js'))
     top = set(re.findall(r'^function\s+([A-Za-z_$][\w$]*)', js_src, re.M))
     top |= set(re.findall(r'^(?:var|let|const)\s+([A-Za-z_$][\w$]*)', js_src, re.M))
     need = sorted(names & top)
