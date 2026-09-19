@@ -54,8 +54,12 @@ global.requestAnimationFrame = (fn)=>setTimeout(fn,0);
 global.Image = function(){ return makeEl('img'); };
 
 const html = fs.readFileSync('原型.html','utf8');
-const m = html.match(/<script>([\s\S]*?)<\/script>/);
-let js = m[1];
+// v0.61.05：源码已拆成 js/*.js —— 按文档顺序把各 <script src> 合回一段（同 _patch/smoke_host.js）
+let js = '';
+for (const mm of html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
+  const src = /\bsrc\s*=\s*"([^"]+)"/i.exec(mm[1] || '');
+  js += (src ? fs.readFileSync(src[1], 'utf8') : mm[2]) + '\n';
+}
 // 暴露脚本作用域内的关键符号供测试驱动
 js += '\n;globalThis.__G=()=>G; globalThis.__HEROES=HEROES; globalThis.__ENEMIES=ENEMIES;'
    + ' globalThis.__render=render; globalThis.__startBattle=startBattle;'

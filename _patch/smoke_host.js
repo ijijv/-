@@ -8,11 +8,31 @@ const path = require('path');
 // 默认跑开发源 原型.html；传入路径则跑该文件（用于验证单文件打包产物）
 const P = path.resolve(process.argv[2] || path.join(__dirname, '..', '原型.html'));
 const html = fs.readFileSync(P, 'utf8');
-const m = html.match(/<script>([\s\S]*?)<\/script>/);
-if (!m) { console.error('FAIL: 找不到 <script>'); process.exit(2); }
+
+/**
+ * 按文档顺序把页面里的脚本拼成一段（v0.61.05 三层重构后）：
+ *   开发源 原型.html   → <script src="js/xx.js"> 依次读取相对该 HTML 的文件
+ *   单文件打包产物     → 内联 <script>（打包.py 已把 js/* 合回去）
+ * 两者共用同一条路径，冒烟对源码与产物都能跑。
+ */
+function collectScripts(html, baseDir) {
+  const out = [];
+  const re = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    const attrs = m[1] || '';
+    const src = /\bsrc\s*=\s*"([^"]+)"/i.exec(attrs);
+    if (src) out.push(fs.readFileSync(path.resolve(baseDir, src[1]), 'utf8'));
+    else out.push(m[2]);
+  }
+  return out.join('\n');
+}
+
+const code_in = collectScripts(html, path.dirname(P));
+if (!code_in.trim()) { console.error('FAIL: 页面里没有任何 <script>'); process.exit(2); }
 const runner = fs.readFileSync(path.join(__dirname, 'smoke_runner.js'), 'utf8');
-// 注意：runner 追加进 <script> 正文之后，与 CARDS/G/CURSE_THIS_TURN 同一声明作用域
-const code = m[1] + '\n/* ===== VM SMOKE RUNNER (appended) ===== */\n' + runner;
+// 注意：runner 追加进全部脚本之后，与 CARDS/G/CURSE_THIS_TURN 同一声明作用域
+const code = code_in + '\n/* ===== VM SMOKE RUNNER (appended) ===== */\n' + runner;
 
 function dummyEl() {
   const classList = {

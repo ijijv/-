@@ -116,7 +116,7 @@ def card_section(c, idx, prefix):
 L = []
 L.append('# 志怪塔 · 卡牌机制与数值总表（从代码 v0.47 导出）')
 L.append('')
-L.append('> 本文件由脚本从 `原型.html` 的 `CARDS`/`HEROES` 数组自动导出，是玩家可读的「成品效果文案」。')
+L.append('> 本文件由脚本从 `js/20_data.js` 的 `CARDS`/`HEROES` 数组自动导出，是玩家可读的「成品效果文案」。')
 L.append('> 你直接改本表里的数值/效果后发给我，我按新表回改代码即可。改完我会重新导出覆盖本文件，保持基线同步。')
 L.append('> 生成时间：2026-09-05。共 %d 张卡（另有「怨气」废牌由运行时生成，不在此表）。' % len(cards))
 L.append('')
@@ -174,9 +174,9 @@ L.append('- **需前置机制才出现的牌**（`needs`）：噬魂术(诅咒�
 L.append('- 铁布衫/噬魂术/群鬼乱舞/桃木符/嗜血/百鬼夜行 的伤害是**动态值**（受当前格挡/诅咒/召唤数/失血影响），文案里给的是示例。')
 L.append('- 每张卡的实际结算逻辑在 `eff:` 里（可能与文案细节有出入，改数值时两处要一起动）。')
 L.append('')
-L.append('## 附二：卡牌源码行号（原型.html，快速定位）')
+L.append('## 附二：卡牌源码行号（js/20_data.js，快速定位）')
 L.append('')
-src_lines = open('原型.html', encoding='utf-8').read().split('\n')
+src_lines = open('js/20_data.js', encoding='utf-8').read().split('\n')
 id_map = {}
 for ln, text in enumerate(src_lines, 1):
     m = re.search(r"\{id:'([a-z_0-9]+)'", text)

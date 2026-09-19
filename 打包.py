@@ -9,8 +9,8 @@
 它做了什么:
   1. 素材图片 PNG → WebP（有损压缩，默认质量 78），体积约降 60~75%
   2. 图片 / 音乐 全部 base64 内联成 data URI，写进源码的 ASSET_MAP
-  3. 只保留 原型.html 里的 <script> 正文，经 javascript-obfuscator 压缩混淆
-     （renameGlobals=false，保住内联 onclick="xxx()" 依赖的全局函数名）
+  3. 把 原型.html 里的 <script src="js/*.js"> 按文档顺序合回一段正文，
+     经 javascript-obfuscator 压缩混淆（renameGlobals=false，保住内联 onclick 依赖的全局函数名）
   4. 不含 .git / _patch / _build / memory-bank / 立项文档 / 数值表 —— 只有游戏本体
 
 用法:
@@ -131,11 +131,24 @@ def main():
     print('素材 %d 个（图 %d / 音 %d）: %s → %s'
           % (len(amap), stat['n_img'], stat['n_aud'], human(stat['in']), human(stat['out'])))
 
-    # ---- 2. 拆出 <script> ----
-    m = re.search(r'<script>([\s\S]*?)</script>', html)
-    if not m:
+    # ---- 2. 收集脚本（v0.61.05：源码已拆成 js/*.js，按文档顺序合回单文件） ----
+    #     开发源：<script src="js/xx.js">；产物：内联 <script>（两者共用这一条路径）
+    pieces, spans = [], []
+    for mm in re.finditer(r'<script(\s[^>]*)?>([\s\S]*?)</script>', html, re.I):
+        attrs = mm.group(1) or ''
+        src = re.search(r'\bsrc\s*=\s*"([^"]+)"', attrs, re.I)
+        if src:
+            fp = os.path.join(ROOT, src.group(1).replace('/', os.sep))
+            if not os.path.exists(fp):
+                print('FAIL: 找不到脚本 %s' % fp); sys.exit(1)
+            pieces.append(io.open(fp, 'r', encoding='utf-8', newline='').read())
+        else:
+            pieces.append(mm.group(2))
+        spans.append((mm.start(), mm.end()))
+    if not spans:
         print('FAIL: 找不到 <script>'); sys.exit(1)
-    js = m.group(1)
+    js = '\n'.join(pieces)
+    print('脚本 %d 段 → %s' % (len(pieces), human(len(js.encode('utf-8')))))
 
     # ASSET_MAP 改由构建期注入到同一 <script> 开头，所以把源码里的 null 声明摘掉
     stub = 'var ASSET_MAP = null;'
@@ -172,9 +185,9 @@ def main():
     # </script> 出现在 JS 里会提前闭合标签；转义成 <\/script>（JS 字符串语义等价）
     js_out = js_out.replace('</script>', '<\\/script>')
 
-    # ---- 4. 拼装 ----
+    # ---- 4. 拼装（用首段 <script> 的起点到末段 </script> 的终点替换掉全部脚本标签） ----
     prefix = 'var ASSET_MAP=' + json.dumps(amap, ensure_ascii=False, separators=(',', ':')) + ';\n'
-    html_out = html[:m.start()] + '<script>\n' + prefix + js_out + '\n</script>' + html[m.end():]
+    html_out = html[:spans[0][0]] + '<script>\n' + prefix + js_out + '\n</script>' + html[spans[-1][1]:]
 
     # 静态 HTML 里写死的图标（不在 JS 里，走不了 assetURL）
     rune = amap.get('rune.png')
@@ -190,7 +203,8 @@ def main():
             leaks.append(pat)
     if leaks:
         print('!! 隐私自检命中可疑字符串: %s' % leaks)
-        print('   （ASSET_MAP 里的 data URI 不含路径；若确实误报请人工确认后再发）')
+        print('   （ASSET_MAP 里的 data URI 不含路径；横幅注释里也别写仓库内部路径，'
+              '否则每打一次都误报）')
 
     if not os.path.isdir(OUTD):
         os.makedirs(OUTD)
