@@ -6,8 +6,60 @@
  * 拼接校验：本文件组去掉各自横幅后，应与切分前的内联脚本正文逐字节一致。
  * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
  * ============================================================================ */
+/* ===================== 基础设施：存储 / 随机 / 广告位 =====================
+ * v0.61.06 收口。三处都是给 Cocos 正式工程预留的**唯一接缝**，
+ * HTML 原型的行为与旧版一致（键名、随机分布、奖励内容都没变）。
+ * ========================================================================= */
+
+/* 存储 —— 所有 localStorage 读写都走这里。微信/Cocos 阶段只换这一个对象 */
+const Store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} },
+  getJSON(k){ const r=Store.get(k); if(r==null) return null; try{ return JSON.parse(r); }catch(e){ return null; } },
+  setJSON(k,o){ return Store.set(k, JSON.stringify(o)); }
+};
+
+/* 随机 —— 可播种（mulberry32）。开局定种子并随存档落盘，
+ * 用来复现玩家报障、以及批2 战斗仿真器的同种子对比。
+ * 想复现某一局：在地址后加 ?seed=数字 即可。 */
+let _rngSeed = 1, _rngCalls = 0;
+function seedRng(seed){ _rngSeed=(seed>>>0)||1; _rngCalls=0; }
+function rngSeedNow(){
+  const q=(typeof location!=='undefined' && location.search)? /[?&]seed=(\d+)/.exec(location.search) : null;
+  if(q) return (+q[1])>>>0;                 // ?seed=123 → 同一副牌序、同一批奖励
+  return (Date.now() ^ Math.floor(Math.random()*0x100000000))>>>0;   // 这里用真随机取种子
+}
+function rng(){
+  _rngSeed = (_rngSeed + 0x6D2B79F5) >>> 0;
+  let t = _rngSeed;
+  t = Math.imul(t ^ (t>>>15), t | 1);
+  t = (t + Math.imul(t ^ (t>>>7), t | 61)) ^ t;
+  _rngCalls++;
+  return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+}
+function rngInt(n){ return Math.floor(rng()*n); }
+function rngSnapshot(){ return { s:_rngSeed, n:_rngCalls }; }
+function rngRestore(snap){
+  if(snap && typeof snap.s==='number' && snap.s){ _rngSeed=snap.s>>>0; _rngCalls=snap.n||0; return true; }
+  seedRng(rngSeedNow()); return false;      // 旧存档没有随机态：退回新种子（只是不再可复现）
+}
+
+/* 广告位 —— 4 个激励点位的唯一入口。HTML 原型直接放行并记埋点；
+ * Cocos 版把 request 内部换成 wx.createRewardedVideoAd(id) 即可，调用点不用动。 */
+const AD_SLOTS = ['奖励翻倍','复活','签到翻倍','开局重随'];
+const AdSlot = {
+  request(id, onReward){
+    if(AD_SLOTS.indexOf(id)<0) log(`【广告位】未登记的槽位「${id}」，请同步 AD_SLOTS`);
+    log(`【广告占位·${id}】模拟观看成功，发放奖励（正式版接抖音/微信激励视频 SDK）`);
+    floatMsg('广告 · 已观看');
+    track('ad'); track('ad_'+id);
+    if(typeof onReward==='function') onReward();
+  }
+};
+
 /* ===================== 工具 ===================== */
-function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=rngInt(i+1); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function log(msg){ if(!G) return; G.log.push(msg); if(G.log.length>800) G.log.shift(); }
 
 /* ===================== 飘字提示（debuff 视觉反馈） ===================== */

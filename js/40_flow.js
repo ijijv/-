@@ -202,17 +202,19 @@ function saveRun(scene){
     shopPotions:G.shopPotions?G.shopPotions.map(potionSnap):null,
     campRemoved:!!G.campRemoved, campActed:!!G.campActed,
     wangyouTurns:G.wangyouTurns||0, wangyouDrunk:G.wangyouDrunk||0,
-    log:G.log||[]
+    log:G.log||[],
+    rng:rngSnapshot()            // v0.61.06：随机态随存档落盘，续档后牌序/掉落可复现
   };
-  try{ localStorage.setItem(RUN_KEY, JSON.stringify(data)); }catch(e){}
+  try{ Store.setJSON(RUN_KEY, data); }catch(e){}
 }
-function hasRunSave(){ try{ return !!localStorage.getItem(RUN_KEY); }catch(e){ return false; } }
-function readRun(){ try{ return JSON.parse(localStorage.getItem(RUN_KEY)); }catch(e){ return null; } }
-function clearRunSave(){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} }
+function hasRunSave(){ try{ return !!Store.get(RUN_KEY); }catch(e){ return false; } }
+function readRun(){ try{ return Store.getJSON(RUN_KEY); }catch(e){ return null; } }
+function clearRunSave(){ try{ Store.del(RUN_KEY); }catch(e){} }
 function continueRun(){
-  let d; try{ d=JSON.parse(localStorage.getItem(RUN_KEY)); }catch(e){}
+  let d; try{ d=Store.getJSON(RUN_KEY); }catch(e){}
   if(!d){ floatMsg('没有可继续的进度'); return; }
   G=newState();
+  rngRestore(d.rng);          // v0.61.06：先恢复随机态，再重放后续判定
   G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.hero=d.hero; G.hp=d.hp; G.maxHp=d.maxHp; G.gold=d.gold;
   G.energy=d.energy!=null?d.energy:3; G.block=d.block||0;
   MAP=ACTS[G.act-1];

@@ -14,6 +14,13 @@ _test_out/
 _patch/tmp/
 _patch/smoke_result.json
 smoke_result.json
+# 冒烟/浏览器的运行产物（每次跑都会变，不该进版本库；脚本本身照常进）
+_patch/_sm.json
+_patch/_sm_dist.json
+_patch/_sm.err
+_patch/_smoke_out.json
+_patch/_dom.html
+_patch/_dom.err
 
 # ===== 打包产物 / 依赖 =====
 # dist/ 是 打包.py 的产物，可随时重新生成，不进版本库（发给朋友的也是它）

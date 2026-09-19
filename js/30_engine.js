@@ -40,7 +40,7 @@ function curEnemy(){
   if(G.target>=0 && G.target<G.enemies.length && G.enemies[G.target].hp>0) return G.enemies[G.target];
   return al[0];
 }
-function randomAlive(){ const a=aliveEnemies(); return a.length? a[Math.floor(Math.random()*a.length)] : null; }
+function randomAlive(){ const a=aliveEnemies(); return a.length? a[Math.floor(rng()*a.length)] : null; }
 function selectTarget(i){ if(TUT && TUT.step===2) advanceTut(); G.target=i; render(); document.querySelectorAll('#hand .dmg-buff,#hand .dmg-nerf,#hand .dmg-plain,#hand .dmg-miss').forEach(el=>{ el.classList.remove('dmg-flash'); void el.offsetWidth; el.classList.add('dmg-flash'); }); }
 
 /* ===================== 战斗函数 ===================== */
@@ -328,10 +328,10 @@ function gainBlock(n){
   if(n>0){ G.blockGainedTurn=(G.blockGainedTurn||0)+n; sfx('block'); floatDamage('+'+n, 'block', document.querySelector('#player-panel .hpbar')); }
 }
 function heal(n){ G.hp=Math.min(G.maxHp, G.hp+n); sfx('heal'); const bar=document.querySelector('#player-panel .hpbar'); floatDamage('+'+n, 'heal', bar); }
-function discardRandomHand(){ if(!G.hand.length) return null; const i=Math.floor(Math.random()*G.hand.length); const c=G.hand.splice(i,1)[0]; if(c.type!=='junk') G.discard.push(c); log(`弃掉【${c.name}】`); return c; }
+function discardRandomHand(){ if(!G.hand.length) return null; const i=Math.floor(rng()*G.hand.length); const c=G.hand.splice(i,1)[0]; if(c.type!=='junk') G.discard.push(c); log(`弃掉【${c.name}】`); return c; }
 function enemyRandomDiscard(){
   if(!G.hand.length){ log('缠绕生效，但你已无手牌可弃'); return; }
-  const i=Math.floor(Math.random()*G.hand.length);
+  const i=Math.floor(rng()*G.hand.length);
   const c=G.hand.splice(i,1)[0];
   if(c.type!=='junk') G.discard.push(c);
   floatMsg(`被弃掉：${c.name}`); sfx('card');
@@ -841,7 +841,7 @@ function enemyAct(){
       case 'summon': { const uk=e.intent.unit||'xiaojianshi'; const un=ENEMIES[uk].name; let added=0; for(let i=0;i<e.intent.n;i++){ if(G.enemies.length>=5) break; G.enemies.push(makeEnemy(ENEMIES[uk], uk)); added++; } log(`${e.name} 召唤了 ${added} 只${un}`); break; }
       case 'aoe': { dealDamageToPlayer(e.intent.v,e); if(G.summons.length){ G.summons.shift(); log(`${e.name} 的幽冥之气驱散了一个召唤单位`); } break; }
       case 'burn': if(!G.debuffImmune){ G.burn=(G.burn||0)+e.intent.v; floatMsg(`灼烧 +${e.intent.v}`); log(`${e.name} 对你施加灼烧（每回合 -${e.intent.v*2} 生命，可叠加）`); } else log(`佛渡免疫了${e.name}的【灼烧】`); break;
-      case 'jiming': { e.ledgerActive=true; e.ledgerDmg=0; const avail=AFFIXES.filter(a=>!(e.affixes||[]).some(x=>x.id===a.id)); if(avail.length){ const a=avail[Math.floor(Math.random()*avail.length)]; e.ledgerAffix={id:a.id, tier:1}; log(`${e.name} 记下你的名字，并记下一条罪状【${a.name}】`); } else { e.ledgerAffix=null; log(`${e.name} 记下你的名字（罪状已记满）`); } floatMsg('生死簿 · 记名'); break; }
+      case 'jiming': { e.ledgerActive=true; e.ledgerDmg=0; const avail=AFFIXES.filter(a=>!(e.affixes||[]).some(x=>x.id===a.id)); if(avail.length){ const a=avail[Math.floor(rng()*avail.length)]; e.ledgerAffix={id:a.id, tier:1}; log(`${e.name} 记下你的名字，并记下一条罪状【${a.name}】`); } else { e.ledgerAffix=null; log(`${e.name} 记下你的名字（罪状已记满）`); } floatMsg('生死簿 · 记名'); break; }
       case 'qingsuan': { const ledger=e.ledgerDmg||0; const dmg=Math.min(24, Math.floor(ledger*0.3)); if(e.ledgerAffix){ const a=AFFIXES.find(x=>x.id===e.ledgerAffix.id); if(a){ if(!e.affixes) e.affixes=[]; e.affixes.push({id:a.id, tier:1}); if(a.id==='pingbi'){ e.block+=8; e.pingbi=(e.pingbi||0)+8; } log(`${e.name} 清算：【${a.name}】生效——${a.desc}`); } } e.ledgerActive=false; e.ledgerDmg=0; e.ledgerAffix=null; if(dmg>0){ floatMsg('生死簿 · 清算'); const dead=directDamage(dmg, `${e.name} 清算生死簿：反弹 ${dmg} 点伤害`); if(dead) return; /* v0.61 B10：判负已在 directDamage→loseGame 幂等收口，棋盘停格属正常终局，不再续跑其余敌人 */ } else log(`${e.name} 翻开生死簿：无账可清`); break; }
       case 'yehuo': if(!G.debuffImmune){ G.karmaFire=2; floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害 -30%，每次造成伤害反噬 1 点生命，它受到的诅咒层数翻倍`); } else log(`佛渡免疫了${e.name}的【业火】`); break;
       case 'wangyou': G.wangyouTurns=2; G.wangyouDrunk=0; floatMsg('忘忧 · 两回合'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合开始时可选 1 张手牌「饮下」弃置，否则受 8 点真实伤害`); break;

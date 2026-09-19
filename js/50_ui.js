@@ -59,8 +59,8 @@ function chooseNode(c){
   else if(node.t==='shop') showShop();
   else if(node.t==='unknown') showUnknown();
   else if(node.t==='boss'){
-    if(G.endless){ startBattle([ENDLESS_BOSSES[Math.floor(Math.random()*ENDLESS_BOSSES.length)]]); }
-    else { const pool=BOSS_POOL[G.act]||['yewang']; startBattle([pool[Math.floor(Math.random()*pool.length)]]); }
+    if(G.endless){ startBattle([ENDLESS_BOSSES[Math.floor(rng()*ENDLESS_BOSSES.length)]]); }
+    else { const pool=BOSS_POOL[G.act]||['yewang']; startBattle([pool[Math.floor(rng()*pool.length)]]); }
   }
 }
 const ELITES_BY_ACT = { 1:['baiwuchang','heiwuchang','huapigui','yecha'], 2:['juhunshi','niumamian'], 3:['xiuluojiang','yecha'] };
@@ -115,7 +115,7 @@ function unknownBlackMarket(){
 }
 function unknownTemple(){
   // 无头古庙：随机赐福（恢复生命 / 最大生命 / 金币 / 卡牌）
-  const roll=Math.floor(Math.random()*4);
+  const roll=Math.floor(rng()*4);
   let msg='';
   if(roll===0){ const h=15; G.hp=Math.min(G.maxHp,G.hp+h); msg=`恢复 ${h} 点生命`; sfx('heal'); }
   else if(roll===1){ G.maxHp+=5; G.hp=Math.min(G.maxHp,G.hp+5); msg='最大生命 +5（并恢复 5 点生命）'; sfx('heal'); }
@@ -126,7 +126,7 @@ function unknownTemple(){
 }
 function unknownAmbush(){
   const pool=ELITES_BY_ACT[G.act]||['yecha'];
-  const key=pool[Math.floor(Math.random()*pool.length)];
+  const key=pool[Math.floor(rng()*pool.length)];
   showOverlay(`<h2>拦路恶鬼</h2><p>黑影从暗处扑出——是 <b>${ENEMIES[key].name}</b>！</p><button class="btn" onclick="hideOverlay(); startBattle(['${key}']);">迎战</button>`);
 }
 function unknownForge(){
@@ -154,7 +154,7 @@ function weightedCard(){
     // 优先从角色专属池中筛选对应稀有度的卡牌
     const pool=heroSpecificPool.filter(c=>c.rarity===rarity);
     if(pool.length) {
-      const card = cardById(pool[Math.floor(Math.random()*pool.length)].id);
+      const card = cardById(pool[Math.floor(rng()*pool.length)].id);
       return card;
     }
   }
@@ -162,11 +162,11 @@ function weightedCard(){
   // 如果角色专属池中没有合适的卡牌，则从全池中选择
   const fallbackPool=poolAll.filter(c=>c.rarity===rollCardRarity(tier));
   if(fallbackPool.length) {
-    return cardById(fallbackPool[Math.floor(Math.random()*fallbackPool.length)].id);
+    return cardById(fallbackPool[Math.floor(rng()*fallbackPool.length)].id);
   }
 
   // 如果6次尝试都没有找到合适稀有度的卡牌，使用备选方案
-  return cardById(poolAll[Math.floor(Math.random()*poolAll.length)].id);
+  return cardById(poolAll[Math.floor(rng()*poolAll.length)].id);
 }
 
 /**
@@ -312,11 +312,11 @@ function weightedRelic(){
   const avail=RELICS.filter(r=>!hasRelic(r.id));
   const pool=avail.length? avail : RELICS;
   for(let attempt=0; attempt<6; attempt++){
-    const r=Math.random()*100; const rarity=r<55?'white':r<85?'blue':r<97?'purple':'gold';
+    const r=rng()*100; const rarity=r<55?'white':r<85?'blue':r<97?'purple':'gold';
     const p=pool.filter(x=>x.rarity===rarity);
-    if(p.length) return p[Math.floor(Math.random()*p.length)];
+    if(p.length) return p[Math.floor(rng()*p.length)];
   }
-  return pool[Math.floor(Math.random()*pool.length)];
+  return pool[Math.floor(rng()*pool.length)];
 }
 function showRelicReward(){
   const unowned = RELICS.filter(r=>!hasRelic(r.id));
@@ -501,11 +501,11 @@ const STORIES = {
 const SAVE_KEY = 'zhiguaitower_save_v1';
 let SAVE = { unlocked:[] };
 function loadSave(){
-  try{ const raw=localStorage.getItem(SAVE_KEY); if(raw){ const d=JSON.parse(raw); if(d && Array.isArray(d.unlocked)) SAVE=d; } }
+  try{ const d=Store.getJSON(SAVE_KEY); if(d && Array.isArray(d.unlocked)) SAVE=d; }
   catch(e){ SAVE={unlocked:[]}; }
 }
 function persistSave(){
-  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){}
+  try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
 }
 function unlockBestiary(key){
   if(!key || !ENEMIES[key]) return;
@@ -606,12 +606,7 @@ function weekKey(){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function signedToday(){ return SAVE.lastSignIn===todayStr(); }
-function adPlaceholder(name, reward){
-  log(`【广告占位·${name}】模拟观看成功，发放奖励（正式版接抖音/微信激励视频 SDK）`);
-  floatMsg('广告 · 已观看');
-  track('ad'); track('ad_'+name);
-  reward();
-}
+function adPlaceholder(name, reward){ AdSlot.request(name, reward); } // v0.61.06：转发到统一入口
 function doSignIn(){
   if(signedToday()){ floatMsg('今日已签到'); return; }
   const y=new Date(); y.setDate(y.getDate()-1);

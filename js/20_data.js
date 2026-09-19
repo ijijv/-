@@ -477,7 +477,7 @@ const CARDS = [
     eff:(u)=>{ if(G.hero==='ganshiren'){ const q=G.尸气||0; if(q<=0){ floatMsg('没有尸气可引爆'); log('咒雨：没有尸气可引爆'); return; }
         G.尸气=0; const total=q*(u?7:6); const al=aliveEnemies(); if(!al.length) return;
         const dist=al.map(()=>0);
-        for(let i=0;i<total;i++){ dist[Math.floor(Math.random()*al.length)]++; }
+        for(let i=0;i<total;i++){ dist[Math.floor(rng()*al.length)]++; }
         al.forEach((e,i)=>{ if(dist[i]>0) dealDamageTo(e,dist[i]); });
         log(`咒雨：引爆 ${q} 点【尸气】，造成 ${total} 点伤害随机分配`); floatMsg(`咒雨 · 引爆 ${q} 尸气`); return; }
       if(G.hero==='tianshi'){ aliveEnemies().forEach(e=>applyCurse(e,1)); return; }
@@ -610,8 +610,8 @@ function preBlockNextTurn(){
 }
 function summonTarget(preferCursed){
   const al=aliveEnemies(); if(!al.length) return null;
-  if(preferCursed){ const cu=al.filter(e=>(e.curse||0)>0); if(cu.length) return cu[Math.floor(Math.random()*cu.length)]; }
-  return al[Math.floor(Math.random()*al.length)];
+  if(preferCursed){ const cu=al.filter(e=>(e.curse||0)>0); if(cu.length) return cu[Math.floor(rng()*cu.length)]; }
+  return al[Math.floor(rng()*al.length)];
 }
 /* —— 镇魂（含“此前已被镇魂”永久标记） —— */
 function wasSealedBefore(e){ return !!(e && (e.seal || e.sealedEver)); }
@@ -667,7 +667,7 @@ const POTIONS = [
   {id:'zhenhunshui', name:'镇魂水', desc:'获得 10 点格挡', eff:()=>gainBlock(10)},
   {id:'mengpotang', name:'孟婆汤', desc:'抽 2 张牌', eff:()=>drawCards(2)},
 ];
-function randomPotion(){ const p=POTIONS[Math.floor(Math.random()*POTIONS.length)]; return {...p}; }
+function randomPotion(){ const p=POTIONS[Math.floor(rng()*POTIONS.length)]; return {...p}; }
 function potionSummary(){
   const m={};
   G.potions.forEach(p=>{ m[p.name]=(m[p.name]||0)+1; });
@@ -875,7 +875,7 @@ function makeEnemy(def, key){
   const intents2 = def.intents2 ? def.intents2.map(scaleAtk) : null;
   const e = {key:key, name:def.name, hp, maxHp:hp, block:0, pingbi:0, intents, intentIndex:0, intent:{type:'dormant'}, pendingDamage:0, curse:0, charm:0, charmPct:0.5, charmUsed:false, sealedEver:false, seal:false, strength:0, kind:def.kind, elite:!!def.elite, boss:!!def.boss, aggressive:!!def.aggressive, lifesteal:def.lifesteal||0, phase:!!def.phase, phase2:false, intents2, ledgerActive:false, ledgerDmg:0, ledgerAffix:null, split:!!def.split, splitDone:false, sealedCost:0, uid:UID++};
   e.affixes = rollAffixes(def);
-  if(def.bossAffix && !e.affixes.length){ const a=AFFIXES[Math.floor(Math.random()*AFFIXES.length)]; e.affixes=[{id:a.id, tier:1}]; }
+  if(def.bossAffix && !e.affixes.length){ const a=AFFIXES[Math.floor(rng()*AFFIXES.length)]; e.affixes=[{id:a.id, tier:1}]; }
   if(e.affixes.length){ const pb=e.affixes.find(a=>a.id==='pingbi'); if(pb){ e.block=8*pb.tier; e.pingbi=8*pb.tier; } }
   return e;
 }
@@ -934,8 +934,8 @@ const ENDLESS_BOSSES = ['jiangwang','hanba','xueshi','xiebian','panguanwang','me
 const ENDLESS_GROWTH = 0.06; // 每爬 1 层，敌人生命/攻击 +6%
 function randEndlessFight(){
   // 15% 概率刷精英（单个），否则 2~3 个小怪；词缀由 rollAffixes 按层数叠加
-  if(Math.random()<0.15) return [ENDLESS_ELITES[Math.floor(Math.random()*ENDLESS_ELITES.length)]];
-  const n = Math.random()<0.5 ? 2 : 3;
+  if(rng()<0.15) return [ENDLESS_ELITES[Math.floor(rng()*ENDLESS_ELITES.length)]];
+  const n = rng()<0.5 ? 2 : 3;
   return shuffle(ENDLESS_MINIONS.slice()).slice(0,n);
 }
 function genEndlessMap(){
@@ -1026,7 +1026,7 @@ function rollCardRarity(tier) {
   }
 
   // 生成随机数
-  const rand = Math.random();
+  const rand = rng();
 
   if (rand <= whiteProb) {
     return 'white';

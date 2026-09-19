@@ -8,8 +8,8 @@
  * ============================================================================ */
 /* ===================== 音效（Web Audio，无外部资源） ===================== */
 let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1, lowSpec:false };
-function loadSettings(){ try{ const r=localStorage.getItem('zhiguaitower_settings_v1'); if(r) SETTINGS=Object.assign(SETTINGS, JSON.parse(r)); }catch(e){} }
-function persistSettings(){ try{ localStorage.setItem('zhiguaitower_settings_v1', JSON.stringify(SETTINGS)); }catch(e){} }
+function loadSettings(){ try{ const r=Store.getJSON('zhiguaitower_settings_v1'); if(r) SETTINGS=Object.assign(SETTINGS, r); }catch(e){} }
+function persistSettings(){ try{ Store.setJSON('zhiguaitower_settings_v1', SETTINGS); }catch(e){} }
 function fx(){ return !SETTINGS.lowSpec; }   // 流畅模式：关闭震屏/抖动/飘字等重特效
 function applyLowSpec(){ document.body.classList.toggle('low-spec', !!SETTINGS.lowSpec); }
 let AC=null, NOISE=null;

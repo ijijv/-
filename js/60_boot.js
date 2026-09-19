@@ -233,6 +233,7 @@ function confirmNewGame(){
     const d=readRun();
     if(d){ submitScore(d.score||0, d.act); clearRunSave(); }
     G=newState(); G.mapRow=0;
+    seedRng(rngSeedNow());      // v0.61.06：本局种子（可用 ?seed=N 复现）
     track('runStart');
     if(SAVE.signInBonus>0){ G.gold=SAVE.signInBonus; SAVE.signInBonus=0; persistSave(); log('开局携带签到奖励 '+G.gold+' 金币'); }
     showHeroSelect();
@@ -241,6 +242,7 @@ function confirmNewGame(){
 function startEndless(){
   ensureAudio();
   G=newState();
+  seedRng(rngSeedNow());      // v0.61.06：本局种子
   G.endless=true; G.endlessFloor=0; G.act=4;
   MAP=genEndlessMap();
   G.mapRow=0; G.mapCol=-1;
@@ -296,7 +298,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.61.05</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.61.06</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -362,8 +364,8 @@ function toggleLowSpec(){
   SETTINGS.lowSpec=!SETTINGS.lowSpec; persistSettings(); applyLowSpec(); showSettings();
 }
 /* ===================== 新手引导 ===================== */
-function tutorialSeen(){ try{ return localStorage.getItem('zhiguaitower_tutorial_v1')==='1'; }catch(e){ return false; } }
-function markTutorialSeen(){ try{ localStorage.setItem('zhiguaitower_tutorial_v1','1'); }catch(e){} }
+function tutorialSeen(){ try{ return Store.get('zhiguaitower_tutorial_v1')==='1'; }catch(e){ return false; } }
+function markTutorialSeen(){ try{ Store.set('zhiguaitower_tutorial_v1','1'); }catch(e){} }
 /* —— 交互式新手引导（强制分步：出牌→切换目标→结束回合） —— */
 let TUT=null;
 function startGuidedTutorial(){ TUT={step:1}; renderTutHint(); }
