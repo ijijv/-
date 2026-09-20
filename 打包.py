@@ -128,8 +128,11 @@ def main():
         else:
             print('  跳过非素材文件: %s' % rel)
 
-    print('素材 %d 个（图 %d / 音 %d）: %s → %s'
-          % (len(amap), stat['n_img'], stat['n_aud'], human(stat['in']), human(stat['out'])))
+    _sfx = sorted(k for k in amap if k.startswith('sfx/'))
+    _sfxsz = sum(os.path.getsize(os.path.join(ASSD, k.replace('/', os.sep))) for k in _sfx)
+    print('素材 %d 个（图 %d / 音 %d，含音效 sfx/ %d 个 %.0f KB）: %s → %s'
+          % (len(amap), stat['n_img'], stat['n_aud'], len(_sfx), _sfxsz / 1024.0,
+             human(stat['in']), human(stat['out'])))
 
     # ---- 2. 收集脚本（v0.61.05：源码已拆成 js/*.js，按文档顺序合回单文件） ----
     #     开发源：<script src="js/xx.js">；产物：内联 <script>（两者共用这一条路径）

@@ -33,7 +33,8 @@ def dump_ids():
     # 注意：smoke_host 会对求值结果自己做 JSON.stringify，所以这里给对象表达式即可
     js = ("({cards:CARDS.map(c=>c.id),heroes:HEROES.map(h=>h.id),"
           "relics:RELICS.map(r=>r.id),enemies:Object.keys(ENEMIES),"
-          "bg:['menu'].concat(ACTS.map((a,i)=>'act'+(i+1))),music:['menu','map','battle']})")
+          "bg:['menu'].concat(ACTS.map((a,i)=>'act'+(i+1))),music:['menu','map','battle'],"
+          "sfxKeys:SFX_KEYS,sfxExts:AUD_EXTS})")
     env = dict(os.environ, SMOKE_DUMP=js)
     r = subprocess.run(['node', HOST], capture_output=True, text=True, cwd=ROOT, env=env)
     line = [l for l in r.stdout.splitlines() if l.startswith('__DUMP__')]
@@ -69,6 +70,22 @@ def main():
     for w in miss[:20]:
         print('       缺: %s' % w)
 
+    # ---- 1b. 音效扩展名：两个真相源必须一致（bug B 漂移闸） ----
+    print('\n[1b] 音效扩展名真相源一致')
+    _aud = io.open(os.path.join(ROOT, 'js', '10_audio.js'), 'r', encoding='utf-8').read()
+    _m = re.search(r'const AUD_EXTS\s*=\s*\[([^\]]*)\]', _aud)
+    exts_code = sorted(re.findall(r"'([^']+)'", _m.group(1))) if _m else []
+    _pk = io.open(os.path.join(ROOT, '打包.py'), 'r', encoding='utf-8').read()
+    _m2 = re.search(r'AUD_MIME\s*=\s*\{([^}]*)\}', _pk)
+    # 只取字典的**键**：值是 'audio/mpeg' 这类 MIME，混进来会假失败
+    exts_pack = sorted(set(re.findall(r"'([^']+)'\s*:", _m2.group(1)))) if _m2 else []
+    check(bool(exts_code) and bool(exts_pack),
+          '两边都解析到扩展名表（代码 %s / 打包 %s）' % (','.join(exts_code), ','.join(exts_pack)))
+    check(exts_code == exts_pack,
+          'AUD_EXTS == 打包.py AUD_MIME（%s vs %s）' % (','.join(exts_code), ','.join(exts_pack)))
+    check('.m4a' in exts_code, '扩展名表含 .m4a（bug B：打包会收但播放探测不到）')
+    check(sorted(exts_code) == sorted(ids['sfxExts']), '产物内 AUD_EXTS 与源码一致')
+
     # ---- 2. 磁盘上的素材没被漏掉 ----
     print('\n[2] 磁盘素材完整性（除 enemy_backup）')
     disk = set()
@@ -81,6 +98,40 @@ def main():
     check(disk <= keys, '磁盘 %d 个素材全部打进产物（漏 %d）' % (len(disk), len(disk - keys)))
     for d in sorted(disk - keys)[:10]:
         print('       漏: %s' % d)
+
+    # ---- 2b. 音效文件命名（键名拼错会静默回退合成，这里拦住） ----
+    print('\n[2b] 素材/sfx/ 命名合规')
+    sfxkeys = set(ids['sfxKeys'])
+    disksfx = sorted(d for d in disk if d.startswith('sfx/'))
+    badname, badkey, badvar, badext = [], [], [], []
+    for d in disksfx:
+        base, ext = os.path.splitext(os.path.basename(d))
+        if ext.lower() not in exts_code:
+            badext.append(d); continue
+        stem = base
+        mm = re.match(r'^(.*)_(\d+)$', base)
+        if mm:
+            stem, var = mm.group(1), int(mm.group(2))
+            if var < 1 or var > 3:
+                badvar.append(d); continue
+        if not re.match(r'^[a-z][a-z0-9_]*$', stem):
+            badname.append(d); continue
+        if stem not in sfxkeys:
+            badkey.append(d)
+    check(not badext, '扩展名都在 %s 内（坏 %d）' % (','.join(exts_code), len(badext)))
+    check(not badvar, '变体号都在 1..3（坏 %d）' % len(badvar))
+    check(not badname, '键名部分只用小写/数字/下划线（坏 %d）' % len(badname))
+    check(not badkey, '%d 个音效文件的键名都在 SFX_TABLE 里（未知 %d）' % (len(disksfx), len(badkey)))
+    for lbl, lst in (('扩展名', badext), ('变体号', badvar), ('文件名字符', badname), ('未知键名', badkey)):
+        for x in lst[:8]:
+            print('       %s: %s' % (lbl, x))
+    if disksfx:
+        _sz = sum(os.path.getsize(os.path.join(ASSD, d.replace('/', os.sep))) for d in disksfx)
+        _named = set(re.sub(r'_\d+$', '', os.path.splitext(os.path.basename(d))[0]) for d in disksfx)
+        print('  注: 素材/sfx/ 共 %d 个文件 %.0f KB，覆盖 %d / %d 个键（其余走合成）'
+              % (len(disksfx), _sz / 1024.0, len(_named), len(sfxkeys)))
+    else:
+        print('  注: 素材/sfx/ 不存在或为空 —— 全部音效走 WebAudio 合成（可接受）')
 
     # ---- 3. 内联处理器依赖的全局名在混淆后仍存在 ----
     print('\n[3] 内联 onclick 全局名存活')
@@ -104,7 +155,8 @@ def main():
     # ---- 4. 隐私 ----
     print('\n[4] 隐私扫描')
     bad = {
-        '盘符路径': r'[A-Za-z]:\\\\|[A-Za-z]:/',
+        # 前置不能是字母，否则 'http://…' 里的 'p:/' 会假命中
+        '盘符路径': r'(?<![A-Za-z])[A-Za-z]:\\\\|(?<![A-Za-z])[A-Za-z]:/',
         '用户目录': r'C:\\\\Users|C:/Users',
         '仓库文件': r'\.git/|\.git\\\\|_patch|memory-bank|enemy_backup',
         '桌面路径': r'Desktop',
@@ -123,7 +175,8 @@ def main():
     # 哪些字符串被编码随输入变化（同样输入 + 固定 seed 才稳定），命中与否都不影响功能与隐私。
     print('  注: 产物中 %s "%s" 明文' % ('存在' if '素材/' in html else '不存在', '素材/'))
 
-    unused = sorted(keys - set(want))
+    # 音效是「可选覆盖」：没文件就走合成，所以不算未使用
+    unused = sorted(k for k in (keys - set(want)) if not k.startswith('sfx/'))
     if unused:
         tot = sum(os.path.getsize(os.path.join(ASSD, u)) for u in unused if os.path.exists(os.path.join(ASSD, u)))
         print('\n  注: %d 个素材从未被游戏请求（可考虑从 素材/ 删掉，省 %.0f KB）: %s'

@@ -3,6 +3,7 @@
   /* ---------- 外围降级：保留结算逻辑，屏蔽渲染/音效/存档/成就/召唤 UI 的副作用 ---------- */
   try { SETTINGS.lowSpec = true; SETTINGS.sound = false; SETTINGS.musicVol = 0; SETTINGS.sfxVol = 0; } catch (e) {}
   var __sil = function () {};
+  var __realSfx = sfx; // v0.61.25 金快照探针要用真 sfx（第 631 行会把全局 sfx 顶成 __sil）
   var __realSaveRun = saveRun; // v0.61.06：saveRun 会被 stub，但「存档里带没带随机态」只有真函数测得出
   var __gcInit = goldCompensation; // v0.61 B6：捕获金卡补偿初值（后续用例会改动这个全局）
   try { render = __sil; } catch (e) {}
@@ -2656,6 +2657,256 @@
     __ok('v0.61.20 P6 长按放大的「升级后」对比行有内容可比（升级前后文案不同）',
       (function () { var cu = __card('leifu'); return !!cu && cu.t(true) !== cu.t(false); })());
     // P7 敌人热区 / P9 色弱微调是纯 CSS，列进 更新日志.md 的浏览器复核清单
+
+    /* ===== v0.61.25 音效金快照探针（分发表重写的等价性红线） =====
+       打桩 tone/boom，记录每个键名的「调用序列」（步骤类型 + 全部实参）。
+       与改造前的快照逐条比对：序列必须完全一致，参数个数也必须一致
+       （旧代码里 tone 有 4/5/7 参三种叫法，转发时不能用默认值填充）。 */
+    globalThis.__probeSfx = function (keys) {
+      var K = keys || ['card', 'error', 'block', 'death', 'hit', 'hurt',
+                       'heal', 'gold', 'relic', 'win', 'lose', 'boss'];
+      var _t = tone, _b = boom, out = {}, log = [], i;
+      var _snd = SETTINGS.sound, _vol = SETTINGS.sfxVol;
+      tone = function () { log.push(['t'].concat(Array.prototype.slice.call(arguments))); };
+      boom = function () { log.push(['b'].concat(Array.prototype.slice.call(arguments))); };
+      try {
+        SETTINGS.sound = true; SETTINGS.sfxVol = 1;  // 探针不受设置开关/音量影响
+        for (i = 0; i < K.length; i++) { log.length = 0; __realSfx(K[i]); out[K[i]] = log.slice(); }
+      } finally {
+        SETTINGS.sound = _snd; SETTINGS.sfxVol = _vol; tone = _t; boom = _b; // 无论如何都要还原
+      }
+      return out;
+    };
+    globalThis.__G12 = function () { return globalThis.__probeSfx(); };
+    globalThis.__ALLKEYS = function () { return (typeof SFX_KEYS !== 'undefined') ? SFX_KEYS.slice() : null; };
+
+    /* ===== v0.61.25 音效金快照断言：分发表重写的「零行为变更」红线 =====
+       __GOLD 是改造前（switch 版）打桩 tone/boom 采到的真实调用序列，
+       存档见 _patch/sfx_golden_v61_24.json（12 键 / 27 步）。
+       只要这块绿着，就证明「switch → 分发表」没动过任何一条现有音效的听感参数 ——
+       包括参数个数（旧代码 tone 有 4/5/7 参三种叫法，转发时不能用默认值填充）。 */
+    var __GOLD = {"card":[["t",360,0.06,"triangle",0.18],["b",0.04,0.12,4000,800]],"error":[["t",200,0.12,"square",0.18,0,120]],"block":[["t",300,0.09,"triangle",0.16,0,500]],"death":[["b",0.3,0.4,1200,100],["t",160,0.18,"sawtooth",0.18,0,60]],"hit":[["b",0.14,0.5,2000,160],["t",150,0.12,"square",0.2,0,70]],"hurt":[["b",0.22,0.6,1400,110],["t",110,0.2,"sawtooth",0.25,0,55]],"heal":[["t",520,0.16,"sine",0.14,0,760]],"gold":[["t",880,0.1,"sine",0.16],["t",1320,0.12,"sine",0.14,0.06]],"relic":[["t",660,0.12,"sine",0.18],["t",990,0.16,"sine",0.14,0.08]],"win":[["b",0.3,0.4,2000,300],["t",523,0.16,"triangle",0.16,0],["t",659,0.16,"triangle",0.16,0.1],["t",784,0.16,"triangle",0.16,0.2],["t",1047,0.16,"triangle",0.16,0.30000000000000004]],"lose":[["b",0.4,0.45,1500,120],["t",400,0.2,"sawtooth",0.14,0],["t",300,0.2,"sawtooth",0.14,0.13],["t",220,0.2,"sawtooth",0.14,0.26],["t",150,0.2,"sawtooth",0.14,0.39]],"boss":[["b",0.42,0.5,800,110],["t",120,0.34,"sawtooth",0.22,0,58]]};
+    (function () {
+      var now = globalThis.__probeSfx() || {};
+      var gk = Object.keys(__GOLD), i, diffs = [], steps = 0;
+      for (i = 0; i < gk.length; i++) {
+        var k = gk[i];
+        var a = JSON.stringify(now[k]), b = JSON.stringify(__GOLD[k]);
+        if (a !== b) diffs.push(k);
+        steps += (__GOLD[k] || []).length;
+      }
+      __ok('v0.61.25 金快照 · 覆盖 12 键 / 27 步（探针自检）', gk.length === 12 && steps === 27,
+        'keys=' + gk.length + ' steps=' + steps);
+      for (i = 0; i < gk.length; i++) {
+        var kk = gk[i];
+        var aa = JSON.stringify(now[kk]), bb = JSON.stringify(__GOLD[kk]);
+        __ok('v0.61.25 金快照 · ' + kk + ' 调用序列未变', aa === bb,
+          aa === bb ? '' : ('now=' + aa + ' gold=' + bb));
+      }
+      __ok('v0.61.25 金快照 · 12 键整体一致', diffs.length === 0, diffs.join(','));
+    })();
+
+    /* ===== v0.61.25 音效包：分发表 / 采样通路 / 高频接线 ===== */
+    (function () {
+      var i, j, k, s, ok, got, missing, bad, steps;
+
+      /* ① 分发表完整性：70 键，每步参数都齐 */
+      __ok('v0.61.25 音效表 70 键', SFX_KEYS.length === 70, 'n=' + SFX_KEYS.length);
+      bad = [];
+      for (i = 0; i < SFX_KEYS.length; i++) {
+        k = SFX_KEYS[i]; steps = SFX_TABLE[k];
+        if (!steps || !steps.length) { bad.push(k + ':空'); continue; }
+        for (j = 0; j < steps.length; j++) {
+          s = steps[j];
+          if (s[0] === 't') { if (typeof s[1] !== 'number' || typeof s[2] !== 'number' || s[3] == null || typeof s[4] !== 'number') bad.push(k + ':t参'); }
+          else if (s[0] === 'b') { if (typeof s[1] !== 'number' || typeof s[2] !== 'number' || typeof s[3] !== 'number' || typeof s[4] !== 'number') bad.push(k + ':b参'); }
+          else if (s[0] === 'n') { if (!(s[1] && s[1].length) || typeof s[2] !== 'number' || typeof s[4] !== 'number' || typeof s[5] !== 'number') bad.push(k + ':n参'); }
+          else bad.push(k + ':未知步型' + s[0]);
+        }
+      }
+      __ok('v0.61.25 音效表每步参数完整（无 undefined / 无未知步型）', bad.length === 0, bad.slice(0, 6).join(','));
+
+      /* ② 70 键逐个调用不抛错、且都真的产出声音（探针空序列 = 哑键） */
+      var threw = [], gp;
+      for (i = 0; i < SFX_KEYS.length; i++) { try { __realSfx(SFX_KEYS[i]); } catch (e) { threw.push(SFX_KEYS[i]); } }
+      __ok('v0.61.25 70 键在无 WebAudio 下逐个调用不抛错', threw.length === 0, threw.join(','));
+      gp = globalThis.__probeSfx(SFX_KEYS);
+      var silent = [];
+      for (i = 0; i < SFX_KEYS.length; i++) if (!(gp[SFX_KEYS[i]] || []).length) silent.push(SFX_KEYS[i]);
+      __ok('v0.61.25 70 键全部有声音（无哑键）', silent.length === 0, silent.join(','));
+
+      /* ③ 未知键名：静默忽略 + 只记一次（runner 把 SETTINGS.sound 关了，得先顶开） */
+      var _snU = SETTINGS.sound, _svU = SETTINGS.sfxVol, _eU = null;
+      var _cw = console.warn, _warns = 0;
+      console.warn = function () { _warns++; };        // 顺手接住 warn，别让它污染 _sm.json
+      SETTINGS.sound = true; SETTINGS.sfxVol = 1;   // 音量闸门在查表之前，不顶开就看不到未知键
+      try { __realSfx('__no_such_key__'); __realSfx('__no_such_key__'); }
+      catch (e) { _eU = String((e && e.message) || e); }
+      SETTINGS.sound = _snU; SETTINGS.sfxVol = _svU; console.warn = _cw;
+      __ok('v0.61.25 未知键名静默忽略不抛错', _eU === null, _eU || '');
+      __ok('v0.61.25 未知键名只 warn 一次（连调两次仍 1 次）', _warns === 1 && _sfxWarned['__no_such_key__'] === 1,
+        'warns=' + _warns + ' flag=' + _sfxWarned['__no_such_key__']);
+
+      /* ④ bug A 回归：sfxVol=0 必须真静音。
+         不能用 __probeSfx —— 它为金快照故意把 sfxVol 顶成 1，正好绕开这条。自己打桩 tone/boom。 */
+      var _sv = SETTINGS.sfxVol, _sn = SETTINGS.sound;
+      var _t0 = tone, _b0 = boom, _tc = 0, _bc = 0, _eA = null;
+      tone = function () { _tc++; }; boom = function () { _bc++; };
+      SETTINGS.sound = true; SETTINGS.sfxVol = 0;
+      try { __realSfx('hit'); __realSfx('card'); __realSfx('win'); }
+      catch (e) { _eA = String((e && e.message) || e); }
+      var _t0c = _tc, _b0c = _bc;                    // 正对照：把音量开回来必须出声
+      SETTINGS.sfxVol = 1;
+      try { __realSfx('win'); } catch (e) { _eA = String((e && e.message) || e); }
+      SETTINGS.sfxVol = _sv; SETTINGS.sound = _sn; tone = _t0; boom = _b0;
+      __ok('v0.61.25 bugA：探针是活的（sfxVol=1 时确实出声）',
+        _tc > _t0c || _bc > _b0c, 'tone=' + _tc + ' boom=' + _bc);
+      __ok('v0.61.25 bugA：sfxVol=0 时 tone/boom 零调用（旧写法 0||1 会 100% 播放）',
+        _t0c === 0 && _b0c === 0 && _eA === null,
+        'tone=' + _t0c + ' boom=' + _b0c + ' err=' + _eA);
+
+      /* ⑤ bug B 回归：扩展名真相源含 .m4a，音效/BGM 同集合 */
+      __ok('v0.61.25 bugB：AUD_EXTS 含 .m4a', AUD_EXTS.indexOf('.m4a') >= 0, AUD_EXTS.join(','));
+      __ok('v0.61.25 bugB：BGM_EXTS 与 AUD_EXTS 同集合（只差顺序）',
+        AUD_EXTS.slice().sort().join(',') === BGM_EXTS.slice().sort().join(','),
+        AUD_EXTS.join(',') + ' vs ' + BGM_EXTS.join(','));
+
+      /* ⑥ 第二参数缺省 → rate 1（40 个旧调用点未破坏）；clamp 边界 */
+      __ok('v0.61.25 sfxRate 缺省=1', sfxRate() === 1 && sfxRate(null) === 1 && sfxRate({}) === 1 && sfxRate(0) === 1);
+      __ok('v0.61.25 sfxRate 直接传数字也认', sfxRate(1.1) === 1.1);
+      __ok('v0.61.25 sfxDamageRate 下限（0 伤）', sfxDamageRate(0) === SFX_RATE_MIN);
+      __ok('v0.61.25 sfxDamageRate 上限（999 伤）', sfxDamageRate(999) === SFX_RATE_MAX);
+      __ok('v0.61.25 sfxDamageRate 单调不减', sfxDamageRate(1) <= sfxDamageRate(5) && sfxDamageRate(5) <= sfxDamageRate(12));
+
+      /* ⑦ 打击层分级 */
+      __ok('v0.61.25 pickHitSfx 分级（轻/重/暴击/斩杀/格挡）',
+        pickHitSfx(3, false, false) === 'hit_light' && pickHitSfx(12, false, false) === 'hit_heavy'
+        && pickHitSfx(30, false, false) === 'hit_crit' && pickHitSfx(3, false, true) === 'hit_crit'
+        && pickHitSfx(0, true, false) === 'hit_guard');
+
+      /* ⑧ 采样通路：无 WebAudio 时安全跳过；无 buffer 不假装播了 */
+      __ok('v0.61.25 采集状态结构正确',
+        (function () { var r = sfxSamples(); return !!r && r.mode === 'auto' && r.keys === 0 && r.loaded === false && r.loading === false; })());
+      __ok('v0.61.25 无 AudioContext 时 loadSfxSamples 安全返回',
+        (function () { var old = sfxMode; sfxMode = 'sample'; try { loadSfxSamples(); return sfxSamples().keys === 0 && SFX_LOADING === false; } catch (e) { return false; } finally { sfxMode = old; } })());
+      __ok('v0.61.25 playSample 无采样时返回 false（优雅回退合成）', playSample('hit_light', 1) === false);
+
+      /* ⑨ 命名与路径：键名_变体号，mp3 优先，且不会串到别的键 */
+      var cands = sfxCandidates('hit_light');
+      __ok('v0.61.25 采样路径命名符合规范',
+        cands.indexOf('sfx/hit_light.mp3') >= 0 && cands.indexOf('sfx/hit_light_1.mp3') >= 0
+        && cands.indexOf('sfx/hit_light_2.mp3') >= 0 && cands.indexOf('sfx/hit_light_3.mp3') >= 0,
+        cands.slice(0, 8).join(' '));
+      __ok('v0.61.25 sfxCandidates 不越界到别的键',
+        cands.filter(function (p) { return p.indexOf('hit_light') < 0; }).length === 0);
+      __ok('v0.61.25 file:// 下 sampleURL 不做无谓请求',
+        (SFX_PROTO === 'file:') ? sampleURL('sfx/hit_light.mp3') === null : true, 'proto=' + SFX_PROTO);
+
+      /* ⑩ 节流：同键间隔内第二次不出声 */
+      _sfxGate['__gate__'] = 0;
+      __ok('v0.61.25 sfxOnce 首次出声', sfxOnce('__gate__', 80) === true);
+      __ok('v0.61.25 sfxOnce 同帧第二次被节流', sfxOnce('__gate__', 80) === false);
+
+      /* ⑪ 高频接线：打桩 sfx 记录键名，验证真的接在调用点上 */
+      function __rec(fn) {
+        var list = [], _s = sfx;
+        sfx = function (n) { list.push(n); };
+        try { fn(); } finally { sfx = _s; }
+        return list;
+      }
+      __ok('v0.61.25 接线·抽牌 → card_draw',
+        __rec(function () { G = __base('ganshiren'); G.drawPile = [__card('leifu')]; drawCards(1); }).indexOf('card_draw') >= 0);
+      __ok('v0.61.25 接线·施咒 → card_curse',
+        __rec(function () { G = __base('tianshi'); applyCurse(G.enemies[0], 2); }).indexOf('card_curse') >= 0);
+      _sfxGate['card_shiji'] = 0;   // 整份冒烟 <120ms，闸门会被前面既有用例点着
+      __ok('v0.61.25 接线·尸气 → card_shiji',
+        __rec(function () { G = __base('ganshiren'); gainShiqi(2); }).indexOf('card_shiji') >= 0);
+      __ok('v0.61.25 接线·尸气没涨就不出声',
+        (function () { _sfxGate['card_shiji'] = 0;
+          return __rec(function () { G = __base('ganshiren'); G.尸气 = G.maxShiQi || 12; gainShiqi(2); }).indexOf('card_shiji') < 0; })());
+      __ok('v0.61.25 接线·真伤 → atk_true',
+        __rec(function () { G = __base('tianshi'); G.hp = 60; directDamage(8, '真伤'); }).indexOf('atk_true') >= 0);
+      __ok('v0.61.25 接线·全局点击音 → ui_click',
+        (function () {
+          var list = __rec(function () { onDocClick({ target: { closest: function () { return {}; } } }); });
+          return list.indexOf('ui_click') >= 0;
+        })(), 'ok');
+      __ok('v0.61.25 接线·点空白不出点击音',
+        (function () {
+          var list = __rec(function () { onDocClick({ target: { closest: function () { return null; } } }); });
+          return list.indexOf('ui_click') < 0;
+        })());
+
+      /* 打击层分级接线（轻/重/暴击/格挡/连击段） */
+      function __hitKey(dmg, block, point) {
+        return __rec(function () {
+          G = __base('tianshi');
+          var e = G.enemies[0]; e.hp = 500; e.maxHp = 500; e.block = block || 0; e.kind = 'ghost';
+          dealDamageTo(e, dmg, false, 0, !!point);
+        });
+      }
+      got = __hitKey(3, 0);    __ok('v0.61.25 接线·轻击 → hit_light', got.indexOf('hit_light') >= 0, got.join(','));
+      got = __hitKey(12, 0);   __ok('v0.61.25 接线·重击 → hit_heavy', got.indexOf('hit_heavy') >= 0, got.join(','));
+      got = __hitKey(40, 0);   __ok('v0.61.25 接线·高伤 → hit_crit', got.indexOf('hit_crit') >= 0, got.join(','));
+      got = __hitKey(3, 99);   __ok('v0.61.25 接线·全被格挡 → hit_guard', got.indexOf('hit_guard') >= 0, got.join(','));
+      got = __hitKey(1, 0, 1); __ok('v0.61.25 接线·连击逐段 → atk_multi_each', got.indexOf('atk_multi_each') >= 0, got.join(','));
+
+      /* 反伤 / 受击 / 格挡吃满的连击段 */
+      got = __rec(function () { G = __base('wuseng'); G.thorns = 3; G.enemies[0].hp = 99; dealDamageToPlayer(5, G.enemies[0]); });
+      __ok('v0.61.25 接线·反震 → thorns', got.indexOf('thorns') >= 0, got.join(','));
+      __ok('v0.61.25 接线·玩家受击 → hurt', got.indexOf('hurt') >= 0, got.join(','));
+      got = __rec(function () { G = __base('wuseng'); G.hp = 60; G.block = 99; dealDamageToPlayer(4, G.enemies[0], 0, { multi: true }); });
+      __ok('v0.61.25 接线·格挡吃满的连击段仍出 enemy_multi', got.indexOf('enemy_multi') >= 0, got.join(','));
+
+      /* 敌人出招：逐意图类型验声 */
+      function __intentKey(type, extra) {
+        return __rec(function () {
+          G = __base('ganshiren'); G.hp = 200;
+          var e = G.enemies[0]; e.hp = 200; e.maxHp = 200; e.block = 0;
+          var it = { type: type, v: 3, n: 1 };
+          for (var kk in (extra || {})) it[kk] = extra[kk];
+          e.intents = [it]; e.intents2 = null; e.intentIndex = 0; e.intent = it;
+          __realEnemyAct();   // 全局 enemyAct 已被 runner stub，必须调真身
+        });
+      }
+      var IMAP = { attack: 'enemy_attack', multi: 'enemy_multi', charge: 'enemy_charge', block: 'enemy_block',
+                   heal: 'enemy_heal', strength: 'enemy_strength', summon: 'enemy_summon', weak: 'enemy_debuff',
+                   gouhun: 'enemy_debuff', discard: 'enemy_debuff', burn: 'enemy_debuff', wangyou: 'enemy_debuff',
+                   yehuo: 'enemy_buff_self', qingsuan: 'enemy_qingsuan', dormant: 'enemy_dormant' };
+      missing = [];
+      for (k in IMAP) {
+        got = __intentKey(k);
+        if (got.indexOf(IMAP[k]) < 0) missing.push(k + '→' + IMAP[k]);
+      }
+      __ok('v0.61.25 接线·15 种敌人出招各有其声', missing.length === 0, missing.join(' '));
+      got = __intentKey('attackBlock', { v: 6, block: 5 });
+      __ok('v0.61.25 接线·攻击+格挡 → enemy_attack 与 enemy_block 各一次',
+        got.indexOf('enemy_attack') >= 0 && got.indexOf('enemy_block') >= 0, got.join(','));
+
+      /* 二阶段 / 消耗 / 三选一·地图选点（后者无 DOM，只验调用点在位） */
+      got = __rec(function () { G = __base('tianshi'); var e = G.enemies[0]; e.intents2 = e.intents; enterPhase2(e); });
+      __ok('v0.61.25 接线·Boss 二阶段 → boss_phase2（不再蹭 relic）',
+        got.indexOf('boss_phase2') >= 0 && got.indexOf('relic') < 0, got.join(','));
+      got = __rec(function () { G = __base('tianshi'); G.hand = [__card('fodu')]; G.energy = 5; doPlayCard(0); });
+      __ok('v0.61.25 接线·消耗牌 → card_exhaust', got.indexOf('card_exhaust') >= 0, got.join(','));
+      /* 三选一 / 地图选点：下游要 DOM，把下游入口临时打桩后直接调 —— 验行为，不验源码文本
+         （原先用 String(fn).indexOf 查源码，混淆产物里必然红，等于给产物冒烟白添两条噪音）。 */
+      got = __rec(function () {
+        var _g = goNext, _h = hideOverlay, _r = render, _s2 = saveRun, _u = updateGoldCompensation;
+        goNext = hideOverlay = render = saveRun = updateGoldCompensation = function () {};
+        try {
+          G = __base('tianshi');
+          G.rewardPicks = [__card('leifu')];
+          pickReward(0);
+        } finally {
+          goNext = _g; hideOverlay = _h; render = _r; saveRun = _s2; updateGoldCompensation = _u;
+        }
+      });
+      __ok('v0.61.25 接线·三选一翻牌 → ui_reward', got.indexOf('ui_reward') >= 0, got.join(','));
+
+      got = __rec(function () { G = __base('tianshi'); G.mapRow = 0; G.mapPath = []; chooseNode(0); });
+      __ok('v0.61.25 接线·地图选点 → ui_map', got.indexOf('ui_map') >= 0, got.join(','));
+    })();
 
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }

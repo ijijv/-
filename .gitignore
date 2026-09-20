@@ -38,3 +38,6 @@ _build/node_modules/
 *~
 Thumbs.db
 desktop.ini
+
+# 补丁脚本的临时语法检查副本（node --check 用，落地即删）
+_patch/_chk_*

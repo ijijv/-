@@ -111,6 +111,7 @@ function drawMapLinks(){
   }
 }
 function chooseNode(c){
+  sfx('ui_map');   // v0.61.25：地图选点音
   const node=MAP[G.mapRow][c];
   (G.mapPath=G.mapPath||[]).push({r:G.mapRow, c:c}); // v0.61.20(P2)：记下这一步，地图连线据此画「已走」
   G.mapCol=c;
@@ -342,6 +343,7 @@ function showReward(){
   showOverlay(`<h2>战斗胜利 · 三选一</h2><p>点击一张卡牌加入你的牌组（或跳过）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="skipReward()">跳过</button>`);
 }
 function pickReward(i){
+  sfx('ui_reward');   // v0.61.25：三选一翻牌音
   const c=G.rewardPicks[i];
   G.deck.push(c);
   log(`获得卡牌【${c.name}】`);

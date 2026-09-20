@@ -605,7 +605,9 @@ const isCanCurse  = c => !!(c && CAN_CURSE_IDS.includes(c.id));
 /* —— 尸气 —— */
 function gainShiqi(n){ if(!n || n<=0) return;
   tipOnce('shiqi', '<b>【尸气】</b>是茅山赶尸人的专属资源：上限 12 点、<b>整局累积不清零</b>。场上每有 1 个召唤物，回合开始就 +1；攒着可以强化【五通神】，或用【咒雨】一次引爆。');
-  G.尸气 = Math.min(G.maxShiQi||12, (G.尸气||0)+n); }
+  const __before=(G.尸气||0);
+  G.尸气 = Math.min(G.maxShiQi||12, __before+n);
+  if(G.尸气>__before) sfxOnce('card_shiji', 120); }   // v0.61.25：尸气真的涨了才出声，且防同帧叠音
 function hasShiqi(n){ return (G.尸气||0) >= n; }
 function spendShiqi(n){ if(!hasShiqi(n)) return false; G.尸气 -= n; return true; }
 /* —— 血怒（不自动烧；只在使用“每层+N”效果时消耗实际用到的层数） —— */
@@ -806,9 +808,16 @@ document.addEventListener('mouseout', function(e){
   if(t && !(e.relatedTarget && t.contains(e.relatedTarget))) hideTip();
 });
 /* 关闭 tooltip：点击空白处、或按 ESC（触屏上 tap 后的提示可这样轻松关掉） */
-document.addEventListener('click', function(e){
+/* v0.61.25：全局按钮点击音 —— 原来全项目零按钮音。只对可点元素出声，
+   免得拖卡、点空白也响；40ms 节流防抖。抽成具名函数是为了冒烟能直接喂假事件验它。 */
+function onDocClick(e){
+  try{
+    const bt=e.target && e.target.closest ? e.target.closest('button,.btn,[onclick],.map-node,[role="button"]') : null;
+    if(bt) sfxOnce('ui_click', 40);
+  }catch(err){}
   if(!(e.target && e.target.closest && e.target.closest('[data-tip]'))) hideTip();
-});
+}
+document.addEventListener('click', onDocClick);
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') hideTip(); });
 /* 按英雄取费用：数值＝全英雄通用；对象＝{ganshiren:0, default:2}（如附灵术 A 列免费、D 列升级 1 费） */
 function _costPick(v){ if(v==null) return null; if(typeof v!=='object') return v; return v[G.hero]!=null?v[G.hero]:(v.default!==undefined?v.default:null); }
