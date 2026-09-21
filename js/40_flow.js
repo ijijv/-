@@ -254,7 +254,7 @@ function continueRun(){
   PLAYER_HP_PREV=null; ENEMY_HP_PREV={};
   log(`继续旅程：第 ${G.act} 幕（生命 ${G.hp}/${G.maxHp} · 金币 ${G.gold}）`);
   hideOverlay();
-  if(d.scene==='battle'){ SCENE='battle'; setBg(G.endless?'act3':'act'+G.act); setBGM('battle'); render(); }
+  if(d.scene==='battle'){ SCENE='battle'; setBg(G.endless?'act3':'act'+G.act); setBGM(battleBgmFor(G.enemies)); render(); } // v0.61.31：读档进 Boss 房也走 Boss 轨（上一行已恢复 G.enemies）
   else if(d.scene==='camp'){ SCENE='camp'; renderCampfire(); }
   else if(d.scene==='shop'){ SCENE='shop'; renderShop(); }
   else if(d.scene==='unknown'){ SCENE='unknown'; showUnknown(); }

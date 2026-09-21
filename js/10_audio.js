@@ -347,6 +347,34 @@ function startSynthBGM(track){
     step++;
   }, 2600);
 }
+/* v0.61.31：精英 / Boss / 商店三轨是「可选升级轨」—— 素材没交付就退回基础轨。
+   不退的后果很实在：Boss 房切 battle_boss 而文件不存在 → tryNext 耗尽扩展名 →
+   掉进 startSynthBGM('battle_boss')，**反而比普通战少了音乐**（合成器只给 'battle' 叠鼓）。
+   基础轨 menu/map/battle 不设回退项（它们没有可退的上级）。 */
+const BGM_FALLBACK = { battle_elite:'battle', battle_boss:'battle', shop:'map' };
+/* 打包产物里 ASSET_MAP 是权威清单：查得到就直接用，查不到当场退回（同步、可测、零空转）。
+   开发期（file:// 双击，打包.py 没注入 ASSET_MAP）无法预知磁盘上有什么，
+   返回原轨交给 tryNext 逐扩展名探测，探测耗尽后由 startBGM 内部兜底。 */
+function bgmTrackFor(track){
+  if(!ASSET_MAP) return track;
+  return BGM_EXTS.some(e=>ASSET_MAP['music/bgm_'+track+e]) ? track : (BGM_FALLBACK[track]||track);
+}
+/* startBGM 逐扩展名探测全部失败后，该退到哪条基础轨；返回 null = 没有可退的上级（照原轨走合成器）。
+   单独抽成纯函数是为了**可测**：冒烟宿主开头会把 startBGM 换成静音桩（见 smoke_runner.js 顶部），
+   startBGM 的函数体在沙箱里不可达，这条决策只能直接验函数本身。 */
+function bgmFallbackFor(track){
+  const fb=BGM_FALLBACK[track];
+  return (fb && fb!==track) ? fb : null;   // fb===track 时返回 null，否则 startBGM 会自我递归
+}
+/* 从敌人列表判定该用哪条战斗轨：Boss > 精英 > 普通。
+   入参是数组而非直接读 G —— 这样读档续战（40_flow.js）和开局（30_engine.js）能共用，
+   也便于冒烟里直接喂假数据验证。 */
+function battleBgmFor(enemies){
+  const l=enemies||[];
+  if(l.some(e=>e&&e.boss)) return 'battle_boss';
+  if(l.some(e=>e&&e.elite)) return 'battle_elite';
+  return 'battle';
+}
 function startBGM(track){
   if(!SETTINGS.sound){ stopBGM(); return; }
   if(BGM_TRACK===track) return;
@@ -357,7 +385,15 @@ function startBGM(track){
   let idx=0, active=true;
   function tryNext(){
     if(!active) return;
-    if(idx>=exts.length){ BGM=null; startSynthBGM(track); return; }
+    if(idx>=exts.length){
+      /* v0.61.31：升级轨探测全 miss → 退回基础轨（否则 Boss 房比普通战还安静）。
+         兜底放在 startBGM 内部而不是加第二参数：这样所有直接调用点
+         （如 60_boot.js 声音开关重开时的 startBGM(CUR_BGM)）自动获得回退能力。
+         「退到哪条」的决策在 bgmFallbackFor 里（纯函数、冒烟可验），这一行只负责转发。 */
+      const __fb=bgmFallbackFor(track);
+      if(__fb) return startBGM(__fb);
+      BGM=null; startSynthBGM(track); return;
+    }
     const a=new Audio(assetURL('music/bgm_'+track+exts[idx++]));
     a.loop=true; a.volume=(SETTINGS.musicVol==null?0.32:SETTINGS.musicVol);
     let resolved=false;
@@ -375,7 +411,9 @@ function startBGM(track){
   }
   tryNext();
 }
-function setBGM(track){ CUR_BGM=track; startBGM(track); }
+/* CUR_BGM 记的是**逻辑轨**（设置页/存档看到的是「该在哪首曲子」），
+   实际播放哪条由 bgmTrackFor 决定 —— 素材到货后无需改任何调用点，自动切回升级轨。 */
+function setBGM(track){ CUR_BGM=track; startBGM(bgmTrackFor(track)); }
 /* 首次交互解锁音频（浏览器禁止自动播放，需一次用户手势） */
 function unlockAudio(){ ensureAudio(); loadSfxSamples(); if(BGM && SETTINGS.sound){ try{ BGM.play().catch(()=>{}); }catch(e){} } }
 document.addEventListener('pointerdown', unlockAudio, {once:true});

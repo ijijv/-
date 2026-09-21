@@ -27,6 +27,8 @@ _patch/_dom.err
 # 仿真器/冒烟的运行产物一律不进库（sim_baseline_v06106.json 是刻意留的基线，不以 _ 开头）
 _patch/_*.json
 _patch/_*.err
+# 打包/冒烟的运行日志（每次跑都会变；脚本本身照常进库）
+_patch/_*.log
 # 由 git 现场还原的「改前树」，可随时重建：for f in js/*.js; do git show <rev>:$f > _patch/_pre/$f; done
 _patch/_pre/
 _patch/*.check.js

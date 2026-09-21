@@ -591,8 +591,11 @@ let CURSE_THIS_TURN = 0; // 本回合施加的诅咒数量
 
 function startBattle(keys){
   SCENE='battle';
-  setBg(G.endless?'act3':'act'+G.act); setBGM('battle');
+  setBg(G.endless?'act3':'act'+G.act);
   G.enemies = keys.map(k=>makeEnemy(ENEMIES[k], k));
+  /* v0.61.31：Boss/精英轨必须**在这一行之后**判定 —— G.enemies 到上一行才存在，
+     原来 setBGM('battle') 写在建敌人之前，那一刻 e.boss / e.elite 都还没生成，判不出来。 */
+  setBGM(battleBgmFor(G.enemies));
   G.enemies.forEach((e,i)=>{ if(e.intents.length>1) e.intentIndex = i % e.intents.length; });
   G.target=0;
   G.battleOver=false; // v0.61 B4：每场开打重置终局旗标

@@ -2934,6 +2934,151 @@
     __ok('v0.61.30 结算后 battleOver 重新置 true', G.battleOver === true);
   })();
 
+  /* ============ v0.61.31 BGM 五轨路由 + 缺轨回退到基础轨 ============ */
+  (function () {
+    /* 1. 回退表本身：三条升级轨各有基础轨可退；三条基础轨不设项（没有可退的上级） */
+    __ok('v0.61.31 BGM_FALLBACK 三条升级轨都有基础轨可退',
+      BGM_FALLBACK.battle_elite === 'battle' && BGM_FALLBACK.battle_boss === 'battle' && BGM_FALLBACK.shop === 'map');
+    __ok('v0.61.31 基础轨不设回退项（否则会自我递归）',
+      !('menu' in BGM_FALLBACK) && !('map' in BGM_FALLBACK) && !('battle' in BGM_FALLBACK));
+
+    /* 2. 战斗轨判定：Boss > 精英 > 普通 */
+    __ok('v0.61.31 battleBgmFor：普通战 → battle',
+      battleBgmFor([{ elite:false, boss:false }, { elite:false, boss:false }]) === 'battle');
+    __ok('v0.61.31 battleBgmFor：含精英 → battle_elite',
+      battleBgmFor([{ elite:false, boss:false }, { elite:true, boss:false }]) === 'battle_elite');
+    __ok('v0.61.31 battleBgmFor：含 Boss → battle_boss（优先于精英）',
+      battleBgmFor([{ elite:true, boss:false }, { elite:false, boss:true }]) === 'battle_boss');
+    __ok('v0.61.31 battleBgmFor：空列表 / undefined 不抛错 → battle',
+      battleBgmFor([]) === 'battle' && battleBgmFor(undefined) === 'battle' && battleBgmFor([null]) === 'battle');
+
+    /* 3. 打包产物口径：ASSET_MAP 是权威清单 → 同步回退，不空转 4 次文件探测 */
+    var __savA = ASSET_MAP;
+    ASSET_MAP = { 'music/bgm_map.ogg': 'data:x', 'music/bgm_battle.ogg': 'data:x' };
+    __ok('v0.61.31 缺 Boss 轨 → bgmTrackFor 退回 battle', bgmTrackFor('battle_boss') === 'battle');
+    __ok('v0.61.31 缺精英轨 → bgmTrackFor 退回 battle', bgmTrackFor('battle_elite') === 'battle');
+    __ok('v0.61.31 缺商店轨 → bgmTrackFor 退回 map', bgmTrackFor('shop') === 'map');
+    __ok('v0.61.31 基础轨仍指向自己',
+      bgmTrackFor('battle') === 'battle' && bgmTrackFor('map') === 'map' && bgmTrackFor('menu') === 'menu');
+    ASSET_MAP = { 'music/bgm_map.ogg': 'data:x', 'music/bgm_battle_boss.mp3': 'data:x' };
+    __ok('v0.61.31 交付了 Boss 轨 → 用它，且不挑扩展名（.mp3 也认）',
+      bgmTrackFor('battle_boss') === 'battle_boss');
+    __ok('v0.61.31 交付 Boss 轨不影响没交付的精英轨', bgmTrackFor('battle_elite') === 'battle');
+    ASSET_MAP = __savA;
+
+    /* 4. setBGM 打桩：CUR_BGM 记逻辑轨、实际请求走 bgmTrackFor */
+    var __origStart = startBGM, __seen = [];
+    startBGM = function (t) { __seen.push(t); };
+    var __stubOK = (startBGM !== __origStart);
+    __ok('v0.61.31 前置：startBGM 可被桩替换（冒烟里它本就被全局静音桩 __sil 换掉了，本组只验路由、不验真实播放）', __stubOK);
+    if (__stubOK) {
+      var __savB = ASSET_MAP;
+      ASSET_MAP = { 'music/bgm_battle.ogg': 'data:x' };
+      setBGM('battle_boss');
+      __ok('v0.61.31 setBGM 记的是逻辑轨（CUR_BGM=battle_boss）', CUR_BGM === 'battle_boss');
+      __ok('v0.61.31 缺 Boss 轨时实际只请求 battle（一次到位，不空转探测）',
+        __seen.length === 1 && __seen[0] === 'battle', JSON.stringify(__seen));
+      __seen = []; ASSET_MAP = { 'music/bgm_battle_boss.ogg': 'data:x' };
+      setBGM('battle_boss');
+      __ok('v0.61.31 有 Boss 轨时实际请求 battle_boss（素材到货即生效）',
+        __seen.length === 1 && __seen[0] === 'battle_boss', JSON.stringify(__seen));
+      ASSET_MAP = __savB;
+      startBGM = __origStart;
+    }
+
+    /* 5. 端到端：真的开一场 Boss/精英/普通战，看 startBattle 请求了哪条轨。
+       敌人 key 不写死 —— 从 ENEMIES 里现挑，挑不到就让上面的前置断言直接红。 */
+    var __normalKey = Object.keys(ENEMIES).filter(function (k) {
+      return !ENEMIES[k].elite && !ENEMIES[k].boss;
+    })[0];
+    var __eliteKey = Object.keys(ENEMIES).filter(function (k) { return ENEMIES[k].elite && !ENEMIES[k].boss; })[0];
+    var __bossKey = Object.keys(ENEMIES).filter(function (k) { return ENEMIES[k].boss; })[0];
+    __ok('v0.61.31 前置：ENEMIES 里普通/精英/Boss 三类都有可取样的 key',
+      !!__normalKey && !!__eliteKey && !!__bossKey,
+      'normal=' + __normalKey + ' elite=' + __eliteKey + ' boss=' + __bossKey);
+
+    var __o2 = startBGM, __tracks = [];
+    startBGM = function (t) { __tracks.push(t); };
+    /* 本节每一条都必须**显式摆好 ASSET_MAP** —— 它决定 setBGM 是原样透传逻辑轨还是先退回基础轨。
+       曾经这里没摆，于是同一组断言「源码树过、打包产物红」：源码树 ASSET_MAP=null（开发期透传），
+       产物里 打包.py 注入了 ASSET_MAP 且用户还没交付那三首 → 正确退回 'battle' → 断言红。
+       断言依赖了环境而不是被测逻辑，是写错了；现在三种情形各验一次。 */
+    var __savE = ASSET_MAP;
+    var __TRACKS_ALL = { 'music/bgm_battle.ogg': 'data:x',
+      'music/bgm_battle_elite.ogg': 'data:x', 'music/bgm_battle_boss.ogg': 'data:x',
+      'music/bgm_map.ogg': 'data:x', 'music/bgm_shop.ogg': 'data:x' };
+    var __ONLY_BASE = { 'music/bgm_battle.ogg': 'data:x', 'music/bgm_map.ogg': 'data:x' };
+    if (startBGM !== __o2 && __normalKey && __eliteKey && __bossKey) {
+      var __stErr = null;
+      function __startWith(keys, amap) {
+        __tracks = [];
+        ASSET_MAP = amap;
+        try { G = __base('ganshiren'); __fresh(); startBattle(keys); }
+        catch (e) { __stErr = e; }
+        return __tracks[__tracks.length - 1];
+      }
+      /* (a) 逻辑轨 —— 与素材是否交付无关（这条是本节的地基，环境无关） */
+      __startWith([__normalKey], __TRACKS_ALL);
+      __ok('v0.61.31 前置：startBattle 在本沙箱跑得动（不抛异常）',
+        __stErr === null, __stErr && __stErr.message);
+      __ok('v0.61.31 普通战的逻辑轨 = battle（前置：该敌人确实非精英非Boss）',
+        battleBgmFor(G.enemies) === 'battle' && G.enemies.every(function (e) { return !e.boss && !e.elite; }),
+        'logic=' + battleBgmFor(G.enemies));
+      __startWith([__eliteKey], __TRACKS_ALL);
+      __ok('v0.61.31 精英战的逻辑轨 = battle_elite（前置：该敌人确实是精英）',
+        battleBgmFor(G.enemies) === 'battle_elite' && G.enemies.some(function (e) { return e.elite; }),
+        'logic=' + battleBgmFor(G.enemies));
+      __startWith([__bossKey], __TRACKS_ALL);
+      __ok('v0.61.31 Boss 战的逻辑轨 = battle_boss（前置：该敌人确实是 Boss）',
+        battleBgmFor(G.enemies) === 'battle_boss' && G.enemies.some(function (e) { return e.boss; }),
+        'logic=' + battleBgmFor(G.enemies));
+      __startWith([__eliteKey, __normalKey], __TRACKS_ALL);
+      __ok('v0.61.31 精英带小怪 → 逻辑轨仍是 battle_elite（不被小怪拉回普通轨）',
+        battleBgmFor(G.enemies) === 'battle_elite', 'logic=' + battleBgmFor(G.enemies));
+
+      /* (b) 端到端·三首都已交付 → startBattle 真的把升级轨交出去 */
+      var __te = __startWith([__eliteKey], __TRACKS_ALL);
+      __ok('v0.61.31 已交付精英轨时，startBattle 交出 battle_elite', __te === 'battle_elite', 'got=' + __te);
+      var __tb = __startWith([__bossKey], __TRACKS_ALL);
+      __ok('v0.61.31 已交付 Boss 轨时，startBattle 交出 battle_boss', __tb === 'battle_boss', 'got=' + __tb);
+
+      /* (c) 端到端·只交付了基础轨（= 打包产物当下的真实情形）→ 必须退回，且不空转 */
+      var __tfb = __startWith([__bossKey], __ONLY_BASE);
+      __ok('v0.61.31 未交付 Boss 轨时，startBattle 退回 battle（回退在真实开战路径上生效）',
+        __tfb === 'battle', 'got=' + __tfb);
+      var __tfe = __startWith([__eliteKey], __ONLY_BASE);
+      __ok('v0.61.31 未交付精英轨时，startBattle 退回 battle', __tfe === 'battle', 'got=' + __tfe);
+      var __tnb = __startWith([__normalKey], __ONLY_BASE);
+      __ok('v0.61.31 普通战不受回退影响，仍是 battle', __tnb === 'battle', 'got=' + __tnb);
+    }
+    ASSET_MAP = __savE;
+    startBGM = __o2;
+
+    /* 6. 开发期 file:// 口径（ASSET_MAP=null，无法预知磁盘上有什么）靠 tryNext 探测，
+       探测耗尽后由 startBGM 退回基础轨。**这条分支在冒烟里验不了** —— runner 开头把
+       startBGM / startSynthBGM / stopBGM 一起换成了静音桩 __sil（避免测试挂定时器、碰真 Audio），
+       真实函数体在沙箱里不可达（实测 String(startBGM) === "function () {}"）。
+       硬测只会得到一条恒假的断言，所以这里改成验**决策**：退到哪条轨由纯函数
+       bgmFallbackFor 决定，它可验；`if(__fb) return startBGM(__fb)` 那行转发不可达，
+       如实记在更新日志里，不假装验过。 */
+    __ok('v0.61.31 bgmFallbackFor：三条升级轨 → 各自的基础轨',
+      bgmFallbackFor('battle_elite') === 'battle' && bgmFallbackFor('battle_boss') === 'battle'
+      && bgmFallbackFor('shop') === 'map');
+    __ok('v0.61.31 bgmFallbackFor：基础轨返回 null（关键：否则 startBGM 会自我递归）',
+      bgmFallbackFor('menu') === null && bgmFallbackFor('map') === null && bgmFallbackFor('battle') === null);
+    __ok('v0.61.31 bgmFallbackFor：未知轨名返回 null（战斗中不抛错）', bgmFallbackFor('nope') === null);
+
+    /* 跨路径一致性：打包期（bgmTrackFor 查 ASSET_MAP）与开发期（探测耗尽走 bgmFallbackFor）
+       必须退到**同一条轨**，否则「打包能退、开发退不了」就是两条路径行为分叉。 */
+    var __savC = ASSET_MAP;
+    ASSET_MAP = {};   // 空清单 = 所有轨都查不到，等价于「全都没交付」
+    var __fbList = ['battle_elite', 'battle_boss', 'shop'];
+    var __diverged = __fbList.filter(function (t) { return bgmTrackFor(t) !== bgmFallbackFor(t); });
+    ASSET_MAP = __savC;
+    __ok('v0.61.31 两条路径退回目标一致（打包期 bgmTrackFor == 开发期 bgmFallbackFor）',
+      __diverged.length === 0, '分歧的轨：' + JSON.stringify(__diverged));
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();

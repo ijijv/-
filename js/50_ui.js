@@ -134,6 +134,7 @@ function showUnknown(){
   const descs={well:'以 8 点生命许愿，换一件遗物', blackmarket:'神秘黑商塞给你一张牌', temple:'无头神像赐下随机祝福', ambush:'有恶鬼拦路（精英战）', forge:'免费锻造升级一张牌', empty:'什么也没有', potion:'饮一口灵泉，获得一瓶灵汁', remove:'焚符净坛，删掉牌组中的一张牌'};
   const html=evs.map(ev=>`<div class="relic" onclick="doUnknown('${ev}')"><div class="cname">${labels[ev]}</div><div class="cdesc">${descs[ev]}</div></div>`).join('');
   SCENE='unknown'; saveRun();
+  setBGM('shop'); // v0.61.31：事件节点是非战斗场景，与商店/营地共用同一条轨
   showOverlay(`<h2>⚠ 未知之地</h2><p>前方雾气弥漫，你隐约察觉有三条路可走，各有机缘或凶险。选一条吧。</p><div class="reward-cards">${html}</div>`);
 }
 function doUnknown(ev){
@@ -395,6 +396,7 @@ function skipRelic(){ hideOverlay(); goNext(); }
 function showCampfire(){
   G.campRemoved=false; G.campActed=false;
   SCENE='camp'; saveRun();
+  setBGM('shop'); // v0.61.31：营地为非战斗场景，与商店共用同一条轨
   renderCampfire();
 }
 function renderCampfire(){
@@ -465,6 +467,7 @@ function removeCost(){ return 4 + 4*G.removeCount; }
 function showShop(){
   if(G.shopWares==null){ G.shopWares=[]; while(G.shopWares.length<6){ G.shopWares.push(weightedCard()); } G.shopPotions=[randomPotion(), randomPotion()]; }
   SCENE='shop'; saveRun();
+  setBGM('shop'); // v0.61.31
   renderShop();
 }
 function renderShop(){

@@ -33,7 +33,12 @@ def dump_ids():
     # 注意：smoke_host 会对求值结果自己做 JSON.stringify，所以这里给对象表达式即可
     js = ("({cards:CARDS.map(c=>c.id),heroes:HEROES.map(h=>h.id),"
           "relics:RELICS.map(r=>r.id),enemies:Object.keys(ENEMIES),"
-          "bg:['menu'].concat(ACTS.map((a,i)=>'act'+(i+1))),music:['menu','map','battle'],"
+          "bg:['menu'].concat(ACTS.map((a,i)=>'act'+(i+1))),"
+          # 必须命中：缺任何一个都是 bug
+          "music:['menu','map','battle'],"
+          # v0.61.31 起代码支持这三条升级轨，但**缺文件时会退回基础轨**（Boss/精英→battle、商店→map），
+          # 所以它们不是「必须命中」，而是「交付即生效」。只用于把已交付的从 unused 里排掉。
+          "musicOptional:['battle_elite','battle_boss','shop'],"
           "sfxKeys:SFX_KEYS,sfxExts:AUD_EXTS})")
     env = dict(os.environ, SMOKE_DUMP=js)
     r = subprocess.run(['node', HOST], capture_output=True, text=True, cwd=ROOT, env=env)
@@ -175,8 +180,13 @@ def main():
     # 哪些字符串被编码随输入变化（同样输入 + 固定 seed 才稳定），命中与否都不影响功能与隐私。
     print('  注: 产物中 %s "%s" 明文' % ('存在' if '素材/' in html else '不存在', '素材/'))
 
-    # 音效是「可选覆盖」：没文件就走合成，所以不算未使用
-    unused = sorted(k for k in (keys - set(want)) if not k.startswith('sfx/'))
+    # 「可选覆盖」的两类，没文件都有兜底，故不算未使用：
+    #   · 音效 sfx/：没文件就走程序化合成
+    #   · 三条升级轨：没文件就退回基础轨（v0.61.31，Boss/精英→battle、商店→map）
+    # 其余素材缺一个就是真缺（[1] 会报），这里只盘点「打进来但游戏永远不会请求」的。
+    optional_music = set('music/bgm_%s.mp3' % i for i in ids['musicOptional'])
+    unused = sorted(k for k in (keys - set(want))
+                    if not k.startswith('sfx/') and k not in optional_music)
     if unused:
         tot = sum(os.path.getsize(os.path.join(ASSD, u)) for u in unused if os.path.exists(os.path.join(ASSD, u)))
         print('\n  注: %d 个素材从未被游戏请求（可考虑从 素材/ 删掉，省 %.0f KB）: %s'
