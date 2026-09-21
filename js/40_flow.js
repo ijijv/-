@@ -135,6 +135,10 @@ function giveUp(){
 }
 function revive(){
   G.dead=false;
+  /* v0.61.30 修：复活回到的是**同一场战斗**，必须把 B4 的终局旗标一起清掉。
+     否则 battleOver 恒为 true → 之后打死最后一个敌人时 winFight() 在重入守卫处直接 return，
+     战斗永远不结算，表现为「敌人已清」但界面卡死。 */
+  G.battleOver=false;
   G.hp=G.maxHp; G.weak=0; G.gouhun=0; G.thorns=0; G.block=0; G.burn=0;
   G.discard=G.discard.concat(G.hand); G.hand=[];
   hideOverlay(); sfx('heal');

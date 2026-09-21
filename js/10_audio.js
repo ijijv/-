@@ -163,7 +163,7 @@ const SFX_RATE_MIN = 0.94, SFX_RATE_MAX = 1.22;   // 变调下限/上限（伤�
 /* 采样不走单独的注入表：打包.py 的素材遍历本来就按相对路径收 AUD_MIME 文件，
    所以 sfx/hit_light_1.mp3 这类 key 已在 ASSET_MAP 里。再注入一张重复表只会把 base64 翻倍。 */
 var SFX_BUF = {};                // 键名 -> [AudioBuffer,…]（预解码结果）
-var SFX_LOADED = false, SFX_LOADING = false;
+var SFX_LOADED = false, SFX_LOADING = false, _sfxHinted = false;
 var _sfxLastVariant = {};
 let sfxMode = 'auto';            // auto | synth（强制合成）| sample（强制采样，调试用）
 try{ if(typeof SFX_SAMPLE_MODE==='string') sfxMode=SFX_SAMPLE_MODE; }catch(e){}
@@ -237,7 +237,17 @@ function loadOneSample(ac, name, cb){
 /* 预解码全部键（最多 SFX_SAMPLE_MAX 个）：挂在 iOS 的一次性手势解锁点 unlockAudio 上，非阻塞 */
 function loadSfxSamples(){
   if(SFX_LOADED || SFX_LOADING || sfxMode==='synth') return;
-  if(sfxMode==='auto' && !ASSET_MAP && !SFX_FETCH_OK) return;   // 开发期双击本地打开：无注入表且取不到文件
+  if(sfxMode==='auto' && !ASSET_MAP && !SFX_FETCH_OK){
+    /* 开发期双击本地打开：无注入表且取不到文件。这是**有意为之**（file:// 下 fetch 会被拦，试也是白试），
+       但以前完全静默 —— 玩家会以为「素材放进 素材/sfx/ 了却没生效」。这里说明一次。 */
+    if(!_sfxHinted){ _sfxHinted=true;
+      try{ console.info('[音效] 当前是 file:// 双击打开，浏览器会拦 fetch，'+
+        '素材/sfx/ 下的外置音效探测已跳过，全部走 WebAudio 合成音。'+
+        '想听到自己放进去的音效：用 `python 试玩.py` 起本地 http 服务再打开，'+
+        '或 `python 打包.py` 用产物（音效已内联）。随时可用 sfxSamples() 查采样状态。'); }catch(e){}
+    }
+    return;
+  }
   const ac=ensureAudio();
   /* 冒烟宿主/老浏览器没有 WebAudio（无 decodeAudioData）—— 直接跳过，不抛错 */
   if(!ac || typeof ac.decodeAudioData!=='function' || typeof ac.createBufferSource!=='function') return;

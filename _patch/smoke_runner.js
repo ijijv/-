@@ -2908,6 +2908,32 @@
       __ok('v0.61.25 接线·地图选点 → ui_map', got.indexOf('ui_map') >= 0, got.join(','));
     })();
 
+
+  /* ============ v0.61.30 复活后战斗能正常结算（B4 终局旗标回归） ============ */
+  (function () {
+    /* 复现路径：死亡 → 复活 → 打死最后一个敌人。此前 revive() 只清 G.dead，
+       G.battleOver 留在 true，winFight() 被重入守卫挡掉 → 战斗永不结算（界面卡死）。 */
+    G = __base('ganshiren'); __fresh();
+    loseGame();
+    var flagAfterLose = G.battleOver;
+    revive();
+    __ok('v0.61.30 前置：loseGame 确实置了 battleOver', flagAfterLose === true);
+    __ok('v0.61.30 revive 后 battleOver 已清（不再卡死）', G.battleOver === false, 'battleOver=' + G.battleOver);
+    __ok('v0.61.30 revive 后 dead 也已清（旧行为未破坏）', G.dead === false);
+
+    // 行为验：复活后打死全部敌人，胜利结算要真的跑起来（battleResult 只有 winFight 尾段会写）
+    G = __base('ganshiren'); __fresh();
+    loseGame();
+    revive();
+    G.enemies.forEach(function (e) { e.hp = 0; });
+    __ok('v0.61.30 前置：此刻已无存活敌人', aliveEnemies().length === 0);
+    var threw = null;
+    try { winFight(); } catch (e) { threw = e; }
+    __ok('v0.61.30 winFight 不抛异常', threw === null, threw && threw.message);
+    __ok('v0.61.30 复活后清场 → 胜利结算执行（不再被守卫吞掉）', !!G.battleResult, 'result=' + JSON.stringify(G.battleResult));
+    __ok('v0.61.30 结算后 battleOver 重新置 true', G.battleOver === true);
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();
