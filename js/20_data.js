@@ -93,7 +93,7 @@ const CARDS = [
       :G.hero==='yincha'?`造成 ${u?14:9} 伤害。若目标带有【诅咒】，额外造成 ${u?6:4} 伤害`
       :`造成 ${u?12:8} 伤害。引爆目标 2 层【诅咒】（每层 ${u?7:5} 伤害）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
-      if(G.hero==='tianshi'){ dealDamageTo(t,u?12:8); const boom=Math.min(2,t.curse||0); for(let i=0;i<boom;i++) dealDamageTo(t,u?7:5); t.curse-=boom; if(boom>0) log(`斩妖剑引爆 ${boom} 层【诅咒】`); return; }
+      if(G.hero==='tianshi'){ dealDamageTo(t,u?12:8); const boom=Math.min(2,t.curse||0); for(let i=0;i<boom;i++) dealDamageTo(t,u?7:5); t.curse-=boom; if(boom>0){ sfx('kw_curse'); log(`斩妖剑引爆 ${boom} 层【诅咒】`); } return; }   // v0.61.32
       if(G.hero==='yincha'){ let dc=(u?14:9); if((t.curse||0)>0) dc+=(u?6:4); dealDamageTo(t,dc); return; }
       let d=(u?12:8);
       if(G.hero==='ganshiren') d+=2*G.summons.filter(s=>s.dur>0).length;
@@ -135,7 +135,7 @@ const CARDS = [
     eff:(u)=>{ const t=curEnemy(); if(!t) return; let d=G.block||0;
       if(G.hero==='ganshiren') d+=Math.floor((G.尸气||0)/2)*(u?2:1);
       else if(G.hero==='yincha'){ loseHp(2); }
-      else if(G.hero==='tianshi'){ d+=(t.curse||0)*(u?2:1); t.curse=0; }
+      else if(G.hero==='tianshi'){ const __c=(t.curse||0); d+=__c*(u?2:1); t.curse=0; if(__c>0) sfx('kw_curse'); }   // v0.61.32
       if(d>0) dealDamageTo(t,d); else log('铁布衫：当前没有格挡，落空'); }},
   {id:'shihun', name:'噬魂术', type:'attack', rarity:'blue', cost:2,
     t:(u)=>G.hero==='ganshiren'?`消耗 4 点【尸气】，对目标造成 ${u?18:14} 伤害。若本回合召唤过单位，费用 -1`
@@ -144,9 +144,9 @@ const CARDS = [
       :`消耗目标全部【诅咒】，每层造成 ${u?6:5} 伤害`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='ganshiren'){ if(!hasShiqi(4)){ floatMsg('尸气不足'); return false; } spendShiqi(4); dealDamageTo(t,u?18:14); return; }
-      if(G.hero==='wuseng'){ const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; dealDamageTo(t,c*(u?3:2)); const bb=c*(u?2:1); gainBlock(bb); log(`噬魂术：引爆 ${c} 层【诅咒】，获得 ${bb} 点格挡`); return; }
+      if(G.hero==='wuseng'){ const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; sfx('kw_curse'); dealDamageTo(t,c*(u?3:2)); const bb=c*(u?2:1); gainBlock(bb); log(`噬魂术：引爆 ${c} 层【诅咒】，获得 ${bb} 点格挡`); return; }   // v0.61.32
       if(G.hero==='yincha'){ dealDamageTo(t,(u?15:10)+2*rageSpend(2,20)); return; }
-      const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; dealDamageTo(t,c*(u?6:5)); }},
+      const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; sfx('kw_curse'); dealDamageTo(t,c*(u?6:5)); }},   // v0.61.32
   {id:'qungui', name:'群鬼乱舞', type:'attack', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`消耗 ${u?2:4} 点【尸气】，所有召唤单位本回合立刻作用 1 次`
       :G.hero==='wuseng'?`造成 4 伤害。场上每有 1 个召唤单位，此牌伤害 +${u?2:1}`
@@ -201,7 +201,7 @@ const CARDS = [
       :G.hero==='wuseng'?`对全体敌人造成 ${u?6:5} 伤害。每有 ${u?1:2} 点格挡，此牌伤害 +1（上限 +${u?11:8}）`
       :G.hero==='yincha'?`对全体敌人造成 ${u?7:5} 伤害。失去 2 点生命。每有 1 个召唤单位，此牌伤害 +${u?3:2}`
       :`对全体敌人造成 7 伤害。每层【诅咒】使该敌人受到此伤害 +${u?2:1}，并消耗其全部【诅咒】`,
-    eff:(u)=>{ if(G.hero==='tianshi'){ aliveEnemies().forEach(e=>{ const cc=e.curse||0; dealDamageTo(e,7+(u?2:1)*cc); e.curse=0; }); return; }
+    eff:(u)=>{ if(G.hero==='tianshi'){ let __any=false; aliveEnemies().forEach(e=>{ const cc=e.curse||0; if(cc>0) __any=true; dealDamageTo(e,7+(u?2:1)*cc); e.curse=0; }); if(__any) sfx('kw_curse'); return; }   // v0.61.32
       const n=G.summons.filter(s=>s.dur>0).length;
       if(G.hero==='ganshiren'){ dealDamageToAll((u?6:4)+n*(u?3:2)); return; }
       if(G.hero==='wuseng'){ dealDamageToAll((u?6:5)+Math.min(u?11:8,Math.floor((G.block||0)/(u?1:2)))); return; }
@@ -216,7 +216,7 @@ const CARDS = [
       if(G.hero==='wuseng'){ sealEnemy(t,1); dealDamageTo(t,u?22:16); return; }
       if(G.hero==='yincha'){ sealEnemy(t,1); loseHp(4); let d=u?24:16; if(G.hp < G.maxHp*0.4){ d*=2; log('钟馗镇魂：生命低于 40%，伤害翻倍'); } dealDamageTo(t,d); return; }
       // v0.61.10(P5)：天师列 15/20 → 18/24（每层诅咒引爆的 5/6 不动；其余三列数值不动）
-      const c=t.curse||0; sealEnemy(t,1); dealDamageTo(t,u?24:18); for(let i=0;i<c;i++) dealDamageTo(t,u?6:5); t.curse=0; if(c>0) log(`钟馗镇魂引爆 ${c} 层【诅咒】`); }},
+      const c=t.curse||0; sealEnemy(t,1); dealDamageTo(t,u?24:18); for(let i=0;i<c;i++) dealDamageTo(t,u?6:5); t.curse=0; if(c>0){ sfx('kw_curse'); log(`钟馗镇魂引爆 ${c} 层【诅咒】`); } }},   // v0.61.32
 /* —— 防御 15~23 —— */
   {id:'jingang', name:'金刚符', type:'defense', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?7:4} 点格挡。获得 ${u?2:1} 点【尸气】`
@@ -602,6 +602,36 @@ const GHOST_IDS = ['zhiren','xiaogui','wutong','yinbingguo','zhongkui','shi_wang
 const CAN_CURSE_IDS = ['huofu','wanjian','taomufu','shihunzhou','sheshen','fenfu','zhouyin','zhouyu']; // 无条件可施加诅咒的牌（8 张）
 const isGhostCard = c => !!(c && c.type==='spirit' && GHOST_IDS.includes(c.id));
 const isCanCurse  = c => !!(c && CAN_CURSE_IDS.includes(c.id));
+
+/* ——— v0.61.32：逐张点名的音效表 ———
+   只有「没有统一引擎收口点」的键才需要写在这：能收口的一律走收口点，别往这里堆。
+   （给格挡的牌走 gainBlock 的 card_defense，召唤走 addSummon，血怒走 gainRage，
+     镇魂/魅惑走 sealEnemy/charmEnemy —— 所以它们**不在**下表里。） */
+const CARD_SFX = {
+  /* A 组·玩家输出细分：17 张按听感归 4 类。一张牌只给一个音 —— 冲突时取更有辨识度的那类，
+     所以「剑符」归斩击（不归符咒）、「万剑归宗」归符咒（不归群伤）、「群鬼乱舞/百鬼夜行」归群伤（不归钝击）。 */
+  leifu:'atk_talisman',      huofu:'atk_talisman',      jianfu:'atk_slash',
+  zhanyaojian:'atk_slash',   tianlei:'atk_talisman',    wanjian:'atk_talisman',
+  tiebushan:'atk_blunt',     shihun:'atk_slash',        shixue:'atk_slash',
+  taomufu:'atk_talisman',    shihunzhou:'atk_talisman', zhongkui:'atk_blunt',
+  qungui:'atk_aoe',          baigui:'atk_aoe',          zhouyu:'atk_aoe',
+  yinbingguo:'atk_aoe',      shi_wang:'atk_aoe',
+  /* D 组·自我强化：这些牌没有共性收口点（不是给格挡、不是召唤），只能逐张点名 */
+  kaitianyan:'card_buff',    xueji:'card_buff',         ranxue:'card_buff',
+  ranhun:'card_buff',        jingxin:'card_buff',       yixing:'card_buff',
+  fuling:'card_buff',        xisui:'card_buff'
+};
+function cardSfxFor(c){ return (c && CARD_SFX[c.id]) || null; }
+
+/* I 组·遗物分化：12 件法器按「铃/幡 · 符/笔/剑 · 镜/录/道心」三类分开，
+   聚宝盆与返魂香不属这三类 → 退回通用的 relic 音（所以 relic 键也没退役）。 */
+const RELIC_SFX = {
+  zhaohunfan:'relic_bell',   shehunling:'relic_bell',
+  zhushabi:'relic_fu',       jifengfu:'relic_fu',        hushenfu:'relic_fu',
+  taomujian:'relic_fu',      tongqianjian:'relic_fu',
+  yinyangjing:'relic_mirror',daoxin:'relic_mirror',      baiguilu:'relic_mirror'
+};
+function relicSfxFor(r){ return (r && RELIC_SFX[r.id]) || 'relic'; }
 /* —— 尸气 —— */
 function gainShiqi(n){ if(!n || n<=0) return;
   tipOnce('shiqi', '<b>【尸气】</b>是茅山赶尸人的专属资源：上限 12 点、<b>整局累积不清零</b>。场上每有 1 个召唤物，回合开始就 +1；攒着可以强化【五通神】，或用【咒雨】一次引爆。');
@@ -611,7 +641,10 @@ function gainShiqi(n){ if(!n || n<=0) return;
 function hasShiqi(n){ return (G.尸气||0) >= n; }
 function spendShiqi(n){ if(!hasShiqi(n)) return false; G.尸气 -= n; return true; }
 /* —— 血怒（不自动烧；只在使用“每层+N”效果时消耗实际用到的层数） —— */
-function gainRage(n){ if(!n || n<=0) return; G.xuenu = Math.min(G.maxXuenu||10, (G.xuenu||0)+n); }
+function gainRage(n){ if(!n || n<=0) return;
+  const __b=(G.xuenu||0);
+  G.xuenu = Math.min(G.maxXuenu||10, __b+n);
+  if(G.xuenu>__b) sfx('card_xuenu'); }   // v0.61.32：满 10 层后不再出声（满了就「涨不上去」了）
 function rageLayers(){ return G.xuenu||0; }
 /* per=每层加成, cap=加成上限：返回可使用的层数，并就地消耗 */
 function rageSpend(per, cap){ const layers=Math.floor(cap/per); const use=Math.min(layers, rageLayers()); if(use>0){ G.xuenu -= use; } return use; }
@@ -623,6 +656,7 @@ const SUMMON_LIFE_TYPES = ['zhiren','xiaogui','wutong','yinbing'];
 function addSummon(o){ G.summonsMadeTurn=(G.summonsMadeTurn||0)+1;
   if(G.hero==='ganshiren' && SUMMON_LIFE_TYPES.indexOf(o.type)>=0) o.dur=(o.dur||0)+1;
   tipOnce('summon', '<b>召唤物</b>不算「敌人」—— 它站在你这边，每回合结束自动结算一次自己的效果（打人 / 给你格挡 / 回血），寿命归零就消散。敌人血条下面那排小字就是它们的剩余回合数。');
+  sfx('card_summon');   // v0.61.32：所有己方召唤的**唯一**入口（含尸王与附灵术）
   G.summons.push(o); return o; }
 /* 五通神「回合开始」效果（现形当回合立即结算一次，之后每个回合开始再触发；寿命 -1） */
 function wutongTick(s){
@@ -661,7 +695,8 @@ function summonTarget(preferCursed){
 function wasSealedBefore(e){ return !!(e && (e.seal || e.sealedEver)); }
 function sealEnemy(e, turns){
   if(!e) return false;
-  if(isLinghua(e)){ log(e.name+' 灵化免疫了【镇魂】'); return false; }
+  if(isLinghua(e)){ sfx('kw_linghua'); log(e.name+' 灵化免疫了【镇魂】'); return false; }   // v0.61.32：弹开的听感要能分辨
+  sfx('card_zhenhun');
   e.sealedEver=true; e.seal=true; e.sealTurn=turns||1; floatMsg('镇魂');
   log(e.name+' 被【镇魂】封印'+(e.sealTurn>1?(' '+e.sealTurn+' 回合'):''));
   return true;
@@ -669,7 +704,8 @@ function sealEnemy(e, turns){
 /* —— 魅惑（charmPct=剩余伤害比例；升级更狠 25%） —— */
 function charmEnemy(e, pct){
   if(!e) return false;
-  if(isLinghua(e)){ log(e.name+' 灵化免疫了【魅惑】'); return false; }
+  if(isLinghua(e)){ sfx('kw_linghua'); log(e.name+' 灵化免疫了【魅惑】'); return false; }   // v0.61.32
+  sfx('card_charm');
   e.charm=(e.charm||0)+1;
   const np=(pct==null?0.5:pct);
   e.charmPct = (e.charmPct==null?np:Math.min(e.charmPct,np));
@@ -749,7 +785,14 @@ function usePotionByName(name){
 
 /* ===================== 废牌（敌人怨气机制） ===================== */
 function junkCard(){ return {id:'yuanqi', name:'怨气', type:'junk', rarity:'white', cost:0, t:()=>'废牌 · 打出时失去 3 点生命（若不打出，回合结束自动打出）', eff:()=>{ directDamage(3, '怨气噬心：失去 3 点生命'); }}; }
-function addJunkToHand(n){ for(let i=0;i<n;i++){ if(G.hand.filter(c=>c.type==='junk').length>=3){ log('怨气已达上限（最多 3 张），不再塞入废牌'); return; } G.hand.push(junkCard()); } log('怨气缠身：一张【怨气】废牌塞入你的手牌'); }
+function addJunkToHand(n){ let __added=0;
+  for(let i=0;i<n;i++){
+    if(G.hand.filter(c=>c.type==='junk').length>=3){ log('怨气已达上限（最多 3 张），不再塞入废牌'); break; }
+    G.hand.push(junkCard()); __added++;
+  }
+  /* v0.61.32：把原来的中途 return 改 break —— 语义不变（到上限时同样不记「怨气缠身」那行），
+     但能知道到底塞进去没有，好决定 kw_junk 要不要响。 */
+  if(__added){ sfx('kw_junk'); log('怨气缠身：一张【怨气】废牌塞入你的手牌'); } }
 function clearJunk(){
   const n=G.hand.filter(c=>c.type==='junk').length;
   if(n>0){ G.hand=G.hand.filter(c=>c.type!=='junk'); floatMsg('怨气驱散'); log(`驱散怨气缠身：${n} 张【怨气】废牌消失`); }
@@ -928,7 +971,11 @@ function makeEnemy(def, key){
   const e = {key:key, name:def.name, hp, maxHp:hp, block:0, pingbi:0, intents, intentIndex:0, intent:{type:'dormant'}, pendingDamage:0, curse:0, charm:0, charmPct:0.5, charmUsed:false, sealedEver:false, seal:false, strength:0, kind:def.kind, elite:!!def.elite, boss:!!def.boss, aggressive:!!def.aggressive, lifesteal:def.lifesteal||0, phase:!!def.phase, phase2:false, intents2, ledgerActive:false, ledgerDmg:0, ledgerAffix:null, split:!!def.split, splitDone:false, sealedCost:0, uid:UID++};
   e.affixes = rollAffixes(def);
   if(def.bossAffix && !e.affixes.length){ const a=AFFIXES[Math.floor(rng()*AFFIXES.length)]; e.affixes=[{id:a.id, tier:1}]; }
-  if(e.affixes.length){ const pb=e.affixes.find(a=>a.id==='pingbi'); if(pb){ e.block=8*pb.tier; e.pingbi=8*pb.tier; } }
+  /* v0.61.32：词缀「附上」那一刻的听感（素材清单 1.3 第 24 条：再生/屏壁/刚体/灵化 生效那一刻）。
+     一场多敌各带词缀时用 sfxOnce 节流，免得几个附体音叠成和弦。
+     ⚠ 这条键**不能**因为 yehuo 改走 boss_yehuo 就当它没用了 —— 用户已经交付了
+     素材/sfx/enemy_buff_self_1.mp3，搁着不接等于让人家的文件白发。 */
+  if(e.affixes.length){ sfxOnce('enemy_buff_self', 200); const pb=e.affixes.find(a=>a.id==='pingbi'); if(pb){ e.block=8*pb.tier; e.pingbi=8*pb.tier; } }
   return e;
 }
 function rollAffixes(def){

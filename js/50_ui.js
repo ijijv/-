@@ -167,7 +167,7 @@ function unknownWell(){
   G.hp=Math.max(1,G.hp-8); sfx('hurt'); log('古井许愿：以 8 点生命为代价，换取一件遗物');
   const relic=weightedRelic();
   if(!hasRelic(relic.id)) G.relics.push(relic.id);
-  sfx('relic'); log(`获得遗物【${relic.name}】`);
+  sfx(relicSfxFor(relic)); log(`获得遗物【${relic.name}】`);   // v0.61.32：铃/幡·符/笔/剑·镜/录 三类分化
   showOverlay(`<h2>古井许愿</h2><p>你俯身探井，井底有微光浮动。<br>你以 <b style="color:var(--red)">8 点生命</b>为代价，换取了一件遗物：</p>
     <div class="reward-cards"><div class="relic ${RCOLOR[relic.rarity]}"><div class="cname">${relic.name}</div><div class="cdesc">${relic.desc}</div><div class="ctype">遗物</div></div></div>
     <button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
@@ -390,7 +390,8 @@ function showRelicReward(){
   const html=picks.map((r,i)=>`<div class="relic ${RCOLOR[r.rarity]}" onclick="pickRelic(${i})">${relicIcon(r)}<div class="cname" data-tip="relic:${r.id}">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype">遗物 · ${RNAME[r.rarity]}</div></div>`).join('');
   showOverlay(`<h2>获得遗物 · 三选一</h2><p>遗物本局永久生效，点击获得（或跳过）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="skipRelic()">跳过</button>`);
 }
-function pickRelic(i){ const r=G.relicPicks[i]; if(!hasRelic(r.id)) G.relics.push(r.id); sfx('relic'); log(`获得遗物【${r.name}】`); hideOverlay(); goNext(); }
+/* v0.61.32：遗物音按法器类别分化（同古井许愿那一处） */
+function pickRelic(i){ const r=G.relicPicks[i]; if(!hasRelic(r.id)) G.relics.push(r.id); sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`); hideOverlay(); goNext(); }
 function skipRelic(){ hideOverlay(); goNext(); }
 
 function showCampfire(){
@@ -456,7 +457,7 @@ function forgeCard(i){
   const c=G.deck[i];
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   if(!canUpgrade(c)){ floatMsg('不可升级'); log(`【${c.name}】没有可升级的变化，无法锻造`); return; }
-  c.up=true; log(`锻造升级【${c.name}】`); sfx('relic');
+  c.up=true; log(`锻造升级【${c.name}】`); sfx('ui_levelup');   // v0.61.32：升级从蹭遗物音改成专属音
   if(G.forgeFrom==='camp'){ G.campActed=true; G.forgeFrom=null; saveRun(); renderCampfire(); }
   else { G.forgeFrom=null; hideOverlay(); goNext(); }
 }
@@ -573,10 +574,14 @@ function loadSave(){
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
 }
+/* v0.61.32：解锁音单独成函数 —— 冒烟里 unlockBestiary/unlockAchievement 都被换成空函数，
+   写在它们体内验不到（同 overlaySfx 的理由）。两个调用点各一行转发。 */
+function unlockSfx(){ sfx('ui_unlock'); }
 function unlockBestiary(key){
   if(!key || !ENEMIES[key]) return;
   if(SAVE.unlocked.includes(key)) return;
   SAVE.unlocked.push(key); persistSave();
+  unlockSfx();   // v0.61.32：图鉴新条目
   floatMsg('图鉴 · ' + ENEMIES[key].name);
   log(`【图鉴】收录「${ENEMIES[key].name}」`);
 }
@@ -624,7 +629,7 @@ function unlockAchievement(id){
   SAVE.achievements.push(id); persistSave();
   const a=ACHIEVEMENTS.find(x=>x.id===id);
   if(a){
-    sfx('gold');
+    unlockSfx();   // v0.61.32：成就从蹭金币音改成专属解锁音
     const cos=COSMETICS[a.reward];
     showAchievementToast(`成就解锁 · ${a.name}`, cos?`奖励：${cos.name}（收藏页可装备）`:'');
     log(`【成就】${a.name} 已解锁${cos?`，获得${cos.name}`:''}`);
@@ -772,8 +777,14 @@ function viewDeck(){
 }
 
 /* ===================== 覆盖层 ===================== */
-function showOverlay(html, closable){ document.getElementById('overlayContent').innerHTML=html; document.getElementById('overlay').classList.remove('hidden'); const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none'; }
-function hideOverlay(){ document.getElementById('overlay').classList.add('hidden'); }
+/* v0.61.32：面板开合音单独成函数 —— 冒烟里 showOverlay/hideOverlay 会被整体换成空函数
+   （与 startBGM 同一个处境），写在这两个函数体里就永远验不到。拆出来才验得到，
+   两个调用点只剩一行转发（那两行不可达，已如实记在更新日志里）。 */
+function overlaySfx(){ sfx('ui_panel'); }
+function showOverlay(html, closable){ overlaySfx();   // v0.61.32：面板开合（设置/图鉴/成就/牌库/结算）
+  document.getElementById('overlayContent').innerHTML=html; document.getElementById('overlay').classList.remove('hidden'); const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none'; }
+function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
+  document.getElementById('overlay').classList.add('hidden'); }
 function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }
 
 /* ===================== 渲染 ===================== */

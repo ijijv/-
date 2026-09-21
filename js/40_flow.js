@@ -93,6 +93,7 @@ function advanceAct(){
   showOverlay(`<h2>第 ${G.act} 幕 · ${ACT_NAMES[G.act-1]}</h2><p>更凶的妖魔盘踞在更高层。<br>敌人的生命与攻击都变强了。</p><button class="btn" onclick="hideOverlay(); showMap();">开始攀登</button>`);
 }
 function nextEndlessLap(){
+  sfx('ui_endless');   // v0.61.32：无尽进入下一层的过渡音
   MAP=genEndlessMap();
   G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
   showOverlay(`<h2>第 ${G.endlessFloor} 层 · 镇妖塔</h2><p>塔身继续向上延伸，妖魔愈发凶戾。<br>敌人属性与词缀随层数继续攀升。</p><button class="btn" onclick="hideOverlay(); showMap();">继续攀登</button>`);
