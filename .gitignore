@@ -1,11 +1,14 @@
 # ===== 临时产物 / 中间文件 =====
+# 注意：gitignore **不支持行尾注释** —— `~$*   # 说明` 会被当成整条模式，永远匹配不上。
+# 注释必须独占一行。（这条曾经踩过：锁文件和 _patch/_*.json 因此一直没被忽略。）
 __pycache__/
 *.pyc
 _test_out/
 /_thumb_*
 /_t.png
 *.tmp
-~$*          # Office 打开文档时的锁文件（如 ~$xxx.md）
+# Office 打开文档时的锁文件（如 ~$xxx.md）
+~$*
 *.bak
 *.orig
 *.rej
@@ -21,9 +24,11 @@ _patch/_sm.err
 _patch/_smoke_out.json
 _patch/_dom.html
 _patch/_dom.err
-_patch/_*.json      # 仿真器/冒烟的运行产物一律不进库（sim_baseline_v06106.json 是刻意留的基线，不以 _ 开头）
+# 仿真器/冒烟的运行产物一律不进库（sim_baseline_v06106.json 是刻意留的基线，不以 _ 开头）
+_patch/_*.json
 _patch/_*.err
-_patch/_pre/        # 由 git 现场还原的「改前树」，可随时重建：for f in js/*.js; do git show <rev>:$f > _patch/_pre/$f; done
+# 由 git 现场还原的「改前树」，可随时重建：for f in js/*.js; do git show <rev>:$f > _patch/_pre/$f; done
+_patch/_pre/
 _patch/*.check.js
 
 # ===== 打包产物 / 依赖 =====
