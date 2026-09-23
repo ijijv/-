@@ -3256,6 +3256,123 @@
     __ok('v0.61.32 UI·无尽攀塔过渡 → ui_endless', got.indexOf('ui_endless') >= 0, got.join(','));
   })();
 
+  /* ============ v0.61.33：预伤口径 / 指向机制 / 洗髓经跨关 / 渡魂口径 ============ */
+  (function () {
+    /* —— A① 预伤按「拖拽所指的那只」算（用户报的「锁A拖B 显示9实际6」） —— */
+    /* 注意：CARDS 里的是**共享单例**，本 runner 前面的 forgeCard 用例会把它的 up 置 true，
+       所以这里一律显式写 up（与既有 lv()/up() 辅助同一做法），不然断言会读到脏值。 */
+    var lf = Object.assign({}, __card('leifu'), { up: false });
+    var lfU = Object.assign({}, __card('leifu'), { up: true });
+    G = __base('tianshi'); G.enemies[0].curse = 2; G.enemies[1].curse = 0; G.target = 0;
+    __ok('v0.61.33 A① 不带目标时预览=当前目标(带诅咒)6+3=9', previewDamage(lf).d === 9, 'd=' + previewDamage(lf).d);
+    __ok('v0.61.33 A① 传显式目标(不带诅咒)→6（不再被锁定的那只带偏）',
+      previewDamage(lf, G.enemies[1]).d === 6, 'd=' + previewDamage(lf, G.enemies[1]).d);
+    __ok('v0.61.33 A① 显式目标=带诅咒那只仍是9，且不污染默认口径',
+      previewDamage(lf, G.enemies[0]).d === 9 && previewDamage(lf).d === 9,
+      previewDamage(lf, G.enemies[0]).d + '/' + previewDamage(lf).d);
+    __ok('v0.61.33 A① 升级雷符同口径（拖到不带诅咒=9 / 带诅咒=9+3=12）',
+      previewDamage(lfU, G.enemies[1]).d === 9 && previewDamage(lfU, G.enemies[0]).d === 12,
+      previewDamage(lfU, G.enemies[1]).d + '/' + previewDamage(lfU, G.enemies[0]).d);
+    var sh = Object.assign({}, __card('shihun'), { up: false });
+    G = __base('tianshi'); G.enemies[0].curse = 2; G.enemies[1].curse = 0; G.target = 0;
+    __ok('v0.61.33 A① 「落空」分支也按显式目标判定（噬魂术拖到无诅咒身上）',
+      previewDamage(sh, G.enemies[1]).miss === '无诅咒' && previewDamage(sh, G.enemies[0]).d === 10,
+      JSON.stringify(previewDamage(sh, G.enemies[1])) + ' / d=' + previewDamage(sh, G.enemies[0]).d);
+    G = __base('ganshiren'); G.enemies[0].curse = 1; G.enemies[1].curse = 5; G.target = 0;
+    var xg = Object.assign({}, __card('xiaogui'), { up: false });
+    __ok('v0.61.33 A① 小鬼预览仍取「诅咒最高」(5层)，不被显式目标改写',
+      previewDamage(xg, G.enemies[0]).curse === 5, 'curse=' + previewDamage(xg, G.enemies[0]).curse);
+
+    /* —— A② 点击锁定与卡面预伤徽章已下线 —— */
+    __ok('v0.61.33 A② selectTarget 已删除', typeof selectTarget === 'undefined', typeof selectTarget);
+    G = __base('tianshi'); G.enemies[0].curse = 1;
+    var hh = handCardHTML(__card('leifu'), false, 0, 1);
+    __ok('v0.61.33 A② 卡面不再含预伤徽章类名',
+      hh.indexOf('dmg-buff') < 0 && hh.indexOf('dmg-nerf') < 0 && hh.indexOf('dmg-plain') < 0
+      && hh.indexOf('dmg-miss') < 0 && hh.indexOf('dmg-tag') < 0,
+      hh.slice(0, 80));
+    __ok('v0.61.33 A② 卡面其余信息仍在（费用/卡图/拖拽入口）',
+      hh.indexOf('class="cost"') >= 0 && hh.indexOf('card/leifu.png') >= 0 && hh.indexOf('cardPointerDown') >= 0,
+      hh.slice(0, 80));
+    var eh = enemyPanelHTML(G.enemies[0], 0);
+    __ok('v0.61.33 A② 敌人面板不再有 onclick=selectTarget', eh.indexOf('selectTarget') < 0, eh.slice(0, 100));
+    __ok('v0.61.33 A② 敌人面板不再有 selected 类，仍带 data-uid（拖拽命中靠它）',
+      eh.indexOf(' selected') < 0 && eh.indexOf('data-uid') >= 0, eh.slice(0, 100));
+
+    /* —— B 箭头指向按机制判定 —— */
+    G = __base('tianshi');
+    __ok('v0.61.33 B 单体攻击牌要箭头（雷符/斩妖剑/天雷正法/铁布衫）',
+      needsTarget(__card('leifu')) && needsTarget(__card('zhanyaojian'))
+      && needsTarget(__card('tianlei')) && needsTarget(__card('tiebushan')));
+    __ok('v0.61.33 B 打全体不要箭头（万剑归宗/百鬼夜行）',
+      !needsTarget(__card('wanjian')) && !needsTarget(__card('baigui')));
+    __ok('v0.61.33 B 补上要箭头的非攻击牌（钟馗镇魂/镇妖铃/画皮）',
+      needsTarget(__card('zhongkui')) && needsTarget(__card('zhenyaoling')) && needsTarget(__card('huapi')),
+      [needsTarget(__card('zhongkui')), needsTarget(__card('zhenyaoling')), needsTarget(__card('huapi'))].join(','));
+    __ok('v0.61.33 B 防御/技能/无指向牌不要箭头（金刚咒/洗髓经/附灵术）',
+      !needsTarget(__card('jingang')) && !needsTarget(__card('xisui')) && !needsTarget(__card('fuling')));
+    G = __base('ganshiren');
+    __ok('v0.61.33 B 咒印·赶尸人=拿尸气，不要箭头', !needsTarget(__card('zhouyin')));
+    G = __base('wuseng');
+    __ok('v0.61.33 B 咒印·武僧=给自己挂吸血，不要箭头', !needsTarget(__card('zhouyin')));
+    G = __base('tianshi');
+    __ok('v0.61.33 B 咒印·天师=定向施咒，要箭头', needsTarget(__card('zhouyin')));
+    G = __base('yincha');
+    __ok('v0.61.33 B 咒印·阴差=定向施咒，要箭头', needsTarget(__card('zhouyin')));
+
+    /* —— C 数字素材接缝：没素材时走文字且不抛错 —— */
+    __ok('v0.61.33 C 无素材时 numProbe() 判定不可用（文字回退）', numProbe() === false);
+    var ferr = null;
+    try { floatDamage('-9', '', null); floatDamage('+12', 'heal', null); } catch (e2) { ferr = e2; }
+    __ok('v0.61.33 C floatDamage 在无素材时不抛错', ferr === null, ferr && ferr.message);
+
+    /* —— D 洗髓经不跨关 —— */
+    g = __base('tianshi'); G.xisuiTurns = 3;
+    var derr = null;
+    try { startBattle(['youhun']); } catch (e3) { derr = e3; }
+    __ok('v0.61.33 D 上一关末尾打出的洗髓经不带进下一关（startBattle 后 xisuiTurns=0）',
+      derr === null && G.xisuiTurns === 0, (derr && derr.message) || ('xisuiTurns=' + G.xisuiTurns));
+    g = __base('tianshi'); G.xisuiTurns = 2; G.drawPile = [__card('leifu'), __card('jingang')];
+    var derr2 = null;
+    try { startTurn(); } catch (e4) { derr2 = e4; }
+    __ok('v0.61.33 D 战斗内洗髓经仍按回合递减（本场没被误伤）',
+      derr2 === null && G.xisuiTurns === 1, (derr2 && derr2.message) || ('xisuiTurns=' + G.xisuiTurns));
+
+    /* —— E 渡魂归己：按「一批的真实总伤害」结算 —— */
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 5, ratio: 0.5 };
+    G.enemies[0].hp = 200; G.enemies[1].hp = 200;
+    duhunBatchBegin(); dealDamageTo(G.enemies[0], 9); dealDamageTo(G.enemies[1], 9); duhunBatchEnd();
+    __ok('v0.61.33 E 群伤按总真实伤害取整（9+9=18 → 回 9，而非逐击 4+4=8）', G.hp === 19, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 5, ratio: 0.5 };
+    dealDamageTo(G.enemies[0], 9);
+    __ok('v0.61.33 E 批外单发照样结算（9 → 回 4）', G.hp === 14, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 5, ratio: 0.5 }; G.enemies[0].block = 5;
+    dealDamageTo(G.enemies[0], 9);
+    __ok('v0.61.33 E 只按打完敌人格挡后的真实伤害算（9-5=4 → 回 2）', G.hp === 12, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 5, ratio: 0.5 }; G.enemies[0].hp = 3;
+    dealDamageTo(G.enemies[0], 9);
+    __ok('v0.61.33 E 斩杀溢出不计入（3 血敌人挨 9 → 按 3 算，回 1）', G.hp === 11, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 0, ratio: 0.5 };
+    dealDamageTo(G.enemies[0], 9);
+    __ok('v0.61.33 E 渡魂已过期则不回复', G.hp === 10, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 5, ratio: 0.3 };
+    duhunBatchBegin(); dealDamageTo(G.enemies[0], 9); duhunBatchEnd();
+    __ok('v0.61.33 E 比例 30% 也按总伤 floor（9 → 回 2）', G.hp === 12, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 79; G.maxHp = 80; G.duhun = { turns: 5, ratio: 0.5 };
+    duhunBatchBegin(); dealDamageTo(G.enemies[0], 9); duhunBatchEnd();
+    __ok('v0.61.33 E 回复不超生命上限', G.hp === 80, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 5, ratio: 0.5 };
+    G.relics = ['taomujian']; // hasRelic 比对的是**遗物 id 字符串**（G.relics.includes(id)），不是对象
+    G.enemies[0].hp = 200;
+    duhunBatchBegin(); dealDamageTo(G.enemies[0], 8); duhunBatchEnd();
+    __ok('v0.61.33 E 遗物增伤计入真实伤害（桃木剑 8×1.25=10 → 回 5）', G.hp === 15, 'hp=' + G.hp);
+    g = __base('tianshi'); G.hp = 10; G.duhun = { turns: 5, ratio: 0.5 };
+    G.enemies[0].hp = 200; G.enemies[1].hp = 200;
+    G.summons = [{ type: 'shi_wang', v: 7, dur: 3, up: false }];
+    summonAct(G.summons[0]);
+    __ok('v0.61.33 E 召唤行动也计入（尸王打全体 7+7=14 → 回 7）', G.hp === 17, 'hp=' + G.hp);
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();

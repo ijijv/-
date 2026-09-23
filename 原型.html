@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.61.32</title>
+<title>志怪塔 · 原型 v0.61.33</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -237,14 +237,9 @@
   .run-status{display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center; background:var(--ink); border:1px solid var(--ink3); border-radius:8px; padding:8px 12px; margin-bottom:12px; font-size:13px; color:var(--dim);}
   .run-status b{color:var(--gold);}
   .menu-panel{background:var(--ink); border:1px solid var(--ink3); border-radius:10px; padding:14px; margin:6px 0 14px;}
-  .dmg-buff{margin-top:5px; font-size:13px; color:#c86b1a; font-weight:bold;}
-  .dmg-nerf{margin-top:5px; font-size:12px; color:#3a6ea0; font-weight:bold;}
-  .dmg-plain{margin-top:5px; font-size:13px; color:#4a3f2f; font-weight:bold;}
-  .dmg-miss{margin-top:5px; font-size:12px; color:#8c2b21; font-weight:bold;}
-  .dmg-tag{font-size:10px; font-weight:normal; color:#8c2b21;}
-  .dmg-aoe{font-size:10px; color:#2b6ba0;}
-  .dmg-flash{animation:dmgFlash .5s ease-out;}
-  @keyframes dmgFlash{0%{background:rgba(224,179,65,.4); border-radius:3px;}100%{background:transparent;}}
+  /* v0.61.33：卡面预伤徽章样式（.dmg-buff/.dmg-nerf/.dmg-plain/.dmg-miss/.dmg-tag/.dmg-aoe）
+     与「点击锁定目标」时的闪烁（.dmg-flash / @keyframes dmgFlash）随机制一并删除 ——
+     预伤现在只浮在**目标敌人头顶**，样式见下面的 #drag-dmg。 */
   /* —— 外置素材（有则增强，无则优雅回退） —— */
   #bg{position:fixed; inset:0; z-index:0; width:100%; height:100%; object-fit:cover; pointer-events:none;}
   body.has-bg{background:transparent;}
@@ -268,6 +263,9 @@
   .card.shake{animation:cardShake .28s ease;}
   @keyframes cardShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
   .fx-dmg.block{color:#7fb0d8;}
+  /* v0.61.33：数字素材字形（素材/num/0.png…9.png）。高度按 1.15em 等比缩放，与既有 22px 字号对齐；
+     抖动/闪烁特效等图片到位后再补（挂在本类上即可，见待办）。 */
+  .fx-num{height:1.15em; width:auto; vertical-align:-.18em; margin:0 -.03em; pointer-events:none;}
   #tooltip{position:fixed; z-index:9999; max-width:250px; padding:9px 11px; background:rgba(24,18,12,.96); border:1px solid var(--gold); border-radius:7px; color:#e8dcc0; font-size:12px; line-height:1.5; pointer-events:none; opacity:0; transform:translateY(3px); transition:opacity .12s ease, transform .12s ease; box-shadow:0 6px 18px rgba(0,0,0,.55);}
   #tooltip.show{opacity:1; transform:translateY(0);}
   #tooltip .tt-title{font-weight:bold; color:#f0e0b8; margin-bottom:3px;}
@@ -340,7 +338,8 @@
   #tip-bubble.show{opacity:1;}
   #tip-bubble .tip-tag{display:inline-block; background:var(--gold); color:#241a10; border-radius:4px; padding:1px 8px; margin-right:8px; font-size:12px; letter-spacing:0; font-weight:bold;}
   #tip-bubble b{color:#f0e0b8;}
-  /* v0.61.20(P3)：拖拽指向敌人时，目标头顶的受击预览（与卡面徽章同源的 previewDamage） */
+  /* v0.61.20(P3)：拖拽指向敌人时，目标头顶的受击预览。
+     v0.61.33：卡面徽章已删，这里成为预伤的**唯一**显示处，且按「拖拽所见目标」实时算（previewDamage(c, e)）。 */
   #drag-dmg{position:fixed; z-index:34; pointer-events:none; font-family:var(--font-kai); font-size:30px; font-weight:bold; letter-spacing:1px;
     color:#ff9a3c; text-shadow:0 0 12px rgba(0,0,0,.95), 0 2px 5px rgba(0,0,0,.9); transform:translate(-50%,-100%); transition:opacity .1s ease;}
   #drag-dmg.weak{color:#8fc6ff;}
@@ -446,7 +445,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.32</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.33</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

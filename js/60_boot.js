@@ -78,6 +78,9 @@ function onDragMove(ev){
   } else {
     d.el.style.pointerEvents='none';
     d.el.style.transform='translate('+dx+'px,'+dy+'px) scale(1.12)';
+    /* v0.61.33：打全体 / 不指向的牌虽然不出箭头，但拖过敌人头顶时也照样报预伤（跟随所指目标） */
+    const idx2=enemyAtPoint(ev.clientX, ev.clientY);
+    if(idx2>=0) showDragPreview(idx2); else hideDragPreview();
   }
 }
 function onDragUp(ev){
@@ -87,10 +90,15 @@ function onDragUp(ev){
   const c=G.hand[d.i];
   let play=false;
   if(c){
-    if(!d.moved) play=true;
+    if(!d.moved){
+      /* v0.61.33：需要指向敌人的牌不能靠「点一下」打出 —— 那会打到 G.target 残留的那只（正是用户遇到的错伤害来源），
+         必须拖到敌人身上。非指向牌（防御/技能/全体）点一下照旧可出。 */
+      if(d.targetable){ floatMsg('把这张牌拖到敌人身上打出'); sfx('error'); }
+      else play=true;
+    }
     else if(d.targetable){
       const idx=enemyAtPoint(ev.clientX, ev.clientY);
-      if(idx>=0){ G.target=idx; play=true; }
+      if(idx>=0){ G.target=idx; play=true; if(TUT && TUT.step===2) advanceTut(); } // v0.61.33：引导第2步改由「拖到敌人身上」推进（原由 selectTarget 推进）
     } else if(d.sy-ev.clientY>=40){ play=true; }
   }
   d.el.classList.remove('dragging','lift','pressed');
@@ -102,8 +110,10 @@ function onDragUp(ev){
   hideDragPreview();
   if(play) playCard(d.i);
 }
-/* v0.61.20(P3)：拖拽受击预览 —— 箭头锁定目标时，目标头顶浮出这张牌的预计伤害。
-   数字直接取自卡面徽章那套 previewDamage()，不另开口径（徽章不显示的「平伤牌」这里也照样给数）。 */
+/* v0.61.20(P3)：拖拽受击预览 —— 目标头顶浮出这张牌的预计伤害。
+   v0.61.33：卡面徽章已删，这里是预伤的**唯一**显示处；口径仍只有 previewDamage() 一套，
+   但按「拖拽所指的那只敌人」算（previewDamage(c, e)），所以数字会跟着目标变；
+   打全体 / 不指向的牌也照样显示（只是不出箭头）。 */
 function hideDragPreview(){
   const el=document.getElementById('drag-dmg');
   if(el) el.classList.add('off');
@@ -113,13 +123,13 @@ function showDragPreview(idx){
   const c=G.hand[DRAG.i]; const e=G.enemies[idx];
   if(!c || !e) return hideDragPreview();
   const eel=document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]');
-  const pv=previewDamage(c);
+  const pv=previewDamage(c, e);   // v0.61.33：按「拖拽正指向的这只」算，跟着目标变（原来是不带目标 → 用上次锁定的那只）
   if(!eel || !pv) return hideDragPreview();
   let el=document.getElementById('drag-dmg');
   if(!el){ el=document.createElement('div'); el.id='drag-dmg'; document.body.appendChild(el); }
   if(pv.miss){ el.textContent='⚠ '+pv.miss+' · 落空'; el.className='weak'; }
   else {
-    const aoe=(c.id==='wanjian'||c.id==='baigui')?' 全体':'';
+    const aoe=AOE_CARDS.includes(c.id)?' 全体':'';   // v0.61.33：与 needsTarget 的全体名单同一处真相
     const per=pv.perTurn?' 每回合':'';
     el.textContent='-'+pv.d+aoe+per;
     el.className = pv.weak ? 'weak' : '';
@@ -370,7 +380,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.61.32</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.61.33</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -443,14 +453,14 @@ function toggleEndTurnHint(){ // v0.61.20(P1)
 /* ===================== 新手引导 ===================== */
 function tutorialSeen(){ try{ return Store.get('zhiguaitower_tutorial_v1')==='1'; }catch(e){ return false; } }
 function markTutorialSeen(){ try{ Store.set('zhiguaitower_tutorial_v1','1'); }catch(e){} }
-/* —— 交互式新手引导（强制分步：出牌→切换目标→结束回合） —— */
+/* —— 交互式新手引导（强制分步：出牌→拖拽指向敌人→结束回合） —— */
 let TUT=null;
 function startGuidedTutorial(){ TUT={step:1}; renderTutHint(); }
 function renderTutHint(){
   let el=document.getElementById('tut-hint');
   if(!TUT){ if(el) el.remove(); return; }
   if(!el){ el=document.createElement('div'); el.id='tut-hint'; document.body.appendChild(el); }
-  const msgs={1:'第一步 · 点一张<b>手牌</b>打出（左上角是符文费用）',2:'第二步 · 点<b>敌人</b>切换攻击目标（金色边框 = 当前目标）',3:'第三步 · 点手牌右侧<b>「结束回合」</b>结束本回合'};
+  const msgs={1:'第一步 · 把<b>攻击牌拖到敌人身上</b>打出（左上角是符文费用）',2:'第二步 · 箭头指向谁，谁的头顶就会浮出<b>预计伤害</b>（非指向牌点一下即可打出）',3:'第三步 · 点手牌右侧<b>「结束回合」</b>结束本回合'};
   el.innerHTML='<span class="tut-tag">引导</span>'+msgs[TUT.step];
   el.classList.add('show');
 }
@@ -461,7 +471,7 @@ function advanceTut(){
 }
 const TUTORIAL_STEPS = [
   {t:'出牌', html:'点<b>手牌</b>打出，左上角数字是<b>符文费用</b>（出不起会提示「符文不足」）。<br>每回合 3 点符文，用完就点「结束回合」。'},
-  {t:'目标与意图', html:'点<b>敌人</b>切换攻击目标（金色边框 = 当前目标）。<br>敌人头顶 <b>⚠ 意图</b> 预告它下回合要做什么，先看清再决定。'},
+  {t:'目标与意图', html:'把 <b>攻击牌拖到敌人身上</b>打出 —— 箭头指到谁就打谁，落点会高亮，同时浮出<b>预计伤害</b>（已算上遗物/诅咒/格挡/虚弱）。<br>敌人头顶 <b>⚠ 意图</b> 预告它下回合要做什么，先看清再决定。'},
   {t:'关键词与状态', html:'文字里的<b>金色关键词</b>（如【诅咒】【虚弱】）悬停可看解释。<br>敌人身上的状态徽章（诅咒/力量等）也可悬停查看。'},
   {t:'遗物与灵汁', html:'顶栏 <b>🧪灵汁</b> 点击直接使用；<b>遗物</b> 本局永久生效。<br>战斗外可点「菜单」存档、改设置。祝你好运，打上塔顶。'}
 ];

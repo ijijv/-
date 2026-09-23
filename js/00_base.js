@@ -118,6 +118,25 @@ function tipOnce(key, html){
 
 /* ===================== 战斗特效（juice：伤害飘字 / 受击震屏 / 敌人抖动） ===================== */
 let HITFX = { enemies: new Set() };
+/* v0.61.33 · 伤害浮字的数字素材接缝（素材/num/0.png … 9.png）
+   NUM_STATE：0=还没探测 1=图片可用 -1=不可用（含探测中，先按不可用渲染，加载完自动切换） */
+let NUM_IMG=null, NUM_STATE=0;
+function numProbe(){
+  if(NUM_STATE) return NUM_STATE===1;
+  if(typeof Image==='undefined' || typeof assetURL!=='function'){ NUM_STATE=-1; return false; }
+  NUM_STATE=-1; // 先假定不可用：本次仍用文字，等 10 张全部加载成功再把 NUM_STATE 翻成 1
+  try{
+    const arr=[]; let left=10, done=false;
+    for(let i=0;i<10;i++){
+      const im=new Image();
+      im.onload=()=>{ if(done) return; if(--left===0){ NUM_IMG=arr; NUM_STATE=1; } };
+      im.onerror=()=>{ if(done) return; done=true; NUM_STATE=-1; NUM_IMG=null; };
+      im.src=assetURL('num/'+i+'.png');
+      arr.push(im);
+    }
+  }catch(e){ NUM_STATE=-1; NUM_IMG=null; }
+  return false;
+}
 let PLAYER_HP_PREV = null;
 let ENEMY_HP_PREV = {};
 function fxLayer(){
@@ -129,7 +148,15 @@ function floatDamage(text, kind, anchor){
   if(!fx()) return;
   const span=document.createElement('span');
   span.className='fx-dmg '+kind;
-  span.textContent=text;
+  // v0.61.33：有数字素材就把字形换成图片（0-9 之外的一律回落文字，符号 +/- 保持文字）
+  const __sign=/^[+-]/.test(text) ? text[0] : '';
+  const __digits=__sign ? text.slice(1) : text;
+  if(numProbe() && __digits.length && !/[^0-9]/.test(__digits)){
+    if(__sign) span.textContent=__sign;
+    for(const ch of __digits){ const im=new Image(); im.className='fx-num'; im.src=NUM_IMG[+ch].src; im.alt=ch; span.appendChild(im); }
+  } else {
+    span.textContent=text;
+  }
   fxLayer().appendChild(span);
   if(anchor){
     const r=anchor.getBoundingClientRect();

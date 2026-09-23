@@ -829,30 +829,13 @@ function groupHand(){
 function handCardHTML(c, disabled, i, n){
   const eff=effectiveCost(c);
   const costHtml = eff<cardCost(c) ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
-  const pv = previewDamage(c);
-  let dmgHtml = '';
-  if(pv){
-    if(pv.miss){
-      dmgHtml = `<div class="dmg-miss">⚠ ${pv.miss} · 落空</div>`;
-    } else if(pv.dynamic || pv.d !== pv.raw || pv.perTurn){
-      let tags=[];
-      if(pv.curse>0) tags.push(`诅咒×${pv.curse}`);
-      if(pv.taomu) tags.push('桃木剑');
-      if(pv.tongqian) tags.push('铜钱剑');
-      if(pv.zhusha) tags.push('朱砂笔');
-      if(pv.turnBuf) tags.push('开天眼');
-      if(pv.weak) tags.push('虚弱');
-      const cls = pv.d>pv.raw ? 'dmg-buff' : pv.d<pv.raw ? 'dmg-nerf' : 'dmg-plain';
-      const aoeNote = (c.id==='wanjian'||c.id==='baigui') ? ' <span class="dmg-aoe">全体</span>' : '';
-      const perTurnNote = pv.perTurn ? ' <span class="dmg-aoe">每回合</span>' : '';
-      const tagHtml = tags.length ? ` <span class="dmg-tag">${tags.join(' · ')}</span>` : '';
-      dmgHtml = `<div class="${cls}">⚔ ${pv.d}${perTurnNote}${aoeNote}${tagHtml}</div>`;
-    }
-  }
+  /* v0.61.33：删除卡面「预伤徽章」（含数值 / 落空 / 诅咒×N 等标签）。
+     原因：徽章按「上次锁定的敌人」算，拖动改指向另一只时数字不跟着变，会显示错伤害。
+     预伤改为只在拖拽时浮在**目标敌人头顶**（60_boot.js showDragPreview），并跟随所指目标变化。 */
   const sealed = c.sealed>0;
   const sealTag = sealed ? `<div class="exhaust-tag">忘忧封印 ${c.sealed} 回合</div>` : '';
   const rot=((i-(n-1)/2)*3).toFixed(1);
-  return `<div class="card ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div>${sealTag}${dmgHtml}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
+  return `<div class="card ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div>${sealTag}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
 }
 function intentText(e){
   const st=(e.strength||0); // v0.61 C2：力量每点 +1
@@ -893,7 +876,7 @@ function enemyPanelHTML(e, idx){
   const ehp=Math.max(0,e.hp/e.maxHp*100);
   const ehPrev=(ENEMY_HP_PREV[e.uid]===undefined)?ehp:ENEMY_HP_PREV[e.uid];
   ENEMY_HP_PREV[e.uid]=ehp;
-  const selected = (e===curEnemy());
+  /* v0.61.33：删除「点击锁定」后不再有选中态 —— 目标只由拖拽落点决定（拖拽中的高亮是 .drag-target） */
   const liftY=(idx>=0?RISE_LIFT[idx%RISE_LIFT.length]:0); // 纵深错落（振幅见 RISE_LIFT）
   const edef=ENEMIES[e.key];
   const eSize=e.boss?'e-boss':e.elite?'e-elite':(edef&&edef.summon)?'e-summon':'e-normal';
@@ -907,7 +890,7 @@ function enemyPanelHTML(e, idx){
   if(e.phase2) badges+=`<span class="badge affix" data-tip="kw:轮回" style="cursor:help">🔄轮回·二阶段</span>`;
   if(e.affixes && e.affixes.length) e.affixes.forEach(a=>{ const af=AFFIXES.find(x=>x.id===a.id); badges+=`<span class="badge affix" data-tip="affix:${a.id}" style="cursor:help">${af?af.name:a.id}${a.tier>1?'·'+a.tier:''}</span>`; });
   if(G.hero==='tianshi' && G.ybTarget===e.uid && G.summons.some(x=>x.type==='yinbing' && x.dur>0)) badges+=`<span class="badge ybtarget" data-tip="kw:阴兵目标" style="cursor:help">🎯阴兵目标</span>`;
-  return `<div class="enemy ${eSize} ${liftY>0?'edepth':''} ${selected?'selected':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" onclick="selectTarget(${idx})" style="z-index:${2000-liftY}; transform:translateY(-${liftY}px)">
+  return `<div class="enemy ${eSize} ${liftY>0?'edepth':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" style="z-index:${2000-liftY}; transform:translateY(-${liftY}px)">
     ${artImg('enemy/'+e.key+'.png', '', 'eportrait '+eSize)}
     <div class="ename" data-tip="enemy:${e.key}">${KIND_ICON[e.kind]||''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
     <span class="stat">生命 <b>${e.hp}</b>/${e.maxHp}</span>
@@ -932,8 +915,19 @@ function summonHTML(s){
 }
 
 /* ===================== 拖拽出牌（阶段② 骨架） ===================== */
-const AOE_CARDS = ['wanjian', 'baigui'];
-function needsTarget(c){ return c.type==='attack' && !AOE_CARDS.includes(c.id); }
+const AOE_CARDS = ['wanjian', 'baigui'];   // 打全体：不需要拖拽箭头（咒雨不在此列 —— 它按机制随机分配，不是「全体」，见 P3）
+/* v0.61.33：是否需要「拖出箭头指向单个敌人」改为**按机制**判定，不再只看 type==='attack'。
+   原先的判定漏掉 4 张真正要指定目标的牌，删掉「点击锁定」后它们会永远选不了目标：
+     · 钟馗镇魂 / 镇妖铃 —— type 是 spirit，但走 curEnemy() 打单体（镇妖铃还对带诅咒目标加伤）
+     · 画皮 —— 定向施加【魅惑】；咒印 —— 定向施加【诅咒】
+   攻击牌里 万剑归宗 / 百鬼夜行 打全体、无需箭头（已由 AOE_CARDS 排除）。 */
+const TARGETED_CARDS = ['leifu','huofu','jianfu','zhanyaojian','tianlei','tiebushan','shihun','qungui',
+  'taomufu','shihunzhou','shixue','zhongkui','zhenyaoling','huapi'];
+function needsTarget(c){
+  // 咒印：目标随角色变 —— 赶尸人=拿尸气、武僧=给自己挂吸血，都不指向敌人；天师/阴差才定向施咒
+  if(c.id==='zhouyin') return G.hero!=='ganshiren' && G.hero!=='wuseng';
+  return TARGETED_CARDS.includes(c.id);
+}
 let DRAG = null;
 let ARROW_TIP = null;
 function dragArrow(){

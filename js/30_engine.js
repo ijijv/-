@@ -41,9 +41,31 @@ function curEnemy(){
   return al[0];
 }
 function randomAlive(){ const a=aliveEnemies(); return a.length? a[Math.floor(rng()*a.length)] : null; }
-function selectTarget(i){ if(TUT && TUT.step===2) advanceTut(); G.target=i; render(); document.querySelectorAll('#hand .dmg-buff,#hand .dmg-nerf,#hand .dmg-plain,#hand .dmg-miss').forEach(el=>{ el.classList.remove('dmg-flash'); void el.offsetWidth; el.classList.add('dmg-flash'); }); }
+/* v0.61.33：删除「点击敌人锁定目标」（原 selectTarget）。目标只由**拖拽落点**决定
+   （60_boot.js 的 onDragUp 里写 G.target），点敌人不再改目标、卡面也不再有预伤徽章。
+   原因：徽章与敌人高亮都按「上次锁定的那只」算，拖动改指向另一只时数字不跟着变，会显示错的伤害。
+   原 selectTarget 兼职的「推进引导第 2 步」改由「把牌拖到敌人身上」触发（见 onDragUp）。 */
 
 /* ===================== 战斗函数 ===================== */
+/* 渡魂归己（v0.61.33 改口径）：把「一张牌 / 一次召唤行动」内对敌人造成的**真实总伤害**攒起来一次转化。
+   真实伤害 = 走完遗物增伤(桃木剑/铜钱剑)、朱砂笔、开天眼、虚弱、敌人格挡之后真正扣在敌人身上的血量
+   （即 dealDamageTo 里的 actual），所以群伤、增益、遗物、格挡、虚弱全部已被计入。
+   攒批的理由：群伤/多段（百鬼夜行、尸王全体、多段攻击）逐击 floor 会丢掉零头，
+   只有对「总伤害」取整一次，才等于用户要求的「真实总伤害 × 比例」。 */
+let DUHUN_ACC=0, DUHUN_BATCH=false;   // DUHUN_ACC=本批累计真实伤害；DUHUN_BATCH=批已开（回合中）
+function duhunActive(){ return !!(G.duhun && G.duhun.turns>0); }
+function duhunFlush(){
+  const acc=DUHUN_ACC; DUHUN_ACC=0;
+  if(!duhunActive() || acc<=0) return;
+  const h=Math.floor(acc*G.duhun.ratio);
+  if(h>0){
+    G.hp=Math.min(G.maxHp, G.hp+h);
+    floatDamage('+'+h, 'heal', document.querySelector('#player-panel .hpbar'));
+    log(`渡魂归己：回复 ${h} 点生命（本批真实伤害 ${acc} × ${Math.round(G.duhun.ratio*100)}%）`);
+  }
+}
+function duhunBatchBegin(){ DUHUN_BATCH=true; DUHUN_ACC=0; }
+function duhunBatchEnd(){ DUHUN_BATCH=false; duhunFlush(); }
 /* floatDelay：>0 时把「音效 / 飘字 / 受击闪 / 日志」推迟到该毫秒 —— 伤害本体照旧同步结算，
    只有演出错开（多段攻击的连击演出用；敌人 multi 走的是 dealDamageToPlayer，同一套手法）。
    point：true 表示「这是调用方预结算好的 1 点」，跳过按整张牌口径设计的加成/减伤
@@ -65,7 +87,7 @@ function dealDamageTo(e,n,ignoreBlock,floatDelay,point){
   const hpBefore=e.hp; const actual=Math.min(d, hpBefore); // 实际扣除血量：d 可能溢出击杀，回血按 actual 而非打出伤害
   if(G.stealWatch){ G.stealAccum=(G.stealAccum||0)+actual; } // 咒印(#42B)：累计这张攻击牌的实际伤害，供 100% 吸血
   e.hp-=d; G.turnStats.dealt+=d; afterEnemyDamaged(e);
-  if(G.duhun && G.duhun.turns>0 && actual>0){ const h=Math.floor(actual*G.duhun.ratio); if(h>0){ G.hp=Math.min(G.maxHp, G.hp+h); floatDamage('+'+h, 'heal', document.querySelector('#player-panel .hpbar')); log(`渡魂归己：回复 ${h} 点生命`); } }
+  if(duhunActive() && actual>0){ DUHUN_ACC+=actual; if(!DUHUN_BATCH) duhunFlush(); } // v0.61.33：攒批，批外（如敌人自伤类）单发即结
   if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; log(`${e.name} 反震：反弹 ${r} 点伤害`); } }
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ sfx('kw_yehuo'); G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.hpLostTurn=(G.hpLostTurn||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); }
   /* v0.61.25：打击层按「打在什么上 / 打了多少 / 有没有打死」分级；
@@ -120,70 +142,70 @@ function applyCurse(e, n){
 const CARD_DMG = {
   /* 手牌伤害预览 = eff 逐列"当前状态"同式抄写。重做前旧值已整体废弃，勿再单独补行。
      仅镜像结算数值，不吃副作用、不实际扣资源；四列顺序：A赶尸人/B武僧/C阴差/D天师。 */
-  leifu: u=>{ const t=curEnemy(); if(!t) return 0; let d=(G.hero==='tianshi'?(u?9:6):G.hero==='yincha'?(u?8:5):(u?6:4));
+  leifu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d=(G.hero==='tianshi'?(u?9:6):G.hero==='yincha'?(u?8:5):(u?6:4));
     if(G.hero==='ganshiren') d=(u?7:4)+G.summons.filter(s=>s.dur>0).length;
     else if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/(u?2:3)));
     else if(G.hero==='yincha') d+=2*Math.min(3,rageLayers()); // eff: 2×rageSpend(2,6) 至多 +6
     else if(t.curse>0) d+=3;
     return d; },
-  huofu: u=>{ const t=curEnemy(); if(!t) return 0; let d=G.hero==='tianshi'?(u?8:5):(u?7:5);
+  huofu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d=G.hero==='tianshi'?(u?8:5):(u?7:5);
     if(G.hero==='ganshiren') d=u?8:5;
     if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/(u?2:3)));
     if(G.hero==='yincha') d=u?11:8; // C 固定 11/8（本回合有格挡也不加），与 eff 一致
     return d; },
-  jianfu: u=>{ const t=curEnemy(); if(!t) return 0; let d;
+  jianfu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d;
     if(G.hero==='wuseng') d=(u?10:6)+Math.floor(G.block/2); // 耗全部格挡，每2格挡+1
     else if(G.hero==='yincha') d=10+(G.hpLostTurn||0)*(u?2:1); // C 固定 10，本回合每失 1 血 +1/+2
     else if(G.hero==='tianshi'){ d=(u?14:9); if((t.curse||0)>=3) d*=2; }
     else { d=(u?13:8); if(hasShiqi(2)) d*=2; }
     return d; },
-  zhanyaojian: u=>{ const t=curEnemy(); if(!t) return 0; const base=u?12:8;
+  zhanyaojian: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; const base=u?12:8;
     if(G.hero==='tianshi'){ const boom=Math.min(2,t.curse||0); return base+boom*(u?7:5); } // D 引爆≤2层诅咒
     if(G.hero==='ganshiren') return base+2*G.summons.filter(s=>s.dur>0).length;
     if(G.hero==='yincha') return (u?14:9)+((t.curse||0)>0?(u?6:4):0); // C：9/14 且带诅咒额外 4/6
     return (t.curse>0)?base+6:base; }, // B：目标带诅咒 +6
-  tianlei: u=>{ if(!curEnemy()) return 0;
+  tianlei: (u,e)=>{ if(!(e||curEnemy())) return 0;
     if(G.hero==='wuseng') return u?20:15; // 获得格挡是副效果，不进伤害预览（与 eff 的主伤害一致）
     if(G.hero==='yincha') return (u?21:16)+Math.min(20,(G.totalHpLost||0)*(u?2:1)); // 近似：未含本牌自扣的5血
     if(G.hero==='tianshi') return u?30:20; // D 诅咒仅作费用减免，不改伤害
     return u?24:18; },
   wanjian: u=>G.hero==='wuseng'?(u?14:9):(G.hero==='tianshi'?(u?16:14):(u?15:10)),
-  zhongkui: u=>{ const t=curEnemy(); if(!t) return 0;
+  zhongkui: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0;
     if(G.hero==='tianshi') return (u?20:15)+(t.curse||0)*(u?6:5); // D 引爆全部诅咒
     if(G.hero==='ganshiren') return u?24:16; // A 固定 16/24（无条件获尸气，不改伤害）
     let d=u?22:16; if(G.hero==='yincha' && G.hp<G.maxHp*0.4) d*=2; // C 残血（<40%）翻倍
     return d; },
-  tiebushan: u=>{ let d=G.block||0;
+  tiebushan: (u,e)=>{ let d=G.block||0;
     if(G.hero==='ganshiren') d+=Math.floor((G.尸气||0)/2)*(u?2:1);
-    else if(G.hero==='tianshi'){ const t=curEnemy(); if(t) d+=(t.curse||0)*(u?2:1); }
+    else if(G.hero==='tianshi'){ const t=e||curEnemy(); if(t) d+=(t.curse||0)*(u?2:1); }
     return d; },
-  shihun: u=>{ const t=curEnemy(); if(!t) return 0; // 四列：预览须与 eff 逐列一致
+  shihun: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; // 四列：预览须与 eff 逐列一致
     if(G.hero==='ganshiren') return u?18:14; // 赶尸人：耗4尸气固定伤，不吃诅咒
     if(G.hero==='wuseng') return (t.curse||0)*(u?3:2); // 武僧：每层 2/3 伤害（另按每层获 1/2 格挡）
     if(G.hero==='yincha') return (u?15:10)+2*Math.min(10,rageLayers()); // 阴差：血怒每层+2(至多10层=+20)，打出时消耗
     return (t.curse||0)*(u?6:5); },
-  qungui: u=>{ const t=curEnemy();
+  qungui: (u,e)=>{ const t=e||curEnemy();
     if(G.hero==='wuseng') return t?4+G.summons.filter(s=>s.dur>0).length*(u?2:1):0; // B 直伤
     if(G.hero==='tianshi') return t?((u?6:5)+Math.min(u?6:4,t.curse||0)):0;         // D 直伤
     if(G.hero==='yincha') return 0; // C 无直接伤害（增伤buff），数值以召唤面板为准
     // A：数值=全场召唤"立即作用一次"的总伤害（近似总伤），无召唤时 0→显示"无召唤"
     return G.summons.filter(s=>s.dur>0).reduce((a,s)=>a+s.v+(s.type!=='shi_wang'&&isSummon('shi_wang')?1:0),0); },
-  taomufu: u=>{ const t=curEnemy(); if(!t) return 0; let d=G.hero==='tianshi'?(u?7:5):G.hero==='ganshiren'?(u?7:5):(G.hero==='yincha'?(u?7:4):(u?6:4));
+  taomufu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d=G.hero==='tianshi'?(u?7:5):G.hero==='ganshiren'?(u?7:5):(G.hero==='yincha'?(u?7:4):(u?6:4));
     if(t.kind==='ghost'||t.kind==='jiangshi') d+=(u?6:4);
     if(G.hero==='wuseng' && (G.blockGainedTurn||0)>0) d+=2;
     else if(G.hero==='yincha' && t.hp<t.maxHp*0.5) d+=2;
     return d; },
-  shixue: u=>{ const t=curEnemy(); if(!t) return 0; let d;
+  shixue: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d;
     if(G.hero==='ganshiren') d=(u?7:5)+Math.min(5,Math.floor((G.尸气||0)/2));
     else if(G.hero==='wuseng') d=(u?6:4)+Math.min(5,Math.floor((G.block||0)/(u?2:3)));
     else if(G.hero==='yincha') d=(u?6:4)+Math.min(u?20:15,Math.floor((G.totalHpLost||0)/(u?3:4)));
     else d=(u?8:6);
     return d; },
-  baigui: u=>{ const n=G.summons.filter(s=>s.dur>0).length;
+  baigui: (u,e)=>{ const n=G.summons.filter(s=>s.dur>0).length;
     if(G.hero==='ganshiren') return (u?6:4)+n*(u?3:2);
     if(G.hero==='wuseng') return (u?6:5)+Math.min(u?11:8,Math.floor((G.block||0)/(u?1:2)));
     if(G.hero==='yincha') return (u?7:5)+n*(u?3:2);
-    const t=curEnemy(); return t?7+(u?2:1)*(t.curse||0):0; }, // D 每目标按自身诅咒独立
+    const t=e||curEnemy(); return t?7+(u?2:1)*(t.curse||0):0; }, // D 每目标按自身诅咒独立
   shihunzhou: u=>G.hero==='ganshiren'?(u?6:3):(G.hero==='tianshi'?(u?6:3):(G.hero==='yincha'?(u?8:5):(u?7:5))),
   zhiren: u=>{ const base = G.hero==='ganshiren' ? (hasShiqi(4)?(u?7:5):(u?4:2)) : (G.hero==='wuseng'||G.hero==='tianshi'?(u?3:2):(G.hero==='yincha'?(rageLayers()>=4?(u?5:4):(u?2:1)):(u?2:1)));
     const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
@@ -193,7 +215,7 @@ const CARD_DMG = {
     return v+(isSummon('shi_wang')?1:0)+bleed; },
   yinbingguo: u=>{ const bleed=(G.bleedSummons)?Math.floor((G.hpLostTurn||0)/2):0;
     return (u?5:4)+(isSummon('shi_wang')?1:0)+bleed; }, // 每只阴兵 v
-  zhenyaoling: u=>{ const t=curEnemy(); if(!t) return 0;
+  zhenyaoling: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0;
     const base = G.hero==='wuseng'?(u?15:10):(G.hero==='tianshi'?(u?14:10):(u?16:10));
     if(G.hero==='wuseng') return base+(((G.block||0)>=10)?(u?11:8):0); // 格挡 ≥10 → +8/+11
     if(G.hero==='yincha') return base+2*Math.min(10,rageLayers()); // 血怒每层 +2（至多 10 层）
@@ -202,17 +224,19 @@ const CARD_DMG = {
   shi_wang: ()=>10                // 尸王自身每回合末全体 10（不吃自身 +1）
 };
 const PER_TURN_SUMMONS = ['zhiren','xiaogui','yinbingguo','shi_wang'];
-function previewDamage(c){
+function previewDamage(c, targetEnemy){
+  /* v0.61.33：targetEnemy = 拖拽正指向的那只敌人。传了就用它，没传才回落 curEnemy()（= 当前目标）。
+     这样「头顶预伤」永远算的是你真正要打的那只，而不是上次锁定的那只（天师 9/6 错的根因）。 */
   const rawFn = CARD_DMG[c.id];
   if(!rawFn) return null;
   if(c.id==='zhouyu' && (G.hero==='wuseng'||G.hero==='yincha'||G.hero==='tianshi')) return null; // B 格挡转化 / C 只施咒 / D 只施咒，本身都无伤害
   if(c.id==='qungui' && G.hero==='yincha') return null; // C 群鬼乱舞是召唤增伤 buff，本身无直伤（数值看召唤面板）
   const perTurn = PER_TURN_SUMMONS.includes(c.id);
   // 召唤牌目标：小鬼/阴兵打「诅咒层数最高」的敌人，纸人打随机敌人（预览用当前选中目标作参照）
-  let e = curEnemy();
+  let e = targetEnemy || curEnemy();
   if(perTurn && (c.id==='xiaogui' || c.id==='yinbingguo')) e = mostCursedEnemy() || e;
   if(!e) return null;
-  const raw = rawFn(c.up);
+  const raw = rawFn(c.up, e); // v0.61.33：把目标透传给 CARD_DMG 的裸伤函数
   const dynamic = DYNAMIC_DMG.includes(c.id);
   if(dynamic){
     if(raw<=0){
@@ -608,6 +632,7 @@ function startBattle(keys){
   PLAYER_HP_PREV=null; ENEMY_HP_PREV={};
   G.block=0; G.weak=0; G.gouhun=0; G.thorns=0; G.pendingEnergy=0; G.pendingDiscard=0; G.summons=[];
   G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=0; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.pendingSeal=0; G.karmaFire=0; G.duhun=null; G.xiejia=0; G.zhouyuA=false; G.尸气=0; G.exhausted=[];
+  G.xisuiTurns=0; // v0.61.33：洗髓经是「本场战斗内接下来 N 回合」的增益，原来此处漏重置 → 上一关末尾打出会漏到下一关开头
   G.deck.forEach(c=>c.sealed=0);
   if(hasRelic('zhaohunfan')){ G.hp=Math.min(G.maxHp,G.hp+3); log('招魂幡：恢复 3 点生命'); }
   G.battleStartHp=G.hp;
@@ -633,6 +658,7 @@ function startTurn(){
   G.hpLostTurn=0; G.blockGainedTurn=0; G.summonsMadeTurn=0; CURSE_THIS_TURN=0;
   G.boostCurse=0; G.junkPlayedThisTurn=0; G.ranhunType=null; G.ranhunSelf=null; G.ranhunHeal=0; G.shouyiUp=false;
   G.zhouhunSteal=0; G.stealWatch=false; G.stealAccum=0; // 咒印：吸血只在本回合内有效
+  DUHUN_ACC=0; DUHUN_BATCH=false; // v0.61.33：渡魂攒批兜底清零（正常应在上一批收尾时已 flush）
   G.thorns=0; G.hitHeal=0; G.hitCurse=0; G.hitShiqi=0; G.hitRage=0; G.hitBlock=0; G.nextBlock=0;
   G.dodgeShiqi=0; G.dodgeNextBlock=0; G.dodgeHealRage=0; G.dodgeCurse=0;
   G.bleedSummons=false; G.bleedSummonsBonus=1;
@@ -719,6 +745,7 @@ function mostCursedEnemy(){
 function summonAct(s){
   const types=['zhiren','xiaogui','yinbing','shi_wang'];
   if(!types.includes(s.type)) return;
+  duhunBatchBegin(); // v0.61.33：一次召唤行动算一批（尸王打全体也只取整一次）
   // 尸王在场：其他召唤单位伤害 +1
   const shiWangBonus = (s.type!=='shi_wang' && G.summons.some(x=>x.type==='shi_wang' && x.dur>0)) ? 1 : 0;
   // 群鬼乱舞(#9) C 阴差：本回合每失去 2 点生命，召唤单位伤害 +1
@@ -758,6 +785,7 @@ function summonAct(s){
   else if(s.type==='shi_wang'){
     for(const e of aliveEnemies()) dealDamageTo(e, s.v);   // 尸王：每回合末对全体造成 10 点伤害
   }
+  duhunBatchEnd(); // v0.61.33：批收尾→按本批真实总伤害回复一次
 }
 /* 召唤单位消散时的结算（#41/#43/#47/#48） */
 function onSummonDeath(s){
@@ -969,9 +997,11 @@ function doPlayCard(i){
   // 咒印(#42 B)：咒魂为「本回合内打出的一张攻击牌」附加 100% 吸血
   const __stealPending = !!G.zhouhunSteal;
   if(G.hero==='wuseng' && G.zhouhunSteal && c.type==='attack'){ G.stealWatch=true; G.stealAccum=0; }
+  duhunBatchBegin(); // v0.61.33：渡魂归己按「这一张牌造成的真实总伤害」结算（群伤/多段只取整一次）
   cardPlayWindow=true;
   const effResult = c.eff(c.up, c, xuenuBonus);
   cardPlayWindow=false;
+  duhunBatchEnd();
   if(G.stealWatch){
     G.stealWatch=false; const __sh=G.stealAccum||0; G.stealAccum=0; G.zhouhunSteal=0;
     if(__sh>0){ heal(__sh); floatMsg('咒魂吸血 +'+__sh); log(`咒印：吸血回复 ${__sh} 点生命`); }
