@@ -351,6 +351,12 @@ function startSynthBGM(track){
    不退的后果很实在：Boss 房切 battle_boss 而文件不存在 → tryNext 耗尽扩展名 →
    掉进 startSynthBGM('battle_boss')，**反而比普通战少了音乐**（合成器只给 'battle' 叠鼓）。
    基础轨 menu/map/battle 不设回退项（它们没有可退的上级）。 */
+/* 已知轨名的**唯一真相源**：素材/music/ 下的每个文件都该是 bgm_<轨>.<ext>，
+   且 <轨> 落在这张表里。为什么值得单列一张表：BGM 文件是**人工按名交付**的，
+   拼错（bgm_elite.mp3 / bgm_battle_Elite.mp3）不会报任何错 —— 代码探不到文件就静默
+   走回退轨，你听到的是普通战斗曲，还以为「没接上」。_patch/verify_dist.py 的 [2c] 段
+   拿这张表逐文件核对磁盘（与 AUD_EXTS 同一套「真相源 + 断言」惯例）。 */
+const BGM_KNOWN_TRACKS = ['menu','map','battle','battle_elite','battle_boss','shop'];
 const BGM_FALLBACK = { battle_elite:'battle', battle_boss:'battle', shop:'map' };
 /* 打包产物里 ASSET_MAP 是权威清单：查得到就直接用，查不到当场退回（同步、可测、零空转）。
    开发期（file:// 双击，打包.py 没注入 ASSET_MAP）无法预知磁盘上有什么，
@@ -413,7 +419,17 @@ function startBGM(track){
 }
 /* CUR_BGM 记的是**逻辑轨**（设置页/存档看到的是「该在哪首曲子」），
    实际播放哪条由 bgmTrackFor 决定 —— 素材到货后无需改任何调用点，自动切回升级轨。 */
-function setBGM(track){ CUR_BGM=track; startBGM(bgmTrackFor(track)); }
+let BGM_WARNED = {};   // 未登记的轨名只提醒一次，不刷屏
+function setBGM(track){
+  /* 轨名没登记 → 素材/music/bgm_<轨>.* 就算躺在磁盘上也不会被请求到（拼错 = 静默无声）。
+     战斗中不能因为一个轨名拼错就抛异常，所以只警告一次、照旧往下走（探测/合成兜底）。 */
+  if(BGM_KNOWN_TRACKS.indexOf(track)<0 && !BGM_WARNED[track]){
+    BGM_WARNED[track]=1;
+    if(typeof console!=='undefined' && console.warn)
+      console.warn('未登记的 BGM 轨名：'+track+'（素材/music/bgm_'+track+'.* 不会被请求到）');
+  }
+  CUR_BGM=track; startBGM(bgmTrackFor(track));
+}
 /* 首次交互解锁音频（浏览器禁止自动播放，需一次用户手势） */
 function unlockAudio(){ ensureAudio(); loadSfxSamples(); if(BGM && SETTINGS.sound){ try{ BGM.play().catch(()=>{}); }catch(e){} } }
 document.addEventListener('pointerdown', unlockAudio, {once:true});

@@ -39,6 +39,8 @@ def dump_ids():
           # v0.61.31 起代码支持这三条升级轨，但**缺文件时会退回基础轨**（Boss/精英→battle、商店→map），
           # 所以它们不是「必须命中」，而是「交付即生效」。只用于把已交付的从 unused 里排掉。
           "musicOptional:['battle_elite','battle_boss','shop'],"
+          # 代码里的已知轨名（唯一真相源）—— 用来断言下面两张 listing 没和代码漂移
+          "bgmTracks:BGM_KNOWN_TRACKS,"
           "sfxKeys:SFX_KEYS,sfxExts:AUD_EXTS})")
     env = dict(os.environ, SMOKE_DUMP=js)
     r = subprocess.run(['node', HOST], capture_output=True, text=True, cwd=ROOT, env=env)
@@ -68,11 +70,20 @@ def main():
     want += [('relic/%s.png' % i) for i in ids['relics']]
     want += [('enemy/%s.png' % i) for i in ids['enemies']]
     want += [('bg/bg_%s.png' % i) for i in ids['bg']]
-    want += [('music/bgm_%s.mp3' % i) for i in ids['music']]
+    # BGM 不能只认 .mp3 —— BGM_EXTS 的顺序是 ogg 优先，交付格式变了不该假红（v0.61.34）
+    _audio = io.open(os.path.join(ROOT, 'js', '10_audio.js'), 'r', encoding='utf-8').read()
+    _mb = re.search(r'const BGM_EXTS\s*=\s*\[([^\]]*)\]', _audio)
+    bgm_exts = re.findall(r"'([^']+)'", _mb.group(1)) if _mb else []
+    check(bool(bgm_exts), '从 10_audio.js 解析到 BGM_EXTS（%s）' % ','.join(bgm_exts))
+    miss_music = ['music/bgm_%s{%s}' % (i, ','.join(bgm_exts)) for i in ids['music']
+                  if not any(('music/bgm_%s%s' % (i, e)) in keys for e in bgm_exts)]
     want += ['rune.png']
     miss = [w for w in want if w not in keys]
     check(not miss, '游戏请求的 %d 个素材全部命中' % len(want))
     for w in miss[:20]:
+        print('       缺: %s' % w)
+    check(not miss_music, '%d 首基础 BGM 各有一个扩展名命中' % len(ids['music']))
+    for w in miss_music:
         print('       缺: %s' % w)
 
     # ---- 1b. 音效扩展名：两个真相源必须一致（bug B 漂移闸） ----
@@ -90,6 +101,15 @@ def main():
           'AUD_EXTS == 打包.py AUD_MIME（%s vs %s）' % (','.join(exts_code), ','.join(exts_pack)))
     check('.m4a' in exts_code, '扩展名表含 .m4a（bug B：打包会收但播放探测不到）')
     check(sorted(exts_code) == sorted(ids['sfxExts']), '产物内 AUD_EXTS 与源码一致')
+
+    # ---- 1c. BGM 轨名：代码真相源 vs 本脚本的 必需/可选 两张 listing ----
+    print('\n[1c] BGM 轨名真相源一致')
+    tracks_code = sorted(ids.get('bgmTracks') or [])
+    tracks_doc = sorted(set(ids['music']) | set(ids['musicOptional']))
+    check(bool(tracks_code), '代码里取到 BGM_KNOWN_TRACKS（%s）' % ','.join(tracks_code))
+    check(tracks_code == tracks_doc,
+          'BGM_KNOWN_TRACKS == 本脚本的 必需+可选 listing（%s vs %s）'
+          % (','.join(tracks_code), ','.join(tracks_doc)))
 
     # ---- 2. 磁盘上的素材没被漏掉 ----
     print('\n[2] 磁盘素材完整性（除 enemy_backup）')
@@ -138,6 +158,33 @@ def main():
     else:
         print('  注: 素材/sfx/ 不存在或为空 —— 全部音效走 WebAudio 合成（可接受）')
 
+    # ---- 2c. BGM 文件名（人工交付，拼错 = 静默走回退轨 → 这里拦住） ----
+    print('\n[2c] 素材/music/ 命名合规')
+    _bgmset = set(ids.get('bgmTracks') or [])
+    diskbgm = sorted(d for d in disk if d.startswith('music/'))
+    badshape, badstem, have = [], [], set()
+    for d in diskbgm:
+        base, ext = os.path.splitext(os.path.basename(d))
+        if ext.lower() not in bgm_exts or not base.startswith('bgm_'):
+            badshape.append(d); continue
+        stem = base[len('bgm_'):]
+        if stem in _bgmset:
+            have.add(stem)
+        else:
+            badstem.append(d)
+    check(not badshape, 'music/ 下都是 bgm_<轨>.<%s>（坏 %d）' % (','.join(bgm_exts), len(badshape)))
+    check(not badstem,
+          '%d 个 BGM 文件的轨名都在 BGM_KNOWN_TRACKS 里（未知 %d）' % (len(diskbgm), len(badstem)))
+    for x in badshape[:8]:
+        print('       命名: %s' % x)
+    for x in badstem[:8]:
+        print('       未知轨名: %s —— 代码永远不会请求它，游戏里听到的是回退轨' % x)
+    print('  注: 磁盘上 %d 条轨（%s）' % (len(have), '、'.join(sorted(have)) or '无'))
+    _missing = sorted(_bgmset - have)
+    if _missing:
+        print('  注: 代码已知但磁盘没有：%s —— 会走回退轨（精英/Boss→battle、商店→map），不算错误'
+              % '、'.join(_missing))
+
     # ---- 3. 内联处理器依赖的全局名在混淆后仍存在 ----
     print('\n[3] 内联 onclick 全局名存活')
     # 处理器名从**产物**里抓（真正会被浏览器调用的那批）；
@@ -184,7 +231,11 @@ def main():
     #   · 音效 sfx/：没文件就走程序化合成
     #   · 三条升级轨：没文件就退回基础轨（v0.61.31，Boss/精英→battle、商店→map）
     # 其余素材缺一个就是真缺（[1] 会报），这里只盘点「打进来但游戏永远不会请求」的。
-    optional_music = set('music/bgm_%s.mp3' % i for i in ids['musicOptional'])
+    # BGM 六条轨**全部**算「可选覆盖」：基础三首没文件走合成、三条升级轨没文件走回退轨。
+    # 注意别只排 musicOptional —— 基础三首自 [1] 起不再进 want（改为任一扩展名判定），
+    # 漏排会让它们在这里假报「从未被请求」（本批第一版就是这个假警报）。
+    optional_music = set('music/bgm_%s%s' % (t, e)
+                         for t in (ids['music'] + ids['musicOptional']) for e in bgm_exts)
     unused = sorted(k for k in (keys - set(want))
                     if not k.startswith('sfx/') and k not in optional_music)
     if unused:

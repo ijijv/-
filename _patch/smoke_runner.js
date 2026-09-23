@@ -3373,6 +3373,84 @@
     __ok('v0.61.33 E 召唤行动也计入（尸王打全体 7+7=14 → 回 7）', G.hp === 17, 'hp=' + G.hp);
   })();
 
+  /* ============ v0.61.34 BGM 六轨：轨名真相源 + 普通/精英必须分开 ============ */
+  (function () {
+    /* 背景：v0.61.31 已把四类场景接上（普通战 battle / 精英战 battle_elite / Boss 战 battle_boss /
+       商店·营地·事件 shop / 地图 map / 菜单 menu），用户 9/23 交付了 6 个 mp3。
+       本组不验「接线做没做」（那是 v0.61.31 组的事），只验「素材名与代码轨名不许漂」——
+       文件名是人工交付的，拼错不会报错，只会静默走回退轨。 */
+    var tr = (typeof BGM_KNOWN_TRACKS !== 'undefined') ? BGM_KNOWN_TRACKS : null;
+    __ok('v0.61.34 前置：BGM_KNOWN_TRACKS 存在且非空', !!tr && tr.length > 0);
+    if (tr) {
+      __ok('v0.61.34 恰好 6 条轨且无重复', tr.length === 6 && new Set(tr).size === 6, tr.join(','));
+      __ok('v0.61.34 三条基础轨在册（menu / map / battle）',
+        tr.indexOf('menu') >= 0 && tr.indexOf('map') >= 0 && tr.indexOf('battle') >= 0);
+      __ok('v0.61.34 三条升级轨在册（battle_elite / battle_boss / shop）',
+        tr.indexOf('battle_elite') >= 0 && tr.indexOf('battle_boss') >= 0 && tr.indexOf('shop') >= 0);
+      /* 与磁盘命名同口径：verify_dist [2c] 按 bgm_<轨> 抠词干再比对，字符集必须一致 */
+      var badch = tr.filter(function (t) { return !/^[a-z][a-z0-9_]*$/.test(t); });
+      __ok('v0.61.34 轨名字符集与磁盘命名规则同口径（小写/数字/下划线）',
+        badch.length === 0, badch.join(','));
+      var fbOut = Object.keys(BGM_FALLBACK).filter(function (k) { return tr.indexOf(k) < 0; });
+      __ok('v0.61.34 BGM_FALLBACK 的每个键都在册（否则回退配置自己就是死配置）',
+        fbOut.length === 0, fbOut.join(','));
+      var stray = ['battle', 'battle_elite', 'battle_boss']
+        .filter(function (t) { return tr.indexOf(t) < 0; });
+      __ok('v0.61.34 battleBgmFor 可能返回的轨名全部在册', stray.length === 0, stray.join(','));
+    }
+
+    /* 用户点名的那条：「普通和精英也要分开」—— 直接断言两者不同轨。
+       注意入参形状：battleBgmFor 读的是**敌人对象**上的 .elite/.boss，不是 key 字符串。
+       喂 key 进去 strings 上没有这两个字段 → 三档全落 'battle'，看着像「没分开」，
+       实际是喂错了东西（本批第一版就踩了这个，红报 battle vs battle）。
+       这里按 makeEnemy 的产出形状（`elite:!!def.elite, boss:!!def.boss`）从**真实数据**造对象；
+       端到端那条路径（startBattle 建完敌人再选轨）由 v0.61.31 那组验。 */
+    var __pre = { normal: 0, elite: 0, boss: 0 };
+    Object.keys(ENEMIES).forEach(function (k) {
+      __pre[ENEMIES[k].boss ? 'boss' : (ENEMIES[k].elite ? 'elite' : 'normal')]++;
+    });
+    __ok('v0.61.34 前置：ENEMIES 里普通/精英/Boss 三类都真实存在（否则本节空转）',
+      __pre.normal > 0 && __pre.elite > 0 && __pre.boss > 0, JSON.stringify(__pre));
+    var __eobj = function (k) { return { elite: !!ENEMIES[k].elite, boss: !!ENEMIES[k].boss }; };
+    var __nk = Object.keys(ENEMIES).filter(function (k) { return !ENEMIES[k].elite && !ENEMIES[k].boss; })[0];
+    var __ek = Object.keys(ENEMIES).filter(function (k) { return ENEMIES[k].elite && !ENEMIES[k].boss; })[0];
+    var __bk = Object.keys(ENEMIES).filter(function (k) { return ENEMIES[k].boss; })[0];
+    __ok('v0.61.34 普通战与精英战不是同一条轨（用户要求：分开）',
+      battleBgmFor([__eobj(__nk)]) === 'battle' && battleBgmFor([__eobj(__ek)]) === 'battle_elite'
+      && battleBgmFor([__eobj(__nk)]) !== battleBgmFor([__eobj(__ek)]),
+      battleBgmFor([__eobj(__nk)]) + '（' + __nk + '） vs '
+      + battleBgmFor([__eobj(__ek)]) + '（' + __ek + '）');
+    __ok('v0.61.34 三档战斗两两不同轨',
+      battleBgmFor([__eobj(__nk)]) !== battleBgmFor([__eobj(__bk)])
+      && battleBgmFor([__eobj(__ek)]) !== battleBgmFor([__eobj(__bk)]),
+      [battleBgmFor([__eobj(__nk)]), battleBgmFor([__eobj(__ek)]),
+       battleBgmFor([__eobj(__bk)])].join(','));
+    /* 读档恢复 G.enemies 之前可能拿到空/畸形入参，不许炸 */
+    __ok('v0.61.34 battleBgmFor 对空数组/undefined/[null] 都回 battle 而不抛错',
+      battleBgmFor([]) === 'battle' && battleBgmFor(undefined) === 'battle' && battleBgmFor([null]) === 'battle');
+
+    /* 未登记轨名：setBGM 只警告、不抛错，且仍按原名请求（交给探测/合成兜底） */
+    var __savA = ASSET_MAP, __savCUR = CUR_BGM, __o3 = startBGM, __req = [];
+    var __ow = console.warn, __warns = [];
+    console.warn = function (m) { __warns.push(m); };   // 把提示收进断言，别往 stderr 吐
+    ASSET_MAP = null;   // 开发期口径（file://）：透传逻辑轨，不预判磁盘
+    startBGM = function (t) { __req.push(t); };
+    var __werr = null;
+    try { setBGM('bgm_typo'); } catch (e) { __werr = e; }
+    var __lastReq = __req[__req.length - 1];
+    __ok('v0.61.34 未登记轨名不抛错（战斗中不能因轨名拼错炸掉）', __werr === null, __werr && __werr.message);
+    __ok('v0.61.34 未登记轨名仍按原名请求（探测/合成兜底，不是静默丢弃）',
+      __lastReq === 'bgm_typo', 'got=' + __lastReq);
+    __ok('v0.61.34 CUR_BGM 如实记录逻辑轨（设置页/存档读的就是它）', CUR_BGM === 'bgm_typo', CUR_BGM);
+    __ok('v0.61.34 未登记轨名会 console.warn 一条并点名该轨',
+      __warns.length === 1 && String(__warns[0]).indexOf('bgm_typo') >= 0, __warns.join('|'));
+    __warns = []; __req = [];
+    try { setBGM('bgm_typo'); } catch (e) {}
+    __ok('v0.61.34 同一条未登记轨名不会反复警告（不刷屏），且仍照旧请求',
+      __warns.length === 0 && __req.length === 1 && __req[0] === 'bgm_typo');
+    console.warn = __ow; startBGM = __o3; ASSET_MAP = __savA; CUR_BGM = __savCUR;
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();
