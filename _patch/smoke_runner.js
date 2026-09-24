@@ -58,7 +58,7 @@
     G.xuejiArmed = false; G.endBlockKind = null; G.xiejia = 0; G.thorns = 0;
     G.hitHeal = 0; G.hitCurse = 0; G.hitShiqi = 0; G.hitRage = 0; G.hitBlock = 0; G.nextBlock = 0;
     G.dodge = 0; G.dodgeShiqi = 0; G.dodgeNextBlock = 0; G.dodgeHealRage = 0; G.dodgeCurse = 0;
-    G.ranhunType = null; G.ranhunSelf = null; G.bloodPact = 0; G.retain = 0; G.boostCurse = 0;
+    G.ranhunType = null; G.ranhunSelf = null; G.bloodPact = 0; G.retain = 0;   // v0.61.35：boostCurse 已随守一改为「减费」而退役
     G.zhouyuA = false; G.turnAtkBuff = 0; G.karmaFire = 0; G.burn = 0; G.weak = 0; G.gouhun = 0;
     __fresh();
     return G;
@@ -386,15 +386,15 @@
     __ok('D#42 咒印 目标带诅咒额外+1层(共4)', g.enemies[0].curse === 5 && CURSE_THIS_TURN === 4, 'curse=' + g.enemies[0].curse + ' CURSE=' + CURSE_THIS_TURN);
 
     g = __base('tianshi'); CURSE_THIS_TURN = 3; c = __card('jingang'); c.eff(false, c);
-    __ok('D#15 金刚符 按本回合诅咒+格挡(7)', g.block === 7, 'block=' + g.block);
+    __ok('D#15 金刚符 按本回合诅咒+格挡(8)', g.block === 8, 'block=' + g.block);   // v0.61.35：基础 4/6 → 5/7
 
     g = __base('tianshi'); CURSE_THIS_TURN = 3; c = __card('jinguang'); c.eff(false, c);
     __ok('D#17 金光罩 12 盾+诅咒全额(15)', g.block === 15, 'block=' + g.block);
 
-    g = __base('tianshi'); c = __card('xiejiashengyuan'); g.hand = [c]; c.eff(true, c); // 升级 8 格挡
-    __ok('D#23 卸甲 置 endBlockKind=D(8盾)', g.endBlockKind === 'D' && g.block === 8, 'kind=' + g.endBlockKind + ' block=' + g.block);
+    g = __base('tianshi'); c = __card('xiejiashengyuan'); g.hand = [c]; c.eff(true, c); // v0.61.35：升级 8 → 12 格挡
+    __ok('D#23 卸甲 置 endBlockKind=D(12盾)', g.endBlockKind === 'D' && g.block === 12, 'kind=' + g.endBlockKind + ' block=' + g.block);
     g = __base('tianshi'); c = __card('xiejiashengyuan'); c.eff(true, c); finishEndTurn(); resolveEndBlock();
-    __ok('D#23 卸甲 敌后结算 8格挡→4诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 4 && CURSE_THIS_TURN === 4, 'sumCurse=' + __sumCurse() + ' CURSE=' + CURSE_THIS_TURN);
+    __ok('D#23 卸甲 敌后结算 12格挡→6诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 6 && CURSE_THIS_TURN === 6, 'sumCurse=' + __sumCurse() + ' CURSE=' + CURSE_THIS_TURN);
 
     g = __base('tianshi'); g.hand = [__card('leifu'), __card('leifu'), __card('leifu')];
     c = __card('fenfu'); c.eff(false, c); g.discardSelect.picked = [0, 2]; confirmDiscardSelect();
@@ -429,12 +429,23 @@
   // ===== 升级后 0 费（costU:0）真实出牌判定 =====
   // 全部出牌/显示路径走 effectiveCost/cardCost；两者在 c.up && costU!=null 时返回 costU
   (function () {
-    var zeroUp = ['tongling', 'jingxin', 'xueji', 'yixing']; // tiebushan 已按列取费（B 0 费不可升级）
+    var zeroUp = ['tongling', 'jingxin', 'xueji']; // tiebushan 已按列取费（B 0 费不可升级）；yixing 天师列 v0.61.35 取消 (U:0)，另测
     zeroUp.forEach(function (id) {
       var cu = Object.assign({}, __card(id)); cu.up = true;
       __ok('升级0费 costU=' + id, cardCost(cu) === 0 && effectiveCost(cu) === 0,
         'cost=' + cu.cost + ' costU=' + cu.costU + ' cardCost=' + cardCost(cu) + ' eff=' + effectiveCost(cu));
     });
+    // v0.61.35：移形换影「升级 0 费」只对 A/B/C 三列有效；天师列按新卡池文件改为 1/1
+    ['ganshiren', 'wuseng', 'yincha'].forEach(function (h) {
+      __base(h); var cy = Object.assign({}, __card('yixing'), { up: true });
+      __ok('移形换影 ' + h + ' 升级 0 费（v0.61.35 仅天师列取消）',
+        cardCost(cy) === 0 && effectiveCost(cy) === 0, 'cost=' + cardCost(cy));
+    });
+    (function () {
+      __base('tianshi'); var cy = Object.assign({}, __card('yixing'), { up: true });
+      __ok('移形换影 天师 升级仍 1 费（v0.61.35 取消 (U:0)）',
+        cardCost(cy) === 1 && effectiveCost(cy) === 1, 'cost=' + cardCost(cy));
+    })();
     // playCard 能量门槛（L2314 拦截条件 G.energy<cost）：energy=0/1 对 0 费升级牌均放行
     ['ganshiren', 'wuseng', 'yincha', 'tianshi'].forEach(function (h) {
       ['tongling', 'jingxin', 'xueji'].forEach(function (id) {
@@ -553,9 +564,9 @@
     __ok('雷符预览 C=5+血怒6=11', lv('leifu').d === 11, 'd=' + lv('leifu').d);
     g = __base('tianshi'); g.enemies[0].curse = 1;
     __ok('雷符预览 D=6+3=9', lv('leifu').d === 9, 'd=' + lv('leifu').d);
-    __ok('雷符预览 D升级=9+3=12', lv('leifu', true).d === 12, 'd=' + lv('leifu', true).d);
+    __ok('雷符预览 D升级=9+4=13', lv('leifu', true).d === 13, 'd=' + lv('leifu', true).d);   // v0.61.35：带诅咒加成 +3/+4
     g = __base('tianshi'); g.enemies[0].curse = 2;
-    __ok('斩妖剑预览 D=8+引爆2×5=18', lv('zhanyaojian').d === 18, 'd=' + lv('zhanyaojian').d);
+    __ok('斩妖剑预览 D=10+引爆2×5=20', lv('zhanyaojian').d === 20, 'd=' + lv('zhanyaojian').d);   // v0.61.35：主伤 8→10
     g = __base('ganshiren'); g.summons = [{ type: 'zhiren', v: 1, dur: 2 }];
     __ok('百鬼预览 A=4+1×2=6', lv('baigui').d === 6, 'd=' + lv('baigui').d);
     g = __base('wuseng'); g.block = 6;
@@ -563,7 +574,7 @@
     g = __base('yincha');
     __ok('百鬼预览 C=5+0召唤=5', lv('baigui').d === 5, 'd=' + lv('baigui').d);
     g = __base('tianshi'); g.enemies[0].curse = 3;
-    __ok('百鬼预览 D=7+1×3诅咒=10', lv('baigui').d === 10, 'd=' + lv('baigui').d);
+    __ok('百鬼预览 D=8+1×3诅咒=11', lv('baigui').d === 11, 'd=' + lv('baigui').d);   // v0.61.35：全体主伤 7→8
     g = __base('ganshiren'); g.block = 0; g.尸气 = 6;
     __ok('铁布衫预览 A 无格挡有尸气(3) 非落空', lv('tiebushan').d === 3 && !lv('tiebushan').miss, 'd=' + lv('tiebushan').d);
     g = __base('ganshiren');
@@ -571,7 +582,7 @@
     g = __base('ganshiren'); G.summons = [{ type: 'shi_wang', v: 10, dur: 3 }];
     __ok('纸人预览 尸王在场 2+1=3', lv('zhiren').d === 3, 'd=' + lv('zhiren').d);
     g = __base('tianshi');
-    __ok('小鬼预览 天师 v=3', lv('xiaogui').d === 3, 'd=' + lv('xiaogui').d);
+    __ok('小鬼预览 天师 v=2', lv('xiaogui').d === 2, 'd=' + lv('xiaogui').d);   // v0.61.35：天师列 3/4 → 2/3
     g = __base('wuseng');
     __ok('小鬼预览 武僧 v=2', lv('xiaogui').d === 2, 'd=' + lv('xiaogui').d);
     __ok('阴兵过境预览 每只 v=4', lv('yinbingguo').d === 4, 'd=' + lv('yinbingguo').d);
@@ -673,18 +684,18 @@
 
     /* ⑦ 卸甲生元 D：格挡先抵敌伤、敌后结算；目标满 6 层溢出转回格挡并保留 */
     g = __base('tianshi'); en = g.enemies[0]; en.affixes = null; en.strength = 0;
-    c = __card('xiejiashengyuan'); c.eff(true, c); // 8 盾 + endBlockKind=D
-    dealDamageToPlayer(5, en);                     // 敌人打 5 → 格挡 8→3
-    __ok('⑦ 卸甲 D 敌攻先耗格挡(8→3) 未提前转化', g.block === 3 && g.endBlockKind === 'D' && g.hp === 60, 'block=' + g.block + ' hp=' + g.hp);
+    c = __card('xiejiashengyuan'); c.eff(true, c); // v0.61.35：12 盾 + endBlockKind=D
+    dealDamageToPlayer(5, en);                     // 敌人打 5 → 格挡 12→7
+    __ok('⑦ 卸甲 D 敌攻先耗格挡(12→7) 未提前转化', g.block === 7 && g.endBlockKind === 'D' && g.hp === 60, 'block=' + g.block + ' hp=' + g.hp);
     resolveEndBlock();
-    __ok('⑦ 卸甲 D 敌后结算 余3盾→1诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 1, 'block=' + g.block + ' sum=' + __sumCurse());
+    __ok('⑦ 卸甲 D 敌后结算 余7盾→3诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 3, 'block=' + g.block + ' sum=' + __sumCurse());
 
     g = __base('tianshi'); en = g.enemies[0]; g.enemies[1].hp = 0; // 只剩 en：resolveEndBlock 的随机目标必然命中它
     en.affixes = null; en.strength = 0; en.curse = 6;
     c = __card('xiejiashengyuan'); c.eff(true, c);
     dealDamageToPlayer(5, en);
     resolveEndBlock();
-    __ok('⑦ 卸甲 D 满6溢出转回格挡(余1)不清零', g.block === 1 && g.endBlockKind === null && en.curse === 6, 'block=' + g.block);
+    __ok('⑦ 卸甲 D 满6溢出转回格挡(余7盾→3层全溢出→3盾)不清零', g.block === 3 && g.endBlockKind === null && en.curse === 6, 'block=' + g.block);
 
     /* ⑧b 阴兵过境：锁定“上一次施咒的敌人”+🎯标记 + 转移 + 死亡回落 */
     g = __base('tianshi'); e0 = g.enemies[0]; e1 = g.enemies[1];
@@ -792,7 +803,7 @@
     s = g.summons[0];
     __ok('v0.51 五通神(天师) 非永久(有回合限制)', s.indefinite !== true && typeof s.dur === 'number', 'indefinite=' + s.indefinite + ' dur=' + s.dur);
     __ok('v0.51 五通神(天师) 基础剩1回合(共2)', s.dur === 1, 'dur=' + s.dur);
-    __ok('v0.60 五通神(天师) 当回合 +4格挡+1诅咒', g.block === 4 && __sumCurse() === 1, 'block=' + g.block + ' curse=' + __sumCurse());
+    __ok('v0.60 五通神(天师) 当回合 +6格挡+1诅咒', g.block === 6 && __sumCurse() === 1, 'block=' + g.block + ' curse=' + __sumCurse());   // v0.61.35：立即/每回合格挡 4 → 6
 
     g = __base('tianshi'); c = __card('wutong'); c.eff(true, c);
     __ok('v0.51 五通神(天师) 升级剩2回合(共3)', g.summons[0].dur === 2, 'dur=' + g.summons[0].dur);
@@ -1699,9 +1710,9 @@
     }
     var g, c, e, s;
 
-    /* —— 初始卡池（v0.60.02 修正：此前把两人的名单发反了）
-          天师 D   ：雷符×3 金刚符×1 佛渡×1 聚灵×1 渡魂归己×1 咒印×1 画皮×1 守一×1 = 10 张
-          赶尸人 A ：雷符×2 金刚符×2 佛渡×1 舍身×1 血契×1 纸人×1 尸王×1 守一×1 小鬼×1 = 9 张 —— */
+    /* —— 初始卡池（v0.61.35 换新：天师去佛渡/画皮、金刚符 1→2、加纸人）
+          天师 D   ：雷符×3 金刚符×2 聚灵×1 渡魂归己×1 咒印×1 纸人×1 守一×1 = 10 张
+          赶尸人 A ：雷符×2 金刚符×2 佛渡×1 舍身×1 血契×1 纸人×1 尸王×1 守一×1 小鬼×1 = 11 张 —— */
     function deckOf(id) {
       var h = HEROES.filter(function (x) { return x.id === id; })[0];
       return { s: h.deck.map(function (p) { return p[0] + 'x' + p[1]; }).join(' '),
@@ -1709,17 +1720,19 @@
     }
     var dt_ = deckOf('tianshi'), ga_ = deckOf('ganshiren');
     __ok('v0.60.02 天师初始卡池 10 张且组成正确', dt_.n === 10 &&
-      dt_.s === 'leifux3 jingangx1 fodux1 julingx1 duhunguijix1 zhouyinx1 huapix1 shouyix1',
+      dt_.s === 'leifux3 jingangx2 julingx1 duhunguijix1 zhouyinx1 zhirenx1 shouyix1',
       dt_.n + ' 张 | ' + dt_.s);
     __ok('v0.60.02 赶尸人初始卡池 11 张且组成正确', ga_.n === 11 &&
       ga_.s === 'leifux2 jingangx2 fodux1 sheshenx1 xueqix1 zhirenx1 shi_wangx1 shouyix1 xiaoguix1',
       ga_.n + ' 张 | ' + ga_.s);
     __ok('v0.60.02 尸王只在赶尸人起始牌组（天师无）',
       ga_.s.indexOf('shi_wang') >= 0 && dt_.s.indexOf('shi_wang') < 0, ga_.s);
-    __ok('v0.60.02 咒印/画皮/聚灵/渡魂归己归天师，纸人/小鬼/舍身归赶尸人',
-      dt_.s.indexOf('zhouyin') >= 0 && dt_.s.indexOf('huapi') >= 0 && dt_.s.indexOf('juling') >= 0 &&
-      dt_.s.indexOf('duhunguiji') >= 0 && ga_.s.indexOf('zhiren') >= 0 &&
-      ga_.s.indexOf('xiaogui') >= 0 && ga_.s.indexOf('sheshen') >= 0, dt_.s + ' || ' + ga_.s);
+    __ok('v0.61.35 咒印/聚灵/渡魂归己/纸人/守一归天师；佛渡与画皮已退出天师初始牌组',
+      dt_.s.indexOf('zhouyin') >= 0 && dt_.s.indexOf('juling') >= 0 &&
+      dt_.s.indexOf('duhunguiji') >= 0 && dt_.s.indexOf('zhiren') >= 0 && dt_.s.indexOf('shouyi') >= 0 &&
+      dt_.s.indexOf('huapi') < 0 && dt_.s.indexOf('fodu') < 0 &&
+      ga_.s.indexOf('zhiren') >= 0 && ga_.s.indexOf('xiaogui') >= 0 && ga_.s.indexOf('sheshen') >= 0,
+      dt_.s + ' || ' + ga_.s);
 
     /* —— 端到端：拿 HEROES 里真实的赶尸人牌组开局，尸王必须在手（激活 2275 的取牌逻辑） —— */
     var gA = __base('ganshiren');
@@ -1751,7 +1764,7 @@
       jingji: [1, 1], fodu: [0, 0], tongpi: [2, 2], fanzhen: [1, 1], xiejiashengyuan: [1, 1], juling: [0, 0],
       sheshen: [0, 0], shouyi: [0, 0], yiwu: [0, 0], xueqi: [1, 1], tongling: [1, 0], jingxin: [1, 0],
       ranxue: [0, 0], xisui: [2, 2], duhunguiji: [1, 1], fenfu: [0, 0], xueji: [1, 0], ranhun: [0, 0],
-      kaitianyan: [1, 1], yixing: [1, 0], fuling: [2, 1], zhenyaoling: [2, 2], zhiren: [1, 1], zhouyin: [1, 1],
+      kaitianyan: [1, 1], yixing: [1, 1], fuling: [2, 1], zhenyaoling: [2, 2], zhiren: [1, 1], zhouyin: [1, 1],   // v0.61.35：yixing 天师列取消 (U:0)
       xiaogui: [1, 1], huapi: [1, 1], wutong: [2, 2], zhouyu: [2, 2], yinbingguo: [3, 3], shi_wang: [0, 0]
     };
     var badD = [];
@@ -1776,43 +1789,43 @@
     doPlayCard(0);
     __ok('v0.60 D#1 雷符 无诅咒 → 6 伤', g.enemies[0].hp === 494, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 2：火符 5/8 + 1 层诅咒 + 弃 1 张 —— */
+    /* —— 攻击 2：火符 6/10 + 1 层诅咒 + 弃 1 张（v0.61.35） —— */
     g = dt(); g.hand = [__card('huofu'), __card('leifu')];
     g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#2 火符 5 伤 + 1 层诅咒 + 弃 1 张（2 张→打出 1+弃 1=0）',
-      g.enemies[0].hp === 495 && g.enemies[0].curse === 1 && g.hand.length === 0,
+    __ok('v0.60 D#2 火符 6 伤 + 1 层诅咒 + 弃 1 张（2 张→打出 1+弃 1=0）',
+      g.enemies[0].hp === 494 && g.enemies[0].curse === 1 && g.hand.length === 0,
       'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse + ' hand=' + g.hand.length);
     g = dt(); g.hand = [dup('huofu'), __card('leifu')];
     g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#2u 火符升级 8 伤', g.enemies[0].hp === 492, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.60 D#2u 火符升级 10 伤', g.enemies[0].hp === 490, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 3：剑符 9/14，诅咒≥3 层则消耗 3 层并翻倍 —— */
+    /* —— 攻击 3：剑符 10/15，诅咒≥3 层则消耗 3 层并翻倍（v0.61.35） —— */
     g = dt(); g.enemies[0].curse = 3;
     g.hand = [__card('jianfu')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#3 剑符 9×2=18 伤，诅咒 3→0',
-      g.enemies[0].hp === 482 && g.enemies[0].curse === 0,
+    __ok('v0.60 D#3 剑符 10×2=20 伤，诅咒 3→0',
+      g.enemies[0].hp === 480 && g.enemies[0].curse === 0,
       'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse);
     g = dt(); g.enemies[0].curse = 2;
     g.hand = [__card('jianfu')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#3 剑符 诅咒 2 层 → 9 伤不翻倍', g.enemies[0].hp === 491 && g.enemies[0].curse === 2, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.60 D#3 剑符 诅咒 2 层 → 10 伤不翻倍', g.enemies[0].hp === 490 && g.enemies[0].curse === 2, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 5：天雷正法 20/30，每 2 层诅咒 -1 费、结算后失去减免×2 —— */
+    /* —— 攻击 5：天雷正法 22/32，每 2 层诅咒 -1 费、结算后失去减免×2（v0.61.35） —— */
     g = dt(); g.enemies[0].curse = 5;
     g.hand = [__card('tianlei')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#5 天雷正法 20 伤，诅咒 5→1（减免 2 层×2）',
-      g.enemies[0].hp === 480 && g.enemies[0].curse === 1,
+    __ok('v0.60 D#5 天雷正法 22 伤，诅咒 5→1（减免 2 层×2）',
+      g.enemies[0].hp === 478 && g.enemies[0].curse === 1,
       'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse);
     g = dt(); g.enemies[0].curse = 0;
     g.hand = [dup('tianlei')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#5u 天雷正法升级 30 伤', g.enemies[0].hp === 470, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.60 D#5u 天雷正法升级 32 伤', g.enemies[0].hp === 468, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 6：万剑归宗 全体 14/16 + 施加 1/2 层诅咒 + 斩杀回 1 费 —— */
+    /* —— 攻击 6：万剑归宗 全体 14/18 + 施加 1/2 层诅咒 + 斩杀回 1 费（v0.61.35） —— */
     g = __base('tianshi'); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
     g.enemies[1].hp = 500; g.enemies[1].maxHp = 500;
     g.hand = [__card('wanjian')]; g.drawPile = []; g.discard = []; g.exhausted = [];
@@ -1824,8 +1837,8 @@
     g.enemies[1].hp = 500; g.enemies[1].maxHp = 500;
     g.hand = [dup('wanjian')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#6u 万剑归宗升级 全体 16 伤 + 每人 2 层诅咒',
-      g.enemies[0].hp === 484 && __sumCurse() === 4, 'e0=' + g.enemies[0].hp + ' curse=' + __sumCurse());
+    __ok('v0.60 D#6u 万剑归宗升级 全体 18 伤 + 每人 2 层诅咒',
+      g.enemies[0].hp === 482 && __sumCurse() === 4, 'e0=' + g.enemies[0].hp + ' curse=' + __sumCurse());
 
     /* —— 攻击 7：铁布衫 = 当前格挡 + 每层诅咒 +1/+2，并消耗全部诅咒 —— */
     g = dt(); g.block = 5; g.enemies[0].curse = 2;
@@ -1839,63 +1852,63 @@
     doPlayCard(0);
     __ok('v0.60 D#7u 铁布衫升级 5+2×2=9 伤', g.enemies[0].hp === 491, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 9：群鬼乱舞 5/6 + 每层诅咒 +1（上限 +4/+6） —— */
+    /* —— 攻击 9：群鬼乱舞 6/9 + 每层诅咒 +1（上限 +4/+6）（v0.61.35） —— */
     g = dt(); g.enemies[0].curse = 3;
     g.hand = [__card('qungui')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#9 群鬼乱舞 5+3=8 伤（不消耗诅咒）',
-      g.enemies[0].hp === 492 && g.enemies[0].curse === 3,
+    __ok('v0.60 D#9 群鬼乱舞 6+3=9 伤（不消耗诅咒）',
+      g.enemies[0].hp === 491 && g.enemies[0].curse === 3,
       'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse);
     g = dt(); g.enemies[0].curse = 6;
     g.hand = [dup('qungui')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#9u 群鬼乱舞 6+min(6,6)=12 伤（上限 +6）', g.enemies[0].hp === 488, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.60 D#9u 群鬼乱舞 9+min(6,6)=15 伤（上限 +6）', g.enemies[0].hp === 485, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 11：蚀魂咒 3/6 + 2 层诅咒 —— */
+    /* —— 攻击 11：蚀魂咒 3/8 + 2 层诅咒（v0.61.35：天师列由 v0.61.10 P5 的 4/7 改回 3/8） —— */
     g = dt(); g.hand = [__card('shihunzhou')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#11 蚀魂咒 4 伤 + 2 层诅咒（v0.61.10 P5：3→4）',
-      g.enemies[0].hp === 496 && g.enemies[0].curse === 2,
+    __ok('v0.60 D#11 蚀魂咒 3 伤 + 2 层诅咒（v0.61.35 天师列 3/8）',
+      g.enemies[0].hp === 497 && g.enemies[0].curse === 2,
       'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse);
 
-    /* —— 攻击 12：嗜血 6/8 吸血 50%，目标诅咒≥3 层则消耗 3 层改 100% —— */
+    /* —— 攻击 12：嗜血 6/8 吸血 50%，目标诅咒≥2 层则消耗 2 层改 100%（v0.61.35：阈值 3→2） —— */
     g = dt(40); g.enemies[0].curse = 3;
     g.hand = [__card('shixue')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#12 嗜血 诅咒3层 → 消耗3层、6伤回6血',
-      g.enemies[0].hp === 494 && g.hp === 46 && g.enemies[0].curse === 0,
+    __ok('v0.60 D#12 嗜血 诅咒3层 → 只耗2层、6伤回6血',
+      g.enemies[0].hp === 494 && g.hp === 46 && g.enemies[0].curse === 1,
       'ehp=' + g.enemies[0].hp + ' hp=' + g.hp + ' curse=' + g.enemies[0].curse);
-    g = dt(40); g.enemies[0].curse = 2;
+    g = dt(40); g.enemies[0].curse = 1;   // v0.61.35：阈值降到 2 层，改用 1 层测「不足阈值」分支
     g.hand = [__card('shixue')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#12 嗜血 诅咒2层 → 保留诅咒、6伤回3血',
-      g.hp === 43 && g.enemies[0].curse === 2, 'hp=' + g.hp + ' curse=' + g.enemies[0].curse);
+    __ok('v0.60 D#12 嗜血 诅咒1层 → 保留诅咒、6伤回3血',
+      g.hp === 43 && g.enemies[0].curse === 1, 'hp=' + g.hp + ' curse=' + g.enemies[0].curse);
 
-    /* —— 攻击 13：百鬼夜行 全体 7 + 每层 +1/+2，并消耗各自全部诅咒 —— */
+    /* —— 攻击 13：百鬼夜行 全体 8 + 每层 +1/+2，并消耗各自全部诅咒（v0.61.35） —— */
     g = __base('tianshi'); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
     g.enemies[1].hp = 500; g.enemies[1].maxHp = 500;
     g.enemies[0].curse = 3; g.enemies[1].curse = 0;
     g.hand = [__card('baigui')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#13 百鬼夜行 7+3=10 / 7 伤且清空诅咒',
-      g.enemies[0].hp === 490 && g.enemies[1].hp === 493 && __sumCurse() === 0,
+    __ok('v0.60 D#13 百鬼夜行 8+3=11 / 8 伤且清空诅咒',
+      g.enemies[0].hp === 489 && g.enemies[1].hp === 492 && __sumCurse() === 0,
       'e0=' + g.enemies[0].hp + ' e1=' + g.enemies[1].hp + ' curse=' + __sumCurse());
 
-    /* —— 攻击 14：钟馗镇魂 15/20 + 引爆全部诅咒（每层 5/6）+ 消耗牌 —— */
+    /* —— 攻击 14：钟馗镇魂 主伤 16 固定 + 引爆全部诅咒（每层 3/4）+ 消耗牌（v0.61.35） —— */
     g = dt(); g.enemies[0].curse = 2;
     g.hand = [__card('zhongkui')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#14 钟馗镇魂 18+2×5=28 伤且清空诅咒（v0.61.10 P5：15→18）',
-      g.enemies[0].hp === 472 && g.enemies[0].curse === 0 && g.enemies[0].seal === true,
+    __ok('v0.60 D#14 钟馗镇魂 16+2×3=22 伤且清空诅咒（v0.61.35：18/24+5/6 → 16+3/4）',
+      g.enemies[0].hp === 478 && g.enemies[0].curse === 0 && g.enemies[0].seal === true,
       'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse + ' seal=' + g.enemies[0].seal);
 
     /* —— 防御 15~22 —— */
     g = __base('tianshi'); CURSE_THIS_TURN = 3;
     c = __card('jingang'); c.eff(false, c);
-    __ok('v0.60 D#15 金刚符 4+1×3=7 格挡', g.block === 7, 'block=' + g.block);
+    __ok('v0.60 D#15 金刚符 5+1×3=8 格挡', g.block === 8, 'block=' + g.block);
     g = __base('tianshi'); CURSE_THIS_TURN = 3;
     c = dup('jingang'); c.eff(true, c);
-    __ok('v0.60 D#15u 金刚符升级 6+2×3=12 格挡', g.block === 12, 'block=' + g.block);
+    __ok('v0.60 D#15u 金刚符升级 7+2×3=13 格挡', g.block === 13, 'block=' + g.block);
     g = __base('tianshi'); CURSE_THIS_TURN = 3;
     c = __card('jinguang'); c.eff(false, c);
     __ok('v0.60 D#17 金光罩 12+3=15 格挡', g.block === 15, 'block=' + g.block);
@@ -1904,18 +1917,18 @@
     __ok('v0.60 D#16 隐身符 抽到诅咒牌 3+3=6 格挡', g.block === 6, 'block=' + g.block);
     g = __base('tianshi'); g.drawPile = [__card('huofu')]; g.hand = []; g.discard = [];
     c = dup('yinshen'); c.eff(true, c);
-    __ok('v0.60 D#16u 隐身符升级 6+4=10 格挡', g.block === 10, 'block=' + g.block);
+    __ok('v0.60 D#16u 隐身符升级 5+4=9 格挡', g.block === 9, 'block=' + g.block);
     g = __base('tianshi'); c = __card('tongpi'); c.eff(false, c);
-    __ok('v0.60 D#21 铜皮铁骨 8 格挡 + 受击施 1 层诅咒', g.block === 8 && g.hitCurse === 1,
+    __ok('v0.60 D#21 铜皮铁骨 9 格挡 + 受击施 1 层诅咒', g.block === 9 && g.hitCurse === 1,
       'block=' + g.block + ' hitCurse=' + g.hitCurse);
     g = __base('tianshi'); c = dup('tongpi'); c.eff(true, c);
-    __ok('v0.60 D#21u 铜皮铁骨升级 12 格挡', g.block === 12, 'block=' + g.block);
+    __ok('v0.60 D#21u 铜皮铁骨升级 14 格挡', g.block === 14, 'block=' + g.block);
     g = __base('tianshi'); c = __card('fanzhen'); c.eff(false, c);
     __ok('v0.60 D#22 反震 反击 3 伤 + 1 层诅咒（不给格挡）',
       g.thorns === 3 && g.hitCurse === 1 && g.hitBlock === 0 && g.block === 0,
       'thorns=' + g.thorns + ' hitCurse=' + g.hitCurse + ' hitBlock=' + g.hitBlock);
     g = __base('tianshi'); c = dup('fanzhen'); c.eff(true, c);
-    __ok('v0.60 D#22u 反震升级 仍反击 3 伤、诅咒 2 层', g.thorns === 3 && g.hitCurse === 2,
+    __ok('v0.60 D#22u 反震升级 反击 4 伤、诅咒 2 层（v0.61.35）', g.thorns === 4 && g.hitCurse === 2,
       'thorns=' + g.thorns + ' hitCurse=' + g.hitCurse);
 
     /* —— 功能 28：血契 天师 1/2（赶尸人仍是 2/3） —— */
@@ -1926,13 +1939,19 @@
     g = __base('ganshiren'); c = __card('xueqi'); c.eff(false, c);
     __ok('v0.60 A#28 血契(赶尸人) 仍为每失 1 血 +2 格挡', g.bloodPact === 2, 'pact=' + g.bloodPact);
 
-    /* —— 功能 40：镇妖铃 10/14 + 带诅咒镇魂 2 回合 —— */
+    /* —— 功能 40：镇妖铃 10/15；【诅咒】≥4 层才消耗 4 层、镇魂 2 回合（v0.61.35） —— */
     g = dt(); g.enemies[0].curse = 2;
     g.hand = [dup('zhenyaoling')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#40 镇妖铃升级 14 伤 + 镇魂 2 回合',
-      g.enemies[0].hp === 486 && g.enemies[0].seal === true && g.enemies[0].sealTurn === 2,
+    __ok('v0.60 D#40 镇妖铃升级 15 伤 + 诅咒<4 层仅镇魂 1 回合',
+      g.enemies[0].hp === 485 && g.enemies[0].seal === true && g.enemies[0].sealTurn === 1,
       'ehp=' + g.enemies[0].hp + ' seal=' + g.enemies[0].seal + ' sealTurn=' + g.enemies[0].sealTurn);
+    g = dt(); g.enemies[0].curse = 4;
+    g.hand = [dup('zhenyaoling')]; g.drawPile = []; g.discard = []; g.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.61.35 D#40 镇妖铃 诅咒≥4 层 → 消耗 4 层、镇魂 2 回合',
+      g.enemies[0].hp === 485 && g.enemies[0].curse === 0 && g.enemies[0].seal === true && g.enemies[0].sealTurn === 2,
+      'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse + ' sealTurn=' + g.enemies[0].sealTurn);
 
     /* —— 功能 46：咒雨 固定 1 层（升级不加层）；费用下限 1→升级 0 —— */
     g = __base('tianshi'); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
@@ -1944,46 +1963,115 @@
     __ok('v0.60 D#46 咒雨 未升级费用下限 1', effectiveCost(__card('zhouyu')) === 1, 'cost=' + effectiveCost(__card('zhouyu')));
     __ok('v0.60 D#46u 咒雨 升级费用下限 0', effectiveCost(dup('zhouyu')) === 0, 'cost=' + effectiveCost(dup('zhouyu')));
 
-    /* —— 召唤 41：纸人 基础 2/3；目标带诅咒再 +2/+3 —— */
+    /* —— 召唤 41：纸人 每回合末 2/3 伤 **并施加 1/2 层【诅咒】**（v0.61.35 去掉旧「带诅咒增伤」） —— */
     g = dt(); g.hand = [__card('zhiren')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
     __ok('v0.60 D#41 纸人 基础每回合 2 伤', g.summons[0] && g.summons[0].v === 2,
       'v=' + (g.summons[0] && g.summons[0].v));
-    g = dt(); g.enemies[0].curse = 4; g.summons = [{ type: 'zhiren', v: 2, dur: 2, up: false }];
+    g = dt(); g.summons = [{ type: 'zhiren', v: 2, dur: 2, up: false }];
     summonAct(g.summons[0]);
-    __ok('v0.60 D#41 纸人 目标带诅咒 2+2=4 伤（不分层数）', g.enemies[0].hp === 496, 'ehp=' + g.enemies[0].hp);
-    g = dt(); g.enemies[0].curse = 4; g.summons = [{ type: 'zhiren', v: 3, dur: 2, up: true }];
+    __ok('v0.61.35 D#41 纸人 回合末 2 伤 + 施 1 层【诅咒】',
+      g.enemies[0].hp === 498 && g.enemies[0].curse === 1,
+      'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse);
+    g = dt(); g.summons = [{ type: 'zhiren', v: 3, dur: 2, up: true }];
     summonAct(g.summons[0]);
-    __ok('v0.60 D#41u 纸人升级 3+3=6 伤', g.enemies[0].hp === 494, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.61.35 D#41u 纸人升级 3 伤 + 施 2 层【诅咒】',
+      g.enemies[0].hp === 497 && g.enemies[0].curse === 2,
+      'ehp=' + g.enemies[0].hp + ' curse=' + g.enemies[0].curse);
 
-    /* —— 召唤 45：五通神 立即 4 格挡 + 1 诅咒 —— */
+    /* —— 召唤 45：五通神 立即 6 格挡 + 1 诅咒（v0.61.35：天师列 4→6） —— */
     g = __base('tianshi'); G.block = 0;
     g.hand = [dup('wutong')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#45 五通神 立即 4 格挡 + 1 诅咒、升级剩 3 回合',
-      g.block === 4 && __sumCurse() === 1 && g.summons[0].dur === 2,
+    __ok('v0.60 D#45 五通神 立即 6 格挡 + 1 诅咒、升级剩 3 回合',
+      g.block === 6 && __sumCurse() === 1 && g.summons[0].dur === 2,
       'block=' + g.block + ' curse=' + __sumCurse() + ' dur=' + g.summons[0].dur);
 
-    /* —— 召唤 43：小鬼 3/4 —— */
+    /* —— 召唤 43：小鬼 天师列 2/3；目标改**随机**，命中带【诅咒】则本击 +2/3（v0.61.35） —— */
     g = dt(); g.hand = [__card('xiaogui')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.60 D#43 小鬼 每回合 3 伤', g.summons[0] && g.summons[0].v === 3, 'v=' + (g.summons[0] && g.summons[0].v));
+    __ok('v0.60 D#43 小鬼 每回合 2 伤', g.summons[0] && g.summons[0].v === 2, 'v=' + (g.summons[0] && g.summons[0].v));
+    g = dt(); g.enemies[0].curse = 1; g.summons = [{ type: 'xiaogui', v: 2, dur: 2, up: false }];
+    summonAct(g.summons[0]);
+    __ok('v0.61.35 D#43 小鬼(天师) 命中带【诅咒】目标 2+2=4 伤',
+      g.enemies[0].hp === 496, 'ehp=' + g.enemies[0].hp);
+    g = dt(); g.summons = [{ type: 'xiaogui', v: 3, dur: 2, up: true }];
+    summonAct(g.summons[0]);
+    __ok('v0.61.35 D#43u 小鬼升级 命中无诅咒目标 3 伤（不加成）',
+      g.enemies[0].hp === 497, 'ehp=' + g.enemies[0].hp);
+
+    /* —— v0.61.35 守一(#26)天师列：保留【诅咒牌】→ **该牌自身**下回合 -1 费，只持续一回合 —— */
+    g = __base('tianshi');
+    var _syCurse = Object.assign({}, __card('huofu')), _syPlain = Object.assign({}, __card('jingang'));
+    var _turn0 = g.turn || 0;
+    g.hand = [_syCurse, _syPlain]; g.retainSelect = { need: 1, picked: [0, 1] };
+    g.enemies.forEach(function (x) { x.hp = 0; });   // 关掉 enemyAct 的干扰，只测保留结算
+    confirmRetainSelect();
+    __ok('v0.61.35 守一(天师) 只给保留到的【诅咒牌】挂减免时间戳（普通牌不挂）',
+      _syCurse.costCutTurn === _turn0 + 1 && !_syPlain.costCutTurn,
+      'curse=' + _syCurse.costCutTurn + ' plain=' + _syPlain.costCutTurn);
+    g.turn = _turn0;
+    __ok('v0.61.35 守一(天师) 结算当回合不减费（下一回合才生效）',
+      effectiveCost(_syCurse) === cardCost(_syCurse), 'cost=' + effectiveCost(_syCurse));
+    g.turn = _turn0 + 1;
+    __ok('v0.61.35 守一(天师) 下回合该牌自身 -1 费',
+      effectiveCost(_syCurse) === cardCost(_syCurse) - 1, 'cost=' + effectiveCost(_syCurse));
+    __ok('v0.61.35 守一(天师) 同批保留的普通牌不跟着减费（只减该牌自己）',
+      effectiveCost(_syPlain) === cardCost(_syPlain), 'cost=' + effectiveCost(_syPlain));
+    g.turn = _turn0 + 2;
+    __ok('v0.61.35 守一(天师) 只持续一回合（再下一回合恢复原价）',
+      effectiveCost(_syCurse) === cardCost(_syCurse), 'cost=' + effectiveCost(_syCurse));
+    g.turn = _turn0 + 3;
+    var _syFree = Object.assign({}, __card('juling'), { costCutTurn: _turn0 + 3 });
+    __ok('v0.61.35 守一(天师) 减费不低于 0（0 费牌挂上标记仍是 0）',
+      cardCost(_syFree) === 0 && effectiveCost(_syFree) === 0, 'cost=' + effectiveCost(_syFree));
+    g = dt(); g.turn = 1;
+    var _syOnce = Object.assign({}, __card('juling'), { costCutTurn: 1 });
+    g.hand = [_syOnce]; g.drawPile = []; g.discard = []; g.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.61.35 守一(天师) 减免是一次性的：打出即清标记（同回合再回手不会二次减免）',
+      !_syOnce.costCutTurn, 'flag=' + _syOnce.costCutTurn);
+
+    /* —— v0.61.35 佛渡 / 燃血术：两张「按列分叉」的牌逐列钉住 —— */
+    var FD = __card('fodu');
+    __base('ganshiren'); var _fdA = FD.t(true);
+    __base('wuseng'); var _fdB = FD.t(true);
+    __base('yincha'); var _fdC = FD.t(true);
+    __base('tianshi'); var _fdT = FD.t(true);
+    __ok('v0.61.35 佛渡 升级附加：天师 5 格挡 / 阴差 3 格挡 / 武僧 4 格挡 / 赶尸人 2 尸气',
+      _fdT.indexOf('5 点格挡') >= 0 && _fdC.indexOf('3 点格挡') >= 0 &&
+      _fdB.indexOf('4 点格挡') >= 0 && _fdA.indexOf('2 点【尸气】') >= 0,
+      _fdT + ' | ' + _fdC + ' | ' + _fdB + ' | ' + _fdA);
+    var RX = __card('ranxue');
+    __base('ganshiren'); var _rxA = [RX.t(false), RX.t(true)];
+    __base('wuseng'); var _rxB = [RX.t(false), RX.t(true)];
+    __base('yincha'); var _rxC = [RX.t(false), RX.t(true)];
+    __base('tianshi'); var _rxT = [RX.t(false), RX.t(true)];
+    __ok('v0.61.35 燃血术 天师列固定失 8 点生命（升级不再减到 3）',
+      _rxT[0].indexOf('失去 8 点生命') >= 0 && _rxT[1].indexOf('失去 8 点生命') >= 0,
+      _rxT.join(' / '));
+    __ok('v0.61.35 燃血术 其余三列各自不变（A 4/4、B 6/6、C 4/6）',
+      _rxA[0].indexOf('失去 4 点生命') >= 0 && _rxA[1].indexOf('失去 4 点生命') >= 0 &&
+      _rxB[0].indexOf('失去 6 点生命') >= 0 && _rxB[1].indexOf('失去 6 点生命') >= 0 &&
+      _rxC[0].indexOf('失去 4 点生命') >= 0 && _rxC[1].indexOf('失去 6 点生命') >= 0,
+      _rxA.join('/') + ' | ' + _rxB.join('/') + ' | ' + _rxC.join('/'));
 
     /* —— 卡面预伤害（诅咒/格挡浮动牌恒定显示） —— */
     g = dt(); g.enemies[0].curse = 3;
     __ok('v0.60 D 预伤害 雷符 6+3=9 且常显', previewDamage(__card('leifu')).d === 9 && previewDamage(__card('leifu')).dynamic === true,
       'd=' + previewDamage(__card('leifu')).d);
-    __ok('v0.60 D 预伤害 群鬼乱舞 5+3=8', previewDamage(__card('qungui')).d === 8, 'd=' + previewDamage(__card('qungui')).d);
-    __ok('v0.60 D 预伤害 百鬼夜行 7+3=10', previewDamage(__card('baigui')).d === 10, 'd=' + previewDamage(__card('baigui')).d);
-    __ok('v0.60 D 预伤害 钟馗镇魂 15+3×5=30', previewDamage(__card('zhongkui')).d === 30, 'd=' + previewDamage(__card('zhongkui')).d);
-    __ok('v0.60 D 预伤害 斩妖剑 8+2×5=18', previewDamage(__card('zhanyaojian')).d === 18, 'd=' + previewDamage(__card('zhanyaojian')).d);
+    __ok('v0.60 D 预伤害 群鬼乱舞 6+3=9', previewDamage(__card('qungui')).d === 9, 'd=' + previewDamage(__card('qungui')).d);
+    __ok('v0.60 D 预伤害 百鬼夜行 8+3=11', previewDamage(__card('baigui')).d === 11, 'd=' + previewDamage(__card('baigui')).d);
+    __ok('v0.60 D 预伤害 钟馗镇魂 16+3×3=25（v0.61.35）', previewDamage(__card('zhongkui')).d === 25, 'd=' + previewDamage(__card('zhongkui')).d);
+    __ok('v0.60 D 预伤害 斩妖剑 10+2×5=20（v0.61.35）', previewDamage(__card('zhanyaojian')).d === 20, 'd=' + previewDamage(__card('zhanyaojian')).d);
     __ok('v0.60 D 预伤害 噬魂术 3×5=15', previewDamage(__card('shihun')).d === 15, 'd=' + previewDamage(__card('shihun')).d);
     g.block = 4;
     __ok('v0.60 D 预伤害 铁布衫 4+3=7', previewDamage(__card('tiebushan')).d === 7, 'd=' + previewDamage(__card('tiebushan')).d);
-    __ok('v0.60 D 预伤害 纸人 2+2(带诅咒)=4', previewDamage(__card('zhiren')).d === 4, 'd=' + previewDamage(__card('zhiren')).d);
+    __ok('v0.61.35 D 预伤害 纸人 恒为 2（去掉带诅咒增伤后，预览=基础每回合伤）', previewDamage(__card('zhiren')).d === 2, 'd=' + previewDamage(__card('zhiren')).d);
     __ok('v0.60 D 预伤害 咒雨 无直伤 → 不挂徽章', previewDamage(__card('zhouyu')) === null,
       JSON.stringify(previewDamage(__card('zhouyu'))));
-    __ok('v0.60 D 预伤害 剑符 诅咒≥3 → 18 且常显', previewDamage(__card('jianfu')).d === 18 && previewDamage(__card('jianfu')).dynamic === true,
+    // 注意：这里用的是 CARDS 里的共享单例（此刻 up=false），所以是未升级的 10×2=20
+    __ok('v0.60 D 预伤害 剑符(未升级) 诅咒≥3 → 20 且常显（v0.61.35：10×2）', previewDamage(__card('jianfu')).d === 20 && previewDamage(__card('jianfu')).dynamic === true,
       'd=' + previewDamage(__card('jianfu')).d);
   })();
 
@@ -2364,20 +2452,21 @@
     __base('wuseng'); var _b = [SH.t(false), SH.t(true)];
     __base('yincha'); var _c = [SH.t(false), SH.t(true)];
     __base('tianshi'); var _d = [SH.t(false), SH.t(true)];
-    __ok('v0.61.10 P5 蚀魂咒 只有天师列升到 4/7，其余三列不动',
+    __ok('v0.61.35 蚀魂咒 天师列改为 3/8（v0.61.10 P5 的 4/7 作废），其余三列不动',
       _a[0].indexOf('3 伤害') >= 0 && _a[1].indexOf('6 伤害') >= 0 &&
       _b[0].indexOf('5 伤害') >= 0 && _b[1].indexOf('7 伤害') >= 0 &&
       _c[0].indexOf('5 伤害') >= 0 && _c[1].indexOf('8 伤害') >= 0 &&
-      _d[0].indexOf('4 伤害') >= 0 && _d[1].indexOf('7 伤害') >= 0,
+      _d[0].indexOf('3 伤害') >= 0 && _d[1].indexOf('8 伤害') >= 0,
       _d.join(' / '));
     var ZK = __card('zhongkui');
     __base('ganshiren'); var _e = ZK.t(false);
     __base('wuseng'); var _f = ZK.t(false);
     __base('yincha'); var _i = ZK.t(false);
     __base('tianshi'); var _j = [ZK.t(false), ZK.t(true)];
-    __ok('v0.61.10 P5 钟馗镇魂 只有天师列升到 18/24，其余三列不动',
+    __ok('v0.61.35 钟馗镇魂 天师列改为主伤 16 固定 + 每层 3/4，其余三列不动',
       _e.indexOf('16 伤害') >= 0 && _f.indexOf('16 伤害') >= 0 && _i.indexOf('16 伤害') >= 0 &&
-      _j[0].indexOf('18 伤害') >= 0 && _j[1].indexOf('24 伤害') >= 0,
+      _j[0].indexOf('16 伤害') >= 0 && _j[0].indexOf('每层 3 伤害') >= 0 &&
+      _j[1].indexOf('16 伤害') >= 0 && _j[1].indexOf('每层 4 伤害') >= 0,
       _j.join(' / '));
 
     /* —— P6 赶尸人新被动：4 种召唤物寿命 +1；尸王排除；其他英雄不受影响 —— */
@@ -3270,18 +3359,21 @@
     __ok('v0.61.33 A① 显式目标=带诅咒那只仍是9，且不污染默认口径',
       previewDamage(lf, G.enemies[0]).d === 9 && previewDamage(lf).d === 9,
       previewDamage(lf, G.enemies[0]).d + '/' + previewDamage(lf).d);
-    __ok('v0.61.33 A① 升级雷符同口径（拖到不带诅咒=9 / 带诅咒=9+3=12）',
-      previewDamage(lfU, G.enemies[1]).d === 9 && previewDamage(lfU, G.enemies[0]).d === 12,
+    __ok('v0.61.33 A① 升级雷符同口径（拖到不带诅咒=9 / 带诅咒=9+4=13，v0.61.35 加成升到 +4）',
+      previewDamage(lfU, G.enemies[1]).d === 9 && previewDamage(lfU, G.enemies[0]).d === 13,
       previewDamage(lfU, G.enemies[1]).d + '/' + previewDamage(lfU, G.enemies[0]).d);
     var sh = Object.assign({}, __card('shihun'), { up: false });
     G = __base('tianshi'); G.enemies[0].curse = 2; G.enemies[1].curse = 0; G.target = 0;
     __ok('v0.61.33 A① 「落空」分支也按显式目标判定（噬魂术拖到无诅咒身上）',
       previewDamage(sh, G.enemies[1]).miss === '无诅咒' && previewDamage(sh, G.enemies[0]).d === 10,
       JSON.stringify(previewDamage(sh, G.enemies[1])) + ' / d=' + previewDamage(sh, G.enemies[0]).d);
-    G = __base('ganshiren'); G.enemies[0].curse = 1; G.enemies[1].curse = 5; G.target = 0;
+    G = __base('tianshi'); G.enemies[0].curse = 1; G.enemies[1].curse = 5; G.target = 0;
     var xg = Object.assign({}, __card('xiaogui'), { up: false });
-    __ok('v0.61.33 A① 小鬼预览仍取「诅咒最高」(5层)，不被显式目标改写',
-      previewDamage(xg, G.enemies[0]).curse === 5, 'curse=' + previewDamage(xg, G.enemies[0]).curse);
+    var ybg = Object.assign({}, __card('yinbingguo'), { up: false });
+    __ok('v0.61.35 小鬼预览不再借用「诅咒最高」那只（天师目标已改随机）',
+      previewDamage(xg, G.enemies[0]).curse === 1, 'curse=' + previewDamage(xg, G.enemies[0]).curse);
+    __ok('v0.61.35 阴兵预览仍取「诅咒最高」那只（指向机制未变，防误伤）',
+      previewDamage(ybg, G.enemies[0]).curse === 5, 'curse=' + previewDamage(ybg, G.enemies[0]).curse);
 
     /* —— A② 点击锁定与卡面预伤徽章已下线 —— */
     __ok('v0.61.33 A② selectTarget 已删除', typeof selectTarget === 'undefined', typeof selectTarget);
