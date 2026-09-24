@@ -189,9 +189,11 @@ function renderTopbar(){
     <span class="stat stat-deck">牌堆 <b>${G.drawPile.length}</b> / 弃牌 <b>${G.discard.length}</b></span>
 
 `;
+  // 预尸气：下一回合召唤物将带来的【尸气】进账（仅茅山赶尸人；0 就不显示）
+  const preShiqi=preShiqiNextTurn();
   // 如果当前角色是茅山赶尸人，显示尸气
   if(G.hero === 'ganshiren') {
-    html += `<span class="stat stat-shiqi">尸气: <b>${G.尸气}/${G.maxShiQi}</b></span>`;
+    html += `<span class="stat stat-shiqi">尸气: <b>${G.尸气}/${G.maxShiQi}</b>${preShiqi>0?`<span class="stat-preshiqi" data-tip="kw:预尸气">预+${preShiqi}</span>`:''}</span>`;
   }
   // 如果当前角色是血祭阴差，显示血怒（整局累积资源）
   if(G.hero === 'yincha') {
@@ -380,7 +382,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.61.36</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.61.37</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
