@@ -97,7 +97,8 @@ function dealDamageTo(e,n,ignoreBlock,floatDelay,point){
   const __hopt=(__hk==='hit_guard' || __hk==='atk_multi_each') ? null : { rate:sfxDamageRate(actual) };
   const viz=()=>{ sfx(__hk, __hopt);
     const el=document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]');
-    floatDamage('-'+d, '', el);
+    // v0.61.36：大伤害浮字档 —— 与上一行 __hk 用的是同一套判据（blockedAll / point / killed 都对齐音效）
+    floatDamage('-'+d, '', el, { crit: !__blockedAll && !point && isCritHit(actual, __killed) });
     HITFX.enemies.add(e);
     if(e.boss) inkBurst(el);
     else if(e.elite) screenMicroShake();
@@ -453,7 +454,7 @@ function confirmDiscardSelect(){
   // 焚符(#34)：每弃 1 张，按英雄结算
   for(let k=0;k<nDiscarded;k++){
     if(G.hero==='ganshiren'){ gainShiqi(1); gainBlock(u?3:2); }
-    else if(G.hero==='wuseng'){ gainBlock(u?6:4); }
+    else if(G.hero==='wuseng'){ gainBlock(u?5:4); }   // v0.61.36 武僧列：升级 6 → 5
     else if(G.hero==='yincha'){ heal(u?4:3); }
     else { const re=randomAlive(); if(re) applyCurse(re,1); gainBlock(u?3:2); }
   }

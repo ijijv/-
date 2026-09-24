@@ -297,11 +297,14 @@ function sfx(name, opt){
   if(!steps){ sfxWarnUnknown(name); return; }
   for(let i=0;i<steps.length;i++) sfxStep(steps[i], rate);
 }
+/* 打击分级阈值（**单一来源**）：音效与浮字视觉共用，免得两处阈值日后各漂各的 */
+const HIT_HEAVY_DMG = 10, HIT_CRIT_DMG = 20;
+function isCritHit(dmg, killed){ return !!killed || dmg>=HIT_CRIT_DMG; }
 /* 按「打在什么上 / 打了多少 / 有没有打死」挑打击层 —— 让听感跟着数值走 */
 function pickHitSfx(dmg, blockedAll, killed){
   if(blockedAll) return 'hit_guard';
-  if(killed || dmg>=20) return 'hit_crit';
-  if(dmg>=10) return 'hit_heavy';
+  if(isCritHit(dmg, killed)) return 'hit_crit';
+  if(dmg>=HIT_HEAVY_DMG) return 'hit_heavy';
   return 'hit_light';
 }
 

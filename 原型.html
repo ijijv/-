@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.61.35</title>
+<title>志怪塔 · 原型 v0.61.36</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -263,9 +263,19 @@
   .card.shake{animation:cardShake .28s ease;}
   @keyframes cardShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
   .fx-dmg.block{color:#7fb0d8;}
-  /* v0.61.33：数字素材字形（素材/num/0.png…9.png）。高度按 1.15em 等比缩放，与既有 22px 字号对齐；
-     抖动/闪烁特效等图片到位后再补（挂在本类上即可，见待办）。 */
+  /* v0.61.33/36：数字素材字形（素材/num/{dmg,hurt,block,heal}/0.png…9.png，四档共 40 张）。
+     高度按 1.15em 等比缩放 → 一套尺寸覆盖全部字号档（含下面的 .crit 28px），文字与图片都用同一套尺寸。 */
   .fx-num{height:1.15em; width:auto; vertical-align:-.18em; margin:0 -.03em; pointer-events:none;}
+  /* v0.61.36 · 浮字抖动 + 闪烁（纯 CSS，图片到位前文字一样抖）
+     分工：外层 .fx-dmg 管位移（fxDmg 的 translate/scale），内层 .fx-in 管抖动/闪烁 —— 不抢 transform */
+  .fx-in{display:inline-block; animation:fxJitter .16s ease-in-out 2;}
+  @keyframes fxJitter{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+  /* 大伤害档：与打击音效 hit_crit 同阈值（isCritHit：击杀 或 ≥20）。抖动幅度 ×2 + 闪一下 + 字号抬到 28px；
+     数字图随 em 自动缩放，**不需要美术多交一套尺寸**。 */
+  .fx-dmg.crit{font-size:28px;}
+  .fx-dmg.crit .fx-in{animation:fxJitterBig .18s ease-in-out 3, fxFlash .22s ease-out 1;}
+  @keyframes fxJitterBig{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  @keyframes fxFlash{0%{filter:brightness(2.4)}100%{filter:brightness(1)}}
   #tooltip{position:fixed; z-index:9999; max-width:250px; padding:9px 11px; background:rgba(24,18,12,.96); border:1px solid var(--gold); border-radius:7px; color:#e8dcc0; font-size:12px; line-height:1.5; pointer-events:none; opacity:0; transform:translateY(3px); transition:opacity .12s ease, transform .12s ease; box-shadow:0 6px 18px rgba(0,0,0,.55);}
   #tooltip.show{opacity:1; transform:translateY(0);}
   #tooltip .tt-title{font-weight:bold; color:#f0e0b8; margin-bottom:3px;}
@@ -445,7 +455,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.35</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.36</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

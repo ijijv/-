@@ -4,6 +4,7 @@
   try { SETTINGS.lowSpec = true; SETTINGS.sound = false; SETTINGS.musicVol = 0; SETTINGS.sfxVol = 0; } catch (e) {}
   var __sil = function () {};
   var __realSfx = sfx; // v0.61.25 金快照探针要用真 sfx（第 631 行会把全局 sfx 顶成 __sil）
+  var __realFloatDamage = floatDamage; // v0.61.36：第 658 行会把全局 floatDamage 顶成 __sil，结构断言要用真的
   var __realSaveRun = saveRun; // v0.61.06：saveRun 会被 stub，但「存档里带没带随机态」只有真函数测得出
   var __gcInit = goldCompensation; // v0.61 B6：捕获金卡补偿初值（后续用例会改动这个全局）
   try { render = __sil; } catch (e) {}
@@ -319,10 +320,14 @@
     __ok('B#16 隐身符 4/6', blk('yinshen') === 4 && blk('yinshen', true) === 6, blk('yinshen') + '/' + blk('yinshen', true));
     __ok('B#17 金光罩 14/19', blk('jinguang') === 14 && blk('jinguang', true) === 19, blk('jinguang') + '/' + blk('jinguang', true));
     __ok('B#18 金钟罩 12/17', blk('jinzhong') === 12 && blk('jinzhong', true) === 17, blk('jinzhong') + '/' + blk('jinzhong', true));
-    __ok('B#19 荆棘符 4/7 + 反弹 4/5', blk('jingji') === 4 && blk('jingji', true) === 7,
-      'blk=' + blk('jingji') + '/' + blk('jingji', true) + ' 反弹=' + (function () { var g2 = __base('wuseng'); var cc = __card('jingji'); cc.eff(false, cc); return g2.thorns; })() +
-      '/' + (function () { var g2 = __base('wuseng'); var cc = Object.assign({}, __card('jingji'), { up: true }); cc.eff(true, cc); return g2.thorns; })());
-    __ok('B#20 佛渡 升级 +4 格挡', blk('fodu') === 0 && blk('fodu', true) === 4, blk('fodu') + '/' + blk('fodu', true));
+    (function () {
+      var j0 = (function () { var g2 = __base('wuseng'); var cc = __card('jingji'); cc.eff(false, cc); return g2.thorns; })();
+      var j1 = (function () { var g2 = __base('wuseng'); var cc = Object.assign({}, __card('jingji'), { up: true }); cc.eff(true, cc); return g2.thorns; })();
+      // v0.61.36：武僧列反弹 4/5 → 3/4（格挡 4/7 不动）
+      __ok('B#19 荆棘符 4/7 + 反弹 3/4', blk('jingji') === 4 && blk('jingji', true) === 7 && j0 === 3 && j1 === 4,
+        'blk=' + blk('jingji') + '/' + blk('jingji', true) + ' 反弹=' + j0 + '/' + j1);
+    })();
+    __ok('B#20 佛渡 升级 +5 格挡（v0.61.36 武僧列 4 → 5）', blk('fodu') === 0 && blk('fodu', true) === 5, blk('fodu') + '/' + blk('fodu', true));
     __ok('B#21 铜皮铁骨 10/15 + 反弹 6/8',
       blk('tongpi') === 10 && blk('tongpi', true) === 15 &&
       (function () { var g2 = __base('wuseng'); var cc = __card('tongpi'); cc.eff(false, cc); return g2.thorns === 6; })() &&
@@ -338,7 +343,7 @@
       blk('xiejiashengyuan') + '/' + blk('xiejiashengyuan', true));
 
     g = __base('wuseng'); c = __card('jingji'); c.eff(false, c);
-    __ok('B#19 荆棘符 thorns>=4', (g.thorns || 0) >= 4, 'thorns=' + g.thorns);
+    __ok('B#19 荆棘符 thorns=3（v0.61.36 武僧列 4 → 3）', (g.thorns || 0) === 3, 'thorns=' + g.thorns);
 
     g = __base('wuseng'); c = __card('yixing'); c.eff(false, c);
     __ok('B#37 移形 dodge+闪避后+5格挡', g.dodge === 1 && g.dodgeNextBlock === 5, 'dodge=' + g.dodge);
@@ -346,6 +351,11 @@
     g = __base('wuseng'); g.hand = [__card('leifu'), __card('leifu'), __card('leifu')];
     c = __card('fenfu'); c.eff(false, c); g.discardSelect.picked = [0, 2]; confirmDiscardSelect();
     __ok('B#34 焚符 弃2张→8格挡(每张4)', (g.blockGainedTurn || 0) === 8, 'blockTurn=' + g.blockGainedTurn);
+
+    // v0.61.36：武僧列升级档 6 → 5（未升级 4 不动，上面那条即是）
+    g = __base('wuseng'); g.hand = [__card('leifu'), __card('leifu'), __card('leifu')];
+    c = Object.assign({}, __card('fenfu'), { up: true }); c.eff(true, c); g.discardSelect.picked = [0, 2]; confirmDiscardSelect();
+    __ok('v0.61.36 B#34 焚符(升级) 弃2张→10格挡(每张5)', (g.blockGainedTurn || 0) === 10, 'blockTurn=' + g.blockGainedTurn);
 
     g = __base('wuseng'); g.hand = [__card('jingang'), __card('leifu')];
     g.drawPile = [__card('leifu'), __card('leifu'), __card('leifu')];
@@ -429,22 +439,29 @@
   // ===== 升级后 0 费（costU:0）真实出牌判定 =====
   // 全部出牌/显示路径走 effectiveCost/cardCost；两者在 c.up && costU!=null 时返回 costU
   (function () {
-    var zeroUp = ['tongling', 'jingxin', 'xueji']; // tiebushan 已按列取费（B 0 费不可升级）；yixing 天师列 v0.61.35 取消 (U:0)，另测
+    var zeroUp = ['tongling', 'jingxin', 'xueji']; // tiebushan 已按列取费（B 0 费不可升级）；yixing 按列分叉（B/D 1/1），另测
     zeroUp.forEach(function (id) {
       var cu = Object.assign({}, __card(id)); cu.up = true;
       __ok('升级0费 costU=' + id, cardCost(cu) === 0 && effectiveCost(cu) === 0,
         'cost=' + cu.cost + ' costU=' + cu.costU + ' cardCost=' + cardCost(cu) + ' eff=' + effectiveCost(cu));
     });
-    // v0.61.35：移形换影「升级 0 费」只对 A/B/C 三列有效；天师列按新卡池文件改为 1/1
-    ['ganshiren', 'wuseng', 'yincha'].forEach(function (h) {
+    // v0.61.35 天师列、v0.61.36 武僧列：移形换影取消 (U:0) → 1/1；只剩 A/C 两列仍 1/0
+    ['ganshiren', 'yincha'].forEach(function (h) {
       __base(h); var cy = Object.assign({}, __card('yixing'), { up: true });
-      __ok('移形换影 ' + h + ' 升级 0 费（v0.61.35 仅天师列取消）',
+      __ok('移形换影 ' + h + ' 升级 0 费（A/C 两列仍 1/0）',
         cardCost(cy) === 0 && effectiveCost(cy) === 0, 'cost=' + cardCost(cy));
     });
-    (function () {
-      __base('tianshi'); var cy = Object.assign({}, __card('yixing'), { up: true });
-      __ok('移形换影 天师 升级仍 1 费（v0.61.35 取消 (U:0)）',
+    ['tianshi', 'wuseng'].forEach(function (h) {
+      __base(h); var cy = Object.assign({}, __card('yixing'), { up: true });
+      __ok('移形换影 ' + h + ' 升级仍 1 费（取消 (U:0)）',
         cardCost(cy) === 1 && effectiveCost(cy) === 1, 'cost=' + cardCost(cy));
+    });
+    (function () {
+      // 「1/1」的必然推论：文案与费用升级前后都一样 → 锻造页应置灰
+      __base('wuseng'); var cy = __card('yixing');
+      __ok('v0.61.36 移形换影(武僧) 文案无「0 符文」且升级项置灰（1/1 的必然结果）',
+        cy.t(false).indexOf('0 符文') < 0 && canUpgrade(cy) === false,
+        cy.t(false) + ' canUp=' + canUpgrade(cy));
     })();
     // playCard 能量门槛（L2314 拦截条件 G.energy<cost）：energy=0/1 对 0 费升级牌均放行
     ['ganshiren', 'wuseng', 'yincha', 'tianshi'].forEach(function (h) {
@@ -773,9 +790,13 @@
   (function () {
     var g, c, s;
 
-    // 武僧：基础 1 点（卡）+ 首次触发 4 点（召唤）= 当回合 5 格挡
+    // 武僧：基础 1 点（卡）+ 首次触发 6 点（召唤）= 当回合 7 格挡（v0.61.36：5 → 7）
     g = __base('wuseng'); G.block = 0; c = __card('wutong'); c.eff(false, c);
-    __ok('v0.58 五通神(武僧) 当回合 1+4=5 格挡', g.block === 5, 'block=' + g.block);
+    __ok('v0.58 五通神(武僧) 当回合 1+6=7 格挡（v0.61.36）', g.block === 7, 'block=' + g.block);
+    // ⚠️ 隐式镜像：顶栏「下回合预格挡」走的是 summonTurnBlock，不走 eff —— 不同步就会两处不一致
+    __ok('v0.61.36 五通神(武僧) summonTurnBlock=6 且顶栏预格挡=6（与 eff 同步）',
+      summonTurnBlock(g.summons[0]) === 6 && preBlockNextTurn() === 6,
+      'stb=' + summonTurnBlock(g.summons[0]) + ' pre=' + preBlockNextTurn());
     __ok('v0.51 五通神(武僧) 现形即耗 1 回合(剩1)', g.summons.length === 1 && g.summons[0].dur === 1, JSON.stringify(g.summons));
 
     // 赶尸人：立即 +3 格挡 +1 尸气
@@ -1046,11 +1067,11 @@
     __card('juling').eff(false, __card('juling'));
     __ok('v0.58 B#24 聚灵 只抽 1 张', g.hand.length === 1, 'hand=' + g.hand.length);
 
-    // #25 舍身：3/5 格挡
+    // #25 舍身：4 固定格挡（v0.61.36 武僧列 3/5 → 4/4，升级不再涨）
     g = __base('wuseng'); __fill(); __card('sheshen').eff(false, __card('sheshen'));
     var s3 = g.block;
     g = __base('wuseng'); __fill(); cc = Object.assign({}, __card('sheshen'), { up: true }); cc.eff(true, cc);
-    __ok('v0.58 B#25 舍身 3/5 格挡', s3 === 3 && g.block === 5, s3 + '/' + g.block);
+    __ok('v0.58 B#25 舍身 4/4 格挡（v0.61.36：3/5 → 4 固定）', s3 === 4 && g.block === 4, s3 + '/' + g.block);
 
     // #26 守一：保留 1 张防御牌 3/4 格挡
     g = __base('wuseng'); g.block = 0;
@@ -1083,10 +1104,10 @@
     g = __base('ganshiren');
     __ok('v0.58 B#28 血契 赶尸人仍是血转盾文案', xq.t(false).indexOf('转化为血量') < 0 && xq.t(false).indexOf('失去 1 点生命') >= 0, xq.t(false));
 
-    // #31 燃血术：B 失去 6
+    // #31 燃血术：B 失去 8（v0.61.36：6 → 8，两档同值；+2 符文不动）
     g = __base('wuseng'); cc = __card('ranxue'); cc.eff(false, cc);
-    __ok('v0.58 B#31 燃血术 失去 6 点生命', g.hp === 54 && g.energy === 11, 'hp=' + g.hp + ' energy=' + g.energy);
-    __ok('v0.58 B#31 燃血术 卡面写 6', __card('ranxue').t(false).indexOf('失去 6 点生命') >= 0, __card('ranxue').t(false));
+    __ok('v0.58 B#31 燃血术 失去 8 点生命', g.hp === 52 && g.energy === 11, 'hp=' + g.hp + ' energy=' + g.energy);
+    __ok('v0.58 B#31 燃血术 卡面写 8', __card('ranxue').t(false).indexOf('失去 8 点生命') >= 0, __card('ranxue').t(false));
 
     // #36 燃魂：B 抽 3、每防御牌回 2/3
     g = __base('wuseng'); __fill(); cc = __card('ranhun'); cc.eff(false, cc);
@@ -1113,7 +1134,7 @@
     g = __base('wuseng'); g.block = 0;
     g.summons = [{ type: 'zhiren', v: 1, dur: 2 }];
     cc = Object.assign({}, __card('fuling'), { up: true }); cc.eff(true, cc);
-    __ok('v0.58 B#39 附灵术 2 个→6 / 升级 1 个→4', fl3 === 6 && g.block === 4, fl3 + '/' + g.block);
+    __ok('v0.58 B#39 附灵术 2 个→6 / 升级 1 个→3（v0.61.36：每触发 1 个固定 3）', fl3 === 6 && g.block === 3, fl3 + '/' + g.block);
 
     // #40 镇妖铃：10/15 +（格挡 ≥10 时）+8/+11，且不再消耗格挡
     g = __base('wuseng'); g.block = 12; g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
@@ -1176,8 +1197,10 @@
       cardCost(fl) === 2 && isOneUse(fl) === false, 'cost=' + cardCost(fl) + ' oneUse=' + isOneUse(fl));
 
     g = __base('wuseng');
-    __ok('#39 附灵术(武僧) 2 费 + 非消耗牌',
-      cardCost(fl) === 2 && isOneUse(fl) === false, 'cost=' + cardCost(fl) + ' oneUse=' + isOneUse(fl));
+    var flB = Object.assign({}, __card('fuling'), { up: true }); // 不改共享卡对象
+    __ok('#39 附灵术(武僧) 2 费 / 升级 1 费 + 非消耗牌（v0.61.36：2 → 2/1）',
+      cardCost(fl) === 2 && cardCost(flB) === 1 && isOneUse(fl) === false,
+      'cost=' + cardCost(fl) + ' up=' + cardCost(flB) + ' oneUse=' + isOneUse(fl));
 
     g = __base('tianshi');
     var flU = Object.assign({}, __card('fuling'), { up: true }); // 不改共享卡对象
@@ -1267,11 +1290,12 @@
     __ok('v0.58 B#43 小鬼 2/3 伤害 + 死亡 5/7 格挡', xv === 2 && xvU === 3 && xb === 5 && g.block === 7,
       xv + '/' + xvU + ' 死亡格挡 ' + xb + '/' + g.block);
 
-    // #45 五通神：立即 1/2 + 首次 4 = 5/6，之后每回合开始 4
+    // #45 五通神：立即 1 + 首次 6 = 7（两档同值），之后每回合开始 6（v0.61.36 武僧列）
     g = __base('wuseng'); g.block = 0; c = __card('wutong'); c.eff(false, c);
     var wb = g.block, wv = g.summons[0].v;
     g = __base('wuseng'); g.block = 0; c = Object.assign({}, __card('wutong'), { up: true }); c.eff(true, c);
-    __ok('v0.58 B#45 五通神 立即 5/6，之后每回合 4', wb === 5 && g.block === 6 && wv === 4 && g.summons[0].v === 4,
+    __ok('v0.58 B#45 五通神 立即 7/7，之后每回合 6（v0.61.36：5/6 与 4 → 7 与 6）',
+      wb === 7 && g.block === 7 && wv === 6 && g.summons[0].v === 6,
       wb + '/' + g.block + ' v=' + wv + '/' + g.summons[0].v);
 
     // #46 咒雨：0 费 / 格挡全转伤害·**逐点结算** / 无伤害预览（v0.61.10 P3 改版）
@@ -2038,9 +2062,9 @@
     __base('wuseng'); var _fdB = FD.t(true);
     __base('yincha'); var _fdC = FD.t(true);
     __base('tianshi'); var _fdT = FD.t(true);
-    __ok('v0.61.35 佛渡 升级附加：天师 5 格挡 / 阴差 3 格挡 / 武僧 4 格挡 / 赶尸人 2 尸气',
+    __ok('v0.61.35/36 佛渡 升级附加：天师 5 格挡 / 阴差 3 格挡 / 武僧 5 格挡 / 赶尸人 2 尸气',
       _fdT.indexOf('5 点格挡') >= 0 && _fdC.indexOf('3 点格挡') >= 0 &&
-      _fdB.indexOf('4 点格挡') >= 0 && _fdA.indexOf('2 点【尸气】') >= 0,
+      _fdB.indexOf('5 点格挡') >= 0 && _fdA.indexOf('2 点【尸气】') >= 0,
       _fdT + ' | ' + _fdC + ' | ' + _fdB + ' | ' + _fdA);
     var RX = __card('ranxue');
     __base('ganshiren'); var _rxA = [RX.t(false), RX.t(true)];
@@ -2050,11 +2074,81 @@
     __ok('v0.61.35 燃血术 天师列固定失 8 点生命（升级不再减到 3）',
       _rxT[0].indexOf('失去 8 点生命') >= 0 && _rxT[1].indexOf('失去 8 点生命') >= 0,
       _rxT.join(' / '));
-    __ok('v0.61.35 燃血术 其余三列各自不变（A 4/4、B 6/6、C 4/6）',
+    __ok('v0.61.35 燃血术 三列各自不变（A 4/4、B 8/8、C 4/6；B 于 v0.61.36 改）',
       _rxA[0].indexOf('失去 4 点生命') >= 0 && _rxA[1].indexOf('失去 4 点生命') >= 0 &&
-      _rxB[0].indexOf('失去 6 点生命') >= 0 && _rxB[1].indexOf('失去 6 点生命') >= 0 &&
+      _rxB[0].indexOf('失去 8 点生命') >= 0 && _rxB[1].indexOf('失去 8 点生命') >= 0 &&
       _rxC[0].indexOf('失去 4 点生命') >= 0 && _rxC[1].indexOf('失去 6 点生命') >= 0,
       _rxA.join('/') + ' | ' + _rxB.join('/') + ' | ' + _rxC.join('/'));
+
+    /* —— v0.61.36 武僧（B 列 / 苦僧）8 条改动的反误伤核对 ——
+       本批所有改动都写成 `G.hero==='wuseng'` 分叉或按列常量，A/C/D 三列应逐字不变；
+       这里把「没被动过」钉死，免得下次谁顺手把 else 兜底改了没人发现。 */
+    (function () {
+      // 荆棘符：A 反弹 6/4（本批只动武僧），C 走 hitHeal、D 走 hitCurse —— thorns 都不该有值
+      var jA0 = (function () { var g2 = __base('ganshiren'); var cc = __card('jingji'); cc.eff(false, cc); return g2.thorns; })();
+      var jA1 = (function () { var g2 = __base('ganshiren'); var cc = Object.assign({}, __card('jingji'), { up: true }); cc.eff(true, cc); return g2.thorns; })();
+      var jC = (function () { var g2 = __base('yincha'); var cc = __card('jingji'); cc.eff(false, cc); return { t: g2.thorns, h: g2.hitHeal }; })();
+      var jD = (function () { var g2 = __base('tianshi'); var cc = __card('jingji'); cc.eff(false, cc); return { t: g2.thorns, c: g2.hitCurse }; })();
+      __ok('v0.61.36 反误伤 荆棘符 赶尸人仍反弹 4/6、阴差仍 hitHeal=2、天师仍 hitCurse=1',
+        jA0 === 4 && jA1 === 6 && jC.h === 2 && !jC.t && jD.c === 1 && !jD.t,
+        'A=' + jA0 + '/' + jA1 + '（未升级/升级） C=' + jC.h + ' D=' + jD.c);
+
+      // 佛渡 eff 的 fb 三元：武僧 5 / 天师 5 / 阴差 3（赶尸人走上面的尸气分支，不给格挡）
+      function fdBlock(h, up) {
+        var g2 = __base(h); g2.block = 0;
+        var cc = Object.assign({}, __card('fodu'), { up: !!up }); cc.eff(!!up, cc);
+        return g2.block;
+      }
+      __ok('v0.61.36 反误伤 佛渡 升级附加格挡逐列：武僧 5 / 天师 5 / 阴差 3 / 赶尸人 0',
+        fdBlock('wuseng', true) === 5 && fdBlock('tianshi', true) === 5 &&
+        fdBlock('yincha', true) === 3 && fdBlock('ganshiren', true) === 0,
+        [fdBlock('wuseng', true), fdBlock('tianshi', true), fdBlock('yincha', true), fdBlock('ganshiren', true)].join('/'));
+
+      // 舍身 eff：只有武僧给格挡 —— A 给尸气、C 只抽牌、D 只施咒，三列 block 都该是 0
+      function ssBlock(h, up) {
+        var g2 = __base(h); g2.block = 0; __fill();
+        var cc = Object.assign({}, __card('sheshen'), { up: !!up }); cc.eff(!!up, cc);
+        return g2.block;
+      }
+      __ok('v0.61.36 反误伤 舍身 格挡只有武僧列有：B 4/4、A/C/D 恒 0',
+        ssBlock('wuseng', false) === 4 && ssBlock('wuseng', true) === 4 &&
+        ssBlock('ganshiren', false) === 0 && ssBlock('yincha', true) === 0 && ssBlock('tianshi', false) === 0,
+        [ssBlock('wuseng', false), ssBlock('wuseng', true), ssBlock('ganshiren', false), ssBlock('yincha', true), ssBlock('tianshi', false)].join('/'));
+
+      // 附灵术 费用逐列：A 0 费（消耗）／B 2→1／C 2／D 2→1
+      var flU2 = function () { return Object.assign({}, __card('fuling'), { up: true }); };
+      __base('ganshiren'); var _fA0 = cardCost(__card('fuling'));
+      __base('wuseng');    var _fB = [cardCost(__card('fuling')), cardCost(flU2())];
+      __base('yincha');    var _fC = [cardCost(__card('fuling')), cardCost(flU2())];
+      __base('tianshi');   var _fD = [cardCost(__card('fuling')), cardCost(flU2())];
+      __ok('v0.61.36 反误伤 附灵术 费用逐列：A 0（消耗）／B 2/1／C 2/2／D 2/1',
+        _fA0 === 0 && _fB[0] === 2 && _fB[1] === 1 && _fC[0] === 2 && _fC[1] === 2 &&
+        _fD[0] === 2 && _fD[1] === 1,
+        'A=' + _fA0 + ' B=' + _fB + ' C=' + _fC + ' D=' + _fD);
+
+      // 五通神 立即格挡：武僧 7（本批）／天师 6／阴差 0（走回血）／赶尸人 0（走尸气分支）
+      function wtBlock(h, up) {
+        var g2 = __base(h); g2.block = 0;
+        var cc = Object.assign({}, __card('wutong'), { up: !!up }); cc.eff(!!up, cc);
+        return g2.block;
+      }
+      // 阴差走回血（heal 5，不给格挡）、赶尸人走尸气分支但召唤自身仍给 5 格挡（老断言 :782 即 +5格挡）
+      __ok('v0.61.36 反误伤 五通神 立即格挡：武僧 7（本批）/ 天师 6 / 赶尸人 5 / 阴差 0',
+        wtBlock('wuseng', false) === 7 && wtBlock('tianshi', false) === 6 &&
+        wtBlock('ganshiren', false) === 5 && wtBlock('yincha', false) === 0,
+        [wtBlock('wuseng', false), wtBlock('tianshi', false), wtBlock('ganshiren', false), wtBlock('yincha', false)].join('/'));
+      // 五通神「每回合开始」值：武僧 6（本批）／天师 6
+      var wtU = function (h) {
+        var g2 = __base(h); var cc = Object.assign({}, __card('wutong'), { up: true }); cc.eff(true, cc);
+        return summonTurnBlock(g2.summons[0]);
+      };
+      // 注意：summonTurnBlock / preBlockNextTurn 第一行就是 `if(G.hero!=='wuseng') return 0` ——
+      // 它是**武僧专用**函数（天师的每回合格挡走 wutongTick，不经过这里）。
+      __ok('v0.61.36 五通神 每回合开始格挡：武僧 6（4 → 6）；summonTurnBlock 对非武僧恒 0（函数契约）',
+        wtU('wuseng') === 6 && wtU('tianshi') === 0 &&
+        (__base('yincha'), summonTurnBlock({ type: 'wutong', v: 6, dur: 2, up: false }) === 0),
+        'B=' + wtU('wuseng') + ' D=' + wtU('tianshi'));
+    })();
 
     /* —— 卡面预伤害（诅咒/格挡浮动牌恒定显示） —— */
     g = dt(); g.enemies[0].curse = 3;
@@ -2591,7 +2685,7 @@
     __base('wuseng'); g.block = 0;
     var jj = __card('jingji');
     for (var _i = 0; _i < 3; _i++) { jj.eff(false, jj); }
-    __ok('v0.61.10 未勾选项 P4 荆棘无上限叠加（3 次 × 4 = 12，未被钳制）', G.thorns === 12, 'thorns=' + G.thorns);
+    __ok('v0.61.10 未勾选项 P4 荆棘无上限叠加（3 次 × 3 = 9，未被钳制；v0.61.36 武僧列每层 4 → 3）', G.thorns === 9, 'thorns=' + G.thorns);
   })();
 
 
@@ -3417,6 +3511,95 @@
     var ferr = null;
     try { floatDamage('-9', '', null); floatDamage('+12', 'heal', null); } catch (e2) { ferr = e2; }
     __ok('v0.61.33 C floatDamage 在无素材时不抛错', ferr === null, ferr && ferr.message);
+
+    /* —— v0.61.36 C2 数字图四档接缝（素材/num/{dmg,hurt,block,heal}/0-9.png） —— */
+    __ok('v0.61.36 C2 kind → 目录名 映射四档齐全（空串 / to-player / block / heal）',
+      numKind('') === 'dmg' && numKind('to-player') === 'hurt' &&
+      numKind('block') === 'block' && numKind('heal') === 'heal' &&
+      numKind(undefined) === 'dmg' && numKind('没见过的 kind') === 'dmg',
+      [numKind(''), numKind('to-player'), numKind('block'), numKind('heal'), numKind('没见过的 kind')].join('/'));
+    __ok('v0.61.36 C2 四档各自独立探测：无素材时四档全部判定不可用',
+      numProbe('') === false && numProbe('to-player') === false &&
+      numProbe('block') === false && numProbe('heal') === false,
+      JSON.stringify(NUM_STATE));
+    __ok('v0.61.36 C2 探测状态按档存（不是单一标量）',
+      typeof NUM_STATE === 'object' && NUM_STATE !== null &&
+      typeof NUM_IMG === 'object' && NUM_IMG !== null,
+      typeof NUM_STATE);
+
+    /* —— v0.61.36 C3 浮字结构：外层 .fx-dmg（位移）＋内层 .fx-in（抖动/闪烁） —— */
+    // v0.61.36：跑到这里时 SETTINGS.lowSpec 已被前面某条测试留在 true，而 floatDamage 首行是 if(!fx())return;
+    // 正好顺手把它钉住 —— 「流畅模式不建浮字」是**正确行为**，不是 bug
+    (function () {
+      var made = [], origCE = document.createElement, keepLow = SETTINGS.lowSpec;
+      try {
+        document.createElement = function (tag) { var el = origCE(tag); made.push(el); return el; };
+        SETTINGS.lowSpec = true; floatDamage = __realFloatDamage;
+        floatDamage('-25', '', null, { crit: true });
+      } catch (e0) {} finally { document.createElement = origCE; SETTINGS.lowSpec = keepLow; floatDamage = __sil; }
+      __ok('v0.61.36 C3 流畅模式（lowSpec）下 floatDamage 不建任何浮字节点（fx() 门槛生效）',
+        made.length === 0, 'made=' + made.length);
+    })();
+
+    var __made = [], __origCE = document.createElement, __keepFD = floatDamage, __keepLow = SETTINGS.lowSpec;
+    var __fdErr = null;
+    try {
+      document.createElement = function (tag) { var el = __origCE(tag); __made.push(el); return el; };
+      SETTINGS.lowSpec = false;              // 临时关掉流畅模式，否则 fx() 为假、断言测不到东西
+      floatDamage = __realFloatDamage;        // 换回真的：全局在 :658 已被顶成 __sil
+      floatDamage('-25', '', null, { crit: true });
+      floatDamage('+7', 'block', null);
+    } catch (e4) { __fdErr = e4; } finally {
+      document.createElement = __origCE; floatDamage = __keepFD; SETTINGS.lowSpec = __keepLow;
+    }
+    var __spans = __made.filter(function (e) { return /fx-dmg/.test(String(e.className || '')); });
+    var __inners = __made.filter(function (e) { return String(e.className || '') === 'fx-in'; });
+    var __crit = __spans.filter(function (e) { return /(^|\s)crit(\s|$)/.test(String(e.className || '')); });
+    __ok('v0.61.36 C3 floatDamage 建出「外层 .fx-dmg + 内层 .fx-in」两层，且不抛错',
+      __fdErr === null && __spans.length === 2 && __inners.length === 2,
+      (__fdErr && __fdErr.message) || ('spans=' + __spans.length + ' inners=' + __inners.length));
+    var __sp0 = __spans[0] || {}, __in0 = __inners[0] || {};
+    __ok('v0.61.36 C3 只有 crit 那一次加了 .crit 类（opts 省略时不受影响）',
+      __crit.length === 1 && /block/.test(String(__sp0.className)) === false,
+      __spans.map(function (e) { return e.className; }).join(' | '));
+    __ok('v0.61.36 C3 文字回退时字形挂在**内层**（外层 .fx-dmg 自身不带字形）',
+      String(__sp0.textContent || '') === '' && String(__in0.textContent || '') === '-25',
+      'outer="' + (__sp0.textContent || '') + '" inner="' + (__in0.textContent || '') + '"');
+
+    /* —— v0.61.36 C4 大伤害档阈值与打击音效**同源**（isCritHit 单一来源） —— */
+    __ok('v0.61.36 C4 isCritHit：≥20 或击杀；19 不算',
+      isCritHit(20, false) === true && isCritHit(19, false) === false &&
+      isCritHit(3, true) === true && isCritHit(0, false) === false,
+      [isCritHit(20, false), isCritHit(19, false), isCritHit(3, true)].join('/'));
+    __ok('v0.61.36 C4 HIT_HEAVY_DMG=10 / HIT_CRIT_DMG=20 且 pickHitSfx 走同一套判据',
+      HIT_HEAVY_DMG === 10 && HIT_CRIT_DMG === 20 &&
+      pickHitSfx(25, false, false) === 'hit_crit' && pickHitSfx(12, false, false) === 'hit_heavy' &&
+      pickHitSfx(5, false, false) === 'hit_light' && pickHitSfx(25, true, false) === 'hit_guard' &&
+      pickHitSfx(1, false, true) === 'hit_crit',
+      [pickHitSfx(25, false, false), pickHitSfx(12, false, false), pickHitSfx(5, false, false)].join('/'));
+    // 行为验证（不看源码文本）：真打一下敌人，看浮字是否带 .crit
+    function __critSpansOnHit(dmg) {
+      var made = [], origCE = document.createElement, err = null, keepFD = floatDamage, keepLow = SETTINGS.lowSpec;
+      try {
+        document.createElement = function (tag) { var el = origCE(tag); made.push(el); return el; };
+        G = __base('wuseng'); G.enemies[0].hp = 300; G.enemies[0].maxHp = 300;
+        SETTINGS.lowSpec = false;        // 同上：不关流畅模式就什么都测不到
+        floatDamage = __realFloatDamage; // dealDamageTo 内部调的是全局 floatDamage
+        dealDamageTo(G.enemies[0], dmg);
+      } catch (e5) { err = e5; } finally {
+        document.createElement = origCE; floatDamage = keepFD; SETTINGS.lowSpec = keepLow;
+      }
+      var sp = made.filter(function (e) { return /fx-dmg/.test(String(e.className || '')); });
+      var cr = sp.filter(function (e) { return /(^|\s)crit(\s|$)/.test(String(e.className || '')); });
+      return { err: err, spans: sp.length, crits: cr.length };
+    }
+    var _h25 = __critSpansOnHit(25), _h8 = __critSpansOnHit(8);
+    __ok('v0.61.36 C4 对敌 25 伤 → 浮字带 .crit（与 hit_crit 音效同址同判据）',
+      _h25.err === null && _h25.spans === 1 && _h25.crits === 1,
+      (_h25.err && _h25.err.message) || ('spans=' + _h25.spans + ' crits=' + _h25.crits));
+    __ok('v0.61.36 C4 对敌 8 伤 → 浮字不带 .crit（小伤害档不受影响）',
+      _h8.err === null && _h8.spans === 1 && _h8.crits === 0,
+      (_h8.err && _h8.err.message) || ('spans=' + _h8.spans + ' crits=' + _h8.crits));
 
     /* —— D 洗髓经不跨关 —— */
     g = __base('tianshi'); G.xisuiTurns = 3;

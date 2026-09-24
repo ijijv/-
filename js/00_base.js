@@ -118,23 +118,30 @@ function tipOnce(key, html){
 
 /* ===================== 战斗特效（juice：伤害飘字 / 受击震屏 / 敌人抖动） ===================== */
 let HITFX = { enemies: new Set() };
-/* v0.61.33 · 伤害浮字的数字素材接缝（素材/num/0.png … 9.png）
-   NUM_STATE：0=还没探测 1=图片可用 -1=不可用（含探测中，先按不可用渲染，加载完自动切换） */
-let NUM_IMG=null, NUM_STATE=0;
-function numProbe(){
-  if(NUM_STATE) return NUM_STATE===1;
-  if(typeof Image==='undefined' || typeof assetURL!=='function'){ NUM_STATE=-1; return false; }
-  NUM_STATE=-1; // 先假定不可用：本次仍用文字，等 10 张全部加载成功再把 NUM_STATE 翻成 1
+/* v0.61.33 · 伤害浮字的数字素材接缝（素材/num/{dmg,hurt,block,heal}/0.png … 9.png）
+   v0.61.36：由「单目录 10 张」改成**四档各 10 张**（共 40 张）——
+   颜色和描边必须画进图里（CSS 的 color / text-shadow 对 <img> 无效），所以每档一套。
+   每档**独立探测**：某一档没画完只退那一档，不牵连其他档。
+   NUM_STATE[k]：0=还没探测 1=图片可用 -1=不可用（含探测中，先按不可用渲染，加载完自动切换） */
+/* ⚠️ kind ↔ 目录名的**唯一**映射处（floatDamage 的 kind 取值：'' / 'to-player' / 'block' / 'heal'） */
+const NUM_KIND_DIR = { '': 'dmg', 'to-player': 'hurt', 'block': 'block', 'heal': 'heal' };
+let NUM_IMG = {}, NUM_STATE = {};
+function numKind(kind){ return NUM_KIND_DIR[kind] || 'dmg'; }
+function numProbe(kind){
+  const k = numKind(kind);
+  if(NUM_STATE[k]) return NUM_STATE[k]===1;
+  if(typeof Image==='undefined' || typeof assetURL!=='function'){ NUM_STATE[k]=-1; return false; }
+  NUM_STATE[k]=-1; // 先假定不可用：本次仍用文字，等这一档 10 张全部加载成功再把 NUM_STATE[k] 翻成 1
   try{
     const arr=[]; let left=10, done=false;
     for(let i=0;i<10;i++){
       const im=new Image();
-      im.onload=()=>{ if(done) return; if(--left===0){ NUM_IMG=arr; NUM_STATE=1; } };
-      im.onerror=()=>{ if(done) return; done=true; NUM_STATE=-1; NUM_IMG=null; };
-      im.src=assetURL('num/'+i+'.png');
+      im.onload=()=>{ if(done) return; if(--left===0){ NUM_IMG[k]=arr; NUM_STATE[k]=1; } };
+      im.onerror=()=>{ if(done) return; done=true; NUM_STATE[k]=-1; NUM_IMG[k]=null; };
+      im.src=assetURL('num/'+k+'/'+i+'.png');
       arr.push(im);
     }
-  }catch(e){ NUM_STATE=-1; NUM_IMG=null; }
+  }catch(e){ NUM_STATE[k]=-1; NUM_IMG[k]=null; }
   return false;
 }
 let PLAYER_HP_PREV = null;
@@ -144,19 +151,25 @@ function fxLayer(){
   if(!el){ el=document.createElement('div'); el.id='fx-layer'; document.body.appendChild(el); }
   return el;
 }
-function floatDamage(text, kind, anchor){
+/* opts.crit：大伤害档（阈值与打击音效同源，见 10_audio.js 的 isCritHit） */
+function floatDamage(text, kind, anchor, opts){
   if(!fx()) return;
   const span=document.createElement('span');
-  span.className='fx-dmg '+kind;
+  span.className='fx-dmg '+kind+((opts && opts.crit) ? ' crit' : '');
+  // v0.61.36：字形统一包一层 .fx-in —— 外层管位移（fxDmg 的 translate/scale），
+  // 内层管抖动（translateX）与闪烁（filter），两条动画不抢同一个属性
+  const inner=document.createElement('i'); inner.className='fx-in';
   // v0.61.33：有数字素材就把字形换成图片（0-9 之外的一律回落文字，符号 +/- 保持文字）
   const __sign=/^[+-]/.test(text) ? text[0] : '';
   const __digits=__sign ? text.slice(1) : text;
-  if(numProbe() && __digits.length && !/[^0-9]/.test(__digits)){
-    if(__sign) span.textContent=__sign;
-    for(const ch of __digits){ const im=new Image(); im.className='fx-num'; im.src=NUM_IMG[+ch].src; im.alt=ch; span.appendChild(im); }
+  const __k=numKind(kind);
+  if(numProbe(kind) && NUM_IMG[__k] && __digits.length && !/[^0-9]/.test(__digits)){
+    if(__sign) inner.textContent=__sign;
+    for(const ch of __digits){ const im=new Image(); im.className='fx-num'; im.src=NUM_IMG[__k][+ch].src; im.alt=ch; inner.appendChild(im); }
   } else {
-    span.textContent=text;
+    inner.textContent=text;
   }
+  span.appendChild(inner);
   fxLayer().appendChild(span);
   if(anchor){
     const r=anchor.getBoundingClientRect();
