@@ -221,7 +221,10 @@ function continueRun(){
   if(!d){ floatMsg('没有可继续的进度'); return; }
   G=newState();
   rngRestore(d.rng);          // v0.61.06：先恢复随机态，再重放后续判定
-  G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.mapPath=Array.isArray(d.mapPath)?d.mapPath:[]; G.hero=d.hero; // 老存档没 mapPath → 空数组，连线退化成只有「可达」 G.hp=d.hp; G.maxHp=d.maxHp; G.gold=d.gold;
+  G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.mapPath=Array.isArray(d.mapPath)?d.mapPath:[]; G.hero=d.hero; // 老存档没 mapPath → 空数组，连线退化成只有「可达」
+  // v0.61.39 修 bug：G.hp/G.maxHp/G.gold 原先写在同一行末尾，被上面那句 `//` 注释整段吞掉，
+  //             导致续档后三项回落到 newState() 的默认值（生命 60、金币 0）。
+  G.hp=d.hp; G.maxHp=d.maxHp; G.gold=d.gold;
   G.energy=d.energy!=null?d.energy:3; G.block=d.block||0;
   MAP=ACTS[G.act-1];
   G.deck=(d.deck||[]).map(cardRestore);

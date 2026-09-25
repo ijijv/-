@@ -425,11 +425,11 @@
 
   /* —— #35 血祭 四列口径（经 finishEndTurn） —— */
   (function () {
-    var expect = { ganshiren: 3, wuseng: 2, yincha: 3, tianshi: 4 };
+    var expect = { ganshiren: 3, wuseng: 2, yincha: 4, tianshi: 4 };
     var setCnt = {
       ganshiren: function () { G.summonsMadeTurn = 3; },
       wuseng: function () { G.blockGainedTurn = 12; },
-      yincha: function () { G.hpLostTurn = 7; },
+      yincha: function () { G.hpLostTurn = 16; },   // v0.61.39 阴差列：每失 2 → 每失 4；16/4=4（同时压到上限 +4）
       tianshi: function () { CURSE_THIS_TURN = 4; },
     };
     __HEROES.forEach(function (h) {
@@ -447,13 +447,9 @@
       __ok('升级0费 costU=' + id, cardCost(cu) === 0 && effectiveCost(cu) === 0,
         'cost=' + cu.cost + ' costU=' + cu.costU + ' cardCost=' + cardCost(cu) + ' eff=' + effectiveCost(cu));
     });
-    // v0.61.35 天师列、v0.61.36 武僧列、v0.61.37 赶尸人列：移形换影取消 (U:0) → 1/1；只剩 C 列仍 1/0
-    ['yincha'].forEach(function (h) {
-      __base(h); var cy = Object.assign({}, __card('yixing'), { up: true });
-      __ok('移形换影 ' + h + ' 升级 0 费（仅剩 C 列 1/0）',
-        cardCost(cy) === 0 && effectiveCost(cy) === 0, 'cost=' + cardCost(cy));
-    });
-    ['tianshi', 'wuseng', 'ganshiren'].forEach(function (h) {
+    // v0.61.35 天师列、v0.61.36 武僧列、v0.61.37 赶尸人列、v0.61.39 阴差列：
+    // 移形换影取消 (U:0) → 四列统一 1/1（阴差列原先还带「（0 符文）」文案，一并去掉）
+    ['tianshi', 'wuseng', 'ganshiren', 'yincha'].forEach(function (h) {
       __base(h); var cy = Object.assign({}, __card('yixing'), { up: true });
       __ok('移形换影 ' + h + ' 升级仍 1 费（取消 (U:0)）',
         cardCost(cy) === 1 && effectiveCost(cy) === 1, 'cost=' + cardCost(cy));
@@ -580,7 +576,8 @@
     g = __base('wuseng'); g.block = 9;
     __ok('雷符预览 B=4+min6,3=7', lv('leifu').d === 7, 'd=' + lv('leifu').d);
     g = __base('yincha'); g.xuenu = 4;
-    __ok('雷符预览 C=5+血怒6=11', lv('leifu').d === 11, 'd=' + lv('leifu').d);
+    __ok('v0.61.39 雷符预览 C=4+3×2=10（血怒4，每层+3上限+6 → 吃满 2 层）',
+      lv('leifu').d === 10, 'd=' + lv('leifu').d);
     g = __base('tianshi'); g.enemies[0].curse = 1;
     __ok('雷符预览 D=6+3=9', lv('leifu').d === 9, 'd=' + lv('leifu').d);
     __ok('雷符预览 D升级=9+4=13', lv('leifu', true).d === 13, 'd=' + lv('leifu', true).d);   // v0.61.35：带诅咒加成 +3/+4
@@ -805,14 +802,14 @@
     g = __base('ganshiren'); G.block = 0; G.尸气 = 0; c = __card('wutong'); c.eff(false, c);
     __ok('v0.57 五通神(赶尸人) 当回合 +5格挡', g.block === 5 && (g.尸气 || 0) === 0, 'block=' + g.block + ' 尸气=' + g.尸气);
 
-    // 阴差：改成回血 —— 当回合 = 立即 5 + 首次触发 5 = +10 生命，不给格挡
+    // 阴差：改成回血 —— 当回合 = 立即 6 + 首次触发 6 = +12 生命，不给格挡（v0.61.39：5 → 6）
     g = __base('yincha'); G.block = 0; c = __card('wutong'); c.eff(false, c);
-    __ok('v0.59 五通神(阴差) 当回合 +10生命+0格挡', g.hp === 70 && g.block === 0, 'hp=' + g.hp + ' block=' + g.block);
+    __ok('v0.61.39 五通神(阴差) 当回合 +12生命+0格挡', g.hp === 72 && g.block === 0, 'hp=' + g.hp + ' block=' + g.block);
     __ok('v0.59 五通神(阴差) 基础剩1回合(共2)', g.summons[0].dur === 1, 'dur=' + g.summons[0].dur);
 
-    // 阴差：血怒 ≥4 → 消耗 4 层，持续 2 → 3 回合
+    // 阴差：血怒 ≥3 → 消耗 3 层，持续 2 → 3 回合（v0.61.39：门槛 4 → 3、消耗 4 → 3）
     g = __base('yincha'); G.block = 0; g.xuenu = 4; c = __card('wutong'); c.eff(false, c);
-    __ok('v0.59 五通神(阴差) 血怒4 → 消耗4层、剩2回合(共3)', g.xuenu === 0 && g.summons[0].dur === 2,
+    __ok('v0.61.39 五通神(阴差) 血怒4 → 消耗3层、剩2回合(共3)', g.xuenu === 1 && g.summons[0].dur === 2,
       'xuenu=' + g.xuenu + ' dur=' + g.summons[0].dur);
 
     // 阴差：回合开始的 tick 是「恢复生命」而非格挡
@@ -1425,12 +1422,16 @@
     }
     var g, c, r;
 
-    /* —— 初始卡池：雷符×3 金刚符×2 火符×1 佛渡×1 聚灵×1 血契×1 守一×1 渡魂归己×1 = 11 张 —— */
+    /* —— 初始卡池（v0.61.39 按《阴差版卡池 - 副本.md》重定）：
+       雷符×3 金刚符×1 火符×1 焚符×1 血契×1 守一×1 燃血术×1 纸人×1 = 8 种、共 10 张 —— */
     var h = HEROES.filter(function (x) { return x.id === 'yincha'; })[0];
     var got = h.deck.map(function (p) { return p[0] + 'x' + p[1]; }).join(' ');
     var cnt = h.deck.reduce(function (a, p) { return a + p[1]; }, 0);
-    __ok('v0.59 阴差初始卡池 11 张且组成正确',
-      cnt === 11 && got === 'leifux3 jingangx2 huofux1 fodux1 julingx1 xueqix1 shouyix1 duhunguijix1', got);
+    __ok('v0.61.39 阴差初始卡池 8 种共 10 张且组成正确',
+      cnt === 10 && got === 'leifux3 jingangx1 huofux1 fenfux1 xueqix1 shouyix1 ranxuex1 zhirenx1', got);
+    // 反误伤：被换下的 3 张（佛渡/聚灵/渡魂归己）不该还留在牌库里
+    __ok('v0.61.39 阴差初始卡池 已移出 fodu/juling/duhunguiji',
+      !h.deck.some(function (p) { return ['fodu', 'juling', 'duhunguiji'].indexOf(p[0]) >= 0; }), got);
 
     /* —— 48 张卡的阴差费用（含 (U:0) 升级减免）与文档逐条对齐 —— */
     var COST_WANT = {
@@ -1440,7 +1441,7 @@
       jingji: [1, 1], fodu: [0, 0], tongpi: [2, 2], fanzhen: [1, 1], xiejiashengyuan: [1, 1], juling: [0, 0],
       sheshen: [0, 0], shouyi: [0, 0], yiwu: [0, 0], xueqi: [1, 0], tongling: [1, 0], jingxin: [1, 0],
       ranxue: [0, 0], xisui: [2, 2], duhunguiji: [1, 1], fenfu: [0, 0], xueji: [1, 0], ranhun: [0, 0],
-      kaitianyan: [1, 1], yixing: [1, 0], fuling: [2, 2], zhenyaoling: [2, 2], zhiren: [1, 1], zhouyin: [1, 1],
+      kaitianyan: [1, 1], yixing: [1, 1], fuling: [2, 2], zhenyaoling: [2, 2], zhiren: [1, 1], zhouyin: [1, 1],   // v0.61.39：yixing 阴差列 1/0 → 1/1
       xiaogui: [1, 1], huapi: [1, 1], wutong: [2, 2], zhouyu: [2, 2], yinbingguo: [3, 3], shi_wang: [0, 0]
     };
     var badCost = [];
@@ -1453,29 +1454,29 @@
     __ok('v0.59 阴差 48 张卡费用与文档一致（(U:0) 升级减免）', badCost.length === 0 && Object.keys(COST_WANT).length === 48,
       badCost.join(' '));
 
-    /* —— 攻击 1：雷符 5/8 + 每层血怒 +2（上限 +6）+ 击杀得 2 血怒 —— */
+    /* —— 攻击 1：雷符 4/8 + 每层血怒 +3（上限 +6）+ 击杀得 2 血怒 —— */
     g = gy(); g.xuenu = 3; g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
     g.hand = [__card('leifu')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#1 雷符 5+2×3=11 伤并消耗 3 层血怒', g.enemies[0].hp === 489 && g.xuenu === 0,
+    __ok('v0.61.39 C#1 雷符 4+3×2=10 伤并消耗 2 层血怒（上限 +6 → 至多 2 层）', g.enemies[0].hp === 490 && g.xuenu === 1,
       'ehp=' + g.enemies[0].hp + ' xuenu=' + g.xuenu);
-    g = gy(); g.xuenu = 0; g.enemies[0].hp = 5;
+    g = gy(); g.xuenu = 0; g.enemies[0].hp = 4;   // v0.61.39：基础伤 5 → 4，血量同步下调才仍能一击致死
     g.hand = [__card('leifu')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#1 雷符 击杀 → 获得 2 层血怒', g.enemies[0].hp <= 0 && g.xuenu === 2, 'xuenu=' + g.xuenu);
+    __ok('v0.61.39 C#1 雷符 击杀 → 获得 2 层血怒', g.enemies[0].hp <= 0 && g.xuenu === 2, 'xuenu=' + g.xuenu);
 
-    /* —— 攻击 2：火符 8/11 + 失去 2 生命（不弃牌） —— */
+    /* —— 攻击 2：火符 6/10 + 失去 2 生命（不弃牌） —— */
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
     g.hand = [__card('huofu'), __card('leifu'), __card('leifu')];
     g.drawPile = []; g.discard = []; g.exhausted = [];
     cardPlayWindow = true; doPlayCard(0); cardPlayWindow = false;
-    __ok('v0.59 C#2 火符 8 伤 + 失去 2 生命(被动再给 2 血怒)',
-      g.enemies[0].hp === 492 && g.hp === 58 && g.xuenu === 2,
+    __ok('v0.61.39 C#2 火符 6 伤 + 失去 2 生命(被动再给 2 血怒)',
+      g.enemies[0].hp === 494 && g.hp === 58 && g.xuenu === 2,
       'ehp=' + g.enemies[0].hp + ' hp=' + g.hp + ' xuenu=' + g.xuenu);
     __ok('v0.59 C#2 火符 不弃牌（另 2 张仍在手，弃牌堆只有打出的这张）',
       g.hand.length === 2 && g.discard.length === 1, 'hand=' + g.hand.length + ' discard=' + g.discard.length);
     r = play('huofu', true, 60);
-    __ok('v0.59 C#2 火符 升级 11 伤', r.e.hp === 489, 'ehp=' + r.e.hp);
+    __ok('v0.61.39 C#2 火符 升级 10 伤', r.e.hp === 490, 'ehp=' + r.e.hp);
 
     /* —— 攻击 3：剑符 固定 10 + 本回合每失 1 血 +1/+2 —— */
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.hpLostTurn = 4;
@@ -1487,11 +1488,11 @@
     doPlayCard(0);
     __ok('v0.59 C#3 剑符 升级 10+4×2=18 伤', g.enemies[0].hp === 482, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 4：斩妖剑 9/14 + 带诅咒额外 4/6 —— */
+    /* —— 攻击 4：斩妖剑 10/14 + 带诅咒额外 4/6 —— */
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.enemies[0].curse = 1;
     g.hand = [__card('zhanyaojian')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#4 斩妖剑 9+4=13 伤（带诅咒）', g.enemies[0].hp === 487, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.61.39 C#4 斩妖剑 10+4=14 伤（带诅咒）', g.enemies[0].hp === 486, 'ehp=' + g.enemies[0].hp);
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.enemies[0].curse = 1;
     g.hand = [up('zhanyaojian')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
@@ -1499,9 +1500,9 @@
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.enemies[0].curse = 0;
     g.hand = [__card('zhanyaojian')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#4 斩妖剑 无诅咒 = 9 伤', g.enemies[0].hp === 491, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.61.39 C#4 斩妖剑 无诅咒 = 10 伤', g.enemies[0].hp === 490, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 5：天雷正法 16/21 + 失 5 + 本场每失 1 血 +1/+2（上限 +20） —— */
+    /* —— 攻击 5：天雷正法 16/21 + 失 5 + 本场每失 1 血 +1/+2（上限 +20/+26） —— */
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.totalHpLost = 0;
     g.hand = [__card('tianlei')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
@@ -1510,15 +1511,15 @@
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.totalHpLost = 40;
     g.hand = [up('tianlei')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#5 天雷正法 升级 21+上限20=41 伤', g.enemies[0].hp === 459, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.61.39 C#5 天雷正法 升级 21+上限26=47 伤', g.enemies[0].hp === 453, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 6：万剑归宗 全体 10/15 + 失 3 + 斩杀回 8/12 与 1 符文 —— */
+    /* —— 攻击 6：万剑归宗 全体 10/15 + 失 5 + 斩杀回 10/15 与 1 符文 —— */
     g = gy(50); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
     g.enemies[1].hp = 4; g.enemies[1].maxHp = 60; g.energy = 9;
     g.hand = [__card('wanjian')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#6 万剑归宗 全体 10 伤 + 斩杀回 8 血 + 1 符文',
-      g.enemies[0].hp === 490 && g.hp === 50 - 3 + 8 && g.energy === 9 - 3 + 1,
+    __ok('v0.61.39 C#6 万剑归宗 全体 10 伤 + 失 5 回 10 血 + 1 符文',
+      g.enemies[0].hp === 490 && g.hp === 50 - 5 + 10 && g.energy === 9 - 3 + 1,
       'ehp=' + g.enemies[0].hp + ' hp=' + g.hp + ' energy=' + g.energy);
 
     /* —— 攻击 8：噬魂术 10/15 + 血怒每层 +2（上限 +20） —— */
@@ -1530,7 +1531,7 @@
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.xuenu = 10;
     g.hand = [up('shihun')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#8 噬魂术 升级 15+上限20=35 伤（10 层全消耗）', g.enemies[0].hp === 465 && g.xuenu === 0,
+    __ok('v0.61.39 C#8 噬魂术 升级 16+3×6=34 伤（每层 +3、上限 +18 → 消耗 6 层）', g.enemies[0].hp === 466 && g.xuenu === 4,
       'ehp=' + g.enemies[0].hp + ' xuenu=' + g.xuenu);
 
     /* —— 攻击 9：群鬼乱舞 失 2 + 本回合每失 2 血召唤增伤 1/2 —— */
@@ -1560,17 +1561,17 @@
     r = play('shihunzhou', true, 60);
     __ok('v0.59 C#11 蚀魂咒 升级 8 伤', r.e.hp === 492, 'ehp=' + r.e.hp);
 
-    /* —— 攻击 12：嗜血 4/6 + 本场每失 4/3 点血 +1（上限 +15/20） —— */
+    /* —— 攻击 12：嗜血 固定 5 + 本场每失 4/3 点血 +1（上限 +15/20） —— */
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.totalHpLost = 12;
     g.hand = [__card('shixue')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#12 嗜血 4+floor(12/4)=7 伤', g.enemies[0].hp === 493, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.61.39 C#12 嗜血 5+floor(12/4)=8 伤', g.enemies[0].hp === 492, 'ehp=' + g.enemies[0].hp);
     g = gy(); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.totalHpLost = 12;
     g.hand = [up('shixue')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
-    __ok('v0.59 C#12 嗜血 升级 6+floor(12/3)=10 伤', g.enemies[0].hp === 490, 'ehp=' + g.enemies[0].hp);
+    __ok('v0.61.39 C#12 嗜血 升级 5+floor(12/3)=9 伤（基础伤升级不再变）', g.enemies[0].hp === 491, 'ehp=' + g.enemies[0].hp);
 
-    /* —— 攻击 14：钟馗镇魂 16/24 + 失 4 + 生命 <40% 翻倍 —— */
+    /* —— 攻击 14：钟馗镇魂 16/24 + 失 5 + 生命 <40% 翻倍 —— */
     g = gy(40); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; // 40/80 = 50% → 不翻倍
     g.hand = [__card('zhongkui')]; g.drawPile = []; g.discard = []; g.exhausted = [];
     doPlayCard(0);
@@ -1593,7 +1594,7 @@
 
     /* —— 功能 31/32/36/39：燃血术 / 洗髓经 / 燃魂 / 附灵术 —— */
     g = gy(); g.energy = 9; c = up('ranxue'); c.eff(true, c);
-    __ok('v0.59 C#31 燃血术 升级 失6血 +2 符文', g.hp === 54 && g.energy === 11, 'hp=' + g.hp + ' energy=' + g.energy);
+    __ok('v0.61.39 C#31 燃血术 阴差固定 失4血 +1 符文（升级不再 失6/+2）', g.hp === 56 && g.energy === 10, 'hp=' + g.hp + ' energy=' + g.energy);
     __ok('v0.59 C#32 洗髓经 文案不再产血怒',
       __card('xisui').t(false).indexOf('血怒') < 0 && __card('xisui').t(false).indexOf('1 点符文') >= 0,
       __card('xisui').t(false));
@@ -1610,14 +1611,14 @@
     c = up('fuling'); c.eff(true, c);
     __ok('v0.59 C#39 附灵术 升级触发 2 个 → 回 8(本体) + 4(纸人) = 12', g.hp === 52, 'hp=' + g.hp);
 
-    /* —— 召唤 41：纸人 失 2 + 1/2 伤 + 攻击回 2/3；血怒 ≥4 消耗 4 强化为 4/5、回 3/4 —— */
+    /* —— 召唤 41：纸人 失 2 + 1/2 伤 + 攻击回 2/3；血怒 ≥3 消耗 3 强化为 4/5、回 3/4 —— */
     g = gy(); c = __card('zhiren'); c.eff(false, c);
     __ok('v0.59 C#41 纸人 失 2 血 + {v:1,healV:2}',
       g.hp === 58 && g.summons[0].v === 1 && g.summons[0].healV === 2 && g.summons[0].type === 'zhiren',
       JSON.stringify(g.summons[0]) + ' hp=' + g.hp);
     g = gy(); g.xuenu = 4; c = __card('zhiren'); c.eff(false, c);
-    __ok('v0.59 C#41 纸人 血怒4 → 消耗4层、{v:4,healV:3}',
-      g.xuenu === 0 && g.summons[0].v === 4 && g.summons[0].healV === 3, JSON.stringify(g.summons[0]));
+    __ok('v0.61.39 C#41 纸人 血怒4 → 消耗3层、{v:4,healV:3}',
+      g.xuenu === 1 && g.summons[0].v === 4 && g.summons[0].healV === 3, JSON.stringify(g.summons[0]));
     g = gy(40); g.enemies[0].hp = 500; g.enemies[0].maxHp = 500;
     g.enemies[1].hp = 500; g.enemies[1].maxHp = 500;
     g.summons = [{ type: 'zhiren', v: 2, healV: 3, dur: 2, up: false }];
@@ -1669,17 +1670,17 @@
     }
     var p;
     p = pv('leifu', { rage: 3 });
-    __ok('v0.59 C 预伤害 雷符 血怒3 → 5+6=11 且恒显', p.d === 11 && p.dynamic === true, 'd=' + p.d + ' dyn=' + p.dynamic);
+    __ok('v0.61.39 C 预伤害 雷符 血怒3 → 4+3×2=10 且恒显', p.d === 10 && p.dynamic === true, 'd=' + p.d + ' dyn=' + p.dynamic);
     p = pv('jianfu', { turn: 3 });
     __ok('v0.59 C 预伤害 剑符 本回合失3血 → 13 且恒显', p.d === 13 && p.dynamic === true, 'd=' + p.d);
     p = pv('tianlei', { total: 10 });
     __ok('v0.59 C 预伤害 天雷正法 本场失10血 → 16+10=26', p.d === 26, 'd=' + p.d);
     p = pv('zhanyaojian', { curse: 1 });
-    __ok('v0.59 C 预伤害 斩妖剑 带诅咒 → 9+4=13', p.d === 13, 'd=' + p.d);
+    __ok('v0.61.39 C 预伤害 斩妖剑 带诅咒 → 10+4=14', p.d === 14, 'd=' + p.d);
     p = pv('shihun', { rage: 3 });
     __ok('v0.59 C 预伤害 噬魂术 血怒3 → 10+6=16', p.d === 16, 'd=' + p.d);
     p = pv('shixue', { total: 12 });
-    __ok('v0.59 C 预伤害 嗜血 本场失12血 → 4+3=7', p.d === 7, 'd=' + p.d);
+    __ok('v0.61.39 C 预伤害 嗜血 本场失12血 → 5+3=8', p.d === 8, 'd=' + p.d);
     g = __base('yincha');
     g.summons = [{ type: 'zhiren', v: 1, dur: 2 }, { type: 'xiaogui', v: 1, dur: 2 }];
     g.enemies[0].hp = 500; g.enemies[0].maxHp = 500; g.enemies[0].curse = 0;
@@ -2070,8 +2071,8 @@
     __base('wuseng'); var _fdB = FD.t(true);
     __base('yincha'); var _fdC = FD.t(true);
     __base('tianshi'); var _fdT = FD.t(true);
-    __ok('v0.61.35/36 佛渡 升级附加：天师 5 格挡 / 阴差 3 格挡 / 武僧 5 格挡 / 赶尸人 2 尸气',
-      _fdT.indexOf('5 点格挡') >= 0 && _fdC.indexOf('3 点格挡') >= 0 &&
+    __ok('v0.61.39 佛渡 升级附加：天师 5 格挡 / 阴差 回复 5 生命 / 武僧 5 格挡 / 赶尸人 2 尸气',
+      _fdT.indexOf('5 点格挡') >= 0 && _fdC.indexOf('回复 5 点生命') >= 0 &&
       _fdB.indexOf('5 点格挡') >= 0 && _fdA.indexOf('2 点【尸气】') >= 0,
       _fdT + ' | ' + _fdC + ' | ' + _fdB + ' | ' + _fdA);
     var RX = __card('ranxue');
@@ -2082,11 +2083,13 @@
     __ok('v0.61.35 燃血术 天师列固定失 8 点生命（升级不再减到 3）',
       _rxT[0].indexOf('失去 8 点生命') >= 0 && _rxT[1].indexOf('失去 8 点生命') >= 0,
       _rxT.join(' / '));
-    __ok('v0.61.37 燃血术 A 列 4 → 8（与武僧同值）；B 8/8、C 4/6 不动',
+    __ok('v0.61.39 燃血术 A 8/8、B 8/8、C 固定 4/4（阴差列取消升级减血）',
       _rxA[0].indexOf('失去 8 点生命') >= 0 && _rxA[1].indexOf('失去 8 点生命') >= 0 &&
       _rxB[0].indexOf('失去 8 点生命') >= 0 && _rxB[1].indexOf('失去 8 点生命') >= 0 &&
-      _rxC[0].indexOf('失去 4 点生命') >= 0 && _rxC[1].indexOf('失去 6 点生命') >= 0,
+      _rxC[0].indexOf('失去 4 点生命') >= 0 && _rxC[1].indexOf('失去 4 点生命') >= 0,
       _rxA.join('/') + ' | ' + _rxB.join('/') + ' | ' + _rxC.join('/'));
+    __ok('v0.61.39 燃血术 阴差列符文固定 1（升级不再 2）',
+      _rxC[0].indexOf('获得 1 点符文') >= 0 && _rxC[1].indexOf('获得 1 点符文') >= 0, _rxC.join(' / '));
 
     /* —— v0.61.36 武僧（B 列 / 苦僧）8 条改动的反误伤核对 ——
        本批所有改动都写成 `G.hero==='wuseng'` 分叉或按列常量，A/C/D 三列应逐字不变；
@@ -2101,15 +2104,16 @@
         jA0 === 4 && jA1 === 6 && jC.h === 2 && !jC.t && jD.c === 1 && !jD.t,
         'A=' + jA0 + '/' + jA1 + '（未升级/升级） C=' + jC.h + ' D=' + jD.c);
 
-      // 佛渡 eff 的 fb 三元：武僧 5 / 天师 5 / 阴差 3（赶尸人走上面的尸气分支，不给格挡）
+      // 佛渡 eff 的 fb 三元：武僧 5 / 天师 5（v0.61.39 阴差列改为「升级回复 5 点生命」，已移出 fb）
+      // 赶尸人走上面的尸气分支，四列里只有阴差/赶尸人不给格挡
       function fdBlock(h, up) {
         var g2 = __base(h); g2.block = 0;
         var cc = Object.assign({}, __card('fodu'), { up: !!up }); cc.eff(!!up, cc);
         return g2.block;
       }
-      __ok('v0.61.36 反误伤 佛渡 升级附加格挡逐列：武僧 5 / 天师 5 / 阴差 3 / 赶尸人 0',
+      __ok('v0.61.39 反误伤 佛渡 升级附加格挡逐列：武僧 5 / 天师 5 / 阴差 0 / 赶尸人 0',
         fdBlock('wuseng', true) === 5 && fdBlock('tianshi', true) === 5 &&
-        fdBlock('yincha', true) === 3 && fdBlock('ganshiren', true) === 0,
+        fdBlock('yincha', true) === 0 && fdBlock('ganshiren', true) === 0,
         [fdBlock('wuseng', true), fdBlock('tianshi', true), fdBlock('yincha', true), fdBlock('ganshiren', true)].join('/'));
 
       // 舍身 eff：只有武僧给格挡 —— A 给尸气、C 只抽牌、D 只施咒，三列 block 都该是 0
@@ -2665,27 +2669,102 @@
     if (kk < exx.pool.length) {
       pickExchangeNew(kk);
       var inHand = g.hand[g.hand.length - 1];
-      __ok('v0.61.10 P11 易物 换入的牌本回合费用 -1',
-        inHand && inHand.tempCostCut === 1 && effectiveCost(inHand) === cardCost(inHand) - 1,
+      __ok('v0.61.39 易物 换入的牌不再费用 -1',
+        inHand && inHand.tempCostCut === undefined && effectiveCost(inHand) === cardCost(inHand),
         'id=' + (inHand && inHand.id) + ' cost=' + (inHand && cardCost(inHand)) + ' eff=' + (inHand && effectiveCost(inHand)));
-      // 关键：不能污染 CARDS 里的共享对象（同名牌的另外几张不该一起减费）
-      __ok('v0.61.10 P11 易物 减费标记不落到共享卡牌对象上',
-        __card('zhongkui').tempCostCut === undefined, String(__card('zhongkui').tempCostCut));
+      // 仍必须是副本：不能污染 CARDS 里的共享对象（同名牌的另外几张不该被连带改动）
+      __ok('v0.61.39 易物 换入的是副本、不落到共享卡牌对象上',
+        inHand !== __card('zhongkui') && __card('zhongkui').tempCostCut === undefined,
+        'same=' + (inHand === __card('zhongkui')));
       // 消耗牌回牌库靠 G.deck.indexOf —— 副本必须已在牌库里顶替原对象
-      __ok('v0.61.10 P11 易物 副本在 G.deck 里顶替原对象（保住 indexOf 语义）',
+      __ok('v0.61.39 易物 副本在 G.deck 里顶替原对象（保住 indexOf 语义）',
         g.deck.indexOf(inHand) >= 0, 'deckLen=' + g.deck.length);
-      // 到期清除：进入下一回合后标记消失（牌此时可能已在弃牌堆，也要清）
+      // 万剑归宗 A 列仍靠同一套副本顶替发 -1/-2 费，到期清理不能一起删掉
       startTurn();
-      __ok('v0.61.10 P11 易物 减费「本回合」到期即失效', !inHand.tempCostCut && effectiveCost(inHand) === cardCost(inHand),
+      __ok('v0.61.39 反误伤 与万剑归宗共用的 tempCostCut 到期清理仍有效',
+        !inHand.tempCostCut && effectiveCost(inHand) === cardCost(inHand),
         'cut=' + inHand.tempCostCut + ' eff=' + effectiveCost(inHand));
     } else {
       __ok('v0.61.10 P11 易物 换入池构造失败（用例前提不成立）', false, JSON.stringify(exx.pool.map(function (x) { return x.id; })));
     }
     __base('yincha');
-    __ok('v0.61.10 P11 易物 四列卡面都写明「换入的牌本回合费用 -1」',
+    __ok('v0.61.39 易物 四列卡面都不再写「换入的牌本回合费用 -1」',
       ['ganshiren', 'wuseng', 'yincha', 'tianshi'].every(function (h) {
-        __base(h); return __card('yiwu').t(false).indexOf('换入的牌本回合费用 -1') >= 0;
+        __base(h); return __card('yiwu').t(false).indexOf('换入的牌本回合费用 -1') < 0
+          && __card('yiwu').t(false).indexOf('选择 1 张手牌与弃牌堆交换') >= 0;
       }));
+    // 反误伤：万剑归宗 A 列的减费文案仍在（别把共用的消费端一起删了）
+    __base('ganshiren');
+    __ok('v0.61.39 反误伤 万剑归宗 A 列「抽到的牌本回合费用 -N」文案仍在',
+      __card('wanjian').t(false).indexOf('本回合费用 -') >= 0, __card('wanjian').t(false));
+
+    /* ============ v0.61.39 新增：三个 bug 的行为对拍 ============ */
+
+    /* —— ① 五通神在附灵术 / 群鬼乱舞后必须也触发一次 ——
+       根因：triggerSummons 走 summonAct，而 summonAct 的 type 白名单（zhiren/xiaogui/yinbing/shi_wang）
+             里没有 'wutong'，于是五通神被静默跳过 —— 附灵术与「群鬼乱舞·赶尸人」都触发不到它。
+       修法：decay===false 时把 wutong 交给 wutongTick(s, true)，只结算效果、不扣寿命。 */
+    g = __base('yincha'); g.hp = 40; g.block = 0;
+    g.summons = [{ type: 'wutong', v: 6, dur: 2 }];
+    c = __card('fuling'); c.eff(false, c);
+    __ok('v0.61.39 附灵术 × 五通神(阴差) 触发一次 → 回 6(五通神) + 2(附灵本体 n=1) = 8 血',
+      g.hp === 48, 'hp=' + g.hp);
+    __ok('v0.61.39 附灵术 × 五通神 不扣寿命（仍剩 2，寿命只归 startTurn 管）',
+      g.summons.length === 1 && g.summons[0].dur === 2, JSON.stringify(g.summons));
+    g = __base('ganshiren'); g.block = 0; g.尸气 = 4;
+    g.summons = [{ type: 'wutong', v: 5, dur: 2 }];
+    c = __card('qungui'); c.eff(false, c);
+    __ok('v0.61.39 群鬼乱舞(赶尸人) × 五通神 触发一次 → +5 格挡', g.block === 5, 'block=' + g.block);
+    __ok('v0.61.39 群鬼乱舞(赶尸人) × 五通神 不扣寿命（仍剩 2）', g.summons[0].dur === 2, JSON.stringify(g.summons));
+    // 反误伤：回合末（decay=true）不能重复触发五通神 —— 否则一回合扣两次寿命
+    g = __base('yincha'); g.hp = 40; g.summons = [{ type: 'wutong', v: 6, dur: 2 }];
+    triggerSummons(true);
+    __ok('v0.61.39 反误伤 回合末(decay=true) 不重复触发五通神', g.hp === 40, 'hp=' + g.hp);
+    __ok('v0.61.39 反误伤 回合末五通神寿命不被这里扣（dur 仍 2）',
+      g.summons.length === 1 && g.summons[0].dur === 2, JSON.stringify(g.summons));
+
+    /* —— ② 续档必须恢复生命 / 上限 / 金币（40_flow.js:224 被同行 `//` 注释吞掉的半行） —— */
+    (function () {
+      var snap = {
+        act: 1, mapRow: 2, mapCol: 1, mapPath: [], hero: 'yincha',
+        hp: 37, maxHp: 88, gold: 123, energy: 3, block: 0,
+        deck: [], hand: [], drawPile: [], discard: [], exhausted: [],
+        rng: rngSnapshot()
+      };
+      var __realGet = Store.getJSON;
+      Store.getJSON = function (k) { return k === RUN_KEY ? snap : null; };
+      try { continueRun(); } catch (e) {
+        __ok('v0.61.39 续档 continueRun 未抛错', false, String(e && e.message));
+      } finally { Store.getJSON = __realGet; }
+      __ok('v0.61.39 续档 恢复生命 / 上限 / 金币（修前会回落成 60/80/0）',
+        G.hp === 37 && G.maxHp === 88 && G.gold === 123,
+        'hp=' + G.hp + ' maxHp=' + G.maxHp + ' gold=' + G.gold);
+      __ok('v0.61.39 续档 battleStartHp 跟着 d.hp（不再被旧默认值带偏）',
+        G.battleStartHp === 37, 'battleStartHp=' + G.battleStartHp);
+    })();
+
+    /* —— ③ 移形换影(阴差) 闪避结算：回血与血怒都按升级档 —— */
+    (function () {
+      __base('yincha'); var cy = __card('yixing');
+      __ok('v0.61.39 移形换影(阴差) 文案去「0 符文」且写清 2/4 回血、1/2 血怒',
+        cy.t(false).indexOf('0 符文') < 0 && cy.t(false).indexOf('恢复 2 点生命') >= 0 &&
+        cy.t(false).indexOf('1 层【血怒】') >= 0 && cy.t(true).indexOf('恢复 4 点生命') >= 0 &&
+        cy.t(true).indexOf('2 层【血怒】') >= 0, cy.t(false) + ' / ' + cy.t(true));
+      // __base() 会整个换掉全局 G —— 必须一段一测、打完立刻断言，
+      // 否则后一次 __base 会把前一段的 G 换走，g1 拿到的是已丢弃的旧对象。
+      var g1 = __base('yincha'); g1.hp = 40; g1.xuenu = 0;
+      var c1 = __card('yixing'); c1.eff(false, c1);
+      dealDamageToPlayer(5, { name: '测试妖' });
+      __ok('v0.61.39 移形换影(阴差未升级) 闪避结算 → 回 2 血 + 1 层血怒',
+        g1.hp === 42 && g1.xuenu === 1 && g1.dodge === 0,
+        'hp=' + g1.hp + ' xuenu=' + g1.xuenu + ' dodge=' + g1.dodge);
+      var g2 = __base('yincha'); g2.hp = 40; g2.xuenu = 0;
+      var c2 = Object.assign({}, __card('yixing'), { up: true }); c2.eff(true, c2);
+      dealDamageToPlayer(5, { name: '测试妖' });
+      __ok('v0.61.39 移形换影(阴差升级) 闪避结算 → 回 4 血 + 2 层血怒',
+        g2.hp === 44 && g2.xuenu === 2 && g2.dodge === 0,
+        'hp=' + g2.hp + ' xuenu=' + g2.xuenu + ' dodge=' + g2.dodge);
+    })();
 
     /* —— 未勾选项必须原样保留（防误改） —— */
     g = __base('tianshi');

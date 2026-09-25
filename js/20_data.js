@@ -50,12 +50,12 @@ const CARDS = [
   {id:'leifu', name:'雷符', type:'attack', rarity:'white', cost:1,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?7:5} 伤害。场上每有 1 个召唤单位，伤害 +1；若击杀敌人，获得 ${u?3:2} 点【尸气】`
       :G.hero==='wuseng'?`造成 ${u?6:4} 伤害。每有 ${u?2:3} 点当前格挡，伤害 +1（上限 +6）`
-      :G.hero==='yincha'?`造成 ${u?8:5} 伤害。每层【血怒】使此牌伤害 +2（上限 +6），打出时消耗对应【血怒】；若以此牌击杀敌人，获得 2 层【血怒】`
+      :G.hero==='yincha'?`造成 ${u?8:4} 伤害。每层【血怒】使此牌伤害 +3（上限 +6），打出时消耗对应【血怒】；若以此牌击杀敌人，获得 2 层【血怒】`
       :`造成 ${u?9:6} 伤害。若目标带【诅咒】，消耗 1 层，伤害 +${u?4:3}`,
-    eff:(u)=>{ const t=curEnemy(); if(!t) return; let d=(G.hero==='tianshi'?(u?9:6):G.hero==='yincha'?(u?8:5):(u?6:4));
+    eff:(u)=>{ const t=curEnemy(); if(!t) return; let d=(G.hero==='tianshi'?(u?9:6):G.hero==='yincha'?(u?8:4):(u?6:4));
       if(G.hero==='ganshiren'){ d=(u?7:5)+G.summons.filter(s=>s.dur>0).length; }
       else if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/(u?2:3)));
-      else if(G.hero==='yincha') d+=2*rageSpend(2,6);
+      else if(G.hero==='yincha') d+=3*rageSpend(3,6);
       else if(t.curse>0){ t.curse-=1; d+=(u?4:3); }   // v0.61.35 天师列：+3 → +3/+4
       const before=t.hp;
       dealDamageTo(t,d);
@@ -66,12 +66,12 @@ const CARDS = [
   {id:'huofu', name:'火符', type:'attack', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?7:5} 伤害。挑选弃 1 张手牌；若弃掉的是【鬼怪牌】，获得 ${u?3:2} 点【尸气】`
       :G.hero==='wuseng'?`造成 ${u?7:5} 伤害。每有 ${u?2:3} 点当前格挡，伤害 +1（上限 +6），随机弃 1 张手牌`
-      :G.hero==='yincha'?`造成 ${u?11:8} 伤害。失去 2 点生命`
+      :G.hero==='yincha'?`造成 ${u?10:6} 伤害。失去 2 点生命`
       :`造成 ${u?10:6} 伤害。施加 1 层【诅咒】，随机弃 1 张手牌`,
     eff:(u,c)=>{ const t=curEnemy(); if(!t) return; let d=G.hero==='tianshi'?(u?10:6):(u?7:5);   // v0.61.35 天师列：5/8 → 6/10
       if(G.hero==='ganshiren') d=(u?7:5);
       if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/(u?2:3)));
-      if(G.hero==='yincha'){ d=(u?11:8); loseHp(2); }
+      if(G.hero==='yincha'){ d=(u?10:6); loseHp(2); }
       if(G.hero==='ganshiren'){ startHuofuSelect(c, u, t, d); return; } // A 列：先挑要弃的手牌，确认后才结算伤害（v0.61 B7：可取消、可回退）
       dealDamageTo(t,d);
       if(G.hero==='tianshi') applyCurse(t,1);
@@ -91,11 +91,11 @@ const CARDS = [
   {id:'zhanyaojian', name:'斩妖剑', type:'attack', rarity:'purple', cost:2,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?12:7} 伤害。场上每有 1 个召唤单位，额外造成 2 点伤害`
       :G.hero==='wuseng'?`造成 ${u?12:8} 伤害。若目标带有【诅咒】，额外造成 6 点伤害`
-      :G.hero==='yincha'?`造成 ${u?14:9} 伤害。若目标带有【诅咒】，额外造成 ${u?6:4} 伤害`
+      :G.hero==='yincha'?`造成 ${u?14:10} 伤害。若目标带有【诅咒】，额外造成 ${u?6:4} 伤害`
       :`造成 ${u?12:10} 伤害。引爆目标 2 层【诅咒】（每层 ${u?7:5} 伤害）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='tianshi'){ dealDamageTo(t,u?12:10); const boom=Math.min(2,t.curse||0); for(let i=0;i<boom;i++) dealDamageTo(t,u?7:5); t.curse-=boom; if(boom>0){ sfx('kw_curse'); log(`斩妖剑引爆 ${boom} 层【诅咒】`); } return; }   // v0.61.32
-      if(G.hero==='yincha'){ let dc=(u?14:9); if((t.curse||0)>0) dc+=(u?6:4); dealDamageTo(t,dc); return; }
+      if(G.hero==='yincha'){ let dc=(u?14:10); if((t.curse||0)>0) dc+=(u?6:4); dealDamageTo(t,dc); return; }
       let d=(G.hero==='ganshiren')?(u?12:7):(u?12:8);   // v0.61.37 A 列基础 8 → 7（B 列仍 8）
       if(G.hero==='ganshiren') d+=2*G.summons.filter(s=>s.dur>0).length;
       else if(t.curse>0) d+=6;
@@ -103,11 +103,11 @@ const CARDS = [
   {id:'tianlei', name:'天雷正法', type:'attack', rarity:'purple', cost:3, hpCost:(u)=>G.hero==='yincha'?5:0,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?28:20} 伤害。每有 2 点【尸气】此牌费用 -1（最低 0），打出时消耗减免费用×2 尸气`
       :G.hero==='wuseng'?`造成 ${u?20:15} 伤害，并获得等于造成伤害的格挡`
-      :G.hero==='yincha'?`造成 ${u?21:16} 伤害。失去 5 点生命，本场每失去过 1 点生命，此牌伤害 +${u?2:1}（上限 +20）`
+      :G.hero==='yincha'?`造成 ${u?21:16} 伤害。失去 5 点生命，本场每失去过 1 点生命，此牌伤害 +${u?2:1}（上限 +${u?26:20}）`
       :`造成 ${u?32:22} 伤害。目标每有 2 层【诅咒】此牌费用 -1（最低 0）；结算后目标失去减免费用×2 层【诅咒】`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='wuseng'){ const dealt=dealDamageTo(t,u?20:15); if(dealt>0){ gainBlock(dealt); log(`天雷正法：获得 ${dealt} 点格挡`); } return; }
-      if(G.hero==='yincha'){ loseHp(5); dealDamageTo(t,(u?21:16)+Math.min(20,(G.totalHpLost||0)*(u?2:1))); return; }
+      if(G.hero==='yincha'){ loseHp(5); dealDamageTo(t,(u?21:16)+Math.min(u?26:20,(G.totalHpLost||0)*(u?2:1))); return; }
       if(G.hero==='tianshi'){
         // v0.61.35 天师列：主伤 20/30 → 22/32（减免费用×2 的扣诅咒口径不变）
         const red=Math.min(3,Math.floor((t.curse||0)/2)); dealDamageTo(t,u?32:22);
@@ -115,14 +115,14 @@ const CARDS = [
         return; }
       const red=Math.min(3,Math.floor((G.尸气||0)/2)); if(red>0){ spendShiqi(red*2); log(`天雷正法：消耗 ${red*2} 点【尸气】`); }
       dealDamageTo(t,u?28:20); }},
-  {id:'wanjian', name:'万剑归宗', type:'attack', rarity:'gold', cost:3, hpCost:(u)=>G.hero==='yincha'?3:0,
+  {id:'wanjian', name:'万剑归宗', type:'attack', rarity:'gold', cost:3, hpCost:(u)=>G.hero==='yincha'?5:0,
     t:(u)=>G.hero==='ganshiren'?`对全体敌人造成 ${u?14:10} 伤害。每击败 1 名敌人，获得 3 点【尸气】并抽 1 张牌（抽到的牌本回合费用 -${u?2:1}）`
       :G.hero==='wuseng'?`对全体敌人造成 ${u?14:9} 伤害，并获得 ${u?12:10} 点格挡。每用此牌斩杀 1 名敌人，将 1 张 0 费的万剑归宗加入手牌`
-      :G.hero==='yincha'?`对全体敌人造成 ${u?15:10} 伤害。失去 3 点生命。每击败 1 名敌人，恢复 ${u?12:8} 点生命并获得 1 点符文`
+      :G.hero==='yincha'?`对全体敌人造成 ${u?15:10} 伤害。失去 5 点生命。每击败 1 名敌人，恢复 ${u?15:10} 点生命并获得 1 点符文`
       :`对全体敌人造成 ${u?18:14} 伤害。对所有敌人施加 ${u?2:1} 层【诅咒】。每击败 1 名敌人，恢复 1 点符文`,
     eff:(u,c)=>{ const before=G.turnStats.kills.length; const targets=aliveEnemies().slice();
       if(G.hero==='wuseng'){ const d=u?14:9; targets.forEach(e=>{ if(e.hp>0) dealDamageTo(e,d); }); const bb=u?12:10; gainBlock(bb); log(`万剑归宗：获得 ${bb} 点格挡`); }
-      else if(G.hero==='yincha'){ loseHp(3); const d=u?15:10; targets.forEach(e=>{ if(e.hp>0) dealDamageTo(e,d); }); }
+      else if(G.hero==='yincha'){ loseHp(5); const d=u?15:10; targets.forEach(e=>{ if(e.hp>0) dealDamageTo(e,d); }); }
       else if(G.hero==='tianshi'){ const d=u?18:14; targets.forEach(e=>{ if(e.hp>0) dealDamageTo(e,d); }); aliveEnemies().forEach(e=>applyCurse(e,u?2:1)); }   // v0.61.35 天师列：14/16 → 14/18
       else { const d=u?14:10; targets.forEach(e=>{ if(e.hp>0) dealDamageTo(e,d); }); }   // v0.61.37 A 列升级 15 → 14
       const killed=G.turnStats.kills.length-before;
@@ -135,7 +135,7 @@ const CARDS = [
             const __di=G.deck.indexOf(__o); if(__di>=0) G.deck[__di]=__n;
             G.hand[__i]=__n; }
           log(`万剑归宗：击败 ${killed} 名敌人，获 ${killed*3} 尸气并抽 ${killed} 张（本回合 -${__cut} 费）`); }
-        else if(G.hero==='yincha'){ const hk=killed*(u?12:8); heal(hk); G.energy+=killed; log(`万剑归宗：击败 ${killed} 名敌人，恢复 ${hk} 点生命并获得 ${killed} 点符文`); }
+        else if(G.hero==='yincha'){ const hk=killed*(u?15:10); heal(hk); G.energy+=killed; log(`万剑归宗：击败 ${killed} 名敌人，恢复 ${hk} 点生命并获得 ${killed} 点符文`); }
         else if(G.hero==='tianshi'){ G.energy+=killed; log(`万剑归宗：击败 ${killed} 名敌人，恢复 ${killed} 点符文`); }
         else if(G.hero==='wuseng' && c){ for(let i=0;i<killed;i++) G.hand.push(Object.assign({}, c, {cost:0, costU:null})); log(`万剑归宗：斩杀 ${killed} 名敌人，获得 ${killed} 张 0 费万剑归宗`); }
       } }},
@@ -152,17 +152,17 @@ const CARDS = [
   {id:'shihun', name:'噬魂术', type:'attack', rarity:'blue', cost:2,
     t:(u)=>G.hero==='ganshiren'?`消耗 ${u?2:4} 点【尸气】，对目标造成 ${u?18:14} 伤害。若本回合召唤过单位，费用 -1`
       :G.hero==='wuseng'?`消耗目标全部【诅咒】：每层造成 ${u?3:2} 点伤害，并获得 ${u?2:1} 点格挡`
-      :G.hero==='yincha'?`对目标造成 ${u?15:10} 伤害。每层【血怒】使此牌伤害 +2（上限 +20），打出时消耗对应【血怒】`
+      :G.hero==='yincha'?`对目标造成 ${u?16:10} 伤害。每层【血怒】使此牌伤害 +${u?3:2}（上限 +${u?18:12}），打出时消耗对应【血怒】`
       :`消耗目标全部【诅咒】，每层造成 ${u?6:5} 伤害`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='ganshiren'){ const __sc=u?2:4; if(!hasShiqi(__sc)){ floatMsg('尸气不足'); return false; } spendShiqi(__sc); dealDamageTo(t,u?18:14); return; }
       if(G.hero==='wuseng'){ const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; sfx('kw_curse'); dealDamageTo(t,c*(u?3:2)); const bb=c*(u?2:1); gainBlock(bb); log(`噬魂术：引爆 ${c} 层【诅咒】，获得 ${bb} 点格挡`); return; }   // v0.61.32
-      if(G.hero==='yincha'){ dealDamageTo(t,(u?15:10)+2*rageSpend(2,20)); return; }
+      if(G.hero==='yincha'){ dealDamageTo(t,(u?16:10)+(u?3:2)*rageSpend(u?3:2,u?18:12)); return; }
       const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; sfx('kw_curse'); dealDamageTo(t,c*(u?6:5)); }},   // v0.61.32
   {id:'qungui', name:'群鬼乱舞', type:'attack', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`消耗 ${u?2:4} 点【尸气】，所有召唤单位本回合立刻作用 1 次`
       :G.hero==='wuseng'?`造成 4 伤害。场上每有 1 个召唤单位，此牌伤害 +${u?2:1}`
-      :G.hero==='yincha'?`失去 2 点生命。本回合每失去 2 点生命，召唤单位伤害 +${u?2:1}`
+      :G.hero==='yincha'?`本回合每失去 2 点生命，召唤单位伤害 +${u?2:1}。立刻失去 2 点生命。`
       :`造成 ${u?9:6} 伤害。目标每有 1 层【诅咒】此牌伤害 +1（上限 +${u?6:4}）`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ if(!hasShiqi(u?2:4)){ floatMsg('尸气不足'); return false; } spendShiqi(u?2:4); triggerSummons(false); return; }
       if(G.hero==='wuseng'){ const t=curEnemy(); if(!t) return; dealDamageTo(t,4+G.summons.filter(s=>s.dur>0).length*(u?2:1)); return; }
@@ -198,12 +198,12 @@ const CARDS = [
   {id:'shixue', name:'嗜血', type:'attack', rarity:'purple', cost:1,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?7:5} 伤害。每有 1 点【尸气】，此牌伤害 +1（上限 +${u?7:6}）`
       :G.hero==='wuseng'?`造成 ${u?6:4} 伤害。每有 ${u?2:3} 点格挡，此牌伤害 +1（上限 +5）`
-      :G.hero==='yincha'?`造成 ${u?6:4} 伤害。本场每失去 ${u?3:4} 点生命，此牌伤害 +1（上限 +${u?20:15}）`
+      :G.hero==='yincha'?`造成 5 伤害。本场每失去 ${u?3:4} 点生命，此牌伤害 +1（上限 +${u?20:15}）`
       :`造成 ${u?8:6} 伤害。回复造成伤害 50% 的生命；目标【诅咒】≥2 层时，消耗 2 层并把比例提升到 100%`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return; let d;
       if(G.hero==='ganshiren') d=(u?7:5)+Math.min(u?7:6,(G.尸气||0));
       else if(G.hero==='wuseng') d=(u?6:4)+Math.min(5,Math.floor((G.block||0)/(u?2:3)));
-      else if(G.hero==='yincha') d=(u?6:4)+Math.min(u?20:15,Math.floor((G.totalHpLost||0)/(u?3:4)));
+      else if(G.hero==='yincha') d=5+Math.min(u?20:15,Math.floor((G.totalHpLost||0)/(u?3:4)));
       else { d=(u?8:6); let ratio=0.5;
         if((t.curse||0)>=2){ t.curse-=2; ratio=1; log('嗜血：消耗 2 层【诅咒】，吸血比例提升到 100%'); }   // v0.61.35 天师列：阈值 3 层 → 2 层
         const dealt=dealDamageTo(t,d); if(dealt>0){ const h=Math.floor(dealt*ratio); if(h>0){ heal(h); floatMsg('+'+h+' 生命'); log('嗜血：回复 '+h+' 点生命'); } } return; }
@@ -218,81 +218,83 @@ const CARDS = [
       if(G.hero==='ganshiren'){ dealDamageToAll((u?6:4)+n*(u?3:2)); return; }
       if(G.hero==='wuseng'){ dealDamageToAll((u?6:5)+Math.min(u?11:8,Math.floor((G.block||0)/(u?1:2)))); return; }
       loseHp(2); dealDamageToAll((u?7:5)+n*(u?3:2)); }},
-  {id:'zhongkui', name:'钟馗镇魂', type:'spirit', rarity:'gold', cost:3, exhaust:true, hpCost:(u)=>G.hero==='yincha'?4:0,
+  {id:'zhongkui', name:'钟馗镇魂', type:'spirit', rarity:'gold', cost:3, exhaust:true, hpCost:(u)=>G.hero==='yincha'?5:0,
     t:(u)=>G.hero==='ganshiren'?`对目标造成 ${u?24:16} 伤害并【镇魂】。获得 ${u?6:4} 点【尸气】（消耗牌）`
       :G.hero==='wuseng'?`对目标造成 ${u?22:16} 伤害并【镇魂】。格挡达 12/15/21 时费用 -1/-2/-3（消耗）`
-      :G.hero==='yincha'?`对目标造成 ${u?24:16} 伤害并【镇魂】。失去 4 点生命；若生命低于 40%，伤害翻倍。消耗牌（一次性）`
+      :G.hero==='yincha'?`对目标造成 ${u?24:16} 伤害并【镇魂】。失去 5 点生命；若生命低于 40%，伤害翻倍。消耗牌（一次性）`
       :`对目标造成 16 伤害并【镇魂】。引爆并清空目标全部【诅咒】（每层 ${u?4:3} 伤害）（消耗）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='ganshiren'){ sealEnemy(t,1); dealDamageTo(t,u?24:16); gainShiqi(u?6:4); log(`钟馗镇魂：造成 ${u?24:16} 伤害并获得 ${u?6:4} 点【尸气】`); return; }
       if(G.hero==='wuseng'){ sealEnemy(t,1); dealDamageTo(t,u?22:16); return; }
-      if(G.hero==='yincha'){ sealEnemy(t,1); loseHp(4); let d=u?24:16; if(G.hp < G.maxHp*0.4){ d*=2; log('钟馗镇魂：生命低于 40%，伤害翻倍'); } dealDamageTo(t,d); return; }
+      if(G.hero==='yincha'){ sealEnemy(t,1); loseHp(5); let d=u?24:16; if(G.hp < G.maxHp*0.4){ d*=2; log('钟馗镇魂：生命低于 40%，伤害翻倍'); } dealDamageTo(t,d); return; }
       // v0.61.35：天师列按新卡池文件改为「主伤 16 固定（升级不变）+ 每层引爆 3/4」
       //           （v0.61.10(P5) 的 18/24 + 每层 5/6 作废；其余三列数值不动）
       const c=t.curse||0; sealEnemy(t,1); dealDamageTo(t,16); for(let i=0;i<c;i++) dealDamageTo(t,u?4:3); t.curse=0; if(c>0){ sfx('kw_curse'); log(`钟馗镇魂引爆 ${c} 层【诅咒】`); } }},   // v0.61.32
 /* —— 防御 15~23 —— */
-  {id:'jingang', name:'金刚符', type:'defense', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
+  {id:'jingang', name:'金刚符', type:'defense', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?(u?3:2):0,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?7:4} 点格挡。获得 ${u?2:1} 点【尸气】`
       :G.hero==='wuseng'?`获得 ${u?9:6} 点格挡`
-      :G.hero==='yincha'?`获得 ${u?9:7} 点格挡。失去 2 点生命`
+      :G.hero==='yincha'?`获得 ${u?9:6} 点格挡。失去 ${u?3:2} 点生命`
       :`获得 ${u?7:5} 点格挡。本回合每施加 1 层【诅咒】额外 +${u?2:1} 格挡（上限 +6）`,
     eff:(u)=>{ let b;
       if(G.hero==='ganshiren'){ b=u?7:4; gainShiqi(u?2:1); }
       else if(G.hero==='wuseng'){ b=u?9:6; }
-      else if(G.hero==='yincha'){ loseHp(2); b=u?9:7; }
+      else if(G.hero==='yincha'){ loseHp(u?3:2); b=u?9:6; }
       else { b=(u?7:5)+Math.min(6,(u?2:1)*(CURSE_THIS_TURN||0)); }   // v0.61.35 天师列：4/6 → 5/7
       gainBlock(b); }},
   {id:'yinshen', name:'隐身符', type:'defense', rarity:'white', cost:1,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?6:3} 点格挡，抽 1 张牌。若抽到【鬼怪牌】，获得 ${u?2:1} 点【尸气】`
       :G.hero==='wuseng'?`获得 ${u?6:4} 点格挡，抽 1 张牌。若本回合未失去生命，下回合额外抽 1 张`
-      :G.hero==='yincha'?`获得 ${u?5:3} 点格挡，抽 1 张牌。若本回合失去过生命，改为抽 2 张`
+      :G.hero==='yincha'?`获得 ${u?7:3} 点格挡，抽 1 张牌。若本回合失去过生命，改为抽 2 张`
       :`获得 ${u?5:3} 点格挡，抽 1 张牌。若抽到【诅咒牌】，再获得 ${u?4:3} 点格挡`,
-    eff:(u)=>{ const b=G.hero==='ganshiren'?(u?6:3):(G.hero==='wuseng'?(u?6:4):(u?5:3));   // v0.61.35 天师列：3/6 → 3/5（阴差列同为 3/5）
+    eff:(u)=>{ const b=G.hero==='ganshiren'?(u?6:3):(G.hero==='wuseng'?(u?6:4):(G.hero==='yincha'?(u?7:3):(u?5:3)));   // v0.61.35 天师列：3/6 → 3/5；v0.61.39 阴差列拆出并改 3/5 → 3/7
       if(G.hero==='yincha'){ gainBlock(b); drawCards((G.hpLostTurn||0)>0?2:1); return; }
       gainBlock(b); drawCards(1);
       if(G.hero==='wuseng' && !(G.hpLostTurn||0)){ G.dodgeDraw=Math.max(G.dodgeDraw||0,1); log('隐身诀：本回合未受伤，下回合额外抽 1 张'); }
       else if(G.hero==='ganshiren'){ const hit=G.lastDrawnCards&&G.lastDrawnCards.find(x=>isGhostCard(x)); if(hit){ gainShiqi(u?2:1); log(`隐身诀：抽到鬼怪牌，获得 ${u?2:1} 点【尸气】`); } }
       else if(G.hero==='tianshi'){ const hit=G.lastDrawnCards&&G.lastDrawnCards.find(x=>isCanCurse(x)); if(hit){ const b2=u?4:3; gainBlock(b2); log(`隐身诀：抽到【诅咒牌】，额外获得 ${b2} 点格挡`); } } }},
-  {id:'jinguang', name:'金光罩', type:'defense', rarity:'blue', cost:2, hpCost:(u)=>G.hero==='yincha'?3:0,
+  {id:'jinguang', name:'金光罩', type:'defense', rarity:'blue', cost:2, hpCost:(u)=>G.hero==='yincha'?(u?5:4):0,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?14:9} 点格挡。再消耗 2 点【尸气】额外获得 ${u?7:5} 点格挡`
       :G.hero==='wuseng'?`获得 ${u?19:14} 点格挡`
-      :G.hero==='yincha'?`获得 ${u?14:10} 点格挡。失去 3 点生命`
+      :G.hero==='yincha'?`获得 ${u?17:11} 点格挡。失去 ${u?5:4} 点生命`
       :`获得 ${u?17:12} 点格挡。本回合每施加 1 层【诅咒】额外 +${u?2:1} 格挡`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ gainBlock(u?14:9); if(hasShiqi(2)){ spendShiqi(2); gainBlock(u?7:5); log(`金光罩：消耗 2 点尸气，额外获得 ${u?7:5} 点格挡`); } }
       else if(G.hero==='wuseng'){ gainBlock(u?19:14); }
-      else if(G.hero==='yincha'){ loseHp(3); gainBlock(u?14:10); }
+      else if(G.hero==='yincha'){ loseHp(u?5:4); gainBlock(u?17:11); }
       else { gainBlock((u?17:12)+(CURSE_THIS_TURN||0)*(u?2:1)); } }},   // v0.61.35 天师列：每层诅咒 +1 → +1/+2
   {id:'jinzhong', name:'金钟罩', type:'defense', rarity:'purple', cost:2,
-    t:(u)=>`获得 ${G.hero==='ganshiren'?(u?16:10):G.hero==='yincha'?(u?15:10):(u?17:12)} 点格挡。清除自身所有负面状态与手牌中的状态牌`,
-    eff:(u)=>{ gainBlock(G.hero==='ganshiren'?(u?16:10):G.hero==='yincha'?(u?15:10):(u?17:12)); clearJunk(); clearPlayerDebuffs(); floatMsg('负面状态已清除'); }},
+    t:(u)=>`获得 ${G.hero==='ganshiren'?(u?16:10):G.hero==='yincha'?(u?18:12):(u?17:12)} 点格挡。清除自身所有负面状态与手牌中的状态牌`,
+    eff:(u)=>{ gainBlock(G.hero==='ganshiren'?(u?16:10):G.hero==='yincha'?(u?18:12):(u?17:12)); clearJunk(); clearPlayerDebuffs(); floatMsg('负面状态已清除'); }},
   {id:'jingji', name:'荆棘符', type:'defense', rarity:'blue', cost:1,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?6:3} 点格挡。本回合每受 1 次攻击，反弹 ${u?6:4} 点伤害`
       :G.hero==='wuseng'?`获得 ${u?7:4} 点格挡。本回合每受 1 次攻击，反弹 ${u?4:3} 点伤害`   // v0.61.36 武僧列：反弹 4/5 → 3/4
-      :G.hero==='yincha'?`获得 ${u?5:3} 点格挡。本回合每受 1 次攻击，恢复 2 点生命`
+      :G.hero==='yincha'?`获得 ${u?6:4} 点格挡。本回合每受 1 次攻击，恢复 ${u?3:2} 点生命`
       :`获得 ${u?6:3} 点格挡。本回合每受到 1 次攻击，对攻击者施加 ${u?2:1} 层【诅咒】`,
-    eff:(u)=>{ const b=G.hero==='ganshiren'?(u?6:3):(G.hero==='wuseng'?(u?7:4):(G.hero==='yincha'?(u?5:3):(u?6:3))); gainBlock(b);   // v0.61.35 天师列：3/5 → 3/6
+    eff:(u)=>{ const b=G.hero==='ganshiren'?(u?6:3):(G.hero==='wuseng'?(u?7:4):(G.hero==='yincha'?(u?6:4):(u?6:3))); gainBlock(b);   // v0.61.35 天师列：3/5 → 3/6
       if(G.hero==='ganshiren'){ G.thorns+=u?6:4; }
       else if(G.hero==='wuseng'){ G.thorns+=u?4:3; }   // v0.61.36 武僧列：反弹 4/5 → 3/4
-      else if(G.hero==='yincha'){ G.hitHeal=2; }
+      else if(G.hero==='yincha'){ G.hitHeal=u?3:2; }
       else { G.hitCurse=u?2:1; } }},   // v0.61.35 天师列：反击诅咒 1 层 → 1/+2 层
   /* v0.61.10(P1)：佛渡 1 费 → 0 费 + 全列【消耗】。免疫不再能靠重复打出续上（每场限一次）。 */
   {id:'fodu', name:'佛渡', type:'defense', rarity:'blue', cost:0, exhaust:true,
     t:(u)=>G.hero==='ganshiren'?`清除所有状态牌与自身负面状态，本回合免疫敌人施加的负面效果${u?'，并获得 2 点【尸气】':''}。消耗（一次性）`
-      :G.hero==='yincha'?`清除所有状态牌与自身负面状态，本回合免疫敌人施加的负面效果${u?'，额外获得 3 点格挡':''}。消耗（一次性）`
+      :G.hero==='yincha'?`清除所有状态牌与自身负面状态，本回合免疫敌人施加的负面效果${u?'，回复 5 点生命':''}。消耗（一次性）`
       :G.hero==='tianshi'?`清除所有状态牌与自身负面状态，本回合免疫敌人施加的负面效果${u?'，额外获得 5 点格挡':''}。消耗（一次性）`
       :G.hero==='wuseng'?`清除所有状态牌与自身负面状态，本回合免疫敌人施加的负面效果${u?'，额外获得 5 点格挡':''}。消耗（一次性）`   // v0.61.36 武僧列：升级附加 4 → 5
       :`清除所有状态牌与自身负面状态，本回合免疫敌人施加的负面效果${u?'，额外获得 4 点格挡':''}。消耗（一次性）`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ clearJunk(); clearPlayerDebuffs(); G.debuffImmune=1; floatMsg('本回合免疫负面效果'); if(u){ gainShiqi(2); log(`佛渡：升级后获得 2 点【尸气】`); } return; }
-      const fb=(G.hero==='yincha')?3:((G.hero==='tianshi'||G.hero==='wuseng')?5:4);   // v0.61.35 天师列 4→5；v0.61.36 武僧列 4→5（阴差 3；赶尸人走上面 2 尸气分支）
-      clearJunk(); clearPlayerDebuffs(); G.debuffImmune=1; floatMsg('本回合免疫负面效果'); if(u){ gainBlock(fb); log(`佛渡：升级后获得 ${fb} 点格挡`); } }},
-  {id:'tongpi', name:'铜皮铁骨', type:'defense', rarity:'blue', cost:2, hpCost:(u)=>G.hero==='yincha'?3:0,
+      const fb=(G.hero==='tianshi'||G.hero==='wuseng')?5:4;   // v0.61.39 阴差列升级改为「回复 5 点生命」，fb 不再含阴差
+      clearJunk(); clearPlayerDebuffs(); G.debuffImmune=1; floatMsg('本回合免疫负面效果');
+      if(G.hero==='yincha'){ if(u){ heal(5); log('佛渡：升级后回复 5 点生命'); } }
+      else if(u){ gainBlock(fb); log(`佛渡：升级后获得 ${fb} 点格挡`); } }},
+  {id:'tongpi', name:'铜皮铁骨', type:'defense', rarity:'blue', cost:2,   // v0.61.39 阴差列不再失血，hpCost 整体撤除
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?12:8} 点格挡。反弹 ${u?5:4} 点伤害。每有 1 个召唤单位，额外反弹 1 点`
       :G.hero==='wuseng'?`获得 ${u?15:10} 点格挡。反弹 ${u?8:6} 点伤害`
-      :G.hero==='yincha'?`获得 ${u?11:8} 点格挡。失去 3 点生命，反弹 ${u?8:6} 点伤害`
+      :G.hero==='yincha'?`获得 ${u?13:9} 点格挡。本回合每受到 1 次攻击，恢复 ${u?4:3} 点生命`
       :`获得 ${u?14:9} 点格挡。本回合每受到 1 次攻击，对攻击者施加 1 层【诅咒】`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ gainBlock(u?12:8); G.thorns+=(u?5:4)+G.summons.filter(s=>s.dur>0).length; }
       else if(G.hero==='wuseng'){ gainBlock(u?15:10); G.thorns+=u?8:6; }
-      else if(G.hero==='yincha'){ loseHp(3); gainBlock(u?11:8); G.thorns+=u?8:6; }
+      else if(G.hero==='yincha'){ gainBlock(u?13:9); G.hitHeal=u?4:3; }
       else { gainBlock(u?14:9); G.hitCurse=1; } }},   // v0.61.35 天师列：8/12 → 9/14
   {id:'fanzhen', name:'反震', type:'defense', rarity:'blue', cost:1, costU:{wuseng:0},
     t:(u)=>G.hero==='ganshiren'?`反弹 ${u?4:3} 点伤害。本回合每受 1 次攻击，获得 ${u?2:1} 点【尸气】`
@@ -303,14 +305,14 @@ const CARDS = [
       else if(G.hero==='wuseng'){ G.thorns+=u?5:4; } // B 文档：只反弹，不再给「下回合格挡」
       else if(G.hero==='yincha'){ G.thorns+=u?5:4; G.hitRage=Math.max(G.hitRage||0,u?2:1); }
       else { G.thorns+=u?4:3; G.hitCurse=Math.max(G.hitCurse||0,u?2:1); } }},   // v0.61.35 天师列：反击 3 → 3/4
-  {id:'xiejiashengyuan', name:'卸甲生元', type:'defense', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?3:0,
+  {id:'xiejiashengyuan', name:'卸甲生元', type:'defense', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?7:4} 点格挡。回合结束自动将剩余格挡换算为【尸气】：每保留 2 点，获得 ${u?2:1} 点（无论敌人是否攻击）`
       :G.hero==='wuseng'?`获得 ${u?8:5} 点格挡。使【卸甲】持续 ${u?3:2} 回合：期间格挡不清零，到期后剩余格挡转为生命`
-      :G.hero==='yincha'?`获得 ${u?7:5} 点格挡。失去 3 点生命。敌人攻击后每保留 1 点格挡，恢复 1 点生命`
+      :G.hero==='yincha'?`获得 ${u?8:5} 点格挡。失去 2 点生命。敌人攻击后每保留 1 点格挡，恢复 1 点生命（上限恢复 ${u?14:11} 滴血量）`
       :`获得 ${u?12:8} 点格挡。敌人攻击后，将剩余格挡转为对随机敌人施加【诅咒】（每 2 格挡 = 1 层，上限 6 层；敌人满 6 层时溢出部分会转回格挡）`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ gainBlock(u?7:4); G.endBlockKind='A'; G.xiejiaUp=!!u; floatMsg('回合结束格挡将自动转为尸气'); }
       else if(G.hero==='wuseng'){ gainBlock(u?8:5); G.xiejia=u?3:2; floatMsg('【卸甲】已启动，格挡不再清零'); }
-      else if(G.hero==='yincha'){ loseHp(3); gainBlock(u?7:5); G.endBlockKind='C'; floatMsg('敌人攻击后格挡将转为生命'); }
+      else if(G.hero==='yincha'){ loseHp(2); gainBlock(u?8:5); G.endBlockKind='C'; G.xiejiaHealCap=u?14:11; floatMsg('敌人攻击后格挡将转为生命'); }
       else { gainBlock(u?12:8); G.endBlockKind='D'; floatMsg('敌人攻击后格挡将转为诅咒'); } }},   // v0.61.35 天师列：6/8 → 8/12
 /* —— 功能 24~40 —— */
   {id:'juling', name:'聚灵', type:'skill', rarity:'white', cost:0,
@@ -340,10 +342,10 @@ const CARDS = [
       :`保留 ${u?2:1} 张手牌。保留的每张【诅咒牌】，下回合该牌费用 -1（仅一回合）`,
     eff:(u)=>{ G.retain+=(u?2:1); G.shouyiUp=!!u; floatMsg(`回合结束时可保留 ${G.retain} 张手牌`); }},
   {id:'yiwu', name:'易物', type:'skill', rarity:'blue', cost:0,
-    t:(u)=>G.hero==='ganshiren'?`选择 1 张手牌与弃牌堆交换，换入的牌本回合费用 -1。若换出的是【鬼怪牌】，获得 2 点【尸气】`
-      :G.hero==='wuseng'?`选择 1 张手牌与弃牌堆交换，换入的牌本回合费用 -1。若换出的是防御牌，获得 4 点格挡`
-      :G.hero==='yincha'?`选择 1 张手牌与弃牌堆交换，换入的牌本回合费用 -1。若换出的是技能牌，恢复 5 点生命`
-      :`选择 1 张手牌与弃牌堆交换，换入的牌本回合费用 -1。若换出的是攻击牌，额外抽 1 张牌`,
+    t:(u)=>G.hero==='ganshiren'?`选择 1 张手牌与弃牌堆交换。若换出的是【鬼怪牌】，获得 2 点【尸气】`
+      :G.hero==='wuseng'?`选择 1 张手牌与弃牌堆交换。若换出的是防御牌，获得 4 点格挡`
+      :G.hero==='yincha'?`选择 1 张手牌与弃牌堆交换。若换出的是技能牌，恢复 5 点生命`
+      :`选择 1 张手牌与弃牌堆交换。若换出的是攻击牌，额外抽 1 张牌`,
     eff:(u,c)=>{ startExchangeSelect(1, c); }},
   {id:'xueqi', name:'血契', type:'skill', rarity:'blue', cost:1, costU:{wuseng:0, yincha:0, ganshiren:0},   // v0.61.37 赶尸人列升级 0 费
     t:(u)=>G.hero==='wuseng'?`将目前的格挡按 60% 转化为血量${u?'（0 符文）':''}`
@@ -361,12 +363,12 @@ const CARDS = [
     t:(u)=>`下回合获得 1 点符文${u?'（0 符文）':''}`,
     eff:(u)=>{ G.pendingEnergy=(G.pendingEnergy||0)+1; floatMsg('下回合 +1 符文'); }},
   {id:'ranxue', name:'燃血术', type:'skill', rarity:'purple', cost:0,
-    hpCost:(u)=>G.hero==='wuseng'?8:(G.hero==='yincha'?(u?6:4):8),   // v0.61.37 赶尸人列：4 → 8（与武僧/天师同为 8）   // v0.61.36 武僧列：6 → 8
-    t:(u)=>{ const l=G.hero==='wuseng'?8:(G.hero==='yincha'?(u?6:4):8);   // v0.61.36 武僧列：6 → 8
-      const gg=G.hero==='yincha'?(u?2:1):2;
+    hpCost:(u)=>G.hero==='wuseng'?8:(G.hero==='yincha'?4:8),   // v0.61.37 赶尸人列：4 → 8（与武僧/天师同为 8）   // v0.61.36 武僧列：6 → 8   // v0.61.39 阴差列固定 4
+    t:(u)=>{ const l=G.hero==='wuseng'?8:(G.hero==='yincha'?4:8);   // v0.61.36 武僧列：6 → 8（v0.61.39 阴差列固定 4）
+      const gg=G.hero==='yincha'?1:2;
       return `失去 ${l} 点生命。获得 ${gg} 点符文`; },
-    eff:(u)=>{ const l=G.hero==='wuseng'?8:(G.hero==='yincha'?(u?6:4):8);   // v0.61.36 武僧列：6 → 8
-      const gg=G.hero==='yincha'?(u?2:1):2;
+    eff:(u)=>{ const l=G.hero==='wuseng'?8:(G.hero==='yincha'?4:8);   // v0.61.36 武僧列：6 → 8（v0.61.39 阴差列固定 4）
+      const gg=G.hero==='yincha'?1:2;
       loseHp(l); G.energy+=gg; floatMsg(`符文 +${gg}`); log(`燃血术：失去 ${l} 点生命，获得 ${gg} 点符文`); }},
   {id:'xisui', name:'洗髓经', type:'skill', rarity:'gold', cost:2,
     t:(u)=>G.hero==='ganshiren'?`接下来 3 回合，每回合开始获得 ${u?2:1} 点【尸气】和 1 点符文`
@@ -386,7 +388,7 @@ const CARDS = [
   {id:'xueji', name:'血祭', type:'skill', rarity:'purple', cost:1, costU:0, hpCost:(u)=>G.hero==='yincha'?4:3,
     t:(u)=>G.hero==='ganshiren'?`失去 3 点生命。本回合每召唤 1 个单位，下回合多摸 1 张牌（上限 3张）${u?'（0 符文）':''}`
       :G.hero==='wuseng'?`失去 3 点生命。本回合每获得 5 点格挡，下回合多摸 1 张牌（上限 +4）${u?'（0 符文）':''}`
-      :G.hero==='yincha'?`失去 4 点生命。本回合每失去 2 点生命，下回合多摸 1 张牌（上限 +4）${u?'（0 符文）':''}`
+      :G.hero==='yincha'?`本回合每失去 4 点生命，下回合多摸 1 张牌（上限 +4）。立刻失去 4 点生命${u?'（0 符文）':''}`
       :`失去 3 点生命。本回合每施加 1 层【诅咒】，下回合多摸 1 张牌（上限 +4）${u?'（0 符文）':''}`,
     eff:(u)=>{ loseHp(G.hero==='yincha'?4:3); G.xuejiArmed=true; floatMsg('血祭：回合末结算，下回合多摸牌'); }},
   {id:'ranhun', name:'燃魂', type:'skill', rarity:'purple', cost:0, hpCost:(u)=>G.hero==='yincha'?6:(u?4:6),
@@ -402,24 +404,24 @@ const CARDS = [
   {id:'kaitianyan', name:'开天眼', type:'skill', rarity:'blue', cost:1,
     t:(u)=>G.hero==='ganshiren'?`本回合攻击牌伤害 +${u?5:3}。场上每有 1 个召唤单位，额外 +1`
       :G.hero==='wuseng'?`本回合攻击牌伤害 +${u?4:2}。每有 ${u?2:3} 点格挡，额外 +1（上限 +5）`
-      :G.hero==='yincha'?`本回合攻击牌伤害 +${u?5:3}。每层【血怒】使额外伤害 +1（上限 +6），打出后消耗对应【血怒】`
+      :G.hero==='yincha'?`本回合攻击牌伤害 +${u?5:3}。每层【血怒】使额外伤害 +1（上限 +${u?10:8}），打出后消耗对应【血怒】`
       :`本回合攻击牌伤害 +${u?6:4}`,
     eff:(u)=>{ let val;
       if(G.hero==='ganshiren') val=(u?5:3)+G.summons.filter(s=>s.dur>0).length;
       else if(G.hero==='wuseng') val=(u?4:2)+Math.min(5,Math.floor((G.block||0)/(u?2:3)));
-      else if(G.hero==='yincha') val=(u?5:3)+rageSpend(1,6);
+      else if(G.hero==='yincha') val=(u?5:3)+rageSpend(1,u?10:8);
       else val=u?6:4;
       G.turnAtkBuff=(G.turnAtkBuff||0)+val;
       log(`开天眼：本回合攻击牌伤害 +${val}`); }},
-  {id:'yixing', name:'移形换影', type:'skill', rarity:'purple', cost:1, costU:{tianshi:1, wuseng:1, ganshiren:1, default:0},   // v0.61.35 天师列取消 0 费升级；v0.61.36 武僧列同（1/1）；v0.61.37 赶尸人列同（1/1）
+  {id:'yixing', name:'移形换影', type:'skill', rarity:'purple', cost:1, costU:{tianshi:1, wuseng:1, ganshiren:1, yincha:1, default:1},   // v0.61.35 天师列取消 0 费升级；v0.61.36 武僧列同；v0.61.37 赶尸人列同；v0.61.39 阴差列同（1/1）
     t:(u)=>G.hero==='ganshiren'?`闪避下一次攻击。闪避成功后，获得 ${u?3:1} 点【尸气】`
       :G.hero==='wuseng'?`闪避下一次攻击。闪避成功后，下一回合获得 5 点格挡`   // v0.61.36 武僧列：1/1，不再有 0 费升级
-      :G.hero==='yincha'?`闪避下一次攻击。闪避成功后，恢复 4 点生命并获得 1 层【血怒】${u?'（0 符文）':''}`
+      :G.hero==='yincha'?`闪避下一次攻击。闪避成功后，恢复 ${u?4:2} 点生命并获得 ${u?2:1} 层【血怒】`
       :`闪避下一次攻击。闪避成功后，对攻击者施加 1 层【诅咒】${(u&&G.hero!=='tianshi')?'（0 符文）':''}`,
     eff:(u)=>{ G.dodge+=1;
       if(G.hero==='ganshiren'){ G.dodgeShiqi=u?3:1; }   // v0.61.37：1/3（原先死写 2，且结算处硬编码 1，值是断的）
       else if(G.hero==='wuseng'){ G.dodgeNextBlock=5; }
-      else if(G.hero==='yincha'){ G.dodgeHealRage=4; }
+      else if(G.hero==='yincha'){ G.dodgeHealRage=u?4:2; G.dodgeRageGain=u?2:1; }
       else { G.dodgeCurse=1; }
       floatMsg('移形换影：闪避下一次攻击'); }},
   {id:'fuling', name:'附灵术', type:'skill', rarity:'purple', cost:{ganshiren:0, default:2}, costU:{tianshi:1, wuseng:1}, exhaustOnly:['ganshiren'], needs:'summon',   // v0.61.36 武僧列：2 → 2/1
@@ -438,24 +440,24 @@ const CARDS = [
   {id:'zhenyaoling', name:'镇妖铃', type:'spirit', rarity:'purple', cost:2, exhaust:true, hpCost:(u)=>G.hero==='yincha'?3:0,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?15:10} 伤害并【镇魂】。获得 ${u?4:3} 点【尸气】。消耗牌（一次性）`
       :G.hero==='wuseng'?`造成 ${u?15:10} 伤害并【镇魂】。若此时格挡 ≥10，伤害 +${u?11:8}。消耗牌（一次性）`
-      :G.hero==='yincha'?`造成 ${u?16:10} 伤害并【镇魂】。失去 3 点生命，每层【血怒】使此牌伤害 +2（上限 +20）（消耗）`
+      :G.hero==='yincha'?`造成 ${u?16:10} 伤害并【镇魂】。失去 3 点生命，每层【血怒】使此牌伤害 +${u?3:2}（上限 +${u?18:12}）（消耗）`
       :`造成 ${u?15:10} 伤害并【镇魂】。若目标【诅咒】≥4 层，消耗 4 层，镇魂持续 2 回合（消耗）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='ganshiren'){ const __zq=u?4:3; sealEnemy(t,1); dealDamageTo(t,u?15:10); gainShiqi(__zq); log(`镇妖铃：造成 ${u?15:10} 伤害并获得 ${__zq} 点【尸气】`); return; }  // v0.61 B3：单引号→反引号，日志正常插值
       if(G.hero==='wuseng'){ sealEnemy(t,1); let d=u?15:10; if((G.block||0)>=10){ d+=(u?11:8); log(`镇妖铃：格挡 ≥10，伤害 +${u?11:8}`); } dealDamageTo(t,d); return; }
-      if(G.hero==='yincha'){ loseHp(3); sealEnemy(t,1); dealDamageTo(t,(u?16:10)+2*rageSpend(2,20)); return; }
+      if(G.hero==='yincha'){ loseHp(3); sealEnemy(t,1); dealDamageTo(t,(u?16:10)+(u?3:2)*rageSpend(u?3:2,u?18:12)); return; }
       // v0.61.35 天师列：伤害 10/14 → 10/15；镇魂 2 回合的条件由「带诅咒」改为「【诅咒】≥4 层，并消耗 4 层」
       const __cc4=(t.curse||0)>=4; sealEnemy(t, __cc4?2:1); if(__cc4) t.curse-=4; dealDamageTo(t,u?15:10); }},
 /* —— 召唤 / 秘法 41~48 —— */
-  {id:'zhiren', name:'纸人', type:'spirit', rarity:'white', cost:1,
+  {id:'zhiren', name:'纸人', type:'spirit', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`召唤纸人。每回合末造成 ${u?4:2} 伤害。若打出时【尸气】≥4，消耗 4 点【尸气】强化：每回合末造成 ${u?7:5} 伤害。死亡时获得 2 点【尸气】（持续 2 回合）`
       :G.hero==='wuseng'?`召唤纸人。每回合末造成 ${u?3:2} 伤害。纸人存活时，每回合开始获得 ${u?3:2} 点格挡（持续 2 回合）`
-      :G.hero==='yincha'?`召唤纸人。失去 2 点生命。每回合末造成 ${u?2:1} 伤害，纸人攻击时为你恢复 ${u?3:2} 点生命（持续 2 回合）。若打出时【血怒】≥4，消耗 4 点【血怒】强化：每回合末造成 ${u?5:4} 伤害，攻击时恢复 ${u?4:3} 点生命`
+      :G.hero==='yincha'?`召唤纸人。失去 2 点生命。每回合末造成 ${u?2:1} 伤害，纸人攻击时为你恢复 ${u?3:2} 点生命（持续 2 回合）。若打出时【血怒】≥3，消耗 3 点【血怒】强化：每回合末造成 ${u?5:4} 伤害，攻击时恢复 ${u?4:3} 点生命`
       :`召唤纸人。每回合末对随机敌人造成 ${u?3:2} 伤害并施加 ${u?2:1} 层【诅咒】（持续 2 回合）`,
     eff:(u)=>{ let v = G.hero==='wuseng' ? (u?3:2) : (G.hero==='tianshi' ? (u?3:2) : (u?4:2)); let hv=0;
       if(G.hero==='ganshiren' && hasShiqi(4)){ spendShiqi(4); v=u?7:5; log('纸人：消耗 4 点【尸气】强化'); }
       else if(G.hero==='yincha'){ loseHp(2); v=u?2:1; hv=u?3:2;
-        if(rageLayers()>=4){ G.xuenu-=4; v=u?5:4; hv=u?4:3; log('纸人：消耗 4 点【血怒】强化'); } }
+        if(rageLayers()>=3){ G.xuenu-=3; v=u?5:4; hv=u?4:3; log('纸人：消耗 3 点【血怒】强化'); } }
       addSummon({type:'zhiren', v, healV:hv, dur:2, up:!!u}); floatMsg('纸人 · 受命而起'); }},
   {id:'zhouyin', name:'咒印', type:'spirit', rarity:'white', cost:1, exhaustOnly:['wuseng'],
     t:(u)=>G.hero==='ganshiren'?`立即获得 ${u?5:3} 点【尸气】`
@@ -467,7 +469,7 @@ const CARDS = [
       const t=curEnemy(); if(!t) return; let n=u?3:2;
       if(G.hero==='tianshi' && (t.curse||0)>0){ n+=1; log('咒印：目标已有诅咒，额外 +1 层'); }
       applyCurse(t,n); }},
-  {id:'xiaogui', name:'小鬼', type:'spirit', rarity:'white', cost:1,
+  {id:'xiaogui', name:'小鬼', type:'spirit', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`召唤小鬼。每回合末造成 ${u?4:2} 伤害。死亡时获得 ${u?3:2} 点【尸气】（持续 2 回合）`
       :G.hero==='wuseng'?`召唤小鬼。每回合末造成 ${u?3:2} 伤害。小鬼死亡时，获得 ${u?7:5} 点格挡（持续 2 回合）`
       :G.hero==='yincha'?`召唤小鬼。失去 2 点生命。每回合末造成 ${u?2:1} 伤害并获得 1 层【血怒】；小鬼死亡时，恢复 ${u?4:2} 点生命（持续 2 回合）`
@@ -481,12 +483,12 @@ const CARDS = [
   {id:'wutong', name:'五通神', type:'spirit', rarity:'purple', cost:2,
     t:(u)=>G.hero==='ganshiren'?`召唤五通神。立即获得 5 点格挡，之后每回合开始重复一次（持续 ${u?3:2} 回合）。若打出时【尸气】≥5，消耗 5 点【尸气】强化：立即获得 6 点格挡，之后每回合开始重复一次（持续 ${u?4:3} 回合）`
       :G.hero==='wuseng'?`召唤五通神。立即获得 7 点格挡（1 点基础 + 首次触发 6 点）；之后每回合开始获得 6 点格挡（持续 ${u?3:2} 回合）`   // v0.61.36 武僧列：立即 5/6 → 7 固定、每回合 4 → 6
-      :G.hero==='yincha'?`召唤五通神。立即恢复 5 点生命；之后每回合开始恢复 5 点生命（持续 ${u?3:2} 回合）。若打出时【血怒】≥4，消耗 4 点【血怒】强化：持续 ${u?4:3} 回合`
+      :G.hero==='yincha'?`召唤五通神。立即恢复 6 点生命；之后每回合开始恢复 6 点生命（持续 ${u?3:2} 回合）。若打出时【血怒】≥3，消耗 3 点【血怒】强化：持续 ${u?4:3} 回合`
       :`召唤五通神。立即获得 6 点格挡并对随机敌人施加 1 层【诅咒】，之后每回合开始重复一次（持续 ${u?3:2} 回合）`,
     eff:(u)=>{ // 现形即结算首回合：第一次「回合开始」效果落在当前回合（v0.61.36 武僧 = 基础 1 + 首次触发 6 = 立即 7 格挡）
       let wv=G.hero==='wuseng'?6:(G.hero==='tianshi'?6:3), wdur=u?3:2;   // v0.61.35 天师列 4 → 6；v0.61.36 武僧列每回合 4 → 6
       if(G.hero==='wuseng'){ gainBlock(1); }   // v0.61.36：立即合计 7 = 基础 1 + 首触 6（wv 已在上行按列定值）
-      else if(G.hero==='yincha'){ heal(5); wv=5; if(rageLayers()>=4){ G.xuenu-=4; wdur=u?4:3; log('五通神：消耗 4 点【血怒】强化'); } }
+      else if(G.hero==='yincha'){ heal(6); wv=6; if(rageLayers()>=3){ G.xuenu-=3; wdur=u?4:3; log('五通神：消耗 3 点【血怒】强化'); } }
       if(G.hero==='ganshiren'){ if(hasShiqi(5)){ spendShiqi(5); wv=6; wdur=u?4:3; log('五通神：消耗 5 点【尸气】强化'); } else { wv=5; } }
       const s=addSummon({type:'wutong', v:wv, dur:wdur});
       wutongTick(s);
@@ -494,7 +496,7 @@ const CARDS = [
   {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:{ganshiren:3, wuseng:0, default:2}, exhaust:true,   // v0.61.37 赶尸人列 2 → 3
     t:(u)=>G.hero==='ganshiren'?`引爆当前所有【尸气】：清零尸气，每层尸气转化为 ${u?6:5} 点伤害，随机分配给所有敌人。消耗（一次性）`
       :G.hero==='wuseng'?`将当前全部格挡转化为等量伤害，每 1 点随机打在一个敌人身上（逐点结算）。消耗牌（一次性）`
-      :G.hero==='yincha'?`对所有敌人施加 ${u?3:2} 层【诅咒】。每施加 1 层，恢复 2 点生命`
+      :G.hero==='yincha'?`将 ${u?6:4} 层【诅咒】随机施加在敌人身上。每施加 1 层，恢复 2 点生命`
       :`对所有敌人施加 1 层【诅咒】。所有敌人每有 1 层【诅咒】，此牌费用 -1（最低 ${u?0:1}）`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ const q=G.尸气||0; if(q<=0){ floatMsg('没有尸气可引爆'); log('咒雨：没有尸气可引爆'); return; }
         G.尸气=0; if(G.hero==='ganshiren' && q>0){ heal(q); log(`咒雨：引爆 ${q} 点【尸气】，回复 ${q} 点生命`); }   // v0.61.37：清零＝消耗，按新被动等量回血
@@ -532,8 +534,9 @@ const CARDS = [
         floatMsg(smooth?`咒雨 · ${hits} 连击 · 合计 ${total}`:`咒雨 · ${hits} 连击`);
         return;
       }
-      let n=0; aliveEnemies().forEach(e=>{ n+=applyCurse(e,u?3:2); });
-      heal(n*2); log(`咒雨：施加 ${n} 层诅咒，恢复 ${n*2} 点生命`); }},
+      let n=0; const __zyl=aliveEnemies(); const __zyt=u?6:4;   // v0.61.39 阴差列：4/6 层随机分配（原为每个敌人各 2/3 层）
+      for(let i=0;i<__zyt;i++){ if(!__zyl.length) break; const __zye=__zyl[Math.floor(rng()*__zyl.length)]; if(__zye) n+=applyCurse(__zye,1); }
+      heal(n*2); log(`咒雨：随机施加 ${n} 层诅咒，恢复 ${n*2} 点生命`); }},
   {id:'yinbingguo', name:'阴兵过境', type:'spirit', rarity:'gold', cost:3,
     t:(u)=>G.hero==='ganshiren'?`召唤 ${u?3:2} 只阴兵。每回合末造成 ${u?5:4} 伤害。每只死亡时获得 1 点【尸气】（持续 3 回合）`
       :G.hero==='wuseng'?`召唤 ${u?3:2} 只阴兵。每回合末造成 ${u?5:4} 伤害。阴兵存活时，每回合开始获得 ${u?4:3} 点格挡（持续 3 回合）`
@@ -568,7 +571,7 @@ const HEROES = [
   {id:'wuseng', name:'苦行武僧', desc:'以守为攻，格挡既是盾也是矛。', mech:'格挡保留', passive:'每回合开始获得 2 点格挡；回合结束未用完的格挡保留最多 3 点。',
    deck:[['leifu',2],['jingang',2],['jinzhong',1],['tiebushan',1],['xueqi',1],['fanzhen',1],['zhouyu',1],['shouyi',1]]},
   {id:'yincha', name:'血祭阴差', desc:'以血为引，燃烧生命换取爆发。', mech:'血怒 · 以血换力', passive:'【血怒】上限 10 层、整局累积（开新局才清零）。打出扣血牌时每失去 1 点生命，自动 +1 层【血怒】；带“每层 +N（上限 M）”的牌打出时消耗对应【血怒】爆发，生命越低部分牌越强。',
-   deck:[['leifu',3],['jingang',2],['huofu',1],['fodu',1],['juling',1],['xueqi',1],['shouyi',1],['duhunguiji',1]]},  // v0.59 阴差初始卡池：雷符×3 金刚符×2 火符×1 佛渡×1 聚灵×1 血契×1 守一×1 渡魂归己×1（共 11 张）
+   deck:[['leifu',3],['jingang',1],['huofu',1],['fenfu',1],['xueqi',1],['shouyi',1],['ranxue',1],['zhiren',1]]},  // v0.61.39 阴差初始卡池：雷符×3 金刚符×1 火符×1 焚符×1 血契×1 守一×1 燃血术×1 纸人×1（8 种、共 10 张）
 ];
 let cardPlayWindow=false; // 阴差被动·以血引怒：doPlayCard 执行 c.eff 期间为 true
 function loseHp(n){
@@ -676,7 +679,7 @@ function addSummon(o){ G.summonsMadeTurn=(G.summonsMadeTurn||0)+1;
   sfx('card_summon');   // v0.61.32：所有己方召唤的**唯一**入口（含尸王与附灵术）
   G.summons.push(o); return o; }
 /* 五通神「回合开始」效果（现形当回合立即结算一次，之后每个回合开始再触发；寿命 -1） */
-function wutongTick(s){
+function wutongTick(s, noDecay){   // v0.61.39：noDecay=true 时只结算效果、不扣寿命（附灵术/群鬼乱舞用）
   const b=s.v||3;
   if(G.hero==='yincha'){ heal(b); log(`五通神：恢复 ${b} 点生命`); }
   else {
@@ -685,7 +688,7 @@ function wutongTick(s){
     else if(G.hero==='tianshi'){ const wt=randomAlive(); if(wt) applyCurse(wt,1); log(`五通神：获得 ${b} 点格挡并对随机敌人施加 1 层【诅咒】`); }
     else log(`五通神：获得 ${b} 点格挡`);
   }
-  if(!s.indefinite) s.dur--;
+  if(!s.indefinite && !noDecay) s.dur--;
 }
 function isSummon(type){ return G.summons.some(s=>s.type===type && s.dur>0); }
 /* 苦行武僧：某个召唤单位在「回合开始」时会带来的格挡（纸人/阴兵看升级态，五通神固定 6） */
@@ -904,7 +907,7 @@ function _costPick(v){ if(v==null) return null; if(typeof v!=='object') return v
 function cardCost(c){ const u=_costPick(c.costU); return c.up && u!=null ? u : _costPick(c.cost); }
 function effectiveCost(c){
   let cost=cardCost(c);
-  if(c.tempCostCut) cost=Math.max(0, cost-c.tempCostCut); // v0.61.10(P11)：易物换入的牌本回合费用 -1
+  if(c.tempCostCut) cost=Math.max(0, cost-c.tempCostCut); // v0.61.39：易物已不再发这个标记，现在只有万剑归宗 A 列在用（击败敌人后抽到的牌 -1/-2 费）
   // v0.61.35 守一(#26)天师列：保留的【诅咒牌】**只减自己**、且只减下回合那一回合。
   // 用 G.turn 做到期判据（不做显式清零）—— G.turn 已随存档读写（40_flow.js:195/237），
   // 而且 startTurn() 开头就把本回合标记清了一遍，写在标记里会被自己在生效前擦掉。
