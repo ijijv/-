@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.61.39</title>
+<title>志怪塔 · 原型 v0.61.40</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -133,6 +133,10 @@
   .map-row{position:relative; z-index:1; display:flex; justify-content:center; gap:12px; margin:10px 0;}
   .map-node{min-width:96px; padding:10px 16px; border-radius:8px; border:1px solid var(--ink3); background:var(--ink); color:var(--text); font-size:14px; letter-spacing:1px; cursor:default; text-align:center;}
   .map-node.empty{visibility:hidden;}
+  /* v0.61.40：迷雾四档 —— preview = 上一层连线能到的下一层（只见 ? 剪影）；.empty 仍是隐藏占位 */
+  .map-node.preview{border-style:dashed; opacity:.5; color:var(--dim); cursor:default;}
+  .map-node .node-ico:empty{display:none;}
+  .map-node .node-label{vertical-align:middle;}
   .map-row.current .map-node{background:var(--red); color:#fff; border-color:var(--red); cursor:pointer;}
   .map-row.current .map-node:hover{background:var(--red2);}
   .map-row.current .map-node.blocked{background:var(--ink2); color:var(--dim); border-color:var(--ink3); cursor:not-allowed; opacity:.55;}
@@ -459,7 +463,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.39</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.40</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

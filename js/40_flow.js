@@ -188,8 +188,9 @@ function saveRun(scene){
   if(!G || G.endless) return; // 无尽模式不落档
   const s=scene || SCENE || 'map';
   const data={
-    v:2, scene:s,
+    v:3, scene:s,               // v3：新增 mapSeed（地图随机化的复现依据）
     act:G.act, mapRow:G.mapRow, mapCol:G.mapCol, mapPath:(G.mapPath||[]).slice(),
+    mapSeed:G.mapSeed||0,
     hero:G.hero, hp:G.hp, maxHp:G.maxHp, gold:G.gold, energy:G.energy, block:G.block,
     deck:G.deck.map(cardSnap), hand:G.hand.map(cardSnap), drawPile:G.drawPile.map(cardSnap), discard:G.discard.map(cardSnap),
     enemies:G.enemies.map(serializeEnemy), target:G.target, turn:G.turn, battleStartHp:G.battleStartHp,
@@ -226,7 +227,14 @@ function continueRun(){
   //             导致续档后三项回落到 newState() 的默认值（生命 60、金币 0）。
   G.hp=d.hp; G.maxHp=d.maxHp; G.gold=d.gold;
   G.energy=d.energy!=null?d.energy:3; G.block=d.block||0;
-  MAP=ACTS[G.act-1];
+  // v0.61.40：地图改为随机树状图 → 由存档里的 mapSeed 复现整张三幕图（MAP 一律不落盘）。
+  // 旧档（v<=2）没有种子：铸一个，并把「上一层列号 / 已走路径」降级清空 —— 旧图的列号对新图毫无意义，
+  // 清空后 mapReachable 走「整层可选」分支 ⇒ 不丢进度、不软锁、不崩，只失去路径装饰线与上一层列语义。
+  var __isNewSave = (d.v>=3);
+  if(__isNewSave){ G.mapSeed=(d.mapSeed>>>0)||1; }
+  else { G.mapSeed=((((d.rng&&d.rng.s)||0)>>>0) || (rngSeedNow()>>>0) || 1); G.mapCol=-1; G.mapPath=[]; }
+  buildActs(G.mapSeed);
+  if(!(G.mapRow>=0 && G.mapRow<MAP.length)) G.mapRow=Math.max(0, Math.min(G.mapRow||0, MAP.length-1));
   G.deck=(d.deck||[]).map(cardRestore);
   G.hand=(d.hand||[]).map(cardRestore);
   G.drawPile=(d.drawPile||[]).map(cardRestore);

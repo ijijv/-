@@ -1035,40 +1035,138 @@ function rollAffixes(def){
   }
   return shuffle(AFFIXES.slice()).slice(0,count).map(a=>({id:a.id, tier:1}));
 }
-/* 节点化 Run：三幕地图（Boss 不同，敌人靠幕间系数增强） */
-const ACT1 = [
-  [{t:'fight',e:['youhun','youhun']},       null,                                       {t:'fight',e:['youhun','zhizharen']},       {t:'fight',e:['zhizharen','youhun']}],
-  [{t:'fight',e:['huyao','shuigui']},       null,                                       null,                                       {t:'fight',e:['jiangshi','youhun']}],
-  [null,                                     {t:'unknown'},                             {t:'fight',e:['youhun','mengpo']},         null],
-  [null,                                     null,                                       {t:'fight',e:['jiangshi','shanxiao']},      null],
-  [null,                                     {t:'fight',e:['shuigui','jiangshi']},      {t:'camp'},                                 {t:'fight',e:['huyao','shanxiao']}],
-  [{t:'fight',e:['jiangshi','jiangshi']},    null,                                       {t:'fight',e:['huyao','shanxiao']},         null],
-  [{t:'unknown'},                             null,                                       null,                                       {t:'fight',e:['shuigui','yecha']}],
-  [null,                                     {t:'fight',e:['huyao','jiangshi','shanxiao']}, {t:'fight',e:['youhun','mengpo']},       null],
-  [{t:'shop'},                               null,                                       {t:'unknown'},                              null],
-  [null,                                     {t:'fight',e:['youhun','huapigui']},       null,                                       {t:'fight',e:['shuigui','jiangshi']}],
-  [{t:'fight',e:['huyao','jiangshi']},       {t:'camp'},                                 null,                                       {t:'fight',e:['youhun','mengpo']}],
-  [null,                                     {t:'fight',e:['jiangshi','shanxiao','shuigui']}, {t:'fight',e:['huyao','jiangshi']},       null],
-  [null,                                     {t:'shop'},                                 {t:'fight',e:['youhun','youhun']},          {t:'fight',e:['huyao','shanxiao']}],
-  [null,                                     null,                                       {t:'boss'},                                 null],
-];
-
-function swapMap(src, swap){
-  return src.map(row=>row.map(node=>{
-    if(!node) return null;
-    if(node.t!=='fight') return {...node};
-    return {t:'fight', e:node.e.map(k=>swap[k]||k)};
-  }));
-}
+/* 节点化 Run：三幕地图（v0.61.40 起为「每次生成」的随机树状图，参考杀戮尖塔）
+   —— 结构与敌人一起随机：每层宽度 1~4、连边显式生成，允许分叉/汇合；
+     不再有写死的 14×4 字面量表，第二/三幕也不再是它的换皮产物。
+   ⚠ 生成器**绝不碰全局 rng**（自带 mkRng 局部流）。三个理由：
+     ① ?seed=N 复现要求地图不消耗主随机流；
+     ② continueRun 先 rngRestore 再重建地图，若地图吃主随机流，牌序/奖励/词缀会整体错位；
+     ③ 冒烟要能对拍「生成前后 rngSnapshot 完全不变」。 */
+const MAP_ROWS = 14;   // 层数不变 ⇒ 战斗场次、calcScore 的 act*1000+mapRow*50、顶栏「第 X/14 层」全部不变
+/* 每层宽度区间：窄宽交替 → 天然制造分叉点/汇合点；末层恒为 1（Boss） */
+const ROW_SHAPE = [[1,2],[2,3],[3,4],[1,2],[2,3],[3,4],[1,2],[3,4],[2,3],[1,2],[3,4],[2,3],[1,2],[1,1]];
+/* 每幕特殊节点配额（其余填普通战）。elite 对齐旧图密度（2/3/4），**不要**放大成 3/5/7 —— 那会让精英遭遇翻倍 */
+const TYPE_QUOTA = { 1:{camp:2, shop:2, elite:2, unknown:5}, 2:{camp:2, shop:2, elite:3, unknown:4}, 3:{camp:2, shop:2, elite:4, unknown:3} };
+const ACT1_MINIONS = ['youhun','zhizharen','huyao','jiangshi','shanxiao','shuigui','mengpo'];
 const ACT2_SWAP = {youhun:'wangchuan', zhizharen:'niutou', huyao:'mamian', jiangshi:'panguan', shanxiao:'niutou', shuigui:'wangchuan', mengpo:'wangchuan', baiwuchang:'juhunshi', heiwuchang:'juhunshi', huapigui:'niumamian', yecha:'niumamian'};
 const ACT3_SWAP = {youhun:'mingwei', zhizharen:'luosha', huyao:'xiuluo', jiangshi:'yanluo', shanxiao:'xiuluo', shuigui:'mingwei', mengpo:'yanluo', baiwuchang:'xiuluojiang', heiwuchang:'yecha', huapigui:'xiuluojiang', yecha:'yecha'};
-const ACT2 = swapMap(ACT1, ACT2_SWAP);
-const ACT3 = swapMap(ACT1, ACT3_SWAP);
-// 第三幕最终 Boss 后无需篝火（击败后直接通关）
-ACT3[ACT3.length-1] = ACT3[ACT3.length-1].map(n => (n && n.t==='camp') ? null : n);
-const ACTS = [ACT1, ACT2, ACT3];
+/* v0.61.40：从 50_ui.js 顶层**搬移**到这里（**不是复制** —— 同作用域重复 const 同名 = 整脚本 SyntaxError 白屏）。
+   原因：genAct 在本文件顶层就被调用，那一刻 50_ui.js 还没执行，留在那边会 TDZ 报错。 */
+const ELITES_BY_ACT = { 1:['baiwuchang','heiwuchang','huapigui','yecha'], 2:['juhunshi','niumamian'], 3:['xiuluojiang','yecha'] };
+const BOSS_POOL = { 1:['jiangwang','hanba','xueshi'], 2:['xiebian','panguanwang','mengpowang'], 3:['yewang','xiuluowang','yanluotianzi'] };
+
+/* —— 局部随机流（与 00_base.js 的 rng() 同为 mulberry32，但**互不干扰**）—— */
+function mkRng(seed){ let s=(seed>>>0)||1; return function(){ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15), 1|s); t=(t+Math.imul(t^(t>>>7), 61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+function deriveSeed(seed, k){ let h=((((seed>>>0)||1)^Math.imul((k||1), 0x9E3779B1))>>>0); h=Math.imul(h^(h>>>16), 0x85EBCA6B)>>>0; h=Math.imul(h^(h>>>13), 0xC2B2AE35)>>>0; return ((h^(h>>>16))>>>0)||1; }
+function mkShuffle(R){ return function(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(R()*(i+1)); const t=a[i]; a[i]=a[j]; a[j]=t; } return a; }; }
+
+/* —— 敌人池：复用既有换幕表，不新增第二份真相 —— */
+function actMinionPool(act){
+  if(act===2) return ACT1_MINIONS.map(function(k){ return ACT2_SWAP[k]||k; });
+  if(act===3) return ACT1_MINIONS.map(function(k){ return ACT3_SWAP[k]||k; });
+  return ACT1_MINIONS.slice();
+}
+function pickFightFrom(pool, R){ return mkShuffle(R)(pool.slice()).slice(0, R()<0.65?3:2); }
+
+/* —— 分带（band partition）：把 total 个下标切成 parts 段**连续非空**区间 —— */
+function bandBounds(total, parts){
+  parts=Math.max(1, Math.min(parts, total));
+  const base=Math.floor(total/parts), extra=total%parts;
+  const out=[]; let x=0;
+  for(let i=0;i<parts;i++){ const w=base+(i<extra?1:0); out.push([x, x+w-1]); x+=w; }
+  return out;
+}
+/* 相邻两层连边。**不交叉 / 上层无死路 / 下层无孤岛 由构造保证**：
+   · loN<=upN：上层切成 loN 段，第 j 段整段挂到下层 j（多个汇到同一个 → 汇合点）
+   · loN>upN ：下层切成 upN 段，第 i 段整段挂在 上层 i（一个分出多个 → 分叉点）
+   每条边的两端都落在同段内 ⇒ 段号随下标单调 ⇒ i<i' 必有 j<=j'（不交叉）。 */
+function linkRows(upN, loN){
+  const nextOf=Array.from({length:loN}, function(){ return []; });   // 下标 = **下层**列号，值是能走到的上层列号
+  const prevOf=Array.from({length:upN}, function(){ return []; });   // 下标 = **上层**列号，值是能下来的下层列号
+  if(loN<=upN){
+    const bands=bandBounds(upN, loN);   // 上层切成 loN 段：每段整段挂到下层同段号的格子（多个汇到同一个 → 汇合点）
+    for(let j=0;j<loN;j++) for(let i=bands[j][0]; i<=bands[j][1]; i++){ nextOf[j].push(i); prevOf[i].push(j); }
+  } else {
+    const bands=bandBounds(loN, upN);   // 下层切成 upN 段：每段整段挂到上层同段号的格子（一个分出多个 → 分叉点）
+    for(let i=0;i<upN;i++) for(let j=bands[i][0]; j<=bands[i][1]; j++){ prevOf[i].push(j); nextOf[j].push(i); }
+  }
+  return {nextOf:nextOf, prevOf:prevOf};
+}
+
+/* —— 布类型 —— */
+function assignTypes(act, R, rows, minionPool, elitePool, bossPool, quotaOverride){
+  const q = quotaOverride || TYPE_QUOTA[act] || TYPE_QUOTA[1];
+  const shuf = mkShuffle(R);
+  for(let r=0;r<MAP_ROWS;r++) for(let c=0;c<rows[r].length;c++) rows[r][c]={t:'fight', e:[], next:[], prev:[]};
+  const slots=[];
+  for(let r=1;r<MAP_ROWS-1;r++) for(let c=0;c<rows[r].length;c++) slots.push([r,c]);   // 首层与末层不参与特殊节点
+  shuf(slots);
+  const usedRow={};
+  function pick(kind, quota){
+    let n=0;
+    for(let pass=0; pass<2 && n<quota; pass++){
+      for(let i=0;i<slots.length && n<quota;i++){
+        const s=slots[i], node=rows[s[0]][s[1]];
+        if(node.t!=='fight') continue;
+        if(pass===0 && usedRow[s[0]]) continue;   // 第一轮：特殊节点各自独占一层，避免扎堆
+        node.t=kind; usedRow[s[0]]=1; n++;
+      }
+    }
+    return n;   // 第二轮无约束兜底 ⇒ 配额一定能填满
+  }
+  pick('camp', q.camp||0);
+  pick('shop', q.shop||0);
+  pick('unknown', q.unknown||0);
+  pick('elite', q.elite||0);
+  // 末层唯一 Boss：**生成期**就定死 key（旧代码是在 chooseNode 里点开才抽 ⇒ 同一存档续档后 Boss 会变）
+  rows[MAP_ROWS-1][0] = {t:'boss', e:[bossPool[Math.floor(R()*bossPool.length)]], next:[], prev:[]};
+  const pickElite=function(){
+    const k=[elitePool[Math.floor(R()*elitePool.length)]];
+    if(R()<0.5) k.push(minionPool[Math.floor(R()*minionPool.length)]);   // 旧图精英是「精英+小怪」对，单只会明显变软
+    return k;
+  };
+  for(let r=0;r<MAP_ROWS-1;r++) for(let c=0;c<rows[r].length;c++){
+    const node=rows[r][c];
+    if(node.t==='elite'){ node.e=pickElite(); continue; }
+    if(node.t!=='fight') continue;
+    if(r>0 && R()<0.06){ node.t='elite'; node.e=pickElite(); }   // 少量野生精英，保持稀有
+    else node.e=pickFightFrom(minionPool, R);
+  }
+  return q;
+}
+
+/* —— 入口：一个种子 → 一整幕树状图 —— */
+function genAct(act, seed, opts){
+  const O=opts||{};
+  const R=mkRng(seed);
+  const rows=[];
+  for(let r=0;r<MAP_ROWS;r++){
+    const sh=ROW_SHAPE[r]||[1,1];
+    const lo=sh[0], hi=(r===MAP_ROWS-1) ? 1 : Math.max(lo, sh[1]);
+    rows.push(new Array(lo+Math.floor(R()*(hi-lo+1))).fill(null));
+  }
+  const minionPool=O.minions||actMinionPool(act);
+  const elitePool=O.elites||ELITES_BY_ACT[act]||ELITES_BY_ACT[1];
+  const bossPool=O.bosses||BOSS_POOL[act]||BOSS_POOL[1];
+  assignTypes(act, R, rows, minionPool, elitePool, bossPool, O.quota);
+  for(let r=0;r<MAP_ROWS-1;r++){
+    const L=linkRows(rows[r+1].length, rows[r].length);
+    for(let i=0;i<rows[r].length;i++) rows[r][i].next=L.nextOf[i].slice().sort(function(a,b){ return a-b; });
+    for(let j=0;j<rows[r+1].length;j++) rows[r+1][j].prev=L.prevOf[j].slice().sort(function(a,b){ return a-b; });
+  }
+  rows[MAP_ROWS-1][0].next=[];
+  return rows;
+}
+let ACTS = [genAct(1,101), genAct(2,202), genAct(3,303)];   // 加载即有一张合法地图；ACTS.length **必须恒为 3**（40_flow 用它判通关）
 const ACT_NAMES = ['第一幕 · 乱葬岗', '第二幕 · 黄泉路', '第三幕 · 幽冥塔', '镇妖塔 · 无尽'];
 let MAP = ACTS[0];
+/* 开新局 / 续档 都走它：一个种子 → 三幕地图，MAP 同步指向当前幕 */
+function buildActs(seed){
+  const sd=(seed>>>0)||1;
+  ACTS=[genAct(1,deriveSeed(sd,1)), genAct(2,deriveSeed(sd,2)), genAct(3,deriveSeed(sd,3))];
+  MAP=ACTS[((G&&G.act)||1)-1] || ACTS[0];
+  return ACTS;
+}
 
 /* ===================== 镇妖塔 · 无尽模式 ===================== */
 const ENDLESS_MINIONS = ['youhun','zhizharen','huyao','jiangshi','shanxiao','shuigui','mengpo','niutou','mamian','wangchuan','panguan','xiuluo','luosha','mingwei','yanluo'];
@@ -1082,12 +1180,13 @@ function randEndlessFight(){
   return shuffle(ENDLESS_MINIONS.slice()).slice(0,n);
 }
 function genEndlessMap(){
-  // 复用 ACT1 节点骨架（保证节奏 + 可达性），敌人随机化，难度靠 endlessFloor 成长
-  return ACT1.map(row=>row.map(node=>{
-    if(!node) return null;
-    if(node.t==='fight') return {t:'fight', e:randEndlessFight()};
-    return {...node};
-  }));
+  // v0.61.40：每 lap 都是**新结构**（不再复用 ACT1 骨架）。种子由 mapSeed+层数派生 → 同一层可复现，
+  // 不至于每次进无尽都是同一张图。敌人仍走无尽专用池，难度靠 endlessFloor 成长。
+  const sd=deriveSeed((G&&G.mapSeed)||1, 97+((G&&G.endlessFloor)||0));
+  return genAct(1, sd, {
+    minions: ENDLESS_MINIONS, elites: ENDLESS_ELITES, bosses: ENDLESS_BOSSES,
+    quota: {camp:2, shop:2, elite:3, unknown:4}
+  });
 }
 
 /* ===================== 金卡补偿值系统 ===================== */

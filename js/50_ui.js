@@ -7,17 +7,58 @@
  * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
  * ============================================================================ */
 /* ===================== 爬塔地图 ===================== */
-function nodeLabel(node){
-  if(node.t==='camp') return '篝火';
-  if(node.t==='shop') return '商店';
-  if(node.t==='unknown') return '⚠ 未知';
-  if(node.t==='boss') return '👹 Boss';
-  const boss=node.e.some(k=>ENEMIES[k].boss);
-  const elite=node.e.some(k=>ENEMIES[k].elite);
-  if(boss) return '👹 Boss';
-  if(elite) return '☠ 精英';
-  return node.e.length>1 ? `⚔ 战斗×${node.e.length}` : '⚔ 战斗';
+/* ===================== 爬塔地图（v0.61.40：随机树状图 + 逐层迷雾） ===================== */
+/* 节点文案走表，**去掉了敌人数量与敌人名**（遭遇细节藏起来，路线决策只保留节点类型）。
+   NODE_ICON 是**留空槽** —— 用户给图后只填这一张表，渲染逻辑一个字都不用动。 */
+const NODE_LABEL = { fight:'⚔ 战斗', elite:'☠ 精英', unknown:'⚠ 未知', camp:'篝火', shop:'商店', boss:'👹 Boss' };
+const NODE_ICON  = { fight:'', elite:'', unknown:'', camp:'', shop:'', boss:'' };
+const NODE_TIP   = { fight:'普通战斗', elite:'精英战：更强的敌人，更好的奖励', unknown:'未知事件', camp:'篝火：休整或锻造', shop:'鬼市：买卖与删牌', boss:'守关 Boss' };
+const MAP_BG = { 1:'act1', 2:'act2', 3:'act3', endless:'act3' };   // ⚠ endless 必须显式给，否则 act4 会 404 丢背景图
+function mapBgName(){ return G.endless ? MAP_BG.endless : (MAP_BG[G.act]||'act1'); }
+function nodeLabel(node){ return node ? (NODE_LABEL[node.t] || NODE_LABEL.fight) : ''; }
+function nodeHTML(node){
+  const icon = NODE_ICON[node.t] || '';
+  return '<span class="node-ico">' + icon + '</span><span class="node-label">' + nodeLabel(node) + '</span>';
 }
+/* —— 地图查询：迷雾渲染与连线的唯一真相 —— */
+function mapNodeAt(r,c){
+  if(r<0 || r>=MAP.length || !MAP[r] || c<0 || c>=MAP[r].length) return null;
+  return MAP[r][c] || null;
+}
+function mapVisited(r,c){ return (G.mapPath||[]).some(function(p){ return p.r===r && p.c===c; }); }
+/* 当前层这一格能不能走：
+   · 开局/换幕/旧档降级（mapCol<0）→ 整层可选
+   · 上一层那格找不到（列越界等）→ 放宽为整层可选（防软锁）
+   · 否则必须由上一层的 next 显式连过来 */
+function mapReachable(r,c){
+  const node=mapNodeAt(r,c);
+  if(!node) return false;
+  if(r!==G.mapRow) return false;
+  if(r===0 || G.mapCol<0) return true;
+  const up=mapNodeAt(r-1, G.mapCol);
+  if(!up) return true;
+  return (up.next||[]).indexOf(c)>=0;
+}
+/* 下一步会解锁哪几格 = 当前所有可走节点 next 的并集 */
+function mapPreviewSet(){
+  const out=[];
+  const r=G.mapRow, nr=r+1;
+  if(nr>=MAP.length) return out;
+  const cur=MAP[r]||[];
+  for(let c=0;c<cur.length;c++){
+    if(!mapReachable(r,c)) continue;
+    (cur[c].next||[]).forEach(function(j){ if(out.indexOf(j)<0 && mapNodeAt(nr,j)) out.push(j); });
+  }
+  return out;
+}
+/* 四档：past（走过的）/ choice（现在能走）/ preview（下一步会亮）/ hidden（其余，占位不显示） */
+function fogTier(r,c){
+  if(r<G.mapRow) return mapVisited(r,c) ? 'past' : 'hidden';
+  if(r===G.mapRow) return mapReachable(r,c) ? 'choice' : 'hidden';
+  if(r===G.mapRow+1) return (mapPreviewSet().indexOf(c)>=0) ? 'preview' : 'hidden';
+  return 'hidden';
+}
+function fogVisible(r,c){ return fogTier(r,c)!=='hidden'; }
 function runStatusHTML(){
   const relicNames = G.relics.length ? G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('') : '无';
   return `<div class="run-status">
@@ -29,23 +70,22 @@ function runStatusHTML(){
 }
 function showMap(){
   SCENE='map'; saveRun();
-  setBg(G.endless?'act3':'act'+G.act); setBGM('map');
-  let html=`<h2>${ACT_NAMES[G.act-1]}</h2>${runStatusHTML()}<p style="font-size:13px">第 ${G.mapRow+1}/${MAP.length} 层 · 只能走进相邻列的节点，规划好路线。</p>`;
+  setBg(mapBgName()); setBGM('map');
+  let html=`<h2>${ACT_NAMES[G.act-1]}</h2>${runStatusHTML()}<p style="font-size:13px">第 ${G.mapRow+1}/${MAP.length} 层 · 沿连线向上，规划好路线。</p>`;
   // v0.61.20(P2)：路径连线画在这层 svg 里（绝对定位铺满 .map-wrap，行本身仍是普通按钮）
   html+=`<div class="map-wrap"><svg class="map-lines" id="map-lines" aria-hidden="true"></svg>`;
   for(let r=MAP.length-1;r>=0;r--){
-    const cls = r<G.mapRow ? 'past' : r===G.mapRow ? 'current' : 'future';
-    html+=`<div class="map-row ${cls}">`;
+    const rowCls = r<G.mapRow ? 'past' : r===G.mapRow ? 'current' : 'future';
+    html+=`<div class="map-row ${rowCls}">`;
     for(let c=0;c<MAP[r].length;c++){
-      const node=MAP[r][c];
-      if(!node){ html+=`<div class="map-node empty">&nbsp;</div>`; continue; }
-      const label=nodeLabel(node);
-      if(r===G.mapRow){
-        const reachable = G.mapRow===0 || Math.abs(c-G.mapCol)<=1;
-        html += reachable ? `<button class="map-node" onclick="chooseNode(${c})">${label}</button>` : `<div class="map-node blocked">${label}</div>`;
-      } else {
-        html+=`<div class="map-node">${label}</div>`;
-      }
+      const node=MAP[r][c], tier=fogTier(r,c), dc=`data-r="${r}" data-c="${c}"`;
+      // v0.61.40：不可见的格子**仍然占位**（.empty 是 visibility:hidden，仍有尺寸）
+      // → 地图总高度恒定，解锁进度变化时坐标不抖动
+      if(tier==='hidden'){ html+=`<div class="map-node empty" ${dc}>&nbsp;</div>`; continue; }
+      const tip=NODE_TIP[node.t]||'';
+      if(tier==='choice'){ html+=`<button class="map-node" ${dc} title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
+      if(tier==='preview'){ html+=`<div class="map-node preview" ${dc} title="未知的前路">?</div>`; continue; }
+      html+=`<div class="map-node" ${dc} title="${tip}">${nodeHTML(node)}</div>`;
     }
     html+=`</div>`;
   }
@@ -55,10 +95,11 @@ function showMap(){
   // 行布局完成后才有坐标可量，所以推到下一帧再画
   try{ requestAnimationFrame(drawMapLinks); }catch(e){ drawMapLinks(); }
 }
-/* v0.61.20(P2)：地图路径连线。
-   三种线：暗线 = 所有合法连边（|列差|≤1，看得见「地图是张网」）；
-           金虚线 = 现在这一步能走到的；金实线 = 已经走过的。
-   锚点用 (mapRow-1, mapCol) 而不是只看 mapPath —— 这样**没有 mapPath 的老存档**也画得出「可达」。 */
+/* v0.61.20(P2) / v0.61.40：地图路径连线。
+   三种线：暗线 = 当前可走节点 → 它连到的**下一层可见**格；
+           金虚线 = 现在这一步能走到的； 金实线 = 已经走过的。
+   v0.61.40 起连边来自节点自带的 next（显式拓扑），不再用「列差≤1」猜；
+   且**两端都必须可见** —— 否则一条暗线就出卖了未解锁层的拓扑。 */
 let _mapLinkBound=false;
 function drawMapLinks(){
   const svg=document.getElementById('map-lines');
@@ -71,10 +112,12 @@ function drawMapLinks(){
   svg.setAttribute('width',wb.width); svg.setAttribute('height',wb.height);
   while(svg.firstChild) svg.removeChild(svg.firstChild);
   // DOM 顺序自上而下 = 层号自高而低，所以第 k 行是 MAP[MAP.length-1-k]
+  // v0.61.40：行宽可变 + 隐藏格占位 → 不能再用 cells[c] 按**位置**取，改用 data-r/data-c 属性查询
   function nodeAt(r,c){
     const row=rows[MAP.length-1-r]; if(!row) return null;
-    const cells=row.querySelectorAll('.map-node');
-    const el=cells[c]; if(!el || (el.classList && el.classList.contains('empty'))) return null;
+    const el=row.querySelector('.map-node[data-r="'+r+'"][data-c="'+c+'"]');
+    // .empty 是 visibility:hidden —— **仍有尺寸**，必须显式排除，否则连线会画到看不见的格子上
+    if(!el || (el.classList && el.classList.contains('empty'))) return null;
     const b=el.getBoundingClientRect();
     if(!b.width && !b.height) return null;
     return { x:b.left-wb.left+b.width/2, y:b.top-wb.top+b.height/2 };
@@ -87,21 +130,25 @@ function drawMapLinks(){
     p.setAttribute('class',cls);
     svg.appendChild(p);
   }
-  for(let r=0;r<MAP.length-1;r++){
-    for(let c=0;c<MAP[r].length;c++){
-      if(!MAP[r][c]) continue;
-      for(let c2=0;c2<MAP[r+1].length;c2++){
-        if(!MAP[r+1][c2] || Math.abs(c2-c)>1) continue;
-        seg(nodeAt(r,c), nodeAt(r+1,c2), 'link-dim');
-      }
+  // ① 暗线：当前可走的每一格 → 它连到的下一层可见格
+  const __cur=MAP[G.mapRow]||[];
+  for(let c=0;c<__cur.length;c++){
+    if(!mapReachable(G.mapRow,c)) continue;
+    const nx=(__cur[c] && __cur[c].next)||[];
+    for(let k=0;k<nx.length;k++){
+      const j=nx[k];
+      if(!fogVisible(G.mapRow+1,j)) continue;
+      seg(nodeAt(G.mapRow,c), nodeAt(G.mapRow+1,j), 'link-dim');
     }
   }
+  // ② 金色实线：已经走过的路径
   const path=G.mapPath||[];
   for(let i=0;i<path.length-1;i++) seg(nodeAt(path[i].r,path[i].c), nodeAt(path[i+1].r,path[i+1].c), 'link-past');
-  if(G.mapRow>0){
+  // ③ 金色虚线：上一步站的那格 → 现在能走的每一格
+  if(G.mapRow>0 && G.mapCol>=0){
     const a=nodeAt(G.mapRow-1, G.mapCol);
-    for(let c=0;c<MAP[G.mapRow].length;c++){
-      if(!MAP[G.mapRow][c] || Math.abs(c-G.mapCol)>1) continue;
+    for(let c=0;c<__cur.length;c++){
+      if(!mapReachable(G.mapRow,c)) continue;
       seg(a, nodeAt(G.mapRow,c), 'link-reach');
     }
   }
@@ -111,22 +158,25 @@ function drawMapLinks(){
   }
 }
 function chooseNode(c){
+  // v0.61.40：旧代码靠「只把可达节点渲染成 button」隐式限制，这里补显式二次校验（同时兜住 c 越界）
+  if(!mapReachable(G.mapRow,c)){ sfx('error'); floatMsg('这条连线走不通'); return; }
   sfx('ui_map');   // v0.61.25：地图选点音
   const node=MAP[G.mapRow][c];
   (G.mapPath=G.mapPath||[]).push({r:G.mapRow, c:c}); // v0.61.20(P2)：记下这一步，地图连线据此画「已走」
   G.mapCol=c;
   hideOverlay();
-  if(node.t==='fight') startBattle(node.e);
+  if(node.t==='fight'||node.t==='elite') startBattle(node.e);   // v0.61.40：精英升为独立节点类型，e 与普通战同构
   else if(node.t==='camp') showCampfire();
   else if(node.t==='shop') showShop();
   else if(node.t==='unknown') showUnknown();
   else if(node.t==='boss'){
-    if(G.endless){ startBattle([ENDLESS_BOSSES[Math.floor(rng()*ENDLESS_BOSSES.length)]]); }
+    // v0.61.40：Boss 在**生成期**就定死在 node.e（同一存档续档后不再变）；下面两行只是兜底
+    if(node.e && node.e.length) startBattle(node.e);
+    else if(G.endless) startBattle([ENDLESS_BOSSES[Math.floor(rng()*ENDLESS_BOSSES.length)]]);
     else { const pool=BOSS_POOL[G.act]||['yewang']; startBattle([pool[Math.floor(rng()*pool.length)]]); }
   }
 }
-const ELITES_BY_ACT = { 1:['baiwuchang','heiwuchang','huapigui','yecha'], 2:['juhunshi','niumamian'], 3:['xiuluojiang','yecha'] };
-const BOSS_POOL = { 1:['jiangwang','hanba','xueshi'], 2:['xiebian','panguanwang','mengpowang'], 3:['yewang','xiuluowang','yanluotianzi'] };
+
 function showUnknown(){
   const pool=['well','blackmarket','temple','ambush','forge','empty','potion','remove'];
   const evs=shuffle(pool).slice(0,3);
