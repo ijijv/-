@@ -375,7 +375,10 @@ const CARDS = [
       :G.hero==='wuseng'?`接下来 ${u?4:3} 回合，每回合开始获得 2 点格挡和 1 点符文`
       :G.hero==='yincha'?`接下来 ${u?4:3} 回合，每回合开始失去 2 点生命，获得 1 点符文`
       :`接下来 ${u?4:3} 回合，每回合开始对随机敌人施加 1 层【诅咒】和 1 点符文`,
-    eff:(u)=>{ G.xisuiTurns=3; G.xisuiShiqi=u?2:1; floatMsg('洗髓经：接下来 3 回合生效'); }},   // v0.61.37 A 列：持续固定 3 回合，升级改为尸气 1 → 2
+    // v0.61.41：B/C/D 三列卡面写的是「3/4 回合」，eff 却对所有列硬写 3 ⇒ 升级了仍只有 3 回合（卡面骗人）。
+    // A（赶尸人）列是 v0.61.37 明确定的「固定 3 回合」，保持不动；xisuiShiqi 同理只在 A 列有意义。
+    eff:(u)=>{ const n=(G.hero==='ganshiren')?3:(u?4:3); G.xisuiTurns=n; G.xisuiShiqi=u?2:1;
+      floatMsg(`洗髓经：接下来 ${n} 回合生效`); }},   // v0.61.37 A 列：持续固定 3 回合，升级改为尸气 1 → 2
   {id:'duhunguiji', name:'渡魂归己', type:'skill', rarity:'gold', cost:1, exhaust:true,
     t:(u)=>`消耗。接下来 5 回合，你对敌人造成伤害的 ${u?50:30}% 转化为生命`,
     eff:(u)=>{ G.duhun={turns:5, ratio:u?0.5:0.3}; floatMsg('渡魂归己 · 吸血化命'); log(`渡魂归己：接下来 5 回合，造成伤害的 ${Math.round(G.duhun.ratio*100)}% 转化为生命`); }},
@@ -1066,7 +1069,19 @@ function actMinionPool(act){
   if(act===3) return ACT1_MINIONS.map(function(k){ return ACT3_SWAP[k]||k; });
   return ACT1_MINIONS.slice();
 }
-function pickFightFrom(pool, R){ return mkShuffle(R)(pool.slice()).slice(0, R()<0.65?3:2); }
+/* v0.61.41：敌人数量随「层」走（用户要求）——
+   每一幕**前 4 层**最多 2 只（开局不该被 3 只围殴，也留出教学空间）；
+   第 9 层起「3 只」的概率从老的 0.65 抬到 0.85（后期加压）；中间层维持老口径。
+   下标 = MAP 的层号 r（0 起算）；越界一律回落 0.65。 */
+const ENEMY3_P3 = [0, 0, 0, 0, 0.55, 0.6, 0.6, 0.65, 0.65, 0.85, 0.85, 0.85, 0.85, 0.85];
+function enemy3Chance(r){
+  if(typeof r!=='number' || r<0 || r>=ENEMY3_P3.length) return 0.65;
+  return ENEMY3_P3[r];
+}
+function pickFightFrom(pool, R, row){
+  const p3=enemy3Chance(row);
+  return mkShuffle(R)(pool.slice()).slice(0, R()<p3?3:2);
+}
 
 /* —— 分带（band partition）：把 total 个下标切成 parts 段**连续非空**区间 —— */
 function bandBounds(total, parts){
@@ -1130,7 +1145,7 @@ function assignTypes(act, R, rows, minionPool, elitePool, bossPool, quotaOverrid
     if(node.t==='elite'){ node.e=pickElite(); continue; }
     if(node.t!=='fight') continue;
     if(r>0 && R()<0.06){ node.t='elite'; node.e=pickElite(); }   // 少量野生精英，保持稀有
-    else node.e=pickFightFrom(minionPool, R);
+    else node.e=pickFightFrom(minionPool, R, r);   // v0.61.41：把层号传进去 —— 前几层最多 2 只、后期 3 只概率抬高
   }
   return q;
 }

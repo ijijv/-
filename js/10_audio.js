@@ -323,9 +323,13 @@ function artImg(src, fallback, cls){
 }
 function cardArt(c){ return `<div class="cart-wrap">${artImg('card/'+c.id+'.png', '', 'cart')}</div>`; }
 function relicIcon(r){ return artImg('relic/'+r.id+'.png', '', 'ricon'); }
+/* v0.61.41：name 带扩展名（如 'map.jpg'）时只补 bg_ 前缀、**不再补 .png**，否则沿用 bg_<name>.png ——
+   用户给的地图背景是 .jpg，不想为了一个后缀去转码重压（转成 PNG 只会更大）。
+   路径拼法单独抽成 bgRel 是为了能被冒烟直接对拍（setBg 本体要真 DOM，沙箱里量不到）。 */
+function bgRel(name){ return (/\.[A-Za-z0-9]+$/.test(name)) ? ('bg/bg_'+name) : ('bg/bg_'+name+'.png'); }
 function setBg(name){
   var el=document.getElementById('bg'); if(!el) return;
-  var path=assetURL('bg/bg_'+name+'.png');
+  var path=assetURL(bgRel(name));
   el.onload=function(){ document.body.classList.add('has-bg'); };
   el.onerror=function(){ el.style.display='none'; document.body.classList.remove('has-bg'); };
   el.src=path;

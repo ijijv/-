@@ -131,7 +131,10 @@ function showDragPreview(idx){
   else {
     const aoe=AOE_CARDS.includes(c.id)?' 全体':'';   // v0.61.33：与 needsTarget 的全体名单同一处真相
     const per=pv.perTurn?' 每回合':'';
-    el.textContent='-'+pv.d+aoe+per;
+    /* v0.61.41：预伤害的数字也走素材字形 —— numHTML 与伤害飘字共用一套（档位取 dmg）。
+       素材没装/文本不是纯数字时返回 null ⇒ 原样回落文字，与改动前的表现完全一致。 */
+    const glyph=numHTML('', '-'+pv.d);
+    if(glyph) el.innerHTML=glyph+aoe+per; else el.textContent='-'+pv.d+aoe+per;
     el.className = pv.weak ? 'weak' : '';
   }
   const r=eel.getBoundingClientRect();
@@ -384,7 +387,7 @@ function skipOpening(){
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.61.40</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.61.41</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -426,8 +429,10 @@ function showSettings(){
     <input type="range" min="0" max="100" step="1" value="${mv}" oninput="setMusicVol(this.value)" style="width:100%">
     <p>音效音量：<b id="sfxVolLbl" style="color:var(--green)">${sv}%</b></p>
     <input type="range" min="0" max="100" step="1" value="${sv}" oninput="setSfxVol(this.value)" onchange="sfx('relic')" style="width:100%">
-    <p style="margin-top:16px">流畅模式（低配机）：<b style="color:${SETTINGS.lowSpec?'var(--green)':'var(--red)'}">${SETTINGS.lowSpec?'开':'关'}</b></p>
+    <p style="margin-top:16px">流畅模式（低配机）：<b style="color:${SETTINGS.lowSpec?'var(--green)':'var(--red)'}">${SETTINGS.lowSpec?'开':'关'}</b><br><small style="color:var(--dim);font-size:12px">开启后会关掉震屏 / 抖动 / <b>伤害飘字</b></small></p>
     <button class="btn ghost" onclick="toggleLowSpec()">${SETTINGS.lowSpec?'关闭流畅模式':'开启流畅模式'}</button>
+    <p style="margin-top:16px">伤害飘字：<b style="color:${fx()?'var(--green)':'var(--red)'}">${fx()?'开':'关（流畅模式）'}</b> <span id="numStateLbl" style="font-size:12px;color:var(--dim)"></span></p>
+    <button class="btn ghost" onclick="numSelfTest()">浮字自检（四档各放一次）</button>
     <p style="margin-top:16px">结束回合软提示：<b style="color:${SETTINGS.endTurnHint!==false?'var(--green)':'var(--red)'}">${SETTINGS.endTurnHint!==false?'开':'关'}</b></p>
     <button class="btn ghost" onclick="toggleEndTurnHint()">${SETTINGS.endTurnHint!==false?'关闭软提示':'开启软提示'}</button>
     <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
@@ -450,6 +455,21 @@ function toggleSound(){
 }
 function toggleLowSpec(){
   SETTINGS.lowSpec=!SETTINGS.lowSpec; persistSettings(); applyLowSpec(); showSettings();
+}
+/* v0.61.41：浮字自检 —— 四档各放一次，并把 NUM_STATE 摊开显示。
+   存在的理由：飘字到底是在走素材（图片）还是回落文字、以及**是不是被「流畅模式」整段关掉了**，
+   光靠肉眼在快节奏战斗里分不清（流畅模式只影响两处 CSS 动画，很不容易被察觉）。 */
+function numSelfTest(){
+  numPrewarm();
+  [['', '伤害'], ['to-player', '受伤'], ['block', '格挡'], ['heal', '治疗']].forEach(function(kv,i){
+    setTimeout(function(){ floatDamage('-12', kv[0], null, {}); }, i*260);
+  });
+  const st=['dmg','hurt','block','heal'].map(function(k){
+    const v=NUM_STATE[k];
+    return k+'='+(v===1?'图片':v===-1?'回落文字':'未探测');
+  }).join('　');
+  const lbl=document.getElementById('numStateLbl'); if(lbl) lbl.textContent=st;
+  floatMsg((fx() ? '飘字：开　' : '飘字被「流畅模式」整段关掉了　') + st);
 }
 function toggleEndTurnHint(){ // v0.61.20(P1)
   SETTINGS.endTurnHint = (SETTINGS.endTurnHint===false); persistSettings(); renderEndTurnHint(); showSettings();
@@ -526,6 +546,7 @@ document.addEventListener('keydown', function(e){
 loadSave();
 loadSettings();
 applyLowSpec();
+numPrewarm();   // v0.61.41：四档字形开局就预加载 —— 否则本局第一次飘字必然回落文字
 applyCosmetics();
 trackLaunch();
 document.addEventListener('DOMContentLoaded', showStartScreen);

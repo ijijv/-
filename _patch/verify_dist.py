@@ -33,7 +33,16 @@ def dump_ids():
     # 注意：smoke_host 会对求值结果自己做 JSON.stringify，所以这里给对象表达式即可
     js = ("({cards:CARDS.map(c=>c.id),heroes:HEROES.map(h=>h.id),"
           "relics:RELICS.map(r=>r.id),enemies:Object.keys(ENEMIES),"
-          "bg:['menu'].concat(ACTS.map((a,i)=>'act'+(i+1))),"
+          # v0.61.41：背景路径**在游戏作用域里算**（bgRel），python 侧不镜像这条规则 ——
+          # 镜像会漂（本批第一版就是这样把 bg_map.jpg 算成了 bg/map.jpg，靠 [1] 才抓出来）
+          "bg:['menu'].concat(ACTS.map((a,i)=>'act'+(i+1)))"
+          ".concat(Object.keys(MAP_BG).map(k=>MAP_BG[k])).map(bgRel),"
+          # v0.61.41：把 bgRel 的两条规则各钉一个样本，规则被改坏时这里立刻红
+          "bgRule:['menu','map.jpg','map.jpeg'].map(bgRel),"
+          # v0.61.41：地图素材清单从游戏作用域取（6 种节点 + 未解锁 + 左右两条路），
+          # 改名/漏填会让 [1] 立刻红，而不是等玩到地图页才发现图标 404
+          "mapIcons:Object.keys(NODE_ICON).map(k=>MAP_ICON_DIR+NODE_ICON[k])"
+          ".concat([MAP_ICON_DIR+NODE_ICON_LOCKED,MAP_ROAD_ICON.left,MAP_ROAD_ICON.right]),"
           # 必须命中：缺任何一个都是 bug
           "music:['menu','map','battle'],"
           # v0.61.31 起代码支持这三条升级轨，但**缺文件时会退回基础轨**（Boss/精英→battle、商店→map），
@@ -72,17 +81,28 @@ def main():
     want += [('hero/%s.png' % i) for i in ids['heroes']]
     want += [('relic/%s.png' % i) for i in ids['relics']]
     want += [('enemy/%s.png' % i) for i in ids['enemies']]
-    want += [('bg/bg_%s.png' % i) for i in ids['bg']]
+    # BGM 不能只认 .mp3 —— BGM_EXTS 的顺序是 ogg 优先，交付格式变了不该假红（v0.61.34）
+    # v0.61.41：这份源码提前到 bg 之前读，因为背景路径规则（bgRel）也在里面
+    _audio = io.open(os.path.join(ROOT, 'js', '10_audio.js'), 'r', encoding='utf-8').read()
+    # v0.61.41：背景路径**全部由游戏作用域的 bgRel 算好**（见 dump_ids），python 侧不做镜像 ——
+    # 本批第一版就是镜像漂了：python 认「带扩展名走原名」⇒ bg/map.jpg，而磁盘上是 素材/bg/bg_map.jpg
+    check(ids.get('bgRule') == ['bg/bg_menu.png', 'bg/bg_map.jpg', 'bg/bg_map.jpeg'],
+          'bgRel 两条规则：带扩展名只补 bg_ 前缀 / 不带补 bg_<name>.png（%s）'
+          % ','.join(ids.get('bgRule') or []))
+    want += ids['bg']
+    # v0.61.41：地图图标（6 种节点 + 未解锁 + 左右两条路）—— 清单来自游戏作用域，改名/漏填会被抓
+    check(len(ids['mapIcons']) == 9 and len(set(ids['mapIcons'])) == 9,
+          '地图图标清单 9 条且互不重复（%s）' % ','.join(ids['mapIcons']))
+    want += ids['mapIcons']
     # v0.61.36：运行时废牌「怨气」的卡图（旧版漏掉 → 真在用的图被误报为 unused）
     want += [('card/%s.png' % i) for i in ids['junk']]
-    # BGM 不能只认 .mp3 —— BGM_EXTS 的顺序是 ogg 优先，交付格式变了不该假红（v0.61.34）
-    _audio = io.open(os.path.join(ROOT, 'js', '10_audio.js'), 'r', encoding='utf-8').read()
     _mb = re.search(r'const BGM_EXTS\s*=\s*\[([^\]]*)\]', _audio)
     bgm_exts = re.findall(r"'([^']+)'", _mb.group(1)) if _mb else []
     check(bool(bgm_exts), '从 10_audio.js 解析到 BGM_EXTS（%s）' % ','.join(bgm_exts))
     miss_music = ['music/bgm_%s{%s}' % (i, ','.join(bgm_exts)) for i in ids['music']
                   if not any(('music/bgm_%s%s' % (i, e)) in keys for e in bgm_exts)]
     want += ['rune.png']
+    want = list(dict.fromkeys(want))   # MAP_BG 四档同名 map.jpg，去重后再报数
     miss = [w for w in want if w not in keys]
     check(not miss, '游戏请求的 %d 个素材全部命中' % len(want))
     for w in miss[:20]:
@@ -91,8 +111,10 @@ def main():
     for w in miss_music:
         print('       缺: %s' % w)
 
-    # ---- 1d. 数字图（素材/num）四档交付单：目录名从代码取，只用于 unused 排重 ----
-    print('\n[1d] 数字图 素材/num 四档（交付即生效，不算「必须命中」）')
+    # ---- 1d. 数字图（素材/num）四档交付单：目录名从代码取 ----
+    # v0.61.41：四档（dmg/hurt/block/heal）已全部交付，且伤害飘字与拖拽预伤害共用这套字形。
+    # 缺一张不会崩（numGlyphSrc 返 null → 回落文字），但玩家看到的就是「浮字时有时无」，所以这里升级成硬闸。
+    print('\n[1d] 数字图 素材/num 四档')
     _base = io.open(os.path.join(ROOT, 'js', '00_base.js'), 'r', encoding='utf-8').read()
     _mn = re.search(r'const NUM_KIND_DIR\s*=\s*\{([^}]*)\}', _base)
     num_dirs = sorted(set(re.findall(r":\s*'([^']+)'", _mn.group(1)))) if _mn else []
@@ -101,7 +123,10 @@ def main():
     num_want = ['num/%s/%d.png' % (d, i) for d in num_dirs for i in range(10)]
     got = [n for n in num_want if n in keys]
     check(len(num_want) == 40, '四档 × 10 = 40 条数字图路径（%d）' % len(num_want))
-    print('       交付进度: %d / 40 张已打进产物' % len(got))
+    check(len(got) == len(num_want), '四档数字图 40 张全部打进产物（%d / %d）' % (len(got), len(num_want)))
+    for n in num_want:
+        if n not in keys:
+            print('       缺: %s —— 该档整档回落成文字飘字' % n)
 
     # ---- 1b. 音效扩展名：两个真相源必须一致（bug B 漂移闸） ----
     print('\n[1b] 音效扩展名真相源一致')

@@ -9,16 +9,27 @@
 /* ===================== 爬塔地图 ===================== */
 /* ===================== 爬塔地图（v0.61.40：随机树状图 + 逐层迷雾） ===================== */
 /* 节点文案走表，**去掉了敌人数量与敌人名**（遭遇细节藏起来，路线决策只保留节点类型）。
-   NODE_ICON 是**留空槽** —— 用户给图后只填这一张表，渲染逻辑一个字都不用动。 */
-const NODE_LABEL = { fight:'⚔ 战斗', elite:'☠ 精英', unknown:'⚠ 未知', camp:'篝火', shop:'商店', boss:'👹 Boss' };
-const NODE_ICON  = { fight:'', elite:'', unknown:'', camp:'', shop:'', boss:'' };
+   v0.61.41：图标由「留空槽」改成**文件名表**（素材/ 下的相对路径，见 NODE_ICON / MAP_ICON_DIR）。
+   换图只改这三张表（NODE_ICON / NODE_ICON_LOCKED / MAP_ROAD_ICON），渲染逻辑一个字都不用动。
+   ⚠ 图标一律走 assetURL（= artImg/assetURL），**不能**在 HTML 里写死 素材/... —— 那样
+     打包.py 的 ASSET_MAP 内联不会生效，单文件产物里会变成丢图。 */
+const NODE_LABEL = { fight:'战斗', elite:'精英', unknown:'未知', camp:'篝火', shop:'商店', boss:'Boss' };
+const MAP_ICON_DIR = 'map/';
+const NODE_ICON  = { fight:'combat.png', elite:'ellite.png', unknown:'unknown.png', camp:'rest.png', shop:'shop.png', boss:'boss.png' };
+/* 没解锁的关卡：一律挂锁，**不泄露它的类型**（用户给的 locked.png） */
+const NODE_ICON_LOCKED = 'locked.png';
+/* 道路贴图：两张图各是一条 45° 斜路，走左用 path-left、走右用 path-right */
+const MAP_ROAD_ICON = { left:'map/path-left.png', right:'map/path-right.png' };
 const NODE_TIP   = { fight:'普通战斗', elite:'精英战：更强的敌人，更好的奖励', unknown:'未知事件', camp:'篝火：休整或锻造', shop:'鬼市：买卖与删牌', boss:'守关 Boss' };
-const MAP_BG = { 1:'act1', 2:'act2', 3:'act3', endless:'act3' };   // ⚠ endless 必须显式给，否则 act4 会 404 丢背景图
-function mapBgName(){ return G.endless ? MAP_BG.endless : (MAP_BG[G.act]||'act1'); }
+/* ⚠ endless 必须显式给，否则 act4 会 404 丢背景图。
+   v0.61.41：地图背景改用用户给的 素材/bg/bg_map.jpg（setBg 已支持带扩展名的名字），
+   全部幕共用这一张；战斗场景仍走 act1/act2/act3，两者互不影响。 */
+const MAP_BG = { 1:'map.jpg', 2:'map.jpg', 3:'map.jpg', endless:'map.jpg' };
+function mapBgName(){ return G.endless ? MAP_BG.endless : (MAP_BG[G.act]||MAP_BG[1]); }
 function nodeLabel(node){ return node ? (NODE_LABEL[node.t] || NODE_LABEL.fight) : ''; }
+function nodeIconHTML(file){ return artImg(MAP_ICON_DIR + file, '', 'node-ico'); }
 function nodeHTML(node){
-  const icon = NODE_ICON[node.t] || '';
-  return '<span class="node-ico">' + icon + '</span><span class="node-label">' + nodeLabel(node) + '</span>';
+  return nodeIconHTML(NODE_ICON[node.t] || NODE_ICON.fight) + '<span class="node-label">' + nodeLabel(node) + '</span>';
 }
 /* —— 地图查询：迷雾渲染与连线的唯一真相 —— */
 function mapNodeAt(r,c){
@@ -73,18 +84,19 @@ function showMap(){
   setBg(mapBgName()); setBGM('map');
   let html=`<h2>${ACT_NAMES[G.act-1]}</h2>${runStatusHTML()}<p style="font-size:13px">第 ${G.mapRow+1}/${MAP.length} 层 · 沿连线向上，规划好路线。</p>`;
   // v0.61.20(P2)：路径连线画在这层 svg 里（绝对定位铺满 .map-wrap，行本身仍是普通按钮）
-  html+=`<div class="map-wrap"><svg class="map-lines" id="map-lines" aria-hidden="true"></svg>`;
+  html+=`<div class="map-wrap"><div class="map-lines" id="map-lines" aria-hidden="true"></div>`;
   for(let r=MAP.length-1;r>=0;r--){
     const rowCls = r<G.mapRow ? 'past' : r===G.mapRow ? 'current' : 'future';
     html+=`<div class="map-row ${rowCls}">`;
     for(let c=0;c<MAP[r].length;c++){
       const node=MAP[r][c], tier=fogTier(r,c), dc=`data-r="${r}" data-c="${c}"`;
-      // v0.61.40：不可见的格子**仍然占位**（.empty 是 visibility:hidden，仍有尺寸）
-      // → 地图总高度恒定，解锁进度变化时坐标不抖动
-      if(tier==='hidden'){ html+=`<div class="map-node empty" ${dc}>&nbsp;</div>`; continue; }
+      // v0.61.41：未解锁的格子不再留白，改挂 NODE_ICON_LOCKED（用户给的 locked.png）——
+      // 每格都有内容 ⇒ 行高与坐标仍然恒定，解锁进度变化时不抖动；
+      // preview（下一步会亮）与 hidden（更远/同层走不到）都挂锁，只有 past/choice 才露出真实图标。
+      if(tier==='hidden'){ html+=`<div class="map-node locked" ${dc} title="尚未解锁">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
       const tip=NODE_TIP[node.t]||'';
       if(tier==='choice'){ html+=`<button class="map-node" ${dc} title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
-      if(tier==='preview'){ html+=`<div class="map-node preview" ${dc} title="未知的前路">?</div>`; continue; }
+      if(tier==='preview'){ html+=`<div class="map-node preview" ${dc} title="下一步可以走到这里（尚未解锁）">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
       html+=`<div class="map-node" ${dc} title="${tip}">${nodeHTML(node)}</div>`;
     }
     html+=`</div>`;
@@ -95,40 +107,52 @@ function showMap(){
   // 行布局完成后才有坐标可量，所以推到下一帧再画
   try{ requestAnimationFrame(drawMapLinks); }catch(e){ drawMapLinks(); }
 }
-/* v0.61.20(P2) / v0.61.40：地图路径连线。
+/* v0.61.20(P2) / v0.61.40 / v0.61.41：地图路径连线。
    三种线：暗线 = 当前可走节点 → 它连到的**下一层可见**格；
            金虚线 = 现在这一步能走到的； 金实线 = 已经走过的。
    v0.61.40 起连边来自节点自带的 next（显式拓扑），不再用「列差≤1」猜；
-   且**两端都必须可见** —— 否则一条暗线就出卖了未解锁层的拓扑。 */
+   且**两端都必须可见** —— 否则一条暗线就出卖了未解锁层的拓扑。
+   v0.61.41：画法由「自绘 SVG 贝塞尔」换成**用户给的道路贴图**（MAP_ROAD_ICON）。
+   贴图是一条 45° 斜路，所以按「起点→终点」的夹角旋转对齐；走左走右各一张。 */
 let _mapLinkBound=false;
 function drawMapLinks(){
-  const svg=document.getElementById('map-lines');
-  if(!svg || !svg.parentNode || !svg.parentNode.querySelectorAll) return;
-  const wrap=svg.parentNode;
+  const layer=document.getElementById('map-lines');
+  if(!layer || !layer.parentNode || !layer.parentNode.querySelectorAll) return;
+  const wrap=layer.parentNode;
   const rows=Array.prototype.slice.call(wrap.querySelectorAll('.map-row'));
   if(!rows.length || !rows[0].getBoundingClientRect) return;
   const wb=wrap.getBoundingClientRect();
-  svg.setAttribute('viewBox','0 0 '+wb.width+' '+wb.height);
-  svg.setAttribute('width',wb.width); svg.setAttribute('height',wb.height);
-  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  while(layer.firstChild) layer.removeChild(layer.firstChild);
   // DOM 顺序自上而下 = 层号自高而低，所以第 k 行是 MAP[MAP.length-1-k]
-  // v0.61.40：行宽可变 + 隐藏格占位 → 不能再用 cells[c] 按**位置**取，改用 data-r/data-c 属性查询
+  // v0.61.40：行宽可变 → 不能再用 cells[c] 按**位置**取，改用 data-r/data-c 属性查询
   function nodeAt(r,c){
     const row=rows[MAP.length-1-r]; if(!row) return null;
     const el=row.querySelector('.map-node[data-r="'+r+'"][data-c="'+c+'"]');
     // .empty 是 visibility:hidden —— **仍有尺寸**，必须显式排除，否则连线会画到看不见的格子上
+    // （v0.61.41 起没有档会渲染它，这是兜底）
     if(!el || (el.classList && el.classList.contains('empty'))) return null;
     const b=el.getBoundingClientRect();
     if(!b.width && !b.height) return null;
     return { x:b.left-wb.left+b.width/2, y:b.top-wb.top+b.height/2 };
   }
+  /* 道路贴图：中心对齐两点中点，尺寸按两点距离取（贴图对角线 = 边长 ⇒ 显示边长 = 距离/√2），
+     再旋转到两点连线方向（贴图本身是 ±45°，所以补一个 ±45°）。 */
   function seg(a,b,cls){
     if(!a||!b) return;
-    const my=(a.y+b.y)/2;
-    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
-    p.setAttribute('d',`M ${a.x} ${a.y} C ${a.x} ${my}, ${b.x} ${my}, ${b.x} ${b.y}`);
-    p.setAttribute('class',cls);
-    svg.appendChild(p);
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const dist=Math.hypot(dx,dy);
+    if(dist<4) return;
+    const im=document.createElement('img');
+    im.className='map-road '+cls;
+    im.src=assetURL(MAP_ROAD_ICON[dx<0 ? 'left' : 'right']);
+    im.alt='';
+    im.style.left=((a.x+b.x)/2)+'px';
+    im.style.top=((a.y+b.y)/2)+'px';
+    const size=Math.max(42, Math.min(200, Math.round(dist*0.72)));
+    im.style.width=size+'px'; im.style.height=size+'px';
+    const ang=Math.atan2(dy,dx)*180/Math.PI;
+    im.style.transform='translate(-50%,-50%) rotate('+((dx<0 ? ang-45 : ang+45))+'deg)';
+    layer.appendChild(im);
   }
   // ① 暗线：当前可走的每一格 → 它连到的下一层可见格
   const __cur=MAP[G.mapRow]||[];
@@ -177,15 +201,17 @@ function chooseNode(c){
   }
 }
 
+/* v0.61.41：**不再让玩家三选一** —— 踩到未知节点直接随机抽一个事件并立刻进入
+   （用户要求：「未知关卡不要由玩家选择的环节，玩家直接进入随机环节」）。
+   抽到什么用 floatMsg 报一声：原先靠三张卡面预告，现在没有预告了，总得让玩家知道发生了什么。 */
 function showUnknown(){
   const pool=['well','blackmarket','temple','ambush','forge','empty','potion','remove'];
-  const evs=shuffle(pool).slice(0,3);
   const labels={well:'古井许愿', blackmarket:'鬼市黑商', temple:'无头古庙', ambush:'拦路恶鬼', forge:'废弃道观', empty:'荒坟', potion:'灵泉', remove:'净坛'};
-  const descs={well:'以 8 点生命许愿，换一件遗物', blackmarket:'神秘黑商塞给你一张牌', temple:'无头神像赐下随机祝福', ambush:'有恶鬼拦路（精英战）', forge:'免费锻造升级一张牌', empty:'什么也没有', potion:'饮一口灵泉，获得一瓶灵汁', remove:'焚符净坛，删掉牌组中的一张牌'};
-  const html=evs.map(ev=>`<div class="relic" onclick="doUnknown('${ev}')"><div class="cname">${labels[ev]}</div><div class="cdesc">${descs[ev]}</div></div>`).join('');
+  const ev=pool[Math.floor(rng()*pool.length)];
   SCENE='unknown'; saveRun();
   setBGM('shop'); // v0.61.31：事件节点是非战斗场景，与商店/营地共用同一条轨
-  showOverlay(`<h2>⚠ 未知之地</h2><p>前方雾气弥漫，你隐约察觉有三条路可走，各有机缘或凶险。选一条吧。</p><div class="reward-cards">${html}</div>`);
+  floatMsg('未知之地 · ' + (labels[ev]||''));
+  doUnknown(ev);
 }
 function doUnknown(ev){
   hideOverlay();

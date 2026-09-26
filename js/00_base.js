@@ -144,6 +144,39 @@ function numProbe(kind){
   }catch(e){ NUM_STATE[k]=-1; NUM_IMG[k]=null; }
   return false;
 }
+/* v0.61.41：数字字形渲染的**共用件** —— 伤害飘字与拖拽预伤害（#drag-dmg）都走这里，
+   免得「预伤害要用素材」却在另一处自己拼 <img>。
+   numAppend：往元素里塞 <img> 字形（DOM 路径，飘字用）；
+   numHTML  ：同一套拼成 HTML 串（innerHTML 路径，拖拽预伤害用）；
+   两者在「该档不可用 / 文本不是纯数字（含 0-9 之外的字符）」时都返回假值，由调用方回落文字。 */
+function numSplit(text){
+  const sign=/^[+-]/.test(text) ? text[0] : '';
+  const digits=sign ? text.slice(1) : text;
+  if(!digits.length || /[^0-9]/.test(digits)) return null;
+  return { sign:sign, digits:digits };
+}
+function numGlyphSrc(kind){
+  const k=numKind(kind);
+  return (numProbe(kind) && NUM_IMG[k]) ? NUM_IMG[k] : null;
+}
+function numAppend(parent, kind, text){
+  const sp=numSplit(text); if(!sp) return false;
+  const imgs=numGlyphSrc(kind); if(!imgs) return false;
+  if(sp.sign) parent.appendChild(document.createTextNode(sp.sign));
+  for(const ch of sp.digits){ const im=new Image(); im.className='fx-num'; im.src=imgs[+ch].src; im.alt=ch; parent.appendChild(im); }
+  return true;
+}
+function numHTML(kind, text){
+  const sp=numSplit(text); if(!sp) return null;
+  const imgs=numGlyphSrc(kind); if(!imgs) return null;
+  let s=sp.sign ? '<span class="fx-sign">'+sp.sign+'</span>' : '';
+  for(const ch of sp.digits) s+='<img class="fx-num" src="'+imgs[+ch].src+'" alt="'+ch+'">';
+  return s;
+}
+/* v0.61.41：开局就把四档字形预加载。
+   不预加载的话**本局第一次**飘字必然回落文字（探测是异步的，首次调用时那 10 张还没 load 完），
+   而第一次飘字恰好是玩家最会盯着看的那一下 —— 很容易被当成「素材没生效」。 */
+function numPrewarm(){ ['', 'to-player', 'block', 'heal'].forEach(function(k){ try{ numProbe(k); }catch(e){} }); }
 let PLAYER_HP_PREV = null;
 let ENEMY_HP_PREV = {};
 function fxLayer(){
@@ -159,16 +192,8 @@ function floatDamage(text, kind, anchor, opts){
   // v0.61.36：字形统一包一层 .fx-in —— 外层管位移（fxDmg 的 translate/scale），
   // 内层管抖动（translateX）与闪烁（filter），两条动画不抢同一个属性
   const inner=document.createElement('i'); inner.className='fx-in';
-  // v0.61.33：有数字素材就把字形换成图片（0-9 之外的一律回落文字，符号 +/- 保持文字）
-  const __sign=/^[+-]/.test(text) ? text[0] : '';
-  const __digits=__sign ? text.slice(1) : text;
-  const __k=numKind(kind);
-  if(numProbe(kind) && NUM_IMG[__k] && __digits.length && !/[^0-9]/.test(__digits)){
-    if(__sign) inner.textContent=__sign;
-    for(const ch of __digits){ const im=new Image(); im.className='fx-num'; im.src=NUM_IMG[__k][+ch].src; im.alt=ch; inner.appendChild(im); }
-  } else {
-    inner.textContent=text;
-  }
+  // v0.61.41：字形渲染改走共用件 numAppend（与 #drag-dmg 的预伤害同一套），返回 false 才回落文字
+  if(!numAppend(inner, kind, text)) inner.textContent=text;
   span.appendChild(inner);
   fxLayer().appendChild(span);
   if(anchor){
