@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.62.0</title>
+<title>志怪塔 · 原型 v0.63.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -314,6 +314,15 @@
   .map-plaque small{color:var(--dim); font-size:11.5px; letter-spacing:1px; margin-left:8px;}
   /* 木轴：**固定不动**（用户选的是「木轴固定、画心滑动」）。素材是 1086 宽的长条，
      用 100% 100% 拉伸而不是 repeat-x —— 否则窄屏上会横向平铺，把两端的轴头重复到屏幕中间。 */
+  /* v0.63.0：卷轴从「横跨整屏」收成一根**居中**的卷轴（用户：「地图卷轴边缘应该只比地图的宽度长出
+     一点，不要横跨屏幕」）。三层各管一件事，别合并：
+       .map-scroll = 那一列（桌面 792 = 画心上限 760 + 两侧各 16），居中；
+       .map-frame  = 只给左右 16px 内边距 —— 于是木轴恰好比画心宽 32px；
+       .map-viewport = 画心窗口（宽度 = 列宽 - 32）。
+     窄屏列宽退化成 100%，木轴就是「屏幕宽 - 32」，**不用负 margin**（负 margin 在窄屏会溢出）。 */
+  .map-scroll{flex:1 1 auto; min-height:0; width:100%; max-width:792px; margin:0 auto;
+    display:flex; flex-direction:column;}
+  .map-frame{flex:1 1 auto; min-height:0; padding:0 16px; display:flex; flex-direction:column;}
   .map-roller{flex:0 0 auto; position:relative; z-index:3; height:clamp(22px, 4.6vw, 44px);
     background-size:100% 100%; background-repeat:no-repeat;}
   /* ⚠️ v0.62.0：这两条 url() 只是**开发期兜底**（原型.html 与 素材/ 同级，直接双击就能看）。
@@ -323,8 +332,10 @@
      改 applyMapTextures 才会。 */
   .map-roller.top{background-image:url(素材/map/scroll_top.png);}
   .map-roller.bot{background-image:url(素材/map/scroll_bottom.png);}
-  /* 画心窗口：overflow:hidden ⇒ 一个屏幕装不下的那张长图只能从这里看到一段（用户要的正是这个） */
-  .map-viewport{flex:1 1 auto; min-height:0; position:relative; overflow:hidden;
+  /* 画心窗口：overflow:hidden ⇒ 一个屏幕装不下的那张长图只能从这里看到一段（用户要的正是这个）
+     v0.63.0：加 touch-action:none —— 触屏上不加的话浏览器会把「手指拖」抢去当页面滚动，
+     指针事件根本收不到（全项目只有 body / #hand / .card 三处有这个，地图一直漏了）。 */
+  .map-viewport{flex:1 1 auto; min-height:0; position:relative; overflow:hidden; touch-action:none;
     background:#12100d; box-shadow:inset 0 0 60px rgba(0,0,0,.75);}
   /* 画心本体：只有它在动。transform 由 --camY 驱动，类切换（.cam-nofx / 内联 transition-duration）
      控制有没有动画 —— 不手写 rAF 插值，交给 CSS transition。
@@ -529,6 +540,7 @@
     .title-actions{position:static; transform:none; justify-content:center; margin-top:6px;}
     .map-row{height:68px;}
     .map-wrap{padding:22px 0;}
+    .map-frame{padding:0 13px;}   /* v0.63.0：窄屏把木轴与画心的间距收一点，画心才够宽 */
     .map-node{font-size:10px; letter-spacing:0;}
     .map-node .node-ico{width:40px; height:40px;}
     .map-node.locked .node-ico,.map-node.preview .node-ico{width:32px; height:32px;}
@@ -604,6 +616,7 @@
     .map-node.locked .node-ico,.map-node.preview .node-ico{width:27px; height:27px;}
     .map-row{height:58px;}
     .map-wrap{padding:18px 0;}
+    .map-frame{padding:0 10px;}   /* v0.63.0：同上 */
     .relic{width:100px; min-height:80px; padding:6px;}
     .relic .cname{font-size:12px;}
     .relic .cdesc{font-size:9px;}
@@ -617,7 +630,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.62.0</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.63.0</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

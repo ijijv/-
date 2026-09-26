@@ -106,11 +106,11 @@
       // P：上面读到的 computed Y=0 是**过渡的起始值**（2000ms transition 刚起步，这个夹具里没有帧
       // 去推进它）——不是 bug。这里用 animate=false 直接钉到终点，核对 computed 真的出现负 Y。
       try {
-        var vp2 = document.getElementById('map-viewport');
         var sh3 = document.getElementById('map-sheet');
-        var vpH2 = vp2.clientHeight || vp2.offsetHeight || 0;
-        var maxY = sh3.offsetHeight - vpH2; if (!(maxY > 0)) maxY = 0;
-        var tgt = camYForRow(G.mapRow, measureRowH(), maxY, vpH2);
+        /* v0.63.0：改用游戏自己的 mapCamRange()（含实测 padTop）。旧的 4 参写法是 v0.62.0 留下的，
+           少了 .map-sheet 的 padding-top ⇒ 钉出来的位置比真实值低 22~30px，截图里第 1 层会假性被切。 */
+        var C = mapCamRange();
+        var tgt = camYForRow(G.mapRow, C.rowH, C.maxY, C.vpH, C.padTop);
         setMapCam(tgt, false, 0);
         st.push('P target=' + tgt + 'px camY=' + sh3.style.getPropertyValue('--camY')
           + ' computed=' + getComputedStyle(sh3).transform

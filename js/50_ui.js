@@ -67,7 +67,9 @@ function mapReachable(r,c){
   if(!up) return true;
   return (up.next||[]).indexOf(c)>=0;
 }
-/* 下一步会解锁哪几格 = 当前所有可走节点 next 的并集 */
+/* 下一步会解锁哪几格 = 当前所有可走节点 next 的并集。
+   ⚠️ 这是「下一步会亮哪几格」的**现行**语义（冒烟 4410 / 4412 / 4423 钉着它），
+   与下面的 mapRevealedColsAt 是两件事 —— **别合并、别删**。 */
 function mapPreviewSet(){
   const out=[];
   const r=G.mapRow, nr=r+1;
@@ -79,11 +81,68 @@ function mapPreviewSet(){
   }
   return out;
 }
-/* 四档：past（走过的）/ choice（现在能走）/ preview（下一步会亮）/ hidden（其余，占位不显示） */
+/* —— v0.63.0：地图不再遗忘 ——
+   旧版 fogTier 只按**当前位置**算：你站在第 N 层时那层没走的格子是亮的，走掉一格之后它们就退回
+   hidden（变回锁）⇒ 走过的路只剩「一条链 + 当前一层」，满屏互不相连的锁
+   —— 用户报的「每个关卡的图标都要有路径相连」没做到，根因就在这。
+   现在按**你当时真的看过什么**累积：第 r 层亮过的真图标 = next(你在 r-1 层站的那一格)
+   —— 也就是「你当时能走的那几个」，正是 mapReachable 在第 r 层的历史版本。
+   三条性质（前两条钉在冒烟里，改坏会红）：
+     · 不剧透：未来层一个字都不漏；preview 层照旧挂锁（它的身份从没露过，所以它**不算**看过）；
+     · 不孤立：亮出来的每一格都挂得到一个**也亮着**的父节点 ⇒ 图标永远有线（用户那句话本身）；
+     · 纯函数：只依赖 MAP / G.mapRow / G.mapPath，不新增存档字段，旧档照读。 */
+function mapHistoryCol(row){   // 第 row 层「当时站的那一格」列号；查不到返回 -1
+  const p=G.mapPath||[];
+  for(let i=p.length-1;i>=0;i--) if(p[i] && p[i].r===row) return p[i].c;
+  return -1;
+}
+/* 父链完不完整 / 当前层是不是「没有唯一父节点」。任一成立 ⇒ 0..mapRow-1 **全部**整层亮。
+   两种情况：
+     · 当前层没有唯一的父节点（mapCol 越界或 <0）—— 此时当前层整层可选，它每一格的父节点都得亮着；
+     · mapPath 的父链断了一环（旧档：40_flow.js:238 老存档没 mapPath → 空数组；或有人手改档）。
+   为什么整段一起亮、而不是只亮断的那一层：整层亮的那一层，它自己的格子要挂得上父节点，
+   就得**上一层也整层亮**，一环一环往回推就是这个结论。多亮一层的代价，
+   远小于「图标孤零零没有线」—— 那正是用户报的那个毛病。 */
+function mapDegraded(){
+  if(G.mapRow>0 && (G.mapCol<0 || !mapNodeAt(G.mapRow-1, G.mapCol))) return true;
+  for(let r=1;r<=G.mapRow-1;r++){
+    const pc=mapHistoryCol(r-1);
+    if(pc<0 || !mapNodeAt(r-1,pc)) return true;
+  }
+  return false;
+}
+/* 第 row 层「亮过真图标」的列。只有 row ≤ G.mapRow 才有意义；未来层一律空（不剧透）。 */
+function mapRevealedColsAt(row){
+  const out=[]; const cur=MAP[row]||[];
+  if(row>G.mapRow) return out;
+  if(row===G.mapRow){                 // 当前层：直接转调 mapReachable，绝不复制逻辑（免得两处口径分叉）
+    for(let c=0;c<cur.length;c++) if(mapReachable(row,c)) out.push(c);
+    return out;
+  }
+  if(mapDegraded()){                  // 降级：整层亮（理由见 mapDegraded）
+    for(let c=0;c<cur.length;c++) out.push(c);
+    return out;
+  }
+  if(row<=0){
+    /* 第 0 层是特例：它**没有上一层**，所以它的非所选格永远挂不到任何可见父节点上（永远没线）。
+       「每个关卡的图标都要有路径相连」⇒ 挂不上线的图标就不该亮，于是第 0 层只亮走过的那些。
+       （其它层不适用这条：那些层的兄弟格会连到你在下一层站的那一格上，线是有的。） */
+    for(let c=0;c<cur.length;c++) if(mapVisited(row,c)) out.push(c);
+    return out;
+  }
+  const up=mapNodeAt(row-1, mapHistoryCol(row-1));
+  (up.next||[]).forEach(function(j){ if(out.indexOf(j)<0 && mapNodeAt(row,j)) out.push(j); });
+  return out;
+}
+/* 四档：past（走过的 / 当时看过的真图标）/ choice（现在能走）/ preview（下一步会亮，仍是锁）
+        / hidden（其余，挂锁但不属于任何「看过的范围」）。 */
 function fogTier(r,c){
-  if(r<G.mapRow) return mapVisited(r,c) ? 'past' : 'hidden';
+  // ⚠️ 第一件事必须是「这格不存在 → hidden」：夹具里 fogTier(1,1)/(1,2) 就落在不存在的列上
+  if(!mapNodeAt(r,c)) return 'hidden';
+  if(mapVisited(r,c)) return 'past';            // 走过的格子，**任何层**都是 past（含刚打完的那一层）
   if(r===G.mapRow) return mapReachable(r,c) ? 'choice' : 'hidden';
-  if(r===G.mapRow+1) return (mapPreviewSet().indexOf(c)>=0) ? 'preview' : 'hidden';
+  if(r<G.mapRow) return mapRevealedColsAt(r).indexOf(c)>=0 ? 'past' : 'hidden';
+  if(r===G.mapRow+1) return mapPreviewSet().indexOf(c)>=0 ? 'preview' : 'hidden';
   return 'hidden';
 }
 function fogVisible(r,c){ return fogTier(r,c)!=='hidden'; }
@@ -149,9 +208,30 @@ function measureRowH(){
   const h=el && el.offsetHeight;
   return h ? h : 88;      // 兜底值与 CSS 桌面档一致；窄屏两档靠实测拿到
 }
-function camYForRow(row, rowH, maxY, vpH){
+/* 相机几何：行高 / 画心高 / 窗口高 / 最大位移 / 画心上内边距。mapCamInit 与拖拽**共用这一处**，
+   免得两处各算一套（拖拽用的是同一个 maxY，夹取才不会和进场动画对不上）。 */
+function mapCamRange(){
+  const sheet=document.getElementById('map-sheet');
+  const vp=document.getElementById('map-viewport');
+  const rowH=measureRowH();
+  const sheetH=(sheet && sheet.offsetHeight) || (MAP.length*rowH);
+  const vpH=(vp && (vp.clientHeight || vp.offsetHeight)) || 0;
+  let maxY=sheetH-vpH; if(!(maxY>0)) maxY=0;
+  /* v0.63.0 修的一处基准差：.map-sheet 有 padding:30px 0（上下留白，弧线外凸时不被裁），
+     而 camYForRow 用的是「层高 × 层数」这一套基准 —— 少了这段 padding，算出来的位置一律
+     偏小 30px，第 1 层贴底时会**被切掉一截**。这里实测取它（窄屏是 22 / 18px，写死必错）。 */
+  let padTop=0;
+  try{
+    const cs=(typeof window!=='undefined' && window.getComputedStyle && sheet) ? window.getComputedStyle(sheet) : null;
+    if(cs){ const v=parseFloat(cs.paddingTop); if(v>0) padTop=v; }
+  }catch(e){ padTop=0; }
+  return { rowH:rowH, sheetH:sheetH, vpH:vpH, maxY:maxY, padTop:padTop };
+}
+/* padTop 是 v0.63.0 新加的**可选**第 5 参（默认 0）—— 不传时行为与 v0.62.0 逐字节一致
+   （冒烟 5355/5356 钉着 camYForRow(3,88,900,0)===900）。 */
+function camYForRow(row, rowH, maxY, vpH, padTop){
   if(!(vpH>0)) return maxY;
-  let y=(MAP.length-row)*rowH-vpH;
+  let y=(MAP.length-row)*rowH-vpH+(padTop||0);
   if(!(y>0)) y=0;
   if(y>maxY) y=maxY;
   return y;
@@ -167,17 +247,22 @@ function setMapCam(y, animate, ms){
     sheet.style.setProperty('--camY', y+'px');
   }
 }
+/* 当前相机位置（读回 --camY）。拖动要的是「按下那一刻在哪」，不能每帧从 G 重算 ——
+   用户可能已经把画面拖到任意位置了。 */
+function mapCamNow(){
+  const sheet=document.getElementById('map-sheet');
+  if(!sheet || !sheet.style || !sheet.style.getPropertyValue) return 0;
+  const v=parseFloat(sheet.style.getPropertyValue('--camY'));
+  return v>0 ? v : 0;
+}
 /* entry=true：进场动画（Boss 层 → 目标层，2000ms）；stepFrom>=0：从上一行的位置单步移动（600ms）；
    其它：直接落位不放动画。!fx()（流畅模式）一律直接落位。 */
 function mapCamInit(entry, stepFrom){
   const sheet=document.getElementById('map-sheet');
   const vp=document.getElementById('map-viewport');
   if(!sheet || !vp) return;
-  const rowH=measureRowH();
-  const sheetH=sheet.offsetHeight || (MAP.length*rowH);
-  const vpH=vp.clientHeight || vp.offsetHeight || 0;
-  let maxY=sheetH-vpH; if(!(maxY>0)) maxY=0;
-  const target=camYForRow(G.mapRow, rowH, maxY, vpH);
+  const C=mapCamRange();
+  const target=camYForRow(G.mapRow, C.rowH, C.maxY, C.vpH, C.padTop);
   if(!fx()){ setMapCam(target, false, 0); return; }
   if(entry){
     setMapCam(0, false, 0);              // ① 无动画地钉在 Boss 层
@@ -186,18 +271,81 @@ function mapCamInit(entry, stepFrom){
     return;
   }
   if(stepFrom>=0 && stepFrom!==G.mapRow){
-    setMapCam(camYForRow(stepFrom, rowH, maxY, vpH), false, 0);
+    setMapCam(camYForRow(stepFrom, C.rowH, C.maxY, C.vpH, C.padTop), false, 0);
     void sheet.offsetHeight;
     setMapCam(target, true, 600);
     return;
   }
   setMapCam(target, false, 0);
 }
+/* —— v0.63.0：地图自由滑动（用户选的：「纯自由滑动，不吸附」）——
+   旧版地图页**零个**滚轮/触摸/指针处理，--camY 全项目只有 setMapCam 一个写点 ⇒
+   画心只能靠进场动画与「打完一关自动上一行」移动，手指根本拖不动（用户报的「地图无法滑动」）。
+   手感：跟手（每次 pointermove 直接落位、无过渡、无惯性）、松手**停在哪儿就是哪儿**（不吸附到整行），
+        只把位移夹在 [0, maxY]（**夹取不是吸附** —— 它只防拖出纸外，不会把画面拉回某一行）。
+   手法照抄 js/60_boot.js 的出牌拖拽：pointerdown 挂视口、move/up/cancel 挂 document、
+   不用 setPointerCapture（它在 file:// 与部分国产浏览器上不顶用）。 */
+let _mapDragBound=false, _mapDrag=null;
+let _mapUserScrolled=false;   // 用户手动滑过 —— resize 时据此决定「别把镜头拽回当前层」
+let _mapCamRatio=0;           // 上次拖动结束时 camY/maxY，resize 换尺寸后按这个比例保位
+let _mapEatClickUntil=0;      // 拖完地图后的一小段窗口内忽略节点点击（见 chooseNode）
+/* 拖动位移 → 相机位置。**纯函数**（抽出来是为了冒烟能直接对拍 —— 指针手势在 VM 里测不了）。 */
+function mapDragCam(startCam, dy, maxY){
+  let y=startCam-dy;          // 手指下滑(dy>0) = 想看更下面的层 ⇒ camY 变小
+  if(!(y>0)) y=0;
+  if(y>maxY) y=maxY;
+  return y;
+}
+/* 按比例换算相机位置（resize 保位用）。同样是纯函数。 */
+function mapCamFromRatio(ratio, maxY){
+  let y=(ratio>0?ratio:0)*maxY;
+  if(!(y>0)) y=0;
+  if(y>maxY) y=maxY;
+  return y;
+}
+function bindMapDrag(){
+  if(_mapDragBound || typeof document==='undefined' || !document.addEventListener) return;
+  _mapDragBound=true;
+  document.addEventListener('pointerdown', function(ev){
+    const vp=document.getElementById('map-viewport');
+    if(!vp || !ev || !ev.target) return;
+    let inside=false;
+    try{ inside = vp.contains ? vp.contains(ev.target) : (ev.target===vp); }catch(e){ inside=false; }
+    if(!inside) return;
+    const C=mapCamRange();
+    if(!(C.maxY>0)) return;        // 一屏就装得下：没有可滑的余地，别抢走点击
+    _mapDrag={ id:ev.pointerId, sy:ev.clientY, cam:mapCamNow(), maxY:C.maxY, moved:false };
+  });
+  document.addEventListener('pointermove', function(ev){
+    const d=_mapDrag; if(!d) return;
+    if(d.id!=null && ev.pointerId!=null && ev.pointerId!==d.id) return;
+    const dy=ev.clientY-d.sy;
+    if(!d.moved && Math.abs(dy)<7) return;   // 7px 阈值：与出牌拖拽同一口径，防手抖/防「点一下」被当成拖动
+    d.moved=true; _mapUserScrolled=true;
+    const y=mapDragCam(d.cam, dy, d.maxY);
+    setMapCam(y, false, 0);                  // 直接落位：transition-duration 被写成 0ms，跟手不飘
+    _mapCamRatio = d.maxY>0 ? y/d.maxY : 0;
+    if(ev.cancelable) ev.preventDefault();
+  }, {passive:false});
+  const up=function(){
+    const d=_mapDrag; if(!d) return;
+    _mapDrag=null;
+    if(!d.moved) return;                     // 没动 = 就是一次点击，交给节点自己的 onclick
+    /* 拖过就吃掉紧随其后的那一次 click —— 手指从节点图标上起拖也会走到这里，
+       不拦的话「拖地图」会被判成「点了那个节点」（对应出牌拖拽里的 if(!d.moved)）。 */
+    _mapEatClickUntil=(typeof Date!=='undefined' && Date.now) ? Date.now()+400 : 0;
+  };
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+}
 /* 描边分档（用户要求：「达到的关卡的图标要有淡白色的描边，过去的关卡白色描边消失」）：
-   走过的层 → 描边消失；当前所在层 → 淡白描边；更上面的层 → 还是锁，无描边。 */
-function nodeOutlineTier(r){
-  if(r < G.mapRow) return 'o-past';
-  if(r === G.mapRow) return 'o-reached';
+   past → 描边消失；choice → 淡白描边（当前层再叠暗金发光）；preview/hidden → 还是锁，无描边。
+   ⚠️ v0.63.0 由「按行给」改成「按档位给」：按行给会让**当前层里那些走不到的锁**也拿到 o-reached
+   （淡白描边），看起来像能走的关卡 —— 而它们底下连一条线都没有，正是用户报的
+   「每个关卡的图标都要有路径相连」看见的那批假图标。 */
+function nodeOutlineTier(tier){
+  if(tier==='past') return 'o-past';
+  if(tier==='choice') return 'o-reached';
   return 'o-locked';
 }
 /* v0.62.0：把卷轴三张素材（上/下木轴 + 画心）的地址从 CSS 的**相对路径**换成 assetURL() 的结果。
@@ -231,18 +379,25 @@ function showMap(opts){
   }
   let html=`<div class="map-root">${mapTopbarHTML()}`;
   html+=`<div class="map-plaque">${ACT_NAMES[G.act-1]}<small>第 ${G.mapRow+1}/${MAP.length} 层 · 沿连线向上，规划好路线</small></div>`;
+  /* v0.63.0：卷轴收成一根**居中**的卷轴（用户：「木轴只比画心宽一点点，不要横跨屏幕」）。
+     .map-scroll 是那一列（桌面 792 = 画心上限 760 + 两侧各 16），.map-frame 只给左右 16px 内边距 ⇒
+     木轴恰好比画心宽 32px；窄屏列宽退化成 100%，木轴仍是「屏幕宽 - 32」，**不用负 margin**（那会溢出）。
+     ⚠️ .map-lines 与 .map-row 必须继续留在 .map-sheet 里 —— drawMapLinks 的坐标相消靠这个。 */
+  html+=`<div class="map-scroll">`;
   html+=`<div class="map-roller top" aria-hidden="true"></div>`;
+  html+=`<div class="map-frame">`;
   html+=`<div class="map-viewport" id="map-viewport"><div class="map-wrap map-sheet" id="map-sheet"><div class="map-lines" id="map-lines" aria-hidden="true"></div>`;
   for(let r=MAP.length-1;r>=0;r--){
     const rowCls = r<G.mapRow ? 'past' : r===G.mapRow ? 'current' : 'future';
-    const ocls=' '+nodeOutlineTier(r);
     html+=`<div class="map-row ${rowCls}">`;
     for(let c=0;c<MAP[r].length;c++){
       const node=MAP[r][c], tier=fogTier(r,c), dc=`data-r="${r}" data-c="${c}"`;
       // v0.61.41：未解锁的格子不再留白，改挂 NODE_ICON_LOCKED（用户给的 locked.png）——
       // 每格都有内容 ⇒ 行高与坐标仍然恒定，解锁进度变化时不抖动；
       // preview（下一步会亮）与 hidden（更远/同层走不到）都挂锁，只有 past/choice 才露出真实图标。
-      const tip=NODE_TIP[node.t]||'';
+      // v0.63.0：描边改成**跟着档位走**（nodeOutlineTier(tier)），所以 ocls 从「每行算一次」挪进格子循环
+      // —— 否则当前层里那些走不到的锁会拿到 o-reached，看着像能走却没有一条线。
+      const tip=NODE_TIP[node.t]||'', ocls=' '+nodeOutlineTier(tier);
       if(breakSet[r+','+c]){
         // v0.62.0：刚解锁的格 —— 真实图标先挂上但**藏着**（.o-reveal），锁由 playLockBreak 的
         // canvas 画在上面；碎片飞散那一帧（t≈0.20）再让图标显形 + 描边淡入
@@ -253,12 +408,15 @@ function showMap(opts){
       if(tier==='hidden'){ html+=`<div class="map-node locked${ocls}" ${dc} style="${mapNodeStyle(node)}" title="尚未解锁">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
       if(tier==='choice'){ html+=`<button class="map-node${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
       if(tier==='preview'){ html+=`<div class="map-node preview${ocls}" ${dc} style="${mapNodeStyle(node)}" title="下一步可以走到这里（尚未解锁）">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
-      html+=`<div class="map-node${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}">${nodeHTML(node)}</div>`;
+      // past：走过的 + **当时看过的兄弟格**（v0.63.0 起不再退回锁）—— 真图标、暗化、描边消失
+      html+=`<div class="map-node past${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}">${nodeHTML(node)}</div>`;
     }
     html+=`</div>`;
   }
   html+=`</div></div>`;   // 收 .map-sheet / .map-viewport
+  html+=`</div>`;         // 收 .map-frame
   html+=`<div class="map-roller bot" aria-hidden="true"></div>`;
+  html+=`</div>`;         // 收 .map-scroll
   html+=`<div class="map-bottombar"><button class="btn ghost" onclick="openMenu()">菜单（重开 / 退出）</button></div>`;
   html+=`</div>`;         // 收 .map-root
   showOverlay(html);
@@ -269,6 +427,9 @@ function showMap(opts){
   const __ov=document.getElementById('overlay');
   if(__ov && __ov.classList) __ov.classList.add('map-scene');
   applyMapTextures();     // 见上：把三张卷轴素材换成 ASSET_MAP 的 data URI（产物里 CSS 相对路径会 404）
+  bindMapDrag();          // v0.63.0：自由滑动（幂等，见 _mapDragBound）
+  // v0.63.0：新的一场地图场景，手动滑动状态归零 —— 否则上一场的 camY 比例会被 resize 带过来
+  _mapUserScrolled=false; _mapCamRatio=0;
   // 行布局完成后才有坐标可量，所以推到下一帧：先画连线，再落相机，最后放锁破裂
   const __step=stepFrom, __break=breakSet;
   const kick=function(){
@@ -289,11 +450,18 @@ function showMap(opts){
       }, { px:120, top:-32 });
     }
   };
-  try{ requestAnimationFrame(kick); }catch(e){ kick(); }
-  // resize 时重算相机（**不带动画**），否则窄屏换成宽屏后相机停在错的层
+  try{ requestAnimationFrame(kick); } catch(e){ kick(); }
+  /* resize 时重算相机（**不带动画**），否则窄屏换成宽屏后相机停在错的层。
+     v0.63.0：用户手动滑过之后**不能**再这么干 —— mapCamInit 会把镜头拽回当前层，
+     正好是「拖到一半窗口一变就跳回去」的来源。那时改成「按 camY/maxY 比例保位 + 夹取」。 */
   if(!_mapCamBound && typeof window!=='undefined' && window.addEventListener){
     _mapCamBound=true;
-    window.addEventListener('resize', function(){ if(document.getElementById('map-sheet')) mapCamInit(false, -1); });
+    window.addEventListener('resize', function(){
+      if(!document.getElementById('map-sheet')) return;
+      if(!_mapUserScrolled){ mapCamInit(false, -1); return; }
+      const C=mapCamRange();
+      setMapCam(mapCamFromRatio(_mapCamRatio, C.maxY), false, 0);
+    });
   }
 }
 /* v0.61.20(P2) / v0.61.40 / v0.61.41 / v0.61.42：地图路径连线。
@@ -387,32 +555,47 @@ function drawMapLinks(){
       p.setAttribute('class', 'map-path '+cls+' link-new');
     }
   }
-  // ① 暗线：当前可走的每一格 → 它连到的下一层可见格
+  /* —— v0.63.0：三段 ad-hoc 循环合成**一段** ——
+     根因：v0.62.0 及以前「画线」只认三种特定的边（当前可走→下一层 preview、走过的、上一步→现在能走），
+     而 v0.63.0 起「当时看过的兄弟格」也会亮成真图标 —— 它们不落在那三类里，会**光秃秃地没有线**
+     （用户那句「每个关卡的图标都要有路径相连」说的就是它）。
+     现在改成一条通则：**两个相邻层、两端都可见，就画一条**。线的档位按边的性质给：
+       · 两端都在 mapPath 里连着 → link-past（走过的路，淡黄光边；刚打通的那条再加生长动画）
+       · 子节点在本层（即 G.mapRow）→ link-reach（上一步那格 → 现在能走的每一格）
+       · 其余 → link-dim（当时摆在你面前、你没走的那条；语义与「当前可走 → 下一层」完全一致）
+     三个类名一个不删（verify_dist 的结构闸与冒烟 4751-4754 都钉着它们）；
+     门禁仍然只有 fogVisible 一个（冒烟 4755/4756）—— 两端任一不可见，这条边就不存在。 */
   const __cur=MAP[G.mapRow]||[];
-  for(let c=0;c<__cur.length;c++){
-    if(!mapReachable(G.mapRow,c)) continue;
-    const nx=(__cur[c] && __cur[c].next)||[];
-    for(let k=0;k<nx.length;k++){
-      const j=nx[k];
-      if(!fogVisible(G.mapRow+1,j)) continue;
-      seg(nodeAt(G.mapRow,c), nodeAt(G.mapRow+1,j), 'link-dim', false, mapEdgeKey(G.mapRow,c,G.mapRow+1,j));
+  const __path=G.mapPath||[];
+  function walkedKey(r0,c0,r1,c1){
+    for(let i=0;i<__path.length-1;i++){
+      const p0=__path[i], p1=__path[i+1];
+      if(p0&&p1 && p0.r===r0 && p0.c===c0 && p1.r===r1 && p1.c===c1) return true;
+    }
+    return false;
+  }
+  const __dim=[], __past=[], __reach=[];
+  for(let r=0;r<MAP.length-1;r++){
+    const cur=MAP[r]||[];
+    for(let c=0;c<cur.length;c++){
+      if(!fogVisible(r,c)) continue;
+      const nx=(cur[c] && cur[c].next)||[];
+      for(let k=0;k<nx.length;k++){
+        const j=nx[k], r1=r+1;
+        if(!fogVisible(r1,j)) continue;                 // ← 唯一的门禁：两端都要可见
+        const key=mapEdgeKey(r,c,r1,j);
+        const edge={ a:nodeAt(r,c), b:nodeAt(r1,j), key:key };
+        if(walkedKey(r,c,r1,j)) __past.push(edge);
+        else if(r1===G.mapRow) __reach.push(edge);
+        else __dim.push(edge);
+      }
     }
   }
-  // ② 淡黄浅光边：已经走过的路径。**最后一条**（刚打通的那条）若是本次的一次性标记，就带生长动画
-  const path=G.mapPath||[];
-  for(let i=0;i<path.length-1;i++){
-    const p0=path[i], p1=path[i+1];
-    const key=mapEdgeKey(p0.r,p0.c,p1.r,p1.c);
-    seg(nodeAt(p0.r,p0.c), nodeAt(p1.r,p1.c), 'link-past', (key===_mapGlowEdge), key);
-  }
-  // ③ 金虚线：上一步站的那格 → 现在能走的每一格
-  if(G.mapRow>0 && G.mapCol>=0){
-    const a=nodeAt(G.mapRow-1, G.mapCol);
-    for(let c=0;c<__cur.length;c++){
-      if(!mapReachable(G.mapRow,c)) continue;
-      seg(a, nodeAt(G.mapRow,c), 'link-reach', false, mapEdgeKey(G.mapRow-1,G.mapCol,G.mapRow,c));
-    }
-  }
+  // 输出顺序＝叠放顺序：先暗线打底，再走过的，最后金虚线压在上面（与三段循环时代一致）
+  let i;
+  for(i=0;i<__dim.length;i++)   seg(__dim[i].a,   __dim[i].b,   'link-dim',   false, __dim[i].key);
+  for(i=0;i<__past.length;i++)  seg(__past[i].a,  __past[i].b,  'link-past',  (__past[i].key===_mapGlowEdge), __past[i].key);
+  for(i=0;i<__reach.length;i++) seg(__reach[i].a, __reach[i].b, 'link-reach', false, __reach[i].key);
   // 动画是**一次性**的：这一次画完就消费掉，重开地图 / resize 重画都不会再放一遍
   _mapGlowEdge=null;
   if(!_mapLinkBound && typeof window!=='undefined' && window.addEventListener){
@@ -421,6 +604,9 @@ function drawMapLinks(){
   }
 }
 function chooseNode(c){
+  /* v0.63.0：刚刚拖过地图，这一下是「滑动」而不是「选点」—— 手指从节点图标上起拖也会走到这里。
+     与出牌拖拽的 if(!d.moved) 同一个意思，只是地图没有统一的 up 收口，用时间戳守（见 bindMapDrag）。 */
+  if(Date.now && Date.now() < _mapEatClickUntil) return;
   // v0.61.40：旧代码靠「只把可达节点渲染成 button」隐式限制，这里补显式二次校验（同时兜住 c 越界）
   if(!mapReachable(G.mapRow,c)){ sfx('error'); floatMsg('这条连线走不通'); return; }
   sfx('ui_map');   // v0.61.25：地图选点音

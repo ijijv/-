@@ -52,4 +52,5 @@ _patch/_chk_*
 # headless 截图夹具的运行产物（每次由 _patch/shot.py 重建，不进库；脚本本身照常进）
 /_shot.html
 /_frame.html
+/_probe.html
 _patch/_shot_*.png

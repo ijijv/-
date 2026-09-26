@@ -111,7 +111,7 @@ function dealDamageToAll(n){ aliveEnemies().forEach(e=>dealDamageTo(e,n)); }
 function isLinghua(e){ return !!(e && e.affixes && e.affixes.some(a=>a.id==='linghua')); }
 function applyCurse(e, n){
   if(n>0) sfx('card_curse');   // v0.61.25：施用诅咒的听感（天师整套牌的核心动作）
-  if(n>0) tipOnce('curse', '<b>【诅咒】</b>是你在敌人身上累积的印记，本身不掉血 —— 要靠【蚀魂咒】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成伤害。符箓天师整套牌都围着它转。');
+  if(n>0) tipOnce('curse', '<b>【诅咒】</b>是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成伤害。符箓天师整套牌都围着它转。');
   let v=n;
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0) v=v*2;
   // v0.61.35：守一改「减免该牌自身费用」后，旧的「本次施咒 +1 层」不再有生产者，整段退役

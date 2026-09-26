@@ -5215,14 +5215,11 @@
     })();
 
     /* ============ C. 图标描边三态 ============ */
-    __ok('v0.62.0 描边 nodeOutlineTier 三态：走过的 o-past / 当前层 o-reached / 未解锁 o-locked',
-      (function () {
-        var keep = G;
-        try {
-          G = __base('yincha'); G.mapRow = 5;
-          return nodeOutlineTier(4) === 'o-past' && nodeOutlineTier(5) === 'o-reached' && nodeOutlineTier(6) === 'o-locked';
-        } finally { G = keep; }
-      })());
+    __ok('v0.63.0 描边 nodeOutlineTier 改按【档位】而非行号（有意改签名）：past→o-past / choice→o-reached / preview 与 hidden→o-locked。'
+      + '旧签名传行号，会让当前层里那些走不到的锁也拿到 o-reached 淡白描边，看着像「可走」——那是真实可见缺陷',
+      nodeOutlineTier('past') === 'o-past' && nodeOutlineTier('choice') === 'o-reached' &&
+      nodeOutlineTier('preview') === 'o-locked' && nodeOutlineTier('hidden') === 'o-locked' &&
+      nodeOutlineTier(undefined) === 'o-locked' && nodeOutlineTier('') === 'o-locked');
     /* ⚠️ 三条描边 CSS 本身写在 原型.html 里，runner 在 VM 里读不到文件 ⇒ **这里测不了**，
        改由 _patch/verify_dist.py 对打包产物钉（.o-reached / .o-past / .o-locked 必须活到产物里）。
        这里只钉「类名确实由 nodeOutlineTier 产出并挂到每个节点上」这一半。 */
@@ -5291,6 +5288,26 @@
         __ok('v0.62.0 场景 渲染出固定木轴 + 可滑动画心：.map-roller.top / .map-roller.bot / .map-viewport / .map-sheet',
           html.indexOf('map-roller top') >= 0 && html.indexOf('map-roller bot') >= 0 &&
           html.indexOf('map-viewport') >= 0 && html.indexOf('map-sheet') >= 0);
+        /* v0.63.0：卷轴收窄（用户：「木轴只比画心宽一点点，不要横跨屏幕」）——木轴搬进 .map-scroll
+           这一**居中列**里，左右各留 16px（.map-frame 的内边距）⇒ 木轴恰好比画心宽 32px。
+           钉的是**嵌套形状** scroll > frame > viewport（只钉类名出现会漏掉「忘了搬进去」这种改法）。 */
+        __ok('v0.63.0 场景 卷轴收窄：.map-scroll > .map-frame > .map-viewport 三级嵌套，两根木轴都在 .map-scroll 里'
+          + '（木轴只比画心宽 32px，不再横跨屏幕）',
+          (function () {
+            var s = html.indexOf('map-scroll'), f = html.indexOf('map-frame'),
+                v = html.indexOf('map-viewport'), rt = html.indexOf('map-roller top'),
+                rb = html.indexOf('map-roller bot');
+            if (s < 0 || f < 0 || v < 0 || rt < 0 || rb < 0) return false;
+            /* DOM 顺序：scroll → roller.top → frame → viewport …；roller.bot 在 frame 之后 */
+            return rt > s && f > rt && v > f && rb > v;
+          })());
+        __ok('v0.63.0 场景 .map-lines 与 .map-row 仍在 .map-sheet 里（drawMapLinks 的坐标相消靠这个，别搬走）',
+          html.indexOf('map-wrap map-sheet') >= 0 && html.indexOf('map-lines') >= 0 &&
+          html.indexOf('map-row') > html.indexOf('map-lines') &&
+          (function () {   /* .map-sheet 的 </div> 必须在所有 .map-row 之后 */
+            var last = html.lastIndexOf('map-row'), sh = html.indexOf('map-wrap map-sheet');
+            return last > sh;
+          })());
         __ok('v0.62.0 场景 每个节点都带内联落位与小字标签（不会全叠在左上角）',
           (html.match(/style="left:/g) || []).length >= 5 && html.indexOf('node-label') >= 0,
           String((html.match(/style="left:/g) || []).length));
@@ -5368,6 +5385,260 @@
        钉「相减」这个形状而不是钉某个类名：wrap 是用 layer.parentNode 拿的，源码里根本没有 'map-wrap' 字样。 */
     __ok('v0.62.0 相机 drawMapLinks 用「同一 transform 内相减」定位端点（画心位移自己抵消，所以不用改）',
       String(drawMapLinks).indexOf('b.left-wb.left') >= 0 && String(drawMapLinks).indexOf('layer.parentNode') >= 0);
+
+    /* ====================================================================
+     * v0.63.0：地图不再遗忘（曾见＝永久保留）+ 自由滑动（纯自由，不吸附）+ 卷轴收窄
+     *   用户原话：「地图无法滑动，每个关卡的图标都要有路径相连。
+     *              地图卷轴边缘应该只比地图的宽度长出一点，不要横跨屏幕。画心不调。」
+     * ==================================================================== */
+
+    /* ---------- A. 不孤立 / 不剧透：把用户那句话变成机器可验的不变量 ----------
+       这两条是**整批改动的验收标准**：
+         · 不孤立 = 「每个关卡的图标都要有路径相连」⇒ 任何亮着的格子，至少要挂得到一条
+           **也亮着**的边（父或子）。孤立图标正是用户报的那个毛病本身。
+         · 不剧透 = 未来层一个字都不漏；亮出来的「真图标」必须**当时真的看过**
+           （在第 r-1 层时它在 next(你站的那一格) 里）。preview 层照旧挂锁，不算看过。
+       跑的是 genAct 生成的**真实整图**（不是手造小图），沿 routesOf 穷举的真实路线逐层推进。
+       ⚠️ 计划里原本还想钉「mapPreviewSet() ≡ mapSeenColsAt(mapRow+1)」——**这条被撤掉了**：
+       实现后它们是两件事（preview 是「下一步会亮哪几格」的锁提示集合，覆盖当前层**所有**
+       可走节点的 next；revealed 是「已经亮过真图标」的历史集合，只认你当时站的那一格）。
+       硬钉恒等会把正确的实现判成红的，所以改钉下面这两条真性质。 */
+    (function () {
+      var __kMAP = MAP, __kG = G, __kRow = G.mapRow, __kCol = G.mapCol, __kPath = G.mapPath;
+      var __iso = [], __leak = [], __net = [], __states = 0, __maps = 0, __rt = 0;
+      function __visSet(M) {
+        var vis = {}, rr, cc;
+        for (rr = 0; rr < M.length; rr++) for (cc = 0; cc < M[rr].length; cc++)
+          if (fogVisible(rr, cc)) vis[rr + ',' + cc] = true;
+        return vis;
+      }
+      /* 与 drawMapLinks 同口径的邻居：next 往上一层 + prev 往下一层。
+         引擎只生成上下相邻行之间的边（没有同行横向边），这里也不臆造。 */
+      function __nbrs(M, r, c, vis) {
+        var nd = (M[r] && M[r][c]) || null, out = [], i, nx, pv;
+        if (!nd) return out;
+        nx = nd.next || []; pv = nd.prev || [];
+        for (i = 0; i < nx.length; i++) if (vis[(r + 1) + ',' + nx[i]]) out.push([r + 1, nx[i]]);
+        for (i = 0; i < pv.length; i++) if (vis[(r - 1) + ',' + pv[i]]) out.push([r - 1, pv[i]]);
+        return out;
+      }
+      function __check(M, r, c, path, tag) {
+        G.mapRow = r; G.mapCol = c; G.mapPath = path;
+        __states++;
+        var vis = __visSet(M), k, pr, pc, i;
+        /* ① 不剧透 · 未来层：mapRow+1 以后一个字都不许漏 */
+        for (pr = r + 2; pr < M.length; pr++) for (pc = 0; pc < M[pr].length; pc++)
+          if (vis[pr + ',' + pc]) __leak.push(tag + ' 未来层 ' + pr + ',' + pc);
+        /* ② 不剧透 · preview 必在 preview 集合里；过去的真图标必须拿得出「当时看过」的证据 */
+        var pvs = {}, pv0 = mapPreviewSet();
+        for (i = 0; i < pv0.length; i++) pvs[pv0[i]] = true;
+        var hist = {};
+        for (i = 0; i < path.length; i++) hist[path[i].r] = path[i].c;
+        for (k in vis) {
+          pr = +k.split(',')[0]; pc = +k.split(',')[1];
+          if (pr === r + 1 && !pvs[pc]) __leak.push(tag + ' preview ' + pr + ',' + pc + ' 不在 preview 集合里');
+          if (pr < r && !mapVisited(pr, pc) && !mapDegraded()) {
+            var upc = hist[pr - 1];
+            var up = (upc === undefined || upc < 0) ? null : mapNodeAt(pr - 1, upc);
+            if (!up || (up.next || []).indexOf(pc) < 0)
+              __leak.push(tag + ' past ' + pr + ',' + pc + ' 拿不出「当时看过」的证据');
+          }
+        }
+        /* ③ 不孤立 + ④ 都连得到当前层：可见集合按同口径的边走一遍
+           ⚠️ 这里**不能**钉「可见集合整体连通」——第 0 层 3 格各自 next 指向第 1 层不同格时，
+           可见集合天然是 3 条独立的链（引擎没有同行横向边），整体连通本来就不成立，硬钉是错的。
+           真正该成立、也真是用户那句话的是：**每个亮着的格子都连得到你所在的那一层**
+           （顺着亮着的边走）。孤岛图标连不过去 —— 那才是他报的毛病。 */
+        var ids = {}, cnt = 0, k2;
+        for (k in vis) ids[k] = cnt++;
+        var par = []; for (i = 0; i < cnt; i++) par.push(i);
+        function find(x) { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; }
+        for (k in vis) {
+          pr = +k.split(',')[0]; pc = +k.split(',')[1];
+          var nb = __nbrs(M, pr, pc, vis);
+          if (!nb.length) __iso.push(tag + ' 孤立图标 ' + pr + ',' + pc);
+          for (i = 0; i < nb.length; i++) {
+            var a = find(ids[k]), b = find(ids[nb[i][0] + ',' + nb[i][1]]);
+            if (a !== b) par[a] = b;
+          }
+        }
+        /* 连通块数（正确算法：数不同根，别用 bad+1 —— 只有当非根块都是单点时才碰巧相等） */
+        var roots = {}, nblk = 0;
+        for (i = 0; i < cnt; i++) { k2 = find(i); if (!roots[k2]) { roots[k2] = 1; nblk++; } }
+        if (cnt > 1 && nblk > 1) {
+          /* 断言口径：每一块里都必须**至少含一个当前层的格子**（孤岛就是整块都不含当前层） */
+          var blkCur = {}, kk3;
+          for (kk3 in vis) {
+            if (+kk3.split(',')[0] !== r) continue;
+            blkCur[find(ids[kk3])] = 1;
+          }
+          for (kk3 in roots) if (!blkCur[kk3]) { __net.push(tag + ' 有一块可见格连不到当前层（共 ' + nblk + ' 块）'); break; }
+        }
+      }
+      try {
+        var __seeds = [3, 11, 777, 4242];
+        for (var __a = 1; __a <= 3; __a++) {
+          for (var __s = 0; __s < __seeds.length; __s++) {
+            var M = genAct(__a, __seeds[__s]), rts = routesOf(M);
+            MAP = M; __maps++;
+            var __tag = 'a' + __a + 's' + __seeds[__s];
+            /* 开局：mapRow=0 / mapCol=-1 / mapPath=[]（整层可选那一种） */
+            __check(M, 0, -1, [], __tag + ' 开局');
+            /* 沿每一条真实路线逐层推进（每层都查一次） */
+            for (var __i = 0; __i < rts.length; __i++) {
+              __rt++;
+              var acc = [];
+              for (var __j = 0; __j < rts[__i].length; __j++) {
+                var __r = rts[__i][__j][0], __c = rts[__i][__j][1];
+                /* ⚠️ G.mapCol 的**游戏约定**是「上一层你站的那一格的列」，不是当前层的列：
+                   mapReachable(r,c) 用 mapNodeAt(r-1, G.mapCol) 取父节点（chooseNode:615 写 G.mapCol=c，
+                   随后 goNext 只加 mapRow、不动 mapCol）。所以「站在第 r 层还没选」时要传上一层的列。 */
+                __check(M, __r, __j === 0 ? -1 : rts[__i][__j - 1][1], acc.slice(),
+                  __tag + '#' + __i + ' 第' + __j + '层未选');
+                /* 紧接着「刚选中 (r,c)」那一瞬（战斗结算期间、goNext 之前）：mapCol 已换成当前格的列 */
+                acc.push({ r: __r, c: __c });
+                __check(M, __r, __c, acc.slice(), __tag + '#' + __i + ' 第' + __j + '层已选');
+              }
+            }
+            /* 旧档降级（没有 mapPath 但已走到第 5 层）与祖先列越界：整段一起亮，也不许孤立 */
+            __check(M, 5, -1, [], __tag + ' 降级');
+            __check(M, 5, 99, [{ r: 0, c: 0 }, { r: 1, c: 0 }, { r: 2, c: 0 }, { r: 3, c: 0 }, { r: 4, c: 0 }],
+              __tag + ' 越界列');
+          }
+        }
+      } finally {
+        MAP = __kMAP; G.mapRow = __kRow; G.mapCol = __kCol; G.mapPath = __kPath;
+      }
+      __ok('v0.63.0 不孤立（用户原话「每个关卡的图标都要有路径相连」）：' + __states + ' 个真实地图状态、每格都挂得到一条也亮着的边',
+        __iso.length === 0, __iso.slice(0, 6).join(' | '));
+      __ok('v0.63.0 不孤立 每一块可见格都连得到「你所在的那一层」（' + __maps + ' 张真实地图 × ' + __rt
+        + ' 条真实路线 + 开局/降级/越界列）。'
+        + '⚠️ 不钉「整体连通」——第 0 层 3 格各走各的 next 时可见集合天然是 3 条独立链，硬钉会错',
+        __net.length === 0, __net.slice(0, 4).join(' | '));
+      __ok('v0.63.0 不剧透：未来层不亮 / preview 必在 preview 集合 / 过去的真图标必须有「当时看过」的证据',
+        __leak.length === 0, __leak.slice(0, 6).join(' | '));
+    })();
+
+    /* ---------- B. 四档迷雾（手造小图，专打「地图不再遗忘」那几个边角）----------
+       真实整图很难凑出「曾见但不曾走过的兄弟格」，这里手造 4 层小图走真实路线
+       (0,1) → (1,2) → (2,0)（(0,1).next=[1,2]，(1,2).next=[0]，(2,0).next=[0]）。
+       ⚠️ G.mapCol = **上一层你站的那一格的列**（见 §A 里那条注释），不是当前层的列。 */
+    (function () {
+      var __kMAP = MAP, __kG = G, __kRow = G.mapRow, __kCol = G.mapCol, __kPath = G.mapPath;
+      var res = {};
+      /* ⚠️ 小图**自带一份**，不去借 §C 那张：那个 `fx` 是 §C 所在作用域的局部名字，
+         在全局作用域里 `fx` 是**流畅模式开关**（`js/10_audio.js:13`）——借名会静默拿到一个布尔。
+         本图：row0 = [fight→[0], shop→[1,2]]，row1 = [camp→[0], unknown→[0], elite→[0]]，
+               row2 = [fight→[0]]，row3 = [boss→[]]。 */
+      function __fixB() {
+        return [
+          [{ t: 'fight', e: ['youhun', 'jiangshi'], next: [0], prev: [] },
+           { t: 'shop', e: [], next: [1, 2], prev: [] }],
+          [{ t: 'camp', e: [], next: [0], prev: [0] },
+           { t: 'unknown', e: [], next: [0], prev: [1] },
+           { t: 'elite', e: ['yecha'], next: [0], prev: [1] }],
+          [{ t: 'fight', e: ['youhun', 'huyao'], next: [0], prev: [0, 1, 2] }],
+          [{ t: 'boss', e: ['jiangwang'], next: [], prev: [0] }]
+        ];
+      }
+      function __setB(row, col, path) { G.mapRow = row; G.mapCol = col; G.mapPath = path; }
+      try {
+        MAP = __fixB();
+        /* —— 状态①：站在第 1 层、还没选（从 (0,1) 上来 ⇒ mapCol=1；path 到上一层为止）—— */
+        __setB(1, 1, [{ r: 0, c: 1 }]);
+        res.cur = fogTier(1, 1) === 'choice' && fogTier(1, 2) === 'choice' &&
+          mapReachable(1, 1) && mapReachable(1, 2);
+        res.curLocked = fogTier(1, 0) === 'hidden' && !mapReachable(1, 0);   /* next(0,1) 里没有 0 */
+        res.preview = fogTier(2, 0) === 'preview' && !mapReachable(2, 0);
+        res.futureDark = fogTier(3, 0) === 'hidden';                          /* 更远的层一个字都不漏 */
+        /* —— 状态②：站在第 2 层、还没选（从 (1,2) 上来 ⇒ mapCol=2）★核心现场 —— */
+        __setB(2, 2, [{ r: 0, c: 1 }, { r: 1, c: 2 }]);
+        /* (1,1) 从没走过，但你在第 1 层时 next(0,1)=[1,2] ⇒ 当时**看过**它的真图标 ⇒ 永久 past。
+           v0.62.0 只按当前位置重算，这里会退回 hidden（变回锁）—— 这就是「地图会遗忘」的根因，
+           也正是用户那句「每个关卡的图标都要有路径相连」没做到的现场。 */
+        res.sibPast = fogTier(1, 1) === 'past' && !mapVisited(1, 1);
+        res.pickedPast = fogTier(1, 2) === 'past' && mapVisited(1, 2);
+        /* (1,0) 当时就不在 next(0,1) 里 ⇒ 它从来只是把锁 ⇒ 现在也还是锁（不多剧透一个字） */
+        res.neverSeen = fogTier(1, 0) === 'hidden';
+        /* 第 0 层没有上一层 ⇒ 没走过的格子挂不上任何可见父节点 ⇒ 不亮（亮了就是孤立图标） */
+        res.row0Skip = fogTier(0, 0) === 'hidden' && fogTier(0, 1) === 'past';
+        /* 过去的兄弟格必须挂在网里：(1,1) 的可见邻居要有 (0,1)（父）或 (2,0)（子） */
+        var vis = {};
+        for (var rr = 0; rr < MAP.length; rr++) for (var cc = 0; cc < MAP[rr].length; cc++)
+          if (fogVisible(rr, cc)) vis[rr + ',' + cc] = true;
+        res.sibNbr = !!(vis['0,1'] || vis['2,0']);
+        /* —— 状态③：走到第 3 层、还没选（从 (2,0) 上来）—— 累积，不是只看当前层 —— */
+        __setB(3, 0, [{ r: 0, c: 1 }, { r: 1, c: 2 }, { r: 2, c: 0 }]);
+        res.afterAll = fogTier(1, 1) === 'past' && fogTier(1, 2) === 'past' &&
+          fogTier(2, 0) === 'past' && fogTier(0, 1) === 'past' && fogTier(0, 0) === 'hidden';
+      } finally {
+        MAP = __kMAP; G.mapRow = __kRow; G.mapCol = __kCol; G.mapPath = __kPath;
+      }
+      __ok('v0.63.0 迷雾 曾见但不曾走过的**兄弟格**永久保留 past（v0.62.0 会退回锁 = 地图会遗忘）'
+        + '——「每个关卡的图标都要有路径相连」的根因',
+        res.sibPast === true && res.pickedPast === true);
+      __ok('v0.63.0 迷雾 从来只是把锁的格子仍然不亮（不多剧透一个字；preview 层的身份从没露过）',
+        res.neverSeen === true);
+      __ok('v0.63.0 迷雾 第 0 层只亮走过的（它没有上一层 ⇒ 非所选格永远挂不上线 ⇒ 不亮）',
+        res.row0Skip === true);
+      __ok('v0.63.0 迷雾 当前层 choice 露真图标可点 / 下一步 preview 仍是锁 / 更远层不亮',
+        res.cur === true && res.curLocked === true && res.preview === true && res.futureDark === true);
+      __ok('v0.63.0 迷雾 过去的兄弟格挂得到可见邻居（不孤立，它是**网**里的一格不是孤岛）',
+        res.sibNbr === true);
+      __ok('v0.63.0 迷雾 再往上走一层，之前留下的 past 全部还在（累积，不是只看当前层）',
+        res.afterAll === true);
+    })();
+
+    /* ---------- C. 自由滑动：纯函数对拍（指针手势在 VM 里测不了）---------- */
+    __ok('v0.63.0 拖动 mapDragCam 纯跟手：末值 = 起点 − 位移，**不是整行倍数**（钉用户选的「不吸附」）',
+      mapDragCam(500, 120, 900) === 380 && mapDragCam(500, 37, 900) === 463 &&
+      mapDragCam(500, 0, 900) === 500 && mapDragCam(380, -120, 900) === 500);
+    __ok('v0.63.0 拖动 只夹在 [0, maxY]（夹取不是吸附：只防拖出纸外，不会把画面拉回某一行）',
+      mapDragCam(50, 120, 900) === 0 && mapDragCam(880, -100, 900) === 900 &&
+      mapDragCam(0, 1, 900) === 0 && mapDragCam(10, -10, 0) === 0 && mapDragCam(9999, 1, 0) === 0);
+    __ok('v0.63.0 resize 保位 mapCamFromRatio：按比例换算并夹取，maxY=0 时归零（不 NaN、不越界）',
+      mapCamFromRatio(0.5, 900) === 450 && mapCamFromRatio(-1, 900) === 0 &&
+      mapCamFromRatio(2, 900) === 900 && mapCamFromRatio(0.5, 0) === 0 && mapCamFromRatio(1, 0) === 0);
+    __ok('v0.63.0 resize 保位 是拖动的逆运算（拖到 380 后换尺寸，按比例还落在 380 那一档）',
+      mapCamFromRatio(mapDragCam(500, 120, 900) / 900, 900) === 380);
+    __ok('v0.63.0 拖动 bindMapDrag 挂在 document 上并 7px 阈值启动（照抄出牌拖拽口径），'
+      + '且「一屏装得下就别抢走点击」',
+      (function () {
+        var s = String(bindMapDrag);
+        return s.indexOf('pointerdown') >= 0 && s.indexOf('pointermove') >= 0 &&
+          s.indexOf('pointerup') >= 0 && s.indexOf('pointercancel') >= 0 &&
+          s.indexOf('<7') >= 0 && s.indexOf('mapDragCam') >= 0 && s.indexOf('maxY>0') >= 0;
+      })());
+    __ok('v0.63.0 拖动 拖完吃掉紧随的那一次 click（否则从节点上起拖会误触 chooseNode）',
+      String(bindMapDrag).indexOf('_mapEatClickUntil') >= 0 && String(chooseNode).indexOf('_mapEatClickUntil') >= 0);
+    __ok('v0.63.0 拖动 showMap 里绑一次 + 重置「用户手动滑过」标记（否则 resize 会把镜头拽回当前层）',
+      (function () {
+        var s = String(showMap);
+        var b = s.indexOf('bindMapDrag()');
+        return b >= 0 && s.indexOf('_mapUserScrolled=false') > b && s.indexOf('_mapCamRatio=0') > b;
+      })());
+
+    /* ---------- D. 相机基准：padTop（顺带修的第 1 层被切 30px）---------- */
+    __ok('v0.63.0 相机 camYForRow 第 5 参 padTop 把整条基准下移（.map-sheet 有 padding:30px 0，'
+      + '少了它第 1 层贴底时被切掉一截）',
+      camYForRow(0, 88, 900, 500, 0) === 732 && camYForRow(0, 88, 900, 500, 30) === 762 &&
+      camYForRow(0, 88, 900, 500, 30) - camYForRow(0, 88, 900, 500, 0) === 30);
+    __ok('v0.63.0 相机 padTop 默认 0 ⇒ 与 v0.62.0 逐字节一致（5355/5356 那两条照旧绿）',
+      camYForRow(3, 88, 900, 0) === 900 && camYForRow(3, 88, 900, 0, 0) === 900);
+    __ok('v0.63.0 相机 mapCamRange 从 getComputedStyle 实测 paddingTop 并交给 mapCamInit（窄屏是 22/18px，写死必错）',
+      (function () {
+        var s = String(mapCamRange);
+        return s.indexOf('getComputedStyle') >= 0 && s.indexOf('paddingTop') >= 0 &&
+          s.indexOf('padTop') >= 0 && String(mapCamInit).indexOf('C.padTop') >= 0;
+      })());
+
+    /* ---------- E. 描边按档位（nodeOutlineTier 的签名变更本身在 §C 图标描边那段）---------- */
+    __ok('v0.63.0 描边 showMap 的 ocls 在**格子循环内**按档位算（搬出循环才能让当前层的锁不冒白边）',
+      (function () {
+        var s = String(showMap);
+        var loop = s.indexOf('for(let c=0;c<MAP[r].length;c++)');
+        return loop >= 0 && s.indexOf('nodeOutlineTier(tier)') > loop;
+      })());
   })();
 
   rep.pass = _p; rep.fail = _f;
