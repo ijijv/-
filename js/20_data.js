@@ -1052,10 +1052,19 @@ const MAP_ROWS = 14;   // 层数不变 ⇒ 战斗场次、calcScore 的 act*1000
    · **分叉路口少**：分叉只可能发生在「往上变宽」的层间过渡（linkRows 的构造性质，见其注释），
      所以形状设计成**基本只收不放**：13 次层间过渡里只有 2~3 次会变宽，且每次只 +1
      ⇒ 单格最多分出 2 条。旧形状有 [1,2]→[3,4] 这种一次分 4 条的，正是「路口太多」的来源。
-   · 除末层 Boss 行外每层恒 2~3 格：不会宽到眼花，也不会窄到没得选。 */
-const ROW_SHAPE = [[2,3],[3,3],[3,3],[2,3],[2,2],[2,3],[2,2],[2,3],[2,2],[2,2],[2,2],[2,2],[2,2],[1,1]];
-/* 每幕特殊节点配额（其余填普通战）。elite 对齐旧图密度（2/3/4），**不要**放大成 3/5/7 —— 那会让精英遭遇翻倍 */
-const TYPE_QUOTA = { 1:{camp:2, shop:2, elite:2, unknown:5}, 2:{camp:2, shop:2, elite:3, unknown:4}, 3:{camp:2, shop:2, elite:4, unknown:3} };
+   · 除末层 Boss 行外每层恒 2~3 格：不会宽到眼花，也不会窄到没得选。
+   v0.62.0（用户要求「每一条路线都要经过 ≥1 商店 / ≥2 篝火 / ≥1 未知 / ≥2 精英」）——
+   **第 10~12 层收成单格**（第 9 层保留 [2,2] 的那次分叉），形成一段「走廊」。
+   实测（3 幕 × 30 种子）这样把第一幕精英从 +57% 压到 +30%，而路线数 5.8/5.5/6.4 基本不变。
+   走廊的副作用与对策见 CORRIDOR_ROWS 的注释。 */
+const ROW_SHAPE = [[2,3],[3,3],[3,3],[2,3],[2,2],[2,3],[2,2],[2,3],[2,2],[2,2],[1,1],[1,1],[1,1],[1,1]];
+/* 每幕特殊节点配额（其余填普通战）。
+   v0.62.0：elite 从 2/3/4 **降到 1/2/3**。原因是新的「每路线 ≥2 精英」下限（见 ROUTE_NEED）
+   会由 enforceRouteQuota 再补一批精英上去 —— 基础配额与下限是**叠加**的，不降就会双份。
+   实测（3 幕 × 30 种子，按 1/2/3 出货）：精英/幕 3.73 / 4.27 / 5.27（现值 2.87 / 3.90 / 4.93，
+   即 +30% / +9% / +7%）；若保留 2/3/4 则是 4.50 / 4.87 / 5.90（第一幕 +57%，正是要避免的）。
+   另外实测：「缺口补齐顺序」「精英权重」对结果**毫无影响**，唯一的杠杆就是这里的 elite 基数。 */
+const TYPE_QUOTA = { 1:{camp:2, shop:2, elite:1, unknown:5}, 2:{camp:2, shop:2, elite:2, unknown:4}, 3:{camp:2, shop:2, elite:3, unknown:3} };
 const ACT1_MINIONS = ['youhun','zhizharen','huyao','jiangshi','shanxiao','shuigui','mengpo'];
 const ACT2_SWAP = {youhun:'wangchuan', zhizharen:'niutou', huyao:'mamian', jiangshi:'panguan', shanxiao:'niutou', shuigui:'wangchuan', mengpo:'wangchuan', baiwuchang:'juhunshi', heiwuchang:'juhunshi', huapigui:'niumamian', yecha:'niumamian'};
 const ACT3_SWAP = {youhun:'mingwei', zhizharen:'luosha', huyao:'xiuluo', jiangshi:'yanluo', shanxiao:'xiuluo', shuigui:'mingwei', mengpo:'yanluo', baiwuchang:'xiuluojiang', heiwuchang:'yecha', huapigui:'xiuluojiang', yecha:'yecha'};
@@ -1120,7 +1129,13 @@ function assignTypes(act, R, rows, minionPool, elitePool, bossPool, quotaOverrid
   const shuf = mkShuffle(R);
   for(let r=0;r<MAP_ROWS;r++) for(let c=0;c<rows[r].length;c++) rows[r][c]={t:'fight', e:[], next:[], prev:[]};
   const slots=[];
-  for(let r=1;r<MAP_ROWS-1;r++) for(let c=0;c<rows[r].length;c++) slots.push([r,c]);   // 首层与末层不参与特殊节点
+  for(let r=1;r<MAP_ROWS-1;r++){
+    // 首层与末层不参与特殊节点。
+    // v0.62.0：**走廊层也不参与基础配额** —— 否则走廊会被基础配额填满，
+    // 每个玩家在最后 3 层白拿一套特殊节点，路线规划就失去意义（详见 CORRIDOR_ROWS 注释）。
+    if(CORRIDOR_ROWS.indexOf(r)>=0) continue;
+    for(let c=0;c<rows[r].length;c++) slots.push([r,c]);
+  }
   shuf(slots);
   const usedRow={};
   function pick(kind, quota){
@@ -1182,6 +1197,109 @@ function assignSlots(R, rows){
   }
 }
 
+/* —— v0.62.0 每路线特殊节点下限（用户要求，原话「这只是限制」= 是下限不是配额）——
+   「每一幕的每一条路线都要经过至少 1 个商店，2 个篝火，1 个未知和 2 个精英」。
+   实测（v0.61.42 存档地图）现值是 **0/0/0/0** —— 今天一条路线可以一个特殊节点都没有。
+   缺口由 enforceRouteQuota 在连边之后后置补齐。
+
+   ⚠️ 走廊（第 10~12 层，收成单格后**所有路线都经过它们**）
+   把特殊节点放在走廊上「一次覆盖全部路线」对贪心永远是最优解 ⇒ 走廊必定被填满 4 个，
+   于是每个玩家在最后 3 层白拿 2 篝火 1 商店、**「路线规划」就失去意义了**。
+   实测发现走廊总是满的**主因不是后置贪心，是 assignTypes 自己把基础配额放上去了**
+   （加多严的走廊上限都没用）。所以两句一起下：
+     ① 基础配额（TYPE_QUOTA）的候选格**排除走廊**（见 assignTypes 的 slots）；
+     ② 后置贪心只在走廊放不下时才用走廊，且**分级放宽** 2 → 3 → 无限。
+   实测 90/90 张图都在第①级就满足，从不降级 ⇒ 走廊只剩 1~3 个特殊节点，且随种子变。
+   ⚠️ 实测最终落点（3 幕 × 30 种子，配合 TYPE_QUOTA 的 elite 降到 1/2/3）：
+      精英/幕 **3.83 / 4.37 / 5.00**（改动前 2.87 / 3.90 / 4.93 ⇒ **+33% / +12% / +1.4%**），
+      特殊节点/幕 15.57 / 15.17 / 14.80，路线数 5.0 / 5.0 / 5.0，
+      走廊（10~12 层）特殊节点实测 **0~2 个**（分级上限第一级 2 就够，90/90 从不降级），
+      每路线最少 camp2/shop1/unknown1/elite2 —— **90/90 全部满足，0 卡死**。
+      第一幕 +33% 是这条下限的结构代价（不降 TYPE_QUOTA 会是 +57%）。
+   ⚠️ 上面这几个数是**实测**，不是设计目标 —— 设计时的预估值（精英 3.57/4.20/4.87、
+      特殊 10.8/9.8/9.2「比现在还少」）**实测都不成立**：特殊节点/幕 反而从 11.9 涨到 15.5，
+      因为「每路线 ≥2 篝火」是下限，路线有 5 条时下限本身就要求十几个特殊节点。
+      数字若与 更新日志.md 的 v0.62.0 段不一致，以**那一段**为准（那里是发布时复测的）。 */
+const ROUTE_NEED = { camp:2, shop:1, unknown:1, elite:2 };
+const CORRIDOR_ROWS = [10, 11, 12];
+const CORRIDOR_TIERS = [2, 3, Infinity];
+
+/* 枚举**全部**路线：第 0 层每格 DFS 沿 next 走到末层 Boss。实测 3~9 条，很便宜。 */
+function routesOf(rows){
+  const out=[];
+  function dfs(r,c,acc){
+    acc.push([r,c]);
+    if(r===rows.length-1) out.push(acc.slice());
+    else { const nx=rows[r][c].next||[]; for(let k=0;k<nx.length;k++) dfs(r+1,nx[k],acc); }
+    acc.pop();
+  }
+  for(let c=0;c<rows[0].length;c++) dfs(0,c,[]);
+  return out;
+}
+
+/* 路线缺口 → 穷举「每条路线上每个 fight 格」的收益（改它能同时补掉多少**同类型**缺口）→ 改型。
+   评分取「覆盖面最大的候选」而不是「第一个够用的」：一个走廊格能一次补掉全部路线的同款缺口，
+   所以只有在走廊被上限挡住时才会退而求其次打散到下半段。
+   **只改 t/e，完全不动 next/prev** ⇒ 「边不交叉 i<i'⇒j<=j' / 无死路 / 无孤岛 / 都能到 Boss」全部保持。
+   第 0 层与末层永不参与 ⇒ 开局仍是「能赢的普通战」、Boss 行仍唯一。
+   随机流用 mkRng(deriveSeed(seed,4242))，**绝不碰全局 rng**。 */
+function enforceRouteQuota(rows, act, seed, minionPool, elitePool){
+  const R=mkRng(deriveSeed(seed, 4242));
+  const routes=routesOf(rows);
+  const counts=function(rt){
+    const o={camp:0,shop:0,unknown:0,elite:0};
+    for(let i=0;i<rt.length;i++){ const t=rows[rt[i][0]][rt[i][1]].t; if(o[t]!==undefined) o[t]++; }
+    return o;
+  };
+  const corridorUsed=function(){
+    let n=0;
+    for(let i=0;i<CORRIDOR_ROWS.length;i++){
+      const row=rows[CORRIDOR_ROWS[i]];
+      if(row && row[0] && row[0].t!=='fight' && row[0].t!=='boss') n++;
+    }
+    return n;
+  };
+  let tier=0, guard=0;
+  while(guard++ < 600){
+    const defs=[];                                    // 缺口 [路线下标, 类型]
+    for(let i=0;i<routes.length;i++){
+      const c=counts(routes[i]);
+      for(const k in ROUTE_NEED){ if(ROUTE_NEED[k]-c[k]>0) defs.push([i,k]); }
+    }
+    if(!defs.length) return;                          // 全部满足 → 收工（绝大多数图在这里返回）
+    const limit=CORRIDOR_TIERS[Math.min(tier, CORRIDOR_TIERS.length-1)];
+    const cu=corridorUsed();
+    let best=null;
+    for(let qi=0;qi<defs.length;qi++){
+      const rt=routes[defs[qi][0]], ty=defs[qi][1];
+      for(let p=0;p<rt.length;p++){
+        const r=rt[p][0], c=rt[p][1];
+        if(r===0 || r===rows.length-1) continue;
+        if(rows[r][c].t!=='fight') continue;
+        if(CORRIDOR_ROWS.indexOf(r)>=0 && cu>=limit) continue;
+        let gain=0;
+        for(let q2=0;q2<defs.length;q2++){
+          if(defs[q2][1]!==ty) continue;
+          const rt2=routes[defs[q2][0]];
+          for(let z=0;z<rt2.length;z++){ if(rt2[z][0]===r && rt2[z][1]===c){ gain++; break; } }
+        }
+        if(!best || gain>best.gain) best={r:r, c:c, gain:gain, ty:ty};
+      }
+    }
+    if(!best){                                        // 当前分级放不下 → 放宽走廊上限再试
+      if(tier < CORRIDOR_TIERS.length-1){ tier++; continue; }
+      return;                                        // 走廊全开时必然有解，到不了这里
+    }
+    const node=rows[best.r][best.c];
+    node.t=best.ty;
+    if(best.ty==='elite'){                            // 精英节点必须带 1 只精英（50% 再带 1 只小怪，同 assignTypes 口径）
+      const k=[elitePool[Math.floor(R()*elitePool.length)]];
+      if(R()<0.5) k.push(minionPool[Math.floor(R()*minionPool.length)]);
+      node.e=k;
+    } else node.e=[];                                 // 篝火/商店/未知：无敌人
+  }
+}
+
 /* —— 入口：一个种子 → 一整幕树状图 —— */
 function genAct(act, seed, opts){
   const O=opts||{};
@@ -1205,6 +1323,9 @@ function genAct(act, seed, opts){
     for(let j=0;j<rows[r+1].length;j++) rows[r+1][j].prev=L.prevOf[j].slice().sort(function(a,b){ return a-b; });
   }
   rows[MAP_ROWS-1][0].next=[];
+  // v0.62.0：按路线补齐特殊节点下限。**必须在连边之后**（靠 next 枚举路线），
+  // 且只改 t/e 不动拓扑 ⇒ 不影响 linkRows 建立的「边不交叉 / 无死路 / 无孤岛」。
+  enforceRouteQuota(rows, act, seed, minionPool, elitePool);
   return rows;
 }
 let ACTS = [genAct(1,101), genAct(2,202), genAct(3,303)];   // 加载即有一张合法地图；ACTS.length **必须恒为 3**（40_flow 用它判通关）

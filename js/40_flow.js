@@ -87,6 +87,11 @@ function goNext(){
     ? mapEdgeKey(__p[__p.length-2].r, __p[__p.length-2].c, __p[__p.length-1].r, __p[__p.length-1].c)
     : null;
   G.mapRow++;
+  /* v0.62.0：告诉随后的 showMap「相机是从哪一行跟上来的」= G.mapRow-1（刚清掉的那一层）。
+     于是相机只往上走一行（600ms ease-out），不会回地图顶部、也不重播进场动画。
+     与上面的 _mapGlowEdge 一样是**一次性**标记：showMap 用过就清，
+     所以重开地图 / 续档 / 换幕 / resize 都不会误放动画。 */
+  _mapStepFrom=G.mapRow-1;
   if(G.endless) G.endlessFloor++;
   G.shopWares=null;
   if(G.mapRow>=MAP.length){ advanceAct(); return; }
@@ -98,13 +103,13 @@ function advanceAct(){
   G.act++;
   MAP=ACTS[G.act-1];
   G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
-  showOverlay(`<h2>第 ${G.act} 幕 · ${ACT_NAMES[G.act-1]}</h2><p>更凶的妖魔盘踞在更高层。<br>敌人的生命与攻击都变强了。</p><button class="btn" onclick="hideOverlay(); showMap();">开始攀登</button>`);
+  showOverlay(`<h2>第 ${G.act} 幕 · ${ACT_NAMES[G.act-1]}</h2><p>更凶的妖魔盘踞在更高层。<br>敌人的生命与攻击都变强了。</p><button class="btn" onclick="hideOverlay(); showMap({entry:true});">开始攀登</button>`);
 }
 function nextEndlessLap(){
   sfx('ui_endless');   // v0.61.32：无尽进入下一层的过渡音
   MAP=genEndlessMap();
   G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
-  showOverlay(`<h2>第 ${G.endlessFloor} 层 · 镇妖塔</h2><p>塔身继续向上延伸，妖魔愈发凶戾。<br>敌人属性与词缀随层数继续攀升。</p><button class="btn" onclick="hideOverlay(); showMap();">继续攀登</button>`);
+  showOverlay(`<h2>第 ${G.endlessFloor} 层 · 镇妖塔</h2><p>塔身继续向上延伸，妖魔愈发凶戾。<br>敌人属性与词缀随层数继续攀升。</p><button class="btn" onclick="hideOverlay(); showMap({entry:true});">继续攀登</button>`);
 }
 function calcScore(){
   const kills=G.totalKills||0;
@@ -278,7 +283,7 @@ function continueRun(){
   else if(d.scene==='camp'){ SCENE='camp'; renderCampfire(); }
   else if(d.scene==='shop'){ SCENE='shop'; renderShop(); }
   else if(d.scene==='unknown'){ SCENE='unknown'; showUnknown(); }
-  else { SCENE='map'; showMap(); }
+  else { SCENE='map'; showMap({entry:true}); }   // v0.62.0：续档落在地图页 → 走进场动画（Boss 层缓入到当前层）
 }
 function viewLeaderboard(){
   const wk=weekKey();

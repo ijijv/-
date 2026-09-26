@@ -374,7 +374,8 @@ function pickOpening(i){
     updateGoldCompensation(G.lastOpeningRewardHadGold);
   }
 
-  showMap();
+  // v0.62.0：开局选完牌才第一次进地图 —— 相机由 Boss 层往下缓入、缓停在第 1 层（entry:true）
+  showMap({entry:true});
 }
 function rerollOpening(){ adPlaceholder('开局重随', showOpeningChoice); }
 function skipOpening(){
@@ -383,11 +384,12 @@ function skipOpening(){
     updateGoldCompensation(G.lastOpeningRewardHadGold);
   }
 
-  showMap();
+  // v0.62.0：跳过开局选牌也走同一条进场动画（与 pickOpening 口径一致）
+  showMap({entry:true});
 }
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.61.42</h2>
+  showOverlay(`<h2>志 怪 塔 · v0.62.0</h2>
     <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
     ${signInPanelHTML()}
     <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
@@ -512,7 +514,8 @@ function showTutorial(i){
 }
 function resumeGame(){
   if(aliveEnemies().length>0) hideOverlay();
-  else showMap();
+  // v0.62.0：从菜单/结算回到地图页也算「重新进入」，走进场动画（缓停在本局当前那一层）
+  else showMap({entry:true});
 }
 function confirmRestart(){
   showOverlay(`<h2>重新开始？</h2><p>重新开始本局，当前进度将记入排行榜（若有存档）。</p>

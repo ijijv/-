@@ -20,8 +20,7 @@ const NODE_ICON  = { fight:'combat.png', elite:'ellite.png', unknown:'unknown.pn
 const NODE_ICON_LOCKED = 'locked.png';
 /* 道路贴图（MAP_ROAD_ICON = path-left/right.png）在 v0.61.42 随「路径回到代码自绘」一并**退役**：
    曲线改由 drawMapLinks 用 SVG 二次贝塞尔现画（还要做沿路径延长的光边动画，贴图做不到）。
-   两张图仍留在 素材/map/ 下**没有删**（用户的素材不擅自删），只是不再被请求 —— verify_dist 的
-   「从未被请求」盘点里把它们排除掉，免得每次跑都提示「可考虑删掉」。 */
+   v0.62.0：用户明确授权后，这两张图已从 素材/map/ 下**真正删除**（不再有「退役但仍占盘」的状态）。 */
 /* v0.61.42：地图落位 —— 5 个槽位（%），每格随机占一个 + 抖动，故而不再整齐排成等距列。
    槽位间距 21%，抖动上限 ±4% / ±7px ⇒ 不会越槽、也不会与相邻列撞在一起。 */
 const MAP_SLOT_PCT = [8, 29, 50, 71, 92];
@@ -44,7 +43,8 @@ const NODE_TIP   = { fight:'普通战斗', elite:'精英战：更强的敌人，
 const MAP_BG = { 1:'map.jpg', 2:'map.jpg', 3:'map.jpg', endless:'map.jpg' };
 function mapBgName(){ return G.endless ? MAP_BG.endless : (MAP_BG[G.act]||MAP_BG[1]); }
 function nodeLabel(node){ return node ? (NODE_LABEL[node.t] || NODE_LABEL.fight) : ''; }
-function nodeIconHTML(file){ return artImg(MAP_ICON_DIR + file, '', 'node-ico'); }
+/* extra：附加到 .node-ico 上的类（v0.62.0 的锁破裂过渡要挂 .o-reveal 把真实图标先藏起来） */
+function nodeIconHTML(file, extra){ return artImg(MAP_ICON_DIR + file, '', 'node-ico' + (extra ? (' ' + extra) : '')); }
 function nodeHTML(node){
   return nodeIconHTML(NODE_ICON[node.t] || NODE_ICON.fight) + '<span class="node-label">' + nodeLabel(node) + '</span>';
 }
@@ -96,43 +96,205 @@ function runStatusHTML(){
     <span>遗物：${relicNames}</span>
   </div>`;
 }
-function showMap(){
+/* —— v0.62.0 地图顶栏（用户说「上方的玩家信息栏你重新设计」，这块交给我）——
+   只负责**排版**：取值全部复用现成件 —— 头像 artImg('hero/<id>.png')、血条现成的 .hpbar 三件套 +
+   .hp-label 叠数值、金币/幕/层 G.gold/ACT_NAMES/G.mapRow、遗物 relicIcon+relById（同 runStatusHTML 的口径）、
+   尸气与血怒的分支判据照抄 renderTopbar（G.hero==='ganshiren' / 'yincha'）。
+   ⚠️ 战斗页的 #topbar + renderTopbar **一行没动** —— 这里只用新增的 .mt-* 类，
+   绝不改 .stat/.hpbar/.prelic-chip 既有规则，免得波及战斗页。 */
+function mapTopbarHTML(){
+  const hero=HEROES.find(h=>h.id===G.hero);
+  const hpPct=G.maxHp>0 ? Math.max(0, Math.min(100, Math.round(G.hp/G.maxHp*100))) : 0;
+  let res='';
+  if(G.hero==='ganshiren') res=`<span class="mt-shiqi">尸气 <b>${G.尸气}/${G.maxShiQi}</b></span>`;
+  else if(G.hero==='yincha') res=`<span class="mt-xuenu">血怒 <b>${G.xuenu||0}/${G.maxXuenu||10}</b></span>`;
+  const relics=G.relics.length
+    ? `<span class="mt-relics">${G.relics.map(id=>{const r=relById(id); return `<span class="prelic-chip" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('')}</span>`
+    : '<span>无遗物</span>';
+  return `<div class="map-topbar">
+    <span class="mt-portrait">${artImg('hero/'+G.hero+'.png','','')}</span>
+    <span class="mt-col">
+      <span class="mt-row">
+        <span class="mt-name">${hero?hero.name:'—'}</span>
+        <span class="mt-gold"><i></i><b>${G.gold}</b></span>
+        <span>牌库 <b>${G.deck.length}</b> 张</span>
+        ${res}
+      </span>
+      <span class="mt-row">
+        <span class="hpbar${G.block>0?' has-block':''} mt-hp"><i class="hpghost" style="width:${hpPct}%"></i><i class="hpfill" style="width:${hpPct}%"></i><span class="hp-label">${G.hp}/${G.maxHp}</span></span>
+        ${relics}
+      </span>
+    </span>
+    <button class="mt-menu" onclick="openMenu()" title="菜单">☰</button>
+  </div>`;
+}
+
+/* —— v0.62.0 地图相机 ——
+   行为（用户要求）：选完英雄进场时镜头**由 Boss 层往下缓入、最后缓停在第 1 层**；之后每打完一关，
+   镜头**只往上走一行**（600ms ease-out），**不回地图顶部、不重播进场动画**。
+   实现：类/内联样式切换驱动 CSS transition（不手写 rAF 插值）—— .map-sheet 默认 600ms，
+   进场时把 transition-duration 临时换成 2000ms。
+   坐标：行 r 的顶边离画心顶 (MAP.length-1-r)*rowH（DOM 顺序是**从 r 大排到 r 小**，
+   所以 Boss 在最上、第 1 层在最下）。要让第 r 层停在窗口底部：
+     camY = (MAP.length-r)*rowH - viewportH，夹在 [0, maxY]，maxY = 画心高 - 窗口高。
+     ⇒ r=0（第 1 层）camY=maxY 贴底；r=13（Boss）camY≤0 被夹到 0 贴顶。
+   ⚠️ rowH 必须**实测**（.map-row 桌面 88px，≤520px 是 68px，≤360px 是 58px），写死 88 会让窄屏错位。
+   ⚠️ drawMapLinks **不用改**：它用 getBoundingClientRect() 相减定位，而 SVG 层与 .map-row 同在
+   .map-sheet 里、共享同一个 transform，位移在相减时正好抵消（overflow:hidden 也不影响布局测量）。
+   —— 这条是本节最省事的地方，别「顺手修坏」。 */
+let _mapStepFrom = -1;    // 上一帧相机停在哪一行；-1 = 不放「只上一行」的动画（重开地图/续档/换幕）
+let _mapCamBound = false;
+function measureRowH(){
+  const el=document.querySelector('.map-row');
+  const h=el && el.offsetHeight;
+  return h ? h : 88;      // 兜底值与 CSS 桌面档一致；窄屏两档靠实测拿到
+}
+function camYForRow(row, rowH, maxY, vpH){
+  if(!(vpH>0)) return maxY;
+  let y=(MAP.length-row)*rowH-vpH;
+  if(!(y>0)) y=0;
+  if(y>maxY) y=maxY;
+  return y;
+}
+function setMapCam(y, animate, ms){
+  const sheet=document.getElementById('map-sheet');
+  if(!sheet || !sheet.style) return;
+  if(animate) sheet.classList.remove('cam-nofx'); else sheet.classList.add('cam-nofx');
+  if(sheet.style.setProperty){
+    // transition-duration 显式两边都写：内联样式压得过 .cam-nofx 的 transition:none，
+    // 只靠类会给上一次残留的时长留后门
+    sheet.style.setProperty('transition-duration', (animate ? (ms||600) : 0)+'ms');
+    sheet.style.setProperty('--camY', y+'px');
+  }
+}
+/* entry=true：进场动画（Boss 层 → 目标层，2000ms）；stepFrom>=0：从上一行的位置单步移动（600ms）；
+   其它：直接落位不放动画。!fx()（流畅模式）一律直接落位。 */
+function mapCamInit(entry, stepFrom){
+  const sheet=document.getElementById('map-sheet');
+  const vp=document.getElementById('map-viewport');
+  if(!sheet || !vp) return;
+  const rowH=measureRowH();
+  const sheetH=sheet.offsetHeight || (MAP.length*rowH);
+  const vpH=vp.clientHeight || vp.offsetHeight || 0;
+  let maxY=sheetH-vpH; if(!(maxY>0)) maxY=0;
+  const target=camYForRow(G.mapRow, rowH, maxY, vpH);
+  if(!fx()){ setMapCam(target, false, 0); return; }
+  if(entry){
+    setMapCam(0, false, 0);              // ① 无动画地钉在 Boss 层
+    void sheet.offsetHeight;             // ② 强制一次重排，让 --camY:0 真的生效
+    setMapCam(target, true, 2000);       // ③ 再缓入到目标层并缓停
+    return;
+  }
+  if(stepFrom>=0 && stepFrom!==G.mapRow){
+    setMapCam(camYForRow(stepFrom, rowH, maxY, vpH), false, 0);
+    void sheet.offsetHeight;
+    setMapCam(target, true, 600);
+    return;
+  }
+  setMapCam(target, false, 0);
+}
+/* 描边分档（用户要求：「达到的关卡的图标要有淡白色的描边，过去的关卡白色描边消失」）：
+   走过的层 → 描边消失；当前所在层 → 淡白描边；更上面的层 → 还是锁，无描边。 */
+function nodeOutlineTier(r){
+  if(r < G.mapRow) return 'o-past';
+  if(r === G.mapRow) return 'o-reached';
+  return 'o-locked';
+}
+/* v0.62.0：把卷轴三张素材（上/下木轴 + 画心）的地址从 CSS 的**相对路径**换成 assetURL() 的结果。
+   为什么必须有这一步：原型.html 里的 `url(素材/map/scroll_top.png)` 在开发期能解析（两者同级），
+   但 dist/志怪塔.html 是**单文件产物** —— 打包.py 只把 素材/ 收进 ASSET_MAP（base64），
+   **不重写 CSS 里的 url()**（它只特判了 <img src="素材/rune.png">）。所以产物里那三条相对路径会 404，
+   木轴与画心会整片消失；靠这里写内联 background-image 覆盖掉。
+   ⚠️ 只覆盖 background-image —— size / position / repeat 三个长手仍由 CSS 给（画心是两层背景，
+      顺序必须与 CSS 一致：先「画」后「纸」）。querySelector 取不到（老浏览器 / 冒烟桩）就整体跳过，
+      退回 CSS 那条相对路径，等于开发期的行为。 */
+function applyMapTextures(){
+  const q=function(sel){ try{ return document.querySelector(sel); }catch(e){ return null; } };
+  const set=function(el, v){ if(el && el.style) el.style.backgroundImage=v; };
+  const u=function(rel){ return 'url("'+assetURL(rel)+'")'; };
+  set(q('.map-roller.top'), u('map/scroll_top.png'));
+  set(q('.map-roller.bot'), u('map/scroll_bottom.png'));
+  set(q('#map-sheet'), u('bg/bg_map.jpg')+', '+u('map/scroll_paper.jpg'));
+}
+/* opts.entry=true：进场动画（选完英雄 / 换幕 / 续档进地图）。
+   不带则不会播进场动画（goNext 走的是「只上一行」，见 goNext 里写的 _mapStepFrom）。 */
+function showMap(opts){
   SCENE='map'; saveRun();
   setBg(mapBgName()); setBGM('map');
-  let html=`<h2>${ACT_NAMES[G.act-1]}</h2>${runStatusHTML()}<p style="font-size:13px">第 ${G.mapRow+1}/${MAP.length} 层 · 沿连线向上，规划好路线。</p>`;
-  // v0.61.20(P2)：路径连线画在这层 svg 里（绝对定位铺满 .map-wrap，行本身仍是普通按钮）
-  html+=`<div class="map-wrap"><div class="map-lines" id="map-lines" aria-hidden="true"></div>`;
+  const entry=!!(opts && opts.entry), stepFrom=_mapStepFrom;
+  _mapStepFrom=-1;    // 一次性：用过就清 —— 重开地图 / 续档 / resize 都不会误放动画
+  /* 本次要播「锁破裂」的格：刚从 goNext 上来时，当前层里**现在能走**的那些格
+     （它们在上一帧还是锁 ⇒ 现在解锁，正是用户要的那个过渡）。 */
+  const breakSet={};
+  if(stepFrom>=0 && MAP[G.mapRow]){
+    for(let c=0;c<MAP[G.mapRow].length;c++) if(mapReachable(G.mapRow,c)) breakSet[G.mapRow+','+c]=true;
+  }
+  let html=`<div class="map-root">${mapTopbarHTML()}`;
+  html+=`<div class="map-plaque">${ACT_NAMES[G.act-1]}<small>第 ${G.mapRow+1}/${MAP.length} 层 · 沿连线向上，规划好路线</small></div>`;
+  html+=`<div class="map-roller top" aria-hidden="true"></div>`;
+  html+=`<div class="map-viewport" id="map-viewport"><div class="map-wrap map-sheet" id="map-sheet"><div class="map-lines" id="map-lines" aria-hidden="true"></div>`;
   for(let r=MAP.length-1;r>=0;r--){
     const rowCls = r<G.mapRow ? 'past' : r===G.mapRow ? 'current' : 'future';
+    const ocls=' '+nodeOutlineTier(r);
     html+=`<div class="map-row ${rowCls}">`;
     for(let c=0;c<MAP[r].length;c++){
       const node=MAP[r][c], tier=fogTier(r,c), dc=`data-r="${r}" data-c="${c}"`;
       // v0.61.41：未解锁的格子不再留白，改挂 NODE_ICON_LOCKED（用户给的 locked.png）——
       // 每格都有内容 ⇒ 行高与坐标仍然恒定，解锁进度变化时不抖动；
       // preview（下一步会亮）与 hidden（更远/同层走不到）都挂锁，只有 past/choice 才露出真实图标。
-      if(tier==='hidden'){ html+=`<div class="map-node locked" ${dc} style="${mapNodeStyle(node)}" title="尚未解锁">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
       const tip=NODE_TIP[node.t]||'';
-      if(tier==='choice'){ html+=`<button class="map-node" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
-      if(tier==='preview'){ html+=`<div class="map-node preview" ${dc} style="${mapNodeStyle(node)}" title="下一步可以走到这里（尚未解锁）">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
-      html+=`<div class="map-node" ${dc} style="${mapNodeStyle(node)}" title="${tip}">${nodeHTML(node)}</div>`;
+      if(breakSet[r+','+c]){
+        // v0.62.0：刚解锁的格 —— 真实图标先挂上但**藏着**（.o-reveal），锁由 playLockBreak 的
+        // canvas 画在上面；碎片飞散那一帧（t≈0.20）再让图标显形 + 描边淡入
+        // = 用户要的「锁破裂后展示相连的下面关卡的对应图标」。
+        html+=`<button class="map-node breaking${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeIconHTML(NODE_ICON[node.t]||NODE_ICON_LOCKED,'o-reveal')}<span class="node-label">${nodeLabel(node)}</span></button>`;
+        continue;
+      }
+      if(tier==='hidden'){ html+=`<div class="map-node locked${ocls}" ${dc} style="${mapNodeStyle(node)}" title="尚未解锁">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
+      if(tier==='choice'){ html+=`<button class="map-node${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
+      if(tier==='preview'){ html+=`<div class="map-node preview${ocls}" ${dc} style="${mapNodeStyle(node)}" title="下一步可以走到这里（尚未解锁）">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
+      html+=`<div class="map-node${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}">${nodeHTML(node)}</div>`;
     }
     html+=`</div>`;
   }
-  html+=`</div>`; // 收 .map-wrap
-  html+=`<div style="margin-top:12px"><button class="btn ghost" onclick="openMenu()">菜单（重开 / 退出）</button></div>`;
+  html+=`</div></div>`;   // 收 .map-sheet / .map-viewport
+  html+=`<div class="map-roller bot" aria-hidden="true"></div>`;
+  html+=`<div class="map-bottombar"><button class="btn ghost" onclick="openMenu()">菜单（重开 / 退出）</button></div>`;
+  html+=`</div>`;         // 收 .map-root
   showOverlay(html);
-  /* v0.61.42：给 #overlay 打上 .map-scene —— 地图页的黑幕降到 .22、面板改半透明，
-     地图背景（#bg，z-index:0）才看得见。**必须在 showOverlay 之后加**：
-     showOverlay 自己会把 .map-scene 清掉，其它所有面板（奖励/商店/图鉴/结算）因此保持原来的深色底。 */
+  /* v0.61.42 起的 .map-scene 在 v0.62.0 换了语义：不再是「半透明黑幕 + 半透明面板」，
+     而是「**完全不透明**的整屏场景」（详见 原型.html 里 .map-scene 的注释）。
+     **必须在 showOverlay 之后加**：showOverlay 自己会摘掉 .map-scene，
+     其它所有面板（奖励/商店/图鉴/结算）因此保持原来的深色卡片底。 */
   const __ov=document.getElementById('overlay');
   if(__ov && __ov.classList) __ov.classList.add('map-scene');
-  // 行布局完成后才有坐标可量，所以推到下一帧再画
-  /* v0.61.42：推帧的闭包里**再补一次 _mapGlowEdge=null**。drawMapLinks 的守卫
-     （量不到 .map-lines / 拿不到 getBoundingClientRect）会让它在**清标记之前**就 return ——
-     那样这一次没画成的光边标记会**留到下一次** showMap（例如续档后打开地图）才放动画，
-     玩家看到的是一条与「刚打通」毫无关系的旧边在生长。清在这里，标记就只活在它该活的那一帧。 */
-  try{ requestAnimationFrame(function(){ drawMapLinks(); _mapGlowEdge=null; }); }
-  catch(e){ drawMapLinks(); _mapGlowEdge=null; }
+  applyMapTextures();     // 见上：把三张卷轴素材换成 ASSET_MAP 的 data URI（产物里 CSS 相对路径会 404）
+  // 行布局完成后才有坐标可量，所以推到下一帧：先画连线，再落相机，最后放锁破裂
+  const __step=stepFrom, __break=breakSet;
+  const kick=function(){
+    drawMapLinks();
+    _mapGlowEdge=null;      // 见下面 drawMapLinks 前的说明：量不到坐标时它会在清标记之前 return
+    mapCamInit(entry, __step);
+    const keys=Object.keys(__break);
+    for(let i=0;i<keys.length;i++){
+      const p=keys[i].split(','), r=p[0], c=p[1];
+      const el=document.querySelector('.map-node[data-r="'+r+'"][data-c="'+c+'"]');
+      if(!el) continue;
+      // 画布 120px、节点图标 56px ⇒ top=-32px 让锁正好压在图标上
+      playLockBreak(el, function(){
+        el.classList.remove('breaking');
+        el.classList.remove('o-locked'); el.classList.add('o-reached');
+        const ic=el.querySelector('.node-ico');
+        if(ic) ic.classList.remove('o-reveal');
+      }, { px:120, top:-32 });
+    }
+  };
+  try{ requestAnimationFrame(kick); }catch(e){ kick(); }
+  // resize 时重算相机（**不带动画**），否则窄屏换成宽屏后相机停在错的层
+  if(!_mapCamBound && typeof window!=='undefined' && window.addEventListener){
+    _mapCamBound=true;
+    window.addEventListener('resize', function(){ if(document.getElementById('map-sheet')) mapCamInit(false, -1); });
+  }
 }
 /* v0.61.20(P2) / v0.61.40 / v0.61.41 / v0.61.42：地图路径连线。
    三种线：暗线 = 当前可走节点 → 它连到的**下一层可见**格；
@@ -142,7 +304,15 @@ function showMap(){
    v0.61.41 曾换成用户给的道路贴图；v0.61.42 按用户要求**回到代码自绘** —— 因为要做
    「打通一关后，淡黄色浅浅的光边沿着路径延长过去」的动画，贴图做不到「沿路径生长」。
    现在每条边是一条 **SVG 二次贝塞尔弧**（控制点沿垂直方向偏移，所以永不画直线），
-   贝塞尔弯曲方向由两端坐标哈希决定 ⇒ 同一张地图每次画都一样，不会闪。 */
+   贝塞尔弯曲方向由两端坐标哈希决定 ⇒ 同一张地图每次画都一样，不会闪。
+
+   ⚠️ v0.62.0：地图改成「木轴固定 + 画心滑动」之后，`.map-viewport` 加了 overflow:hidden、
+   `.map-sheet` 带了 `translateY(--camY)` —— **这里一行都不用改**，别顺手「修」。
+   原因：端点坐标是用下面 nodeAt() 的 `b.left-wb.left` / `b.top-wb.top` 算的，
+   而 SVG 层与 .map-row **同在一个 .map-sheet 里** ⇒ 画心的位移在相减时自己抵消，
+   量到的永远是「画心坐标系」里的稳定坐标。overflow:hidden 也不影响布局测量。
+   唯一的前提是**别把 .map-lines 或 .map-row 挪到 .map-sheet 外面** —— 那样两端的位移就不再相等，
+   连线会跟着地图一起上下滑，看起来像「线粘在了视口上」。 */
 /* 一次性标记：刚打通的那条边（由 goNext 写入，drawMapLinks 消费一次后清空）。
    只在「打完一关往上走」时动画；重开地图 / 续档 / 换幕 / 窗口 resize 都不动画。 */
 let _mapGlowEdge = null;

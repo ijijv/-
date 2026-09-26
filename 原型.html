@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.61.42</title>
+<title>志怪塔 · 原型 v0.62.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -143,19 +143,38 @@
   .map-node{position:absolute; left:50%; top:0; transform:translateX(-50%); min-width:0; padding:0; border:none; background:none; color:var(--text); font-size:12px; letter-spacing:1px; cursor:default; text-align:center; display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.25;}
   .map-node.empty{visibility:hidden;}   /* v0.61.41 兜底：当前没有任何档会渲染它（未解锁改挂 locked.png） */
   .map-node .node-ico{width:56px; height:56px; object-fit:contain; display:block; pointer-events:none; transition:transform .15s ease; filter:drop-shadow(0 2px 4px rgba(0,0,0,.85));}
-  /* v0.61.42：地图改成**半透明面板 + 看得见的背景图**（详见 #overlay.map-scene），
-     小字直接压在照片上，必须自带描边才读得清 */
+  /* v0.62.0：地图是**完全不透明的卷轴场景**（详见 #overlay.map-scene），
+     小字压在画心上，仍然自带描边才读得清 */
   .map-node .node-label{white-space:nowrap; color:var(--dim); text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 7px rgba(0,0,0,.85);}
   .map-node.locked{opacity:.4;}
-  .map-node.locked .node-ico{width:42px; height:42px; filter:grayscale(.55) brightness(.7) drop-shadow(0 2px 4px rgba(0,0,0,.85));}
+  /* v0.62.0：这里原本还有两条 `.node-ico` 的 filter（locked 灰化 / preview 半灰）——
+     已并入下面的 .o-* 描边态（filter 不可跨规则叠加，留着这两条只会被后者整条覆盖）。尺寸保留。 */
+  .map-node.locked .node-ico{width:42px; height:42px;}
   .map-node.preview{opacity:.7;}
-  .map-node.preview .node-ico{width:46px; height:46px; filter:grayscale(.3) brightness(.9) drop-shadow(0 2px 4px rgba(0,0,0,.85));}
+  .map-node.preview .node-ico{width:46px; height:46px;}
   .map-row.current .map-node{cursor:pointer;}
   .map-row.current .map-node .node-ico{filter:drop-shadow(0 0 10px rgba(224,179,65,.95)) drop-shadow(0 2px 4px rgba(0,0,0,.9));}
   .map-row.current .map-node .node-label{color:var(--gold);}
   .map-row.current .map-node:hover .node-ico{transform:translateY(-3px) scale(1.08);}
   .map-row.past .map-node{opacity:.32;}
   .map-row.future .map-node{opacity:.72;}
+
+  /* —— v0.62.0 解锁态描边（用户要求：「达到的关卡的图标要有淡白色的描边，过去的关卡白色描边消失」）——
+     ⚠️ CSS 的 filter **不可跨规则叠加**：后写的整条**覆盖**前面的，不是合并。所以每个状态必须写一条
+     **完整**的 filter 链（灰化 + 投影 + 描边一次写全），拆成两条规则只会剩最后一条生效。
+     ⚠️ 特异性：`.map-row.current .map-node .node-ico` 是 4 个类，下面每条也都 ≥4 个类且写在它之后，
+     否则当前层那圈的暗金发光会把描边整条吃掉。
+     「淡白描边」用三层 2px drop-shadow 叠出来 —— 单层 2px 太虚，三层才有一圈实边的感觉。 */
+  .map-row .map-node.o-locked .node-ico{          /* 更上面的层：还是锁，灰化、无描边 */
+    filter:grayscale(.55) brightness(.7) drop-shadow(0 2px 4px rgba(0,0,0,.9));}
+  .map-row .map-node.o-past .node-ico{            /* 走过的层：白色描边**消失** */
+    filter:grayscale(.35) brightness(.82) drop-shadow(0 2px 4px rgba(0,0,0,.9));}
+  .map-row .map-node.o-reached .node-ico{         /* 达到/前沿：淡白描边 */
+    filter:drop-shadow(0 0 2px #e6e3da) drop-shadow(0 0 2px #e6e3da) drop-shadow(0 0 2px #e6e3da) drop-shadow(0 2px 4px rgba(0,0,0,.9));}
+  .map-row.current .map-node.o-reached .node-ico{ /* 当前层 + 前沿：暗金发光 **和** 淡白描边一条写完 */
+    filter:drop-shadow(0 0 10px rgba(224,179,65,.95)) drop-shadow(0 0 2px #e6e3da) drop-shadow(0 0 2px #e6e3da) drop-shadow(0 2px 4px rgba(0,0,0,.9));}
+  /* 锁破裂过渡中的节点：真实图标先藏着，等碎片飞散（t≥0.20）那一帧再显形 + 描边淡入 */
+  .map-node .node-ico.o-reveal{opacity:0; transition:opacity .18s ease;}
 
   #turn-summary{margin-bottom:6px; padding:8px 12px; background:rgba(224,179,65,.08); border:1px solid var(--gold); border-radius:8px; font-size:13px; color:var(--gold); line-height:1.6;}
   #turn-summary:empty{display:none;}
@@ -265,14 +284,100 @@
   /* —— 外置素材（有则增强，无则优雅回退） —— */
   #bg{position:fixed; inset:0; z-index:0; width:100%; height:100%; object-fit:cover; pointer-events:none;}
   body.has-bg{background:transparent;}
-  /* v0.61.42：**地图背景终于看得见了** —— 这是「地图背景怎么没有改」的真正根因。
-     地图页是渲染进 #overlay 的（showMap → showOverlay），而 #overlay 老样式是 rgba(10,8,6,.88)
-     的全屏黑幕、它里面的 .panel 又是**完全不透明**的 var(--ink2)；#bg 在 z-index:0、#overlay 在 10，
-     所以换哪张背景图都被黑幕 + 不透明卡片压成一片黑 —— 看不出变化不是图没装，是被盖住了。
-     现在地图场景给 #overlay 打上 .map-scene（见 showOverlay/showMap），黑幕降到 .22、面板改半透明。 */
-  #overlay.map-scene{background:rgba(10,8,6,.22);}
-  #overlay.map-scene #overlayWrap{max-width:720px;}
-  #overlay.map-scene .panel{background:rgba(12,9,7,.30); border-color:rgba(224,179,65,.22);}
+  /* v0.61.42 的「地图背景怎么没有改」：根因是地图页渲染进 #overlay，而 #overlay 是 rgba(10,8,6,.88)
+     的全屏黑幕、里面的 .panel 又是完全不透明的 var(--ink2) ⇒ 换哪张背景图都被压成一片黑。
+     那一版的对策是**调淡**（黑幕 .22 + 面板 rgba(...,.30)）—— **方向就错了**：
+     两层叠出来的合成不透明度是 1-(0.78×0.70)=0.454，也就是说还有约 55% 的战斗 UI 从面板里透出来
+     （v0.62.0 用户报「还有半透明的战斗场景，十分失败」，指的就是这个）。
+     v0.62.0 真修法：**地图场景完全不透明**，并把 #overlay 从「居中的小卡片」改成「整屏场景」。
+     三层覆盖：① #overlay 换不透明底；② #overlayWrap 铺满整屏、去掉 620px 限宽；
+               ③ .panel 去掉卡片底/边框/内边距/限高，退化成一个纯容器。
+     其它所有面板（奖励/商店/图鉴/结算…）不受影响 —— showOverlay 开任何面板前都会先摘掉 .map-scene。 */
+  #overlay.map-scene{background:#0b0a09;}
+  #overlay.map-scene #overlayWrap{width:100%; height:100%; max-width:none;}
+  #overlay.map-scene .panel{background:none; border:0; border-radius:0; padding:0; max-height:none; overflow:visible; text-align:left;}
+
+  /* —— v0.62.0 地图场景（整屏 · 卷轴）——
+     纵向结构（.map-root 是 flex 纵列，铺满 #overlay）：
+       顶栏信息栏 / 幕名匾 / 上木轴（固定）/ 画心窗口 overflow:hidden（只有 .map-sheet 在里面动）/ 下木轴（固定）/ 底栏
+     木轴与纸面是从 志怪塔UI重设计\素材\地图背景-UI版.jpg 切出来的（坐标 PIL 实测：上轴 y190-235、
+     下轴 y3778-3853、纸面 x96-1003），见 素材/map/scroll_top.png / scroll_bottom.png / scroll_paper.jpg。
+     ⚠️ 画心**不用**那张图 —— 它是一整套已完工的**假界面**（画心里画着枯树山石，顶上还有一块写着
+     「焦南」的匾额），当纹理不可复用、按字面照搬还会把假界面搬进来。
+     画心改用游戏**本来就有**的 素材/bg/bg_map.jpg（1295×3238 竖幅水墨：石阶通道、两侧烛火、远处塔影）
+     —— 它正是 设计说明.md §04「塔内石阶通道两侧烛火」那张，也是本作地图页一直想用的图，
+     v0.61.42 之前被黑幕盖住看不见，**不是没装**。 */
+  .map-root{position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden;}
+  .map-plaque{flex:0 0 auto; text-align:center; padding:6px 0 4px; font-family:var(--font-kai);
+    font-size:15px; letter-spacing:4px; color:var(--gold); background:rgba(10,9,7,.72);
+    text-shadow:0 1px 4px rgba(0,0,0,.95);}
+  .map-plaque small{color:var(--dim); font-size:11.5px; letter-spacing:1px; margin-left:8px;}
+  /* 木轴：**固定不动**（用户选的是「木轴固定、画心滑动」）。素材是 1086 宽的长条，
+     用 100% 100% 拉伸而不是 repeat-x —— 否则窄屏上会横向平铺，把两端的轴头重复到屏幕中间。 */
+  .map-roller{flex:0 0 auto; position:relative; z-index:3; height:clamp(22px, 4.6vw, 44px);
+    background-size:100% 100%; background-repeat:no-repeat;}
+  /* ⚠️ v0.62.0：这两条 url() 只是**开发期兜底**（原型.html 与 素材/ 同级，直接双击就能看）。
+     打包.py 不重写 CSS 里的 url()（它只特判 <img src="素材/rune.png">），所以产物里这三个相对路径
+     会 404 —— 真正的加载路径是 showMap 里的 applyMapTextures()：用 assetURL() 取 ASSET_MAP 的
+     data URI 写成**内联 background-image**，把这里的值覆盖掉。改这里的路径不会影响产物，
+     改 applyMapTextures 才会。 */
+  .map-roller.top{background-image:url(素材/map/scroll_top.png);}
+  .map-roller.bot{background-image:url(素材/map/scroll_bottom.png);}
+  /* 画心窗口：overflow:hidden ⇒ 一个屏幕装不下的那张长图只能从这里看到一段（用户要的正是这个） */
+  .map-viewport{flex:1 1 auto; min-height:0; position:relative; overflow:hidden;
+    background:#12100d; box-shadow:inset 0 0 60px rgba(0,0,0,.75);}
+  /* 画心本体：只有它在动。transform 由 --camY 驱动，类切换（.cam-nofx / 内联 transition-duration）
+     控制有没有动画 —— 不手写 rAF 插值，交给 CSS transition。
+     ⚠️ 两层背景：先铺**画**（auto 100% = 按高度等比缩放，绝不拉伸变形），再垫一层可平铺的**旧纸**
+     （256×256 无缝，实测 std 1.4）。这样任何宽高比下都铺得满：画比纸窄时两侧露出纸纹，比纸宽时两侧自然裁掉。 */
+  .map-sheet{position:absolute; left:50%; top:0; width:100%; max-width:760px;
+    padding:30px 0;
+    transform:translate3d(-50%, calc(-1 * var(--camY, 0px)), 0);
+    transition:transform 600ms cubic-bezier(.2,.8,.3,1); will-change:transform;
+    background-image:url(素材/bg/bg_map.jpg), url(素材/map/scroll_paper.jpg);   /* 同上：产物里由 applyMapTextures() 覆盖 */
+    background-size:auto 100%, 256px 256px;
+    background-position:center top, left top;
+    background-repeat:no-repeat, repeat;
+    background-color:#12100d;}
+  .map-sheet.cam-nofx{transition:none;}
+  /* 压一层暗角：画本身很亮很满，不压的话图标和连线会被画面吃掉 */
+  .map-sheet::before{content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 40%, rgba(8,7,6,.28) 0%, rgba(8,7,6,.62) 70%, rgba(8,7,6,.82) 100%);}
+  .map-bottombar{flex:0 0 auto; display:flex; justify-content:center; gap:10px; padding:7px 10px;
+    background:linear-gradient(0deg, rgba(12,10,8,.94), rgba(12,10,8,.72)); border-top:1px solid rgba(224,179,65,.18);}
+  .map-bottombar .btn{padding:6px 14px; font-size:13px;}
+  /* —— v0.62.0 地图顶栏（用户说「上方的玩家信息栏你重新设计」，这块交给我）——
+     取值全部**复用现成件**，只换外壳：头像 = artImg('hero/<id>.png')、血条 = 现成的 .hpbar 三件套 +
+     .hp-label 叠数值、金币/幕/层 = G.gold / ACT_NAMES / G.mapRow、遗物 chip = relicIcon + prelic-chip、
+     尸气 / 血怒两个分支照抄 renderTopbar 的判据（G.hero==='ganshiren' / 'yincha'）。
+     ⚠️ 战斗页的 #topbar + renderTopbar **一行都没动** —— 所以这里只新增 .mt-* 类，
+     绝不改 .stat / .hpbar / .prelic-chip 的既有规则，免得波及战斗页。 */
+  .map-topbar{flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:7px 10px;
+    background:linear-gradient(180deg, rgba(12,10,8,.95), rgba(12,10,8,.74));
+    border-bottom:1px solid rgba(224,179,65,.18);}
+  .mt-portrait{flex:0 0 auto; width:44px; height:44px; border-radius:50%; overflow:hidden; position:relative;
+    border:2px solid var(--gold); background:rgba(0,0,0,.5); box-shadow:0 0 10px rgba(224,179,65,.22);}
+  .mt-portrait img{width:100%; height:100%; object-fit:cover; object-position:top center; display:block;}
+  .mt-col{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:4px;}
+  .mt-row{display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-size:12px; color:var(--dim); line-height:1.2;}
+  .mt-row b{color:var(--gold); font-size:13px;}
+  .mt-name{font-family:var(--font-kai); color:var(--gold); letter-spacing:1px; font-size:13.5px;}
+  .mt-hp{width:min(190px, 40vw); height:14px;}
+  .mt-gold i{display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--gold); margin-right:3px; vertical-align:middle;}
+  .mt-shiqi b{color:#b98bff;}
+  .mt-xuenu b{color:var(--red);}
+  .mt-relics{display:flex; flex-wrap:wrap; gap:4px; align-items:center;}
+  .map-topbar .prelic-chip{padding:1px 5px 1px 1px;}
+  .map-topbar .prelic-chip .ricon{width:18px; height:18px; margin:0;}
+  .mt-menu{flex:0 0 auto; width:36px; height:36px; border-radius:50%; border:1px solid var(--ink3);
+    background:rgba(255,255,255,.04); color:var(--gold); font-size:16px; line-height:1; cursor:pointer;}
+  .mt-menu:hover{border-color:var(--gold);}
+  @media (max-width:520px){
+    .mt-portrait{width:36px; height:36px;}
+    .map-topbar{gap:7px; padding:6px 7px;}
+    .mt-row{font-size:11px; gap:7px;}
+    .mt-hp{width:min(140px, 34vw); height:12px;}
+  }
   .eportrait{width:auto; height:186px; max-width:100%; object-fit:contain; object-position:bottom center; border-radius:0; margin-bottom:2px; background:transparent; display:block; filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));}
   .cart{display:block;}
   .ricon{width:100%; height:56px; object-fit:contain; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.2);}
@@ -512,7 +617,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.42</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.62.0</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

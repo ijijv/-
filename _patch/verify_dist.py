@@ -106,6 +106,15 @@ def main():
     miss_music = ['music/bgm_%s{%s}' % (i, ','.join(bgm_exts)) for i in ids['music']
                   if not any(('music/bgm_%s%s' % (i, e)) in keys for e in bgm_exts)]
     want += ['rune.png']
+    # v0.62.0：**源码 CSS 里声明了 url(素材/…) 的，就是必需素材**。
+    # 卷轴三件（上木轴 / 下木轴 / 画心纸）只走这条路：`原型.html` 的 .map-roller/.map-sheet
+    # 写了开发期兜底 url()，产物里由 showMap→applyMapTextures() 用 assetURL() 覆盖。
+    # 它们**不进任何 ids 清单**，所以早先被 [2] 误报成「从未被游戏请求 / 可考虑删掉」——
+    # 照那句删了地图就没卷轴了。这里从源码反推，新增同类素材自动被覆盖。
+    # （判据与 [5] 的 url 覆盖守卫互为正反面：那边查「CSS 的 url 有没有 JS 加载路径」，
+    #   这边查「这条路径有没有真的打进产物」。）
+    _css_want = sorted(set(re.findall(r'url\(\s*素材/([^)\s"\']+)\s*\)', src)))
+    want += _css_want
     want = list(dict.fromkeys(want))   # MAP_BG 四档同名 map.jpg，去重后再报数
     miss = [w for w in want if w not in keys]
     check(not miss, '游戏请求的 %d 个素材全部命中' % len(want))
@@ -269,16 +278,41 @@ def main():
     print('\n[5] 结构')
     check(html.count('<script>') == 1, '只有 1 个 <script> 标签（实际 %d）' % html.count('<script>'))
     check(html.count('</script>') == 1, '只有 1 个 </script> 标签（实际 %d）' % html.count('</script>'))
-    # v0.61.42：本批三处 CSS 必须活到产物里 —— 混淆只碰 <script> 正文，CSS 是纯文本，
-    # 但「CSS 被误删/误并」这种事冒烟查不到（冒烟不读文件），只能在这里钉住：
-    #   .map-scene    = 地图页半透明底（地图背景看得见的唯一开关）
+    # 关键 CSS 必须活到产物里 —— 混淆只碰 <script> 正文，CSS 是纯文本，
+    # 但「CSS 被误删/误并」这种事冒烟查不到（冒烟在 VM 里跑，不读文件），只能在这里钉住：
+    #   .map-scene    = v0.62.0 起改成「**完全不透明**的整屏地图场景」
+    #                   （v0.61.42 它是半透明底，那正是用户报「透出半透明战斗场景」的根因）
     #   mapGlowGrow   = 沿路径延长的淡黄光边动画
     #   .fx-sign      = 浮字正负号的配色（用户报的「加号减号颜色没变」）
-    for _need in ('.map-scene', 'mapGlowGrow', '.fx-sign'):
-        check(_need in html, '产物保留 v0.61.42 的 %s 样式' % _need)
+    #   .map-viewport / .map-sheet / .map-roller = v0.62.0 卷轴骨架：木轴固定、画心靠 --camY 滑动
+    #   .o-reached / .o-past / .o-locked = v0.62.0 图标描边三态（达到的淡白描边、过去的消失）
+    for _need in ('.map-scene', 'mapGlowGrow', '.fx-sign',
+                  '.map-viewport', '.map-sheet', '.map-roller',
+                  '.o-reached', '.o-past', '.o-locked'):
+        check(_need in html, '产物保留 %s 样式' % _need)
+    # v0.62.0：地图不再是不透明面板，必须是**实心**底色 —— 半透明就是 Image#6 那个 bug 本身。
+    # 这条防的是「以后有人手滑把 #overlay.map-scene 的 background 改回 rgba(...)」。
+    import re as _re
+    _m = _re.search(r'#overlay\.map-scene\s*\{[^}]*\}', html)
+    check(_m is not None, '产物里 #overlay.map-scene 规则还在')
+    if _m:
+        check('rgba' not in _m.group(0).replace(' ', ''),
+              '#overlay.map-scene 的底色是**实心**的（不是半透明）: %s' % _m.group(0)[:90])
     # 提示项，不作断言：stringArrayThreshold=0.75 意味着约 1/4 的字符串保留明文，
     # 哪些字符串被编码随输入变化（同样输入 + 固定 seed 才稳定），命中与否都不影响功能与隐私。
     print('  注: 产物中 %s "%s" 明文' % ('存在' if '素材/' in html else '不存在', '素材/'))
+
+    # v0.62.0：CSS 里的 `url(素材/xxx)` 在单文件产物里**会 404** —— 打包.py 只把 素材/ 收进
+    # ASSET_MAP（base64），并不重写 CSS 的 url()（唯一特判是 <img src="素材/rune.png">）。
+    # 所以每条 CSS 相对路径都必须有一条 JS 走 assetURL() 的加载路径去覆盖它。
+    # 判据：把 url() 里的 '素材/' 前缀去掉，看这个相对路径有没有作为字符串出现在 <script> 里。
+    # （开发期 原型.html 与 素材/ 同级所以能看；产物是发出去的，必须自包含。）
+    _css_urls = _re.findall(r'url\(\s*素材/([^)\s"\']+)\s*\)', html)
+    _script = html[html.find('<script'):]
+    _uncovered = sorted({u for u in _css_urls if ('%s' % u) not in _script})
+    check(not _uncovered,
+          'CSS 里 %d 条 url(素材/…) 都有对应的 assetURL 加载路径（否则产物里 404）: %s'
+          % (len(_css_urls), _uncovered[:5]))
 
     # 「可选覆盖」的两类，没文件都有兜底，故不算未使用：
     #   · 音效 sfx/：没文件就走程序化合成
@@ -290,11 +324,11 @@ def main():
     optional_music = set('music/bgm_%s%s' % (t, e)
                          for t in (ids['music'] + ids['musicOptional']) for e in bgm_exts)
     # v0.61.36：数字图（交付即生效）与 musicOptional 同理 —— 只用来排重，不做「必须命中」
-    # v0.61.42：两条道路贴图（map/path-left.png、map/path-right.png）随「路径回到代码自绘」退役。
-    # 它们**仍在 素材/ 里没删**（用户的素材不擅自删），只是游戏不再请求 —— 这里显式排掉，
-    # 免得每跑一次就提示「可考虑删掉」，那会诱导以后真去删用户的东西。
-    retired = {'map/path-left.png', 'map/path-right.png'}
-    unused = sorted(k for k in (keys - set(want) - set(num_want) - retired)
+    # v0.62.0：原先这里有个 retired = {'map/path-left.png','map/path-right.png'} 的排除集，
+    # 语义是「已退役但**仍在磁盘上**」。本批用户明确授权删掉，文件已真的删除 ⇒ 排除集一并撤销。
+    # **不要把它加回来**：现在若有人再放一份同名贴图进 素材/map/，它就应当照常报「从未被请求」，
+    # 那是真信号；一个排除集会把这份信号静默吃掉（本批清理它的理由就在这）。
+    unused = sorted(k for k in (keys - set(want) - set(num_want))
                     if not k.startswith('sfx/') and k not in optional_music)
     if unused:
         tot = sum(os.path.getsize(os.path.join(ASSD, u)) for u in unused if os.path.exists(os.path.join(ASSD, u)))

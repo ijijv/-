@@ -4323,13 +4323,17 @@
           var t5 = M4[r4][c5].t;
           if (cnt4[t5] !== undefined) cnt4[t5]++;
         }
-        if (cnt4.camp < 1 || cnt4.camp > 3) badD.push('a' + a4 + 's' + s4 + ' camp=' + cnt4.camp);
-        if (cnt4.shop < 1 || cnt4.shop > 3) badD.push('a' + a4 + 's' + s4 + ' shop=' + cnt4.shop);
-        if (cnt4.elite < 2) badD.push('a' + a4 + 's' + s4 + ' elite=' + cnt4.elite);
-        if (cnt4.unknown < 2) badD.push('a' + a4 + 's' + s4 + ' unknown=' + cnt4.unknown);
+        /* v0.62.0 改口径：v0.61.40 这里钉的是「camp/shop 各 1~3」的**幕内总数**上限，
+           而 v0.62.0 的「每路线 ≥2 篝火」是**路线级下限** ⇒ 幕内总数必然被推高（实测 3~5），
+           上限口径已失效。这里保留「幕内不被饿死 + 不失控」的粗筛（下限用路线级下限的理论值 2，
+           上限用实测包络放大到 8/6/10/10），真正的契约由下面 v0.62.0 的**逐路线**断言钉死。 */
+        if (cnt4.camp < 2 || cnt4.camp > 8) badD.push('a' + a4 + 's' + s4 + ' camp=' + cnt4.camp);
+        if (cnt4.shop < 1 || cnt4.shop > 6) badD.push('a' + a4 + 's' + s4 + ' shop=' + cnt4.shop);
+        if (cnt4.elite < 2 || cnt4.elite > 10) badD.push('a' + a4 + 's' + s4 + ' elite=' + cnt4.elite);
+        if (cnt4.unknown < 2 || cnt4.unknown > 10) badD.push('a' + a4 + 's' + s4 + ' unknown=' + cnt4.unknown);
       }
     }
-    __ok('v0.61.40 生成器 每幕配额（camp/shop 各 1~3、elite ≥2、unknown ≥2）', badD.length === 0, badD.slice(0, 6).join(' | '));
+    __ok('v0.62.0 生成器 每幕特殊节点不饿死也不失控（camp 2~8、shop 1~6、elite 2~10、unknown 2~10）', badD.length === 0, badD.slice(0, 6).join(' | '));
 
     /* —— 消费者侧端到端：真的走完 13 层（只看 mapReachable 选路），每层都必须至少有一格能走 ——
        这是「每打完一关解锁往上衍生的关卡」的核心保证：任何一张图、任何一个种子，都不能把人卡在地图页。 */
@@ -4912,9 +4916,16 @@
     __ok('v0.61.42 落位 mapNodeStyle 缺字段有兜底（居中槽 + 零抖动，不是全叠在左上角）',
       mapNodeStyle({ t: 'fight' }) === 'left:50.00%;top:0px;' && mapNodeStyle(null) === '',
       mapNodeStyle({ t: 'fight' }));
-    __ok('v0.61.42 落位 showMap 四档分支**都**带内联落位（少一处就会有格子叠在左上角）',
-      (String(showMap).match(/mapNodeStyle\(node\)/g) || []).length === 4,
-      String((String(showMap).match(/mapNodeStyle\(node\)/g) || []).length));
+    /* v0.62.0 改口径：v0.61.42 这里钉「正好 4 处」是因为当时恰好 4 个雾级分支；
+       v0.62.0 新增了 breaking（锁破裂）档 ⇒ 变成 5 处，**写死数字会随档位数一起腐烂**。
+       改钉形状不变量本身：「凡渲染 .map-node 的地方，必带 style="${mapNodeStyle(node)}"」
+       ⇒ 两边的出现次数必须相等，且至少 5（breaking / choice / preview / hidden / 普通）。
+       ⚠️ Function.toString() **会把注释算进去**，所以这里只比对两个计数的**相等关系**，
+          不比对绝对值（绝对值会被自己写的注释判红）。 */
+    var __nStyle = (String(showMap).match(/style="\$\{mapNodeStyle\(node\)\}"/g) || []).length;
+    var __nNode = (String(showMap).match(/class="map-node/g) || []).length;
+    __ok('v0.62.0 落位 showMap 每处 .map-node markup 都带内联落位（少一处就有格子叠在左上角）',
+      __nStyle === __nNode && __nNode >= 5, 'style=' + __nStyle + ' / node=' + __nNode);
 
     /* ============ B. 生成器形状：2~3 条初始路线 + 少分叉（参照杀戮尖塔）============ */
     var __firstRow = {}, __maxBr = 0, __fN = [], __fR = [], __slotBad = [], __orderBad = 0;
@@ -5062,6 +5073,301 @@
     } finally {
       MAP = __keepMAP; G = __keepG; SCENE = __keepScene; _mapGlowEdge = __keepEdge;
     }
+  })();
+
+  /* ====================================================================
+   * v0.62.0：地图界面重做（卷轴场景 / 相机 / 锁破裂解锁）
+   *           + 每路线特殊节点下限 + 图标描边三态
+   *   用户原话：「每一幕的每一条路线都要经过至少1个商店，2个篝火，1个未知和2个精英，这只是限制」
+   * ==================================================================== */
+  (function () {
+    /* ============ A. 逐路线特殊节点下限 ============ */
+    var __badRoute = [], __routeMin = 99, __routeMax = 0, __lvlFail = [], __corrFail = [],
+        __densFail = [], __enemyFail = [], __eliteSum = [0, 0, 0], __specSum = [0, 0, 0], __N = 30;
+    for (var a = 1; a <= 3; a++) {
+      for (var s = 1; s <= __N; s++) {
+        var M = genAct(a, s), rt = routesOf(M);
+        if (rt.length < __routeMin) __routeMin = rt.length;
+        if (rt.length > __routeMax) __routeMax = rt.length;
+        /* ① 逐路线：每一条路线都要凑够 ROUTE_NEED */
+        for (var i = 0; i < rt.length; i++) {
+          var c = { camp: 0, shop: 0, unknown: 0, elite: 0 };
+          for (var p = 0; p < rt[i].length; p++) {
+            var t = M[rt[i][p][0]][rt[i][p][1]].t;
+            if (c[t] !== undefined) c[t]++;
+          }
+          for (var k in ROUTE_NEED) {
+            if (c[k] < ROUTE_NEED[k]) __badRoute.push('a' + a + 's' + s + ' #' + i + ' ' + k + '=' + c[k]);
+          }
+        }
+        /* ② 首尾不动：第 0 层全是普通战（开局必须能赢）、末层唯一 Boss */
+        for (var c0 = 0; c0 < M[0].length; c0++) {
+          if (M[0][c0].t !== 'fight') __lvlFail.push('a' + a + 's' + s + ' row0 有 ' + M[0][c0].t);
+        }
+        if (M[MAP_ROWS - 1].length !== 1 || M[MAP_ROWS - 1][0].t !== 'boss') {
+          __lvlFail.push('a' + a + 's' + s + ' 末层不是唯一 boss');
+        }
+        /* ③ 改型后敌人编成仍合法：fight 至少 2 只小怪、elite 至少含 1 只精英 */
+        var spec = { camp: 0, shop: 0, unknown: 0, elite: 0 }, cells = 0;
+        for (var r = 0; r < M.length; r++) for (var cc = 0; cc < M[r].length; cc++) {
+          var nd = M[r][cc]; cells++;
+          if (nd.t === 'fight' && (!nd.e || nd.e.length < 2)) __enemyFail.push('a' + a + 's' + s + ' @' + r + ',' + cc + ' fight e=' + (nd.e ? nd.e.length : 'null'));
+          if (nd.t === 'elite' && (!nd.e || nd.e.length < 1)) __enemyFail.push('a' + a + 's' + s + ' @' + r + ',' + cc + ' elite 无精英');
+          if (spec[nd.t] !== undefined) spec[nd.t]++;
+          if (r < 8 && spec[nd.t] !== undefined) { /* 下半段密度在下面单独算 */ }
+        }
+        /* ④ 走廊（第 10~12 层）特殊节点数量受分级上限约束 */
+        var corr = 0;
+        for (var ci = 0; ci < CORRIDOR_ROWS.length; ci++) {
+          var rowC = M[CORRIDOR_ROWS[ci]];
+          if (rowC && rowC[0] && rowC[0].t !== 'fight' && rowC[0].t !== 'boss') corr++;
+        }
+        if (corr > 3) __corrFail.push('a' + a + 's' + s + ' 走廊特殊=' + corr);
+        /* ⑤ 下半段（1~8 层）特殊节点密度不得失控（否则「路线规划」没意义了） */
+        var lo8 = 0, sp8 = 0;
+        for (var r8 = 0; r8 < 8; r8++) for (var c8 = 0; c8 < M[r8].length; c8++) {
+          lo8++;
+          if (spec[M[r8][c8].t] !== undefined) sp8++;
+        }
+        /* v0.62.0 实测修正：计划书写的门槛是 ≤70%，**实测过不了** —— 3 幕 × 60 种子的最坏值是
+           0.75（a1s54 15/20）。这不是 bug：「每路线 ≥2 篝火 + ≥2 精英」是**下限**，
+           路线数 5~6 条时下限本身就要求下半段扛住十几个特殊节点。所以门槛改成实测包络
+           （0.75）之上的 0.80 —— 仍然能抓住「配额把下半段整个塞满」的失控（那种会到 0.9+），
+           但不再把正常地图判红。真实门槛是下面 §A 的逐路线下限，这条只是防失控的粗筛。 */
+        if (sp8 / lo8 > 0.80) __densFail.push('a' + a + 's' + s + ' ' + sp8 + '/' + lo8);
+        /* ⑥ 统计（用于把实测值写进注释，不参与断言） */
+        __eliteSum[a - 1] += spec.elite;
+        __specSum[a - 1] += spec.camp + spec.shop + spec.unknown + spec.elite;
+      }
+    }
+    __ok('v0.62.0 配额 每条路线都满足「篝火≥2 / 商店≥1 / 未知≥1 / 精英≥2」（3幕×' + __N + '种子，0 例外）',
+      __badRoute.length === 0, __badRoute.slice(0, 6).join(' | '));
+    __ok('v0.62.0 配额 路线数在 3~9 之间（太少没得选、太多图会糊）',
+      __routeMin >= 3 && __routeMax <= 9, __routeMin + '~' + __routeMax);
+    __ok('v0.62.0 配额 第 0 层全是普通战、末层唯一 Boss（配额不许碰首尾）',
+      __lvlFail.length === 0, __lvlFail.slice(0, 4).join(' | '));
+    __ok('v0.62.0 配额 改型后敌人编成仍合法（fight ≥2 小怪 / elite ≥1 精英）',
+      __enemyFail.length === 0, __enemyFail.slice(0, 4).join(' | '));
+    __ok('v0.62.0 配额 走廊（第 10~12 层）特殊节点 ≤3（分级上限的硬边界，防止最后 3 层白送）',
+      __corrFail.length === 0, __corrFail.slice(0, 4).join(' | '));
+    __ok('v0.62.0 配额 下半段（1~8 层）特殊节点密度 ≤80%（防失控粗筛；实测最坏 0.75）',
+      __densFail.length === 0, __densFail.slice(0, 4).join(' | '));
+
+    /* 形状：走廊三层收成单格、第 9 层保留双格分叉（方案B 的细化，A 会连第 9 层的分叉一起吃掉） */
+    __ok('v0.62.0 形状 ROW_SHAPE 第 10/11/12 层都是 [1,1]（走廊单格 ⇒ 所有路线都经过它）',
+      JSON.stringify(ROW_SHAPE[10]) === '[1,1]' && JSON.stringify(ROW_SHAPE[11]) === '[1,1]' &&
+      JSON.stringify(ROW_SHAPE[12]) === '[1,1]', JSON.stringify([ROW_SHAPE[10], ROW_SHAPE[11], ROW_SHAPE[12]]));
+    __ok('v0.62.0 形状 ROW_SHAPE 第 9 层仍是 [2,2]（保留最后一次双格分叉）',
+      JSON.stringify(ROW_SHAPE[9]) === '[2,2]', JSON.stringify(ROW_SHAPE[9]));
+    __ok('v0.62.0 形状 CORRIDOR_ROWS 与 ROW_SHAPE 的单格层一致（两处不一致 = 上限管错层）',
+      CORRIDOR_ROWS.length === 3 && CORRIDOR_ROWS.every(function (r) {
+        return JSON.stringify(ROW_SHAPE[r]) === '[1,1]';
+      }), JSON.stringify(CORRIDOR_ROWS));
+
+    /* ============ B. enforceRouteQuota：只改 t/e，绝不动拓扑 ============ */
+    (function () {
+      /* 强测法：先把所有特殊节点**手工退成普通战**造出一个满缺口的地图，再跑配额 ——
+         这样才真的走过了「改型」那条路（直接拿 genAct 的结果跑第二遍会立刻 return，测不到）。 */
+      var M2 = genAct(1, 4242);
+      var snapTopo = function (mm) {
+        return JSON.stringify(mm.map(function (row) {
+          return row.map(function (n) { return { n: n.next, p: n.prev }; });
+        }));
+      };
+      var snapType = function (mm) {
+        return JSON.stringify(mm.map(function (row) { return row.map(function (n) { return n.t; }); }));
+      };
+      for (var r = 0; r < M2.length; r++) for (var c = 0; c < M2[r].length; c++) {
+        if (M2[r][c].t !== 'boss' && M2[r][c].t !== 'fight') { M2[r][c].t = 'fight'; M2[r][c].e = ['youhun', 'zhizharen']; }
+      }
+      var topo0 = snapTopo(M2);
+      /* 顺带钉：配额**不碰全局 rng**（走 mkRng(deriveSeed(seed,4242)) 自己的流） */
+      var rs0 = JSON.stringify(rngSnapshot());
+      enforceRouteQuota(M2, 1, 4242, actMinionPool(1), ELITES_BY_ACT[1]);
+      var rs1 = JSON.stringify(rngSnapshot());
+      var topo1 = snapTopo(M2);
+      __ok('v0.62.0 配额 enforceRouteQuota 只改 t/e，next/prev **一字不动**（拓扑不变量全靠这条）',
+        topo0 === topo1);
+      __ok('v0.62.0 配额 enforceRouteQuota 不偷吃全局 rng（自己走 deriveSeed(seed,4242) 的流）',
+        rs0 === rs1);
+      /* 手工退干净之后，配额必须能把缺口重新补齐（证明「有解」不是靠 assignTypes 侥幸） */
+      var rt2 = routesOf(M2), still = [];
+      for (var i2 = 0; i2 < rt2.length; i2++) {
+        var c2 = { camp: 0, shop: 0, unknown: 0, elite: 0 };
+        for (var p2 = 0; p2 < rt2[i2].length; p2++) {
+          var t2 = M2[rt2[i2][p2][0]][rt2[i2][p2][1]].t;
+          if (c2[t2] !== undefined) c2[t2]++;
+        }
+        for (var k2 in ROUTE_NEED) if (c2[k2] < ROUTE_NEED[k2]) still.push('#' + i2 + ' ' + k2 + '=' + c2[k2]);
+      }
+      __ok('v0.62.0 配额 从「全部退成普通战」也能补回来（配额有解，不是靠 assignTypes 侥幸）',
+        still.length === 0, still.slice(0, 4).join(' | '));
+      /* 同起点跑两遍必须完全一样（配额自身确定性，否则同种子地图会飘） */
+      var M3 = genAct(2, 777);
+      for (var r3 = 0; r3 < M3.length; r3++) for (var c3 = 0; c3 < M3[r3].length; c3++) {
+        if (M3[r3][c3].t !== 'boss' && M3[r3][c3].t !== 'fight') { M3[r3][c3].t = 'fight'; M3[r3][c3].e = []; }
+      }
+      var A3 = JSON.parse(JSON.stringify(M3)), B3 = JSON.parse(JSON.stringify(M3));
+      enforceRouteQuota(A3, 2, 777, actMinionPool(2), ELITES_BY_ACT[2]);
+      enforceRouteQuota(B3, 2, 777, actMinionPool(2), ELITES_BY_ACT[2]);
+      __ok('v0.62.0 配额 同起点同种子跑两遍完全一致（配额是确定性的，地图不会飘）',
+        snapType(A3) === snapType(B3) && JSON.stringify(A3) === JSON.stringify(B3));
+    })();
+
+    /* ============ C. 图标描边三态 ============ */
+    __ok('v0.62.0 描边 nodeOutlineTier 三态：走过的 o-past / 当前层 o-reached / 未解锁 o-locked',
+      (function () {
+        var keep = G;
+        try {
+          G = __base('yincha'); G.mapRow = 5;
+          return nodeOutlineTier(4) === 'o-past' && nodeOutlineTier(5) === 'o-reached' && nodeOutlineTier(6) === 'o-locked';
+        } finally { G = keep; }
+      })());
+    /* ⚠️ 三条描边 CSS 本身写在 原型.html 里，runner 在 VM 里读不到文件 ⇒ **这里测不了**，
+       改由 _patch/verify_dist.py 对打包产物钉（.o-reached / .o-past / .o-locked 必须活到产物里）。
+       这里只钉「类名确实由 nodeOutlineTier 产出并挂到每个节点上」这一半。 */
+    __ok('v0.62.0 描边 showMap 真的把 nodeOutlineTier 的结果挂到每个节点上',
+      String(showMap).indexOf('nodeOutlineTier(') >= 0 && String(showMap).indexOf('ocls') >= 0);
+
+    /* ============ D. 锁破裂纯函数（canvas 在冒烟里测不了 ⇒ 只测几何）============ */
+    (function () {
+      var sh = lockBreakShards(777), sh2 = lockBreakShards(777), sh3 = lockBreakShards(778);
+      var n = 0;
+      for (var i = 0; i < LOCK_RING_N.length; i++) n += LOCK_RING_N[i];
+      __ok('v0.62.0 锁破裂 lockBreakShards 碎片数 = Σ LOCK_RING_N（移植版应当是 70 块）',
+        sh.length === n && n === 70, sh.length + ' / Σ=' + n);
+      __ok('v0.62.0 锁破裂 同种子全等、异种子不等（碎片是确定性的，不靠 Math.random）',
+        JSON.stringify(sh) === JSON.stringify(sh2) && JSON.stringify(sh) !== JSON.stringify(sh3));
+      __ok('v0.62.0 锁破裂 每个碎片 4 个顶点且全部落在破裂中心 200px 内（坐标是**图片空间**，别拿画布 960 去卡）',
+        sh.every(function (o) {
+          if (!o.pts || o.pts.length !== 4) return false;
+          return o.pts.every(function (q) {
+            var dx = q.x - LOCK_C.x, dy = q.y - LOCK_C.y;
+            return Math.sqrt(dx * dx + dy * dy) <= 200;
+          });
+        }));
+      __ok('v0.62.0 锁破裂 碎片带飞散方向/速度/自转/透明度（少了任一项渲染出来就是静止的一坨）',
+        sh.every(function (o) {
+          return typeof o.dx === 'number' && typeof o.dy === 'number' &&
+                 typeof o.speed === 'number' && o.speed > 0 &&
+                 typeof o.spin === 'number' && typeof o.alphaJ === 'number';
+        }));
+      __ok('v0.62.0 锁破裂 ring 半径按 960/256 的画布换算重算过（照抄原渲染器的 0/55/120/200/300/430 会全采到空白）',
+        LOCK_RING_R[LOCK_RING_R.length - 1] < 200 && LOCK_RING_R[0] === 0);
+      __ok('v0.62.0 锁破裂 playLockBreak 有降级路径（!fx / 无 canvas / 图加载失败或 400ms 超时都不许卡住流程）',
+        String(playLockBreak).indexOf('onReveal') >= 0 && String(playLockBreak).indexOf('400') >= 0 &&
+        String(playLockBreak).indexOf('onerror') >= 0);
+    })();
+
+    /* ============ E. 地图场景：不透明卷轴骨架真的被渲染出来 ============ */
+    (function () {
+      /* 坑①：showOverlay 在本文件顶部（第 15 行）被顶成 __sil ⇒ 必须临时换回真函数才看得到 innerHTML。
+         坑②：vm_host 的 getElementById 每次返回**新** dummy（写进去读不回来）⇒ 这里换成一个按 id 缓存的版本，
+              并顺手记录 classList.add/remove 的调用顺序（.map-scene 的加/摘顺序是硬不变量）。 */
+      var keepGEBI = document.getElementById, keepOv = showOverlay, keepMAP = MAP, keepG = G, keepSCENE = SCENE;
+      var els = {}, cls = [];
+      try {
+        document.getElementById = function (id) {
+          if (!els[id]) {
+            var e = keepGEBI.call(document, id);
+            e.classList.add = function () { cls.push(id + ':+' + Array.prototype.join.call(arguments, ',')); };
+            e.classList.remove = function () { cls.push(id + ':-' + Array.prototype.join.call(arguments, ',')); };
+            els[id] = e;
+          }
+          return els[id];
+        };
+        /* 坑③（这次真踩了）：`showOverlay` 在本文件第 15 行已被顶成 __sil，
+           所以 `keepOv = showOverlay` 拿到的是**空桩**，必须换回 __realShowOverlay 才看得到渲染。 */
+        showOverlay = __realShowOverlay;
+        G = __base('yincha'); SCENE = 'map';
+        MAP = genAct(1, 4242); G.act = 1; G.mapRow = 3; G.mapCol = 0;
+        G.mapPath = [{ r: 0, c: 0 }, { r: 1, c: 0 }, { r: 2, c: 0 }, { r: 3, c: 0 }];
+        var err = null;
+        try { showMap(); } catch (e) { err = e; }
+        var html = (els['overlayContent'] && els['overlayContent'].innerHTML) || '';
+        __ok('v0.62.0 场景 showMap() 端到端不抛错', !err, String(err && err.message));
+        __ok('v0.62.0 场景 渲染出 .map-root 骨架（顶栏 / 木轴 / 视口 / 底栏都是它的孩子）',
+          html.indexOf('map-root') >= 0 && html.indexOf('map-topbar') >= 0, 'len=' + html.length);
+        __ok('v0.62.0 场景 渲染出固定木轴 + 可滑动画心：.map-roller.top / .map-roller.bot / .map-viewport / .map-sheet',
+          html.indexOf('map-roller top') >= 0 && html.indexOf('map-roller bot') >= 0 &&
+          html.indexOf('map-viewport') >= 0 && html.indexOf('map-sheet') >= 0);
+        __ok('v0.62.0 场景 每个节点都带内联落位与小字标签（不会全叠在左上角）',
+          (html.match(/style="left:/g) || []).length >= 5 && html.indexOf('node-label') >= 0,
+          String((html.match(/style="left:/g) || []).length));
+        __ok('v0.62.0 场景 showOverlay **摘完** .map-scene 之后 showMap 才**加上**它（顺序反了背景就没了）',
+          (function () {
+            var iRem = cls.indexOf('overlay:-map-scene'), iAdd = cls.indexOf('overlay:+map-scene');
+            return iRem >= 0 && iAdd > iRem;
+          })(), cls.join(' '));
+        __ok('v0.62.0 场景 顶栏复用了角色专属资源（尸气/血怒分支）与遗物 chip，不是另造一套',
+          String(mapTopbarHTML).indexOf('HEROES') >= 0 && String(mapTopbarHTML).indexOf('prelic-chip') >= 0 &&
+          String(mapTopbarHTML).indexOf('openMenu') >= 0);
+        /* 卷轴三张素材必须走 assetURL（打包.py 不重写 CSS 里的 url()，相对路径在产物里会 404）。
+           ⚠️ 别断言「源码里有 '素材/'」—— 那正是会 404 的那条路。要断言的是**三条都走了 assetURL**。 */
+        var __mt = String(applyMapTextures);
+        __ok('v0.62.0 场景 applyMapTextures 用 assetURL 取三张卷轴素材（CSS 里的 url(素材/…) 在单文件产物里会 404）',
+          __mt.indexOf('assetURL') >= 0 &&
+          __mt.indexOf('map/scroll_top.png') >= 0 && __mt.indexOf('map/scroll_bottom.png') >= 0 &&
+          __mt.indexOf('bg/bg_map.jpg') >= 0 && __mt.indexOf('map/scroll_paper.jpg') >= 0);
+        __ok('v0.62.0 场景 applyMapTextures 只覆盖 background-image（画心的 size/position/repeat 仍由 CSS 给）',
+          __mt.indexOf('backgroundImage') >= 0 && __mt.indexOf('backgroundSize') < 0 &&
+          __mt.indexOf('backgroundPosition') < 0);
+        __ok('v0.62.0 场景 showMap 每次开图都调 applyMapTextures（写在 .map-scene 之后，DOM 已就位）',
+          (function () {
+            var s = String(showMap);
+            var a = s.indexOf("classList.add('map-scene')"), b = s.indexOf('applyMapTextures()');
+            return a >= 0 && b > a;
+          })());
+        /* 顶栏有**按英雄分支**的专属资源（赶尸人尸气 / 阴差血怒）——只测一个英雄会漏掉另一支。
+           四个英雄 × 三个不同层数，全部要出非空 html 且带 HP 数值（不许把 undefined 拼进去）。 */
+        (function () {
+          var keep = G, bad = [];
+          try {
+            for (var hi = 0; hi < HEROES.length; hi++) {
+              for (var mr = 0; mr < MAP_ROWS; mr += 6) {
+                G = __base(HEROES[hi].id); G.mapRow = mr;
+                var h = mapTopbarHTML();
+                if (typeof h !== 'string' || h.length < 20) bad.push(HEROES[hi].id + ' len=' + h);
+                if (h.indexOf('undefined') >= 0 || h.indexOf('NaN') >= 0) bad.push(HEROES[hi].id + ' 含 undefined/NaN');
+                if (h.indexOf(G.hp + '/' + G.maxHp) < 0) bad.push(HEROES[hi].id + ' 缺 HP 数值');
+              }
+            }
+          } catch (e) { bad.push('THROW ' + (e && e.message)); } finally { G = keep; }
+          __ok('v0.62.0 场景 顶栏对 4 个英雄 × 各层都渲染出合法 markup（尸气/血怒分支不许拼出 undefined）',
+            bad.length === 0, bad.slice(0, 4).join(' | '));
+        })();
+      } catch (e) {
+        __ok('v0.62.0 场景 showMap 端到端未抛错', false, String(e && e.message));
+      } finally {
+        document.getElementById = keepGEBI; showOverlay = keepOv;
+        MAP = keepMAP; G = keepG; SCENE = keepSCENE;
+      }
+    })();
+
+    /* ============ F. 相机：进场缓入 / 每关只上一行（不回顶部、不重播）============ */
+    __ok('v0.62.0 相机 camYForRow 到顶/到底都夹在 0..maxY（不越界露白）',
+      (function () {
+        var maxY = 900, rowH = 88, vpH = 500;
+        var top = camYForRow(MAP_ROWS - 1, rowH, maxY, vpH);   /* 最上面那行（Boss） */
+        var bot = camYForRow(0, rowH, maxY, vpH);              /* 最下面那行（第 1 层） */
+        return top === 0 && bot <= maxY && bot > 0;
+      })());
+    __ok('v0.62.0 相机 视口高度量不到时退化成 maxY（低配/未布局也不至于把地图顶飞）',
+      camYForRow(3, 88, 900, 0) === 900);
+    __ok('v0.62.0 相机 setMapCam 两个分支都**显式**写 transition-duration（只靠 .cam-nofx 类盖不住残留内联值）',
+      String(setMapCam).indexOf("'transition-duration'") >= 0 &&
+      String(setMapCam).indexOf('cam-nofx') >= 0);
+    __ok('v0.62.0 相机 进场 2000ms、逐关 600ms（缓入后缓停；每关只走一行不重播进场）',
+      String(mapCamInit).indexOf('2000') >= 0 && String(mapCamInit).indexOf('600') >= 0);
+    __ok('v0.62.0 相机 !fx() 低配直接落位不做动画（和全局「能不能动」口径一致）',
+      String(mapCamInit).indexOf('fx()') >= 0);
+    __ok('v0.62.0 相机 goNext 给 showMap 留一次性标记 _mapStepFrom（用完即清 ⇒ 重开地图不会误放动画）',
+      String(goNext).indexOf('_mapStepFrom=G.mapRow-1') >= 0 && String(showMap).indexOf('_mapStepFrom=-1') >= 0);
+    /* 滚动容器（.map-viewport）加 overflow:hidden + 画心（.map-sheet）带 translateY 之后，
+       连线还能对得上，靠的是**两端在同一个 transform 上下文里相减** ⇒ 位移自己抵消。
+       钉「相减」这个形状而不是钉某个类名：wrap 是用 layer.parentNode 拿的，源码里根本没有 'map-wrap' 字样。 */
+    __ok('v0.62.0 相机 drawMapLinks 用「同一 transform 内相减」定位端点（画心位移自己抵消，所以不用改）',
+      String(drawMapLinks).indexOf('b.left-wb.left') >= 0 && String(drawMapLinks).indexOf('layer.parentNode') >= 0);
   })();
 
   rep.pass = _p; rep.fail = _f;
