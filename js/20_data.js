@@ -651,6 +651,75 @@ const CARD_SFX = {
 };
 function cardSfxFor(c){ return (c && CARD_SFX[c.id]) || null; }
 
+/* ——— v0.64.0：精灵图特效表 ———
+   素材 `素材/fx/<key>.png`，8 列纵向精灵图、单元 480×480，帧数由 `_patch/mk_fx_sheets.py`
+   **按每格 alpha 实测**扫出来（8 列的末排常常是空的，不能拿 行×8 当帧数）。要改尺寸就改那个脚本。
+   `scale` 默认 1.0，逐个可调 —— 值由 `_patch/shot_fx.py` 的实拍对照图定，不许拍脑袋。 */
+const FX_SHEETS = {
+  baigui:      { c:8, f:37, f0:44, rows:6, i0:6, scale:2.14, ox:0, oy:0.23 },   // 百鬼夜行　素材 44 帧，两端看不见的 7 帧不播
+  block:       { c:8, f:36, f0:37, rows:5, i0:1, scale:2.03, ox:0, oy:0.18 },   // 格挡 / 金刚符　素材 37 帧，两端看不见的 1 帧不播
+  burn:        { c:8, f:38, f0:43, rows:6, scale:2.47, ox:0, oy:0.23 },   // 灼烧　素材 43 帧，两端看不见的 5 帧不播
+  charge:      { c:8, f:37, f0:42, rows:6, scale:1.35, ox:0, oy:0.22 },   // 蓄力　素材 42 帧，两端看不见的 5 帧不播
+  charm:       { c:8, f:35, f0:45, rows:6, i0:4, scale:1.76, ox:0, oy:0.15 },   // 魅惑　素材 45 帧，两端看不见的 10 帧不播
+  curse:       { c:8, f:35, f0:43, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },   // 诅咒　素材 43 帧，两端看不见的 8 帧不播
+  fodu:        { c:8, f:38, f0:41, rows:6, i0:1, scale:1.75, ox:0, oy:0.17 },   // 佛渡（净化）　素材 41 帧，两端看不见的 3 帧不播
+  gouhun:      { c:8, f:30, f0:39, rows:5, i0:4, scale:1.02, ox:0, oy:0.14 },   // 勾魂　素材 39 帧，两端看不见的 9 帧不播
+  heal:        { c:8, f:34, f0:43, rows:6, i0:3, scale:2.47, ox:0, oy:0.23 },   // 治疗回血　素材 43 帧，两端看不见的 9 帧不播
+  huo:         { c:8, f:18, f0:21, rows:4, scale:1.75, ox:0, oy:0.18 },   // 火符　素材 21 帧，两端看不见的 3 帧不播
+  hurt:        { c:8, f:16, f0:17, rows:4, scale:2.15, ox:0, oy:0.23 },   // 玩家受击（帧数最短，17）　素材 17 帧，两端看不见的 1 帧不播
+  jian:        { c:8, f:18, f0:21, rows:4, i0:1, scale:1.00, ox:0, oy:0.23 },   // 剑符 / 斩妖剑（提示词文档里本就是同一条）　素材 21 帧，两端看不见的 3 帧不播
+  jiangshi:    { c:8, f:34, f0:40, rows:6, i0:5, scale:1.98, ox:0, oy:0.27 },   // 召唤僵尸手（僵王）　素材 40 帧，两端看不见的 6 帧不播
+  jinzhong:    { c:8, f:41, f0:43, rows:6, i0:1, scale:1.82, ox:0, oy:0.2 },   // 金光罩 / 金钟罩　素材 43 帧，两端看不见的 2 帧不播
+  lei:         { c:8, f:11, f0:19, rows:5, scale:1.05 },   // 雷符　素材 19 帧，两端看不见的 8 帧不播
+  lifesteal:   { c:8, f:34, f0:37, rows:5, i0:1, scale:1.43, ox:0.15, oy:0.17 },   // 吸血 / 渡魂归己　素材 37 帧，两端看不见的 3 帧不播
+  shiqi:       { c:8, f:40, f0:46, rows:7, i0:5, scale:2.47, ox:0, oy:0.23 },   // 尸气　素材 46 帧，两端看不见的 6 帧不播
+  shiwang:     { c:8, f:46, f0:51, rows:7, i0:4, scale:1.98, ox:0, oy:0.28 },   // 尸王召唤　素材 51 帧，两端看不见的 5 帧不播
+  thorns:      { c:8, f:19, f0:24, rows:5, i0:4, scale:1.98, ox:0, oy:0.18 },   // 荆棘符 / 反震　素材 24 帧，两端看不见的 5 帧不播
+  tianlei:     { c:8, f:14, f0:21, rows:5, scale:1.00 },   // 天雷正法　素材 21 帧，两端看不见的 7 帧不播
+  wangyou:     { c:8, f:42, f0:46, rows:6, i0:1, scale:2.82, ox:0, oy:0.23 },   // 忘忧汤（孟婆）　素材 46 帧，两端看不见的 4 帧不播
+  wanjian:     { c:8, f:25, f0:36, rows:5, i0:1, scale:1.00, ox:0, oy:0.14 },   // 万剑归宗　素材 36 帧，两端看不见的 11 帧不播
+  weak:        { c:8, f:38, f0:44, rows:6, i0:5, scale:2.54, ox:0, oy:0.23 },   // 虚弱　素材 44 帧，两端看不见的 6 帧不播
+  xiaogui:     { c:8, f:35, f0:42, rows:6, i0:5, scale:2.51, ox:0, oy:0.23 },   // 小鬼召唤　素材 42 帧，两端看不见的 7 帧不播
+  xuenu:       { c:8, f:32, f0:41, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },   // 血怒　素材 41 帧，两端看不见的 9 帧不播
+  yehuo:       { c:8, f:45, f0:47, rows:6, scale:2.47, ox:0, oy:0.23 },   // 业火（修罗王）　素材 47 帧，两端看不见的 2 帧不播
+  yinbing:     { c:8, f:44, f0:51, rows:7, i0:4, scale:1.00, ox:0, oy:0.27 },   // 阴兵过境　素材 51 帧，两端看不见的 7 帧不播
+  zhenyaoling: { c:8, f:41, f0:43, rows:6, i0:1, scale:1.28, ox:0, oy:0.09 },   // 镇妖铃　素材 43 帧，两端看不见的 2 帧不播
+  zhiren:      { c:8, f:34, f0:42, rows:6, i0:6, scale:2.51, ox:0, oy:0.23 },   // 纸人召唤　素材 42 帧，两端看不见的 8 帧不播
+  zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.08 }   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播
+};
+/* `锁_破裂` **故意不在这张表里**：v0.62.0 已用移植 canvas 代码实现（playLockBreak），
+   不接精灵图；30 条提示词文档里也没有它。 */
+
+/* ——— v0.64.0：卡牌 → 特效 ———
+   只登记「有对应素材」的牌（23/48）。**没登记的牌自动退回 v0.43 的 CSS 四件套**（符箓/护体/黑雾/脉冲），
+   所以这里漏一张的后果只是「那张牌没有精灵图特效」，不是「那张牌没有特效」。
+   a = 锚点：enemy 单体敌人 / field 战场（全体） / player 玩家面板 / summon 屏幕中心（召唤位）。
+   s = 覆写 FX_SHEETS 的 scale（默认不写，由对照图定）。 */
+const CARD_FX = {
+  /* 攻击 · 单体 */
+  leifu:{n:'lei',a:'enemy'},          huofu:{n:'huo',a:'enemy'},
+  jianfu:{n:'jian',a:'enemy'},        zhanyaojian:{n:'jian',a:'enemy'},
+  tianlei:{n:'tianlei',a:'enemy'},
+  /* 攻击 · 全体 */
+  wanjian:{n:'wanjian',a:'field'},    baigui:{n:'baigui',a:'field'},
+  /* 防御 · 护盾系（基础盾 block / 高级盾 jinzhong / 反伤 thorns / 净化 fodu） */
+  jingang:{n:'block',a:'player'},     yinshen:{n:'block',a:'player'},
+  tongpi:{n:'block',a:'player'},      xiejiashengyuan:{n:'block',a:'player'},
+  jinguang:{n:'jinzhong',a:'player'}, jinzhong:{n:'jinzhong',a:'player'},
+  jingji:{n:'thorns',a:'player'},     fanzhen:{n:'thorns',a:'player'},
+  fodu:{n:'fodu',a:'player'},
+  /* 鬼怪 · 单体压制 */
+  zhongkui:{n:'zhongkui',a:'enemy'},  zhenyaoling:{n:'zhenyaoling',a:'enemy'},
+  huapi:{n:'charm',a:'enemy'},
+  /* 鬼怪 · 召唤（召唤物只在顶栏有小字，战场上没有格子 ⇒ 锚点在屏幕中心） */
+  zhiren:{n:'zhiren',a:'summon'},     xiaogui:{n:'xiaogui',a:'summon'},
+  yinbingguo:{n:'yinbing',a:'summon'},shi_wang:{n:'shiwang',a:'summon'}
+};
+/* 没登记的牌 = 确实没有对应素材，**不是忘了**。其中这三张最容易被当成漏：
+   铁布衫（伤害=当前格挡+引爆诅咒）/ 噬魂术（引爆诅咒）/ 群鬼乱舞（触发全部召唤）——
+   提示词文档的 30 条里没有它们，已记进 `特效接入对照表.md` 的「有机制没素材」清单。 */
+function cardFxFor(c){ return (c && CARD_FX[c.id]) || null; }
+
 /* I 组·遗物分化：12 件法器按「铃/幡 · 符/笔/剑 · 镜/录/道心」三类分开，
    聚宝盆与返魂香不属这三类 → 退回通用的 relic 音（所以 relic 键也没退役）。 */
 const RELIC_SFX = {
@@ -665,7 +734,7 @@ function gainShiqi(n){ if(!n || n<=0) return;
   tipOnce('shiqi', '<b>【尸气】</b>是茅山赶尸人的专属资源：上限 12 点、<b>战斗内跨回合累积，每场战斗清零</b>。场上每有 1 个召唤物，回合开始就 +1；攒着可以强化【五通神】，或用【咒雨】一次引爆。每消耗 1 点【尸气】会回复 1 点生命。');
   const __before=(G.尸气||0);
   G.尸气 = Math.min(G.maxShiQi||12, __before+n);
-  if(G.尸气>__before) sfxOnce('card_shiji', 120); }   // v0.61.25：尸气真的涨了才出声，且防同帧叠音
+  if(G.尸气>__before){ sfxOnce('card_shiji', 120); playFx('shiqi', 'player'); } }   // v0.61.25：尸气真的涨了才出声，且防同帧叠音；v0.64.0 补特效（同理：涨了才播）
 function hasShiqi(n){ return (G.尸气||0) >= n; }
 function spendShiqi(n){ if(!hasShiqi(n)) return false; G.尸气 -= n;
   if(G.hero==='ganshiren' && n>0) heal(n);   // v0.61.37 新被动：每消耗 1 点【尸气】回复 1 点生命
@@ -674,7 +743,7 @@ function spendShiqi(n){ if(!hasShiqi(n)) return false; G.尸气 -= n;
 function gainRage(n){ if(!n || n<=0) return;
   const __b=(G.xuenu||0);
   G.xuenu = Math.min(G.maxXuenu||10, __b+n);
-  if(G.xuenu>__b) sfx('card_xuenu'); }   // v0.61.32：满 10 层后不再出声（满了就「涨不上去」了）
+  if(G.xuenu>__b){ sfx('card_xuenu'); playFx('xuenu', 'player'); } }   // v0.61.32：满 10 层后不再出声（满了就「涨不上去」了）；v0.64.0 补特效
 function rageLayers(){ return G.xuenu||0; }
 /* per=每层加成, cap=加成上限：返回可使用的层数，并就地消耗 */
 function rageSpend(per, cap){ const layers=Math.floor(cap/per); const use=Math.min(layers, rageLayers()); if(use>0){ G.xuenu -= use; } return use; }

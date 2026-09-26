@@ -189,6 +189,129 @@ function fxLayer(){
   if(!el){ el=document.createElement('div'); el.id='fx-layer'; document.body.appendChild(el); }
   return el;
 }
+/* 敌人元素（按 uid 找）。cardPlayFx 与特效锚点共用，别再各写一份选择器 */
+function enemyEl(e){ return (e && document.querySelector) ? document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]') : null; }
+
+/* ===================== v0.64.0：精灵图特效播放器 =====================
+   素材 `素材/fx/<name>.png`：8 列纵向精灵图、单元 480×480、帧数见 20_data.js 的 FX_SHEETS。
+   **为什么是精灵图不是那 30 个 mp4**：交付视频全是 h264/yuv420p + 纯黑底**无 alpha**，
+   内联管线根本吃不下（打包.py 的 IMG_EXT 不含视频扩展名），贴上去还是黑方块 —— 真透明只在 PNG 里。
+   **为什么用 background-position 而不是 canvas**：省一层离屏合成；而且 `fxSeek` 能直接钉帧，
+   截图夹具要靠它（headless 的 --virtual-time-budget 下后注册的 rAF 拿不到帧）。 */
+let FX_LIVE = {};
+/* 取表项；未知名字返回 null。别在别处直接下标 FX_SHEETS —— 少一处裸引用少一处崩点 */
+function fxSheet(name){
+  return (typeof FX_SHEETS!=='undefined' && FX_SHEETS) ? (FX_SHEETS[name] || null) : null;
+}
+/* 盒子边长（**纯函数，冒烟可测**）：锚点短边 × 1.15，下夹 96、上夹 min(vw,vh)×0.9。
+   为什么两个夹：帧画布 960×960 且**四周留空**（提示词文档明写「特效居中、周围留空」），
+   照锚点框贴必然偏大；上界保证再大的框也不会超出屏幕。 */
+function fxBoxSize(anchorShort, vw, vh){
+  let s=(anchorShort||0)*1.15;
+  const cap=Math.min(vw||0, vh||0)*0.9;
+  if(!(s>96)) s=96;
+  if(cap>0 && s>cap) s=cap;
+  return Math.round(s);
+}
+/* 第 i 帧在精灵图里的左上角偏移（**纯函数**）：行优先，8 列 */
+function fxCellPos(i, cols, box){
+  const c=Math.max(1, cols||8);
+  return { x:-(i%c)*box, y:-Math.floor(i/c)*box };
+}
+/* 锚点 → 视口矩形。'enemy'/'field'/'player'/'summon' 四个别名之外也能直接传元素。
+   v0.64.0 起 'summon' 也落到 **#player-panel**（原先落「屏幕中心」，短边恒 0 ⇒ 被 96px 下限兜住，
+   四个召唤特效会明显偏小）。只有**连元素都量不到**时才退到屏幕中心那一行。 */
+function fxAnchorRect(anchor){
+  if(anchor && anchor.getBoundingClientRect){
+    const r=anchor.getBoundingClientRect();
+    if(r && r.width>0 && r.height>0) return r;
+  }
+  // v0.64.0：'summon' 落到 #player-panel 而不是「屏幕中心、短边 0」——
+  // 召唤位没有自己的元素，而召唤物是**站在玩家这一侧**的（纸人/小鬼/尸王/阴兵）。
+  // 落屏幕中心时短边恒 0 ⇒ 盒子被 96px 下限兜住，四个召唤特效会明显小于周围的单位。
+  const sel = anchor==='player' ? '#player-panel'
+            : anchor==='field'  ? '#enemy-panel'
+            : (anchor==='enemy') ? '#enemy-panel' : (anchor==='summon') ? '#player-panel' : null;
+  if(sel){
+    const el=document.querySelector(sel);
+    if(el && el.getBoundingClientRect){
+      const r=el.getBoundingClientRect();
+      if(r && r.width>0 && r.height>0) return r;
+    }
+  }
+  return { left:window.innerWidth*0.5, top:window.innerHeight*0.42, width:0, height:0 };   // 量不到元素才落这里
+}
+function fxStop(key){
+  const st=FX_LIVE[key]; if(!st) return;
+  st.dead=true;
+  try{ cancelAnimationFrame(st.raf); }catch(e){}
+  if(st.el && st.el.remove) st.el.remove();
+  delete FX_LIVE[key];
+}
+function fxStopAll(){ Object.keys(FX_LIVE).forEach(fxStop); }
+/* 播放。opts：{key（同名并发键，默认=name；逐敌人特效要传 'curse@uid' 才不会互相顶掉）,
+   scale（覆写表里的 scale）, rate（播放倍速）, still（钉帧模式：不排 rAF，交给 fxSeek）} */
+function playFx(name, anchor, opts){
+  if(!fx()) return null;                      // 流畅模式门禁 —— 全项目特效的既有惯例（见 10_audio.js 的 fx()）
+  const S=fxSheet(name); if(!S) return null;
+  opts=opts||{};
+  const key=opts.key||name;
+  const r=fxAnchorRect(anchor);
+  const cap=Math.round(Math.min(window.innerWidth||0, window.innerHeight||0)*0.9);
+  let box=Math.round(fxBoxSize(Math.min(r.width||0, r.height||0), window.innerWidth, window.innerHeight)
+                     * (opts.scale||S.scale||1));
+  if(cap>0 && box>cap) box=cap;
+  fxStop(key);                                // 同名正在播 → **重播**而不是叠加（连击会在原地堆十几个元素）
+  const el=document.createElement('div');
+  el.className='fx-sheet';
+  el.style.width=box+'px'; el.style.height=box+'px';
+  /* v0.64.0：ox/oy 是**量出来的**「内容框中心相对格子中心」的偏移（占 480 单元的比例），
+     由 _patch/fx_tune.py 用 PIL 扫每张图所有帧的 alpha 并集算得，写进 FX_SHEETS。
+     不补这一步的后果：不少特效的画面本来就画在格子偏下 1/4 处（烟从地面升起那类），
+     照格子中心贴到锚点上，scale 一放大就整块沉到单位脚底下。补完之后
+     **内容框的中心**落在锚点中心 —— 与素材留白多少、scale 多少都无关。 */
+  const ox=(S.ox||0)*box, oy=(S.oy||0)*box;
+  el.style.left=Math.round(r.left+r.width/2-box/2-ox)+'px';
+  el.style.top=Math.round(r.top+r.height/2-box/2-oy)+'px';
+  el.style.backgroundImage='url("'+assetURL('fx/'+name+'.png')+'")';
+  el.style.backgroundSize=(S.c*box)+'px auto';
+  /* v0.64.0：i0 = 起始帧。素材每张图的两端都有整格的**全透明**帧（实测最长首空 6 帧、尾空 9 帧），
+     是出图时留的余量，不是动作的一部分。照原始帧数从第 0 格播的后果：
+     开头 0.2 秒画面上什么都没有（像点了没反应），结尾又挂着一个透明元素不删。
+     裁剪边界由 _patch/fx_tune.py 用 PIL 逐帧量覆盖率算得，写进 FX_SHEETS。 */
+  const i0=S.i0||0;
+  const p0=fxCellPos(i0, S.c, box);
+  el.style.backgroundPosition=p0.x+'px '+p0.y+'px';
+  fxLayer().appendChild(el);
+  if(opts.still) return el;                   // 钉帧：不进 FX_LIVE、不排 rAF（只给截图夹具用）
+  const st={ el:el, key:key, i:0, S:S, i0:i0, box:box, dead:false,
+             dur:1000/(24*(opts.rate||1)),    // 源速 24fps
+             t0:(window.performance&&performance.now?performance.now():Date.now()), raf:0 };
+  FX_LIVE[key]=st;
+  st.raf=requestAnimationFrame(function step(){
+    if(st.dead) return;
+    const now=(window.performance&&performance.now?performance.now():Date.now());
+    const i=Math.floor((now-st.t0)/st.dur);
+    if(i>=S.f){ fxStop(key); return; }
+    if(i!==st.i){ st.i=i; const p=fxCellPos(st.i0+i, S.c, box); el.style.backgroundPosition=p.x+'px '+p.y+'px'; }
+    st.raf=requestAnimationFrame(step);
+  });
+  return el;
+}
+/* 纯 setter：把某特效**钉在**播放序列的第 i 帧（0 = 第一帧**画面**，已含 i0 偏移）——
+   截图夹具专用（见上：headless 里 rAF 钉不住） */
+function fxSeek(name, i, anchor, opts){
+  const S=fxSheet(name); if(!S) return null;
+  const o=Object.assign({}, opts||{}, { still:true });
+  const el=playFx(name, anchor, o);
+  if(!el) return null;
+  const box=parseFloat(el.style.width)||0;
+  const i0=S.i0||0;
+  const k=Math.max(0, Math.min(i0+S.f-1, i0+(i|0)));
+  const p=fxCellPos(k, S.c, box);
+  el.style.backgroundPosition=p.x+'px '+p.y+'px';
+  return el;
+}
 /* opts.crit：大伤害档（阈值与打击音效同源，见 10_audio.js 的 isCritHit） */
 function floatDamage(text, kind, anchor, opts){
   if(!fx()) return;
@@ -242,10 +365,22 @@ function shakeCard(i){
 /* ===================== 出卡动效（按类型差异化） ===================== */
 function cardPlayFx(c){
   if(!fx()) return;
+  /* v0.64.0：接了精灵图的牌走 playFx（锚点由 CARD_FX 的 a 字段定）；**没接的牌退回下面这套 CSS 特效**，
+     所以四件套（符箓/护体/黑雾/脉冲）一个都没退役，未接的牌观感不退化。 */
+  const E=(typeof CARD_FX!=='undefined' && c) ? CARD_FX[c.id] : null;
+  if(E && E.n){
+    let anchor;
+    if(E.a==='enemy'){ anchor=enemyEl(curEnemy()) || 'field'; }   // 目标已死/找不到元素时兜底全场
+    else if(E.a==='field') anchor='field';
+    else if(E.a==='summon') anchor='summon';
+    else anchor='player';
+    playFx(E.n, anchor, { scale:E.s });
+    return;
+  }
   if(c.type==='attack'){
     let targetEl=null;
     if(!needsTarget(c)){ targetEl=document.getElementById('enemy-panel'); }
-    else { const t=curEnemy(); if(t) targetEl=document.querySelector('#enemy-panel .enemy[data-uid="'+t.uid+'"]'); }
+    else { const t=curEnemy(); targetEl=enemyEl(t); }
     attackFx(targetEl);
   } else if(c.type==='defense') defenseFx();
   else if(c.type==='spirit') spiritFx();

@@ -56,7 +56,11 @@ def dump_ids():
           # v0.61.36：「怨气」是**运行时生成**的废牌（junkCard()，由敌人词缀「飞牌」塞进手牌），
           # 不在 CARDS 里，卡图却是真在用的 card/yuanqi.png —— 漏了它就会把它误报成「从未被请求」
           "junk:[junkCard().id],"
-          "sfxKeys:SFX_KEYS,sfxExts:AUD_EXTS})")
+          "sfxKeys:SFX_KEYS,sfxExts:AUD_EXTS,"
+          # v0.64.0：特效精灵图表。键名与 rows 都在游戏作用域里取（python 侧不镜像），
+          # 这样表被改名/改行数时是这里先红，而不是等播出来发现错位。
+          "fxSheets:Object.keys(FX_SHEETS),"
+          "fxRows:Object.keys(FX_SHEETS).reduce(function(o,k){ o[k]=FX_SHEETS[k].rows; return o; },{})})")
     env = dict(os.environ, SMOKE_DUMP=js)
     r = subprocess.run(['node', HOST], capture_output=True, text=True, cwd=ROOT, env=env)
     line = [l for l in r.stdout.splitlines() if l.startswith('__DUMP__')]
@@ -239,6 +243,65 @@ def main():
     if _missing:
         print('  注: 代码已知但磁盘没有：%s —— 会走回退轨（精英/Boss→battle、商店→map），不算错误'
               % '、'.join(_missing))
+
+    # ---- 2d. v0.64.0 特效精灵图（命名 + 像素几何） ----
+    # 今天之前 fx/ 前缀**没有任何闸门**：拼错名字 ⇒ playFx 拿不到表项，静默什么都不播；
+    # 换错图（列数/单元边长不对）⇒ background-position 步进错位，播出来是斜切的花屏。
+    # 两条都只能在产物侧拦（冒烟用的是 DOM 桩，没有布局也没有位图）。
+    print('\n[2d] 素材/fx/ 精灵图命名与像素几何')
+    _fxset = set(ids.get('fxSheets') or [])
+    diskfx = sorted(d for d in disk if d.startswith('fx/'))
+    badfxname, badfxkey, badfxpng, badfxgeom = [], [], [], []
+    FX_COLS, FX_CELL = 8, 480          # 与 _patch/mk_fx_sheets.py 的 COLS/CELL 一致；要改两边一起改
+    # 精灵图**只收 PNG**（要 alpha 合成；jpg 没有透明通道，压过一遍就是黑底方块），
+    # 与 [1b] 同款的两源一致性：打包.py 的 IMG_EXT 必须包含 .png，否则这些图根本不会进产物。
+    _pkimg = re.search(r'IMG_EXT\s*=\s*\{([^}]*)\}', io.open(os.path.join(ROOT, '打包.py'), encoding='utf-8').read())
+    _pkimg_ext = set(re.findall(r"'([^']+)'", _pkimg.group(1))) if _pkimg else set()
+    check('.png' in _pkimg_ext, '打包.py 的 IMG_EXT 含 .png（%s）' % ','.join(sorted(_pkimg_ext)))
+    for d in diskfx:
+        base, ext = os.path.splitext(os.path.basename(d))
+        if ext.lower() != '.png':
+            badfxname.append(d); continue
+        if not re.match(r'^[a-z][a-z0-9_]*$', base):
+            badfxname.append(d); continue
+        if base not in _fxset:
+            badfxkey.append(d); continue
+        p = os.path.join(ASSD, d.replace('/', os.sep))
+        with open(p, 'rb') as fh:
+            head = fh.read(24)
+        if head[:8] != b'\x89PNG\r\n\x1a\n' or head[12:16] != b'IHDR':
+            badfxpng.append(d); continue
+        w = int.from_bytes(head[16:20], 'big'); h = int.from_bytes(head[20:24], 'big')
+        # 宽必须正好 8 格；高必须是整数格；行数不能超过表里登记的行数（多出来的排是空白，
+        # 但少于登记行数 = FX_SHEETS 的 rows 写大了，f ≤ 8×rows 的护栏会失效）
+        rows = int(ids['fxRows'][base]) if base in (ids.get('fxRows') or {}) else 0
+        if w != FX_COLS * FX_CELL or h % FX_CELL != 0 or h // FX_CELL < rows:
+            badfxgeom.append('%s %dx%d（期望宽 %d、高为 %d 的整数倍、至少 %d 排）'
+                             % (d, w, h, FX_COLS * FX_CELL, FX_CELL, rows))
+    check(not badfxname, 'fx/ 下都是 <小写键名>.png（坏 %d）' % len(badfxname))
+    check(not badfxkey, '%d 张精灵图的键名都已登记在 FX_SHEETS（未登记 %d）'
+          % (len(diskfx), len(badfxkey)))
+    check(not badfxpng, 'fx/ 下都是真 PNG（签名与 IHDR 头可解析，坏 %d）' % len(badfxpng))
+    check(not badfxgeom, '精灵图几何全部合规：宽 == %d、高 %% %d == 0 且排数 ≥ FX_SHEETS.rows（坏 %d）'
+          % (FX_COLS * FX_CELL, FX_CELL, len(badfxgeom)))
+    for x in badfxname[:8]:
+        print('       命名: %s —— 代码请求的是 fx/<FX_SHEETS 的键>.png，这个永远不会被取到' % x)
+    for x in badfxkey[:8]:
+        print('       未登记: %s —— 在磁盘上占体积，但 playFx 永远不会请求它' % x)
+    for x in badfxgeom[:8]:
+        print('       几何: %s —— background-position 会错位（8 列的步进量是按 480 单元算的）' % x)
+    _missingfx = sorted(_fxset - set(re.sub(r'\.[^.]+$', '', os.path.basename(d)) for d in diskfx))
+    check(not _missingfx, 'FX_SHEETS 登记的 %d 个特效都有对应精灵图打进产物（缺 %d）'
+          % (len(_fxset), len(_missingfx)))
+    for x in _missingfx[:20]:
+        print('       缺: fx/%s.png —— playFx 会静默不播：不是崩溃，是「这张牌打了没反应」' % x)
+    # 登记在册的 fx 文件都是「游戏真的会请求的」，别让它们在末尾的 unused 报告里
+    # 被误报成「可考虑删掉」——照那句删了特效就没了（与 v0.62.0 卷轴三件同一类陷阱）。
+    want.extend(d for d in diskfx)
+    if diskfx:
+        _fsz = sum(os.path.getsize(os.path.join(ASSD, d.replace('/', os.sep))) for d in diskfx)
+        print('  注: 素材/fx/ 共 %d 张 %.1f MB，FX_SHEETS 登记 %d 个'
+              % (len(diskfx), _fsz / 1048576.0, len(_fxset)))
 
     # ---- 3. 内联处理器依赖的全局名在混淆后仍存在 ----
     print('\n[3] 内联 onclick 全局名存活')

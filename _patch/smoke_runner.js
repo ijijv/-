@@ -5639,6 +5639,247 @@
         var loop = s.indexOf('for(let c=0;c<MAP[r].length;c++)');
         return loop >= 0 && s.indexOf('nodeOutlineTier(tier)') > loop;
       })());
+
+    /* ================= F. v0.64.0 特效：精灵图播放器 =================
+       这一段只测**能测的**：表结构、纯函数、锚点合法性、门禁、接线是否还在。
+       特效「长什么样、屏幕上多大」冒烟测不到（DOM 桩 offsetHeight 恒 0、background-position 无布局），
+       靠 `_patch/shot_fx.py` 的实拍对照图定 scale。 */
+
+    /* ---------- F1. 表结构 ---------- */
+    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 30 条'
+      + '（帧数是 _patch/fx_tune.py 按每格 alpha 实扫的 —— 8 列末排常留空，拿 行×8 当帧数会播到空白格）',
+      Object.keys(FX_SHEETS).length === 30 &&
+      Object.keys(FX_SHEETS).every(function (k) {
+        var s = FX_SHEETS[k];
+        return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
+      }));
+    __ok('v0.64.0 FX_SHEETS 的 i0（起始帧）与 f0（素材分配给它的帧数）都自洽：'
+      + 'i0+f 不越出图（≤ 8×rows）、f0 ≥ i0+f、没裁的就不写 f0',
+      Object.keys(FX_SHEETS).every(function (k) {
+        var s = FX_SHEETS[k], i0 = s.i0 || 0;
+        if (i0 + s.f > 8 * s.rows) return false;
+        if ('f0' in s && !(s.f0 >= i0 + s.f)) return false;
+        return ('f0' in s) === (s.f0 > s.f);
+      }));
+    __ok('v0.64.0 **30 个特效全都裁掉了两端的空白帧**（素材末尾常有整格全透明，开头也有）——'
+      + '不裁的话：按下后前 0.2 秒画面上什么都没有（像点了没反应），播完还挂着一个透明元素不删。'
+      + '裁掉的帧数合计 169（≈ 7.0 秒 @24fps，由 _patch/fx_tune.py 逐格扫 alpha 实量）',
+      (function () {
+        var n = 0, cut = 0;
+        Object.keys(FX_SHEETS).forEach(function (k) {
+          var s = FX_SHEETS[k];
+          if (!('f0' in s)) return;
+          n++; cut += s.f0 - s.f;
+        });
+        return n === 30 && cut === 169;
+      })());
+    __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
+      Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
+    __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 30);
+
+    /* ---------- F2. CARD_FX 接线 ---------- */
+    __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
+      (function () {
+        var ids = {}; CARDS.forEach(function (c) { ids[c.id] = 1; });
+        return Object.keys(CARD_FX).every(function (k) { return !!ids[k]; });
+      })());
+    __ok('v0.64.0 CARD_FX 每个值的 n 都登记在 FX_SHEETS 里，a 都是四个合法锚点之一',
+      Object.keys(CARD_FX).every(function (k) {
+        var e = CARD_FX[k];
+        return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon'].indexOf(e.a) >= 0;
+      }));
+    __ok('v0.64.0 CARD_FX 没有覆盖全部 48 张 —— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
+      + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；23 张是有素材的那批',
+      Object.keys(CARD_FX).length === 23 && CARDS.length === 48);
+
+    /* ---------- F3. 纯函数：盒子尺寸 ---------- */
+    __ok('v0.64.0 fxBoxSize 下夹 96、上夹 min(vw,vh)×0.9（帧画布 960×960 四周留空，照锚点框贴必然偏大；'
+      + '上界保证再大的框也不超屏）',
+      fxBoxSize(0, 800, 600) === 96 && fxBoxSize(100, 800, 600) === 115 &&
+      fxBoxSize(4000, 800, 600) === 540 && fxBoxSize(500, 800, 600) === 540 &&
+      fxBoxSize(300, 800, 600) === 345);
+    __ok('v0.64.0 fxBoxSize 在窗口为 0 时不产生 NaN/负数（冷启动/隐藏标签页会传 0）',
+      isFinite(fxBoxSize(0, 0, 0)) && fxBoxSize(0, 0, 0) === 96);
+    __ok('v0.64.0 fxBoxSize 对锚点短边单调不减（锚点越大框越大，不会出现反直觉的缩小）',
+      fxBoxSize(100, 900, 900) <= fxBoxSize(200, 900, 900) && fxBoxSize(200, 900, 900) <= fxBoxSize(400, 900, 900));
+
+    /* ---------- F4. 纯函数：帧 → 精灵图偏移（行优先，8 列） ---------- */
+    __ok('v0.64.0 fxCellPos 行优先：第 7 帧在第 1 排末尾、第 8 帧换行到第 2 排第 1 格',
+      (function () {
+        var a = fxCellPos(0, 8, 100), b = fxCellPos(7, 8, 100), c = fxCellPos(8, 8, 100), d = fxCellPos(19, 8, 100);
+        return a.x === 0 && a.y === 0 && b.x === -700 && b.y === 0 &&
+          c.x === 0 && c.y === -100 && d.x === -300 && d.y === -200;
+      })());
+    __ok('v0.64.0 fxCellPos 的最后一帧也不越出图外（f 与 rows 的边界靠这条兜住）',
+      (function () {
+        var bad = [];
+        Object.keys(FX_SHEETS).forEach(function (k) {
+          var s = FX_SHEETS[k], p = fxCellPos(s.f - 1, s.c, 480);
+          if (-p.x >= s.c * 480 || -p.y >= s.rows * 480) bad.push(k);
+        });
+        return bad.length === 0;
+      })());
+
+    /* ---------- F5. 门禁与兜底 ---------- */
+    __ok('v0.64.0 playFx 第一行是 if(!fx()) return —— 与 floatDamage/hurtVignette 同一条流畅模式门禁'
+      + '（关特效时连元素都不建，不是建了再隐藏）',
+      String(playFx).replace(/\s/g, '').indexOf('if(!fx())return') >= 0);
+    __ok('v0.64.0 fxSheet 对未知名字返回 null（不 throw），playFx 拿到 null 就静默返回',
+      fxSheet('__不存在的特效__') === null && fxSheet('lei') === FX_SHEETS.lei);
+    __ok('v0.64.0 流畅模式（本套冒烟里 lowSpec=true）下 playFx 返回 null 且 FX_LIVE 保持空',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = true;
+        var r = playFx('lei', 'player');
+        var n = Object.keys(FX_LIVE).length;
+        SETTINGS.lowSpec = keep;
+        return r === null && n === 0;
+      })());
+    __ok('v0.64.0 fxStopAll 是幂等的（空表调用不报错，startBattle 每场都会调）',
+      (function () { fxStopAll(); fxStopAll(); return Object.keys(FX_LIVE).length === 0; })());
+
+    /* ---------- F6. 真跑一次：元素尺寸/背景/锚点都写对了吗 ---------- */
+    __ok('v0.64.0 关掉流畅模式后 playFx 真的建出元素：尺寸=盒子、background-size=8×盒子（8 列要横向铺 8 格）、'
+      + '第 0 帧偏移 (0,0)，且结束后 fxStopAll 能清干净 FX_LIVE',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
+        var out = '?';
+        try {
+          // 显式 scale:1 —— 表里的 scale 是逐张量出来的（lei 1.05），钉住它会让这条断言
+          // 在每次重跑 fx_tune.py 后跟着变；这里测的是「盒子/background-size/首帧偏移」的机制
+          var el = playFx('lei', null, { scale: 1 }); // 桩里 querySelector 全 null ⇒ 落屏幕中心、短边 0 ⇒ 96
+          var live = Object.keys(FX_LIVE);
+          out = [el ? el.style.width : 'no-el', el ? el.style.backgroundSize : '',
+                 el ? el.style.backgroundPosition : '', live.join(',')].join('|');
+          fxStopAll();
+        } catch (e) { out = 'THROW ' + e.message; }
+        SETTINGS.lowSpec = keep;
+        return out === '96px|768px auto|0px 0px|lei' && Object.keys(FX_LIVE).length === 0;
+      })());
+    __ok('v0.64.0 同名特效**重播而不是叠加**（key 表里同名只留一个）—— 连击/五通神每回合 tick 会反复触发，'
+      + '叠加会在玩家身上堆出十几个元素',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
+        var n = -1;
+        try { playFx('block', 'player'); playFx('block', 'player'); playFx('block', 'player'); n = Object.keys(FX_LIVE).length; fxStopAll(); }
+        catch (e) { n = -1; }
+        SETTINGS.lowSpec = keep;
+        return n === 1;
+      })());
+    __ok('v0.64.0 逐敌人特效靠 opts.key 区分：curse@1 与 curse@2 能**同时**存在'
+      + '（全场 AoE 一次给每个敌人施咒，只按名字作键会只剩最后一个敌人有特效）',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
+        var keys = '?';
+        try {
+          playFx('curse', null, { key: 'curse@1' });
+          playFx('curse', null, { key: 'curse@2' });
+          keys = Object.keys(FX_LIVE).sort().join(',');
+          fxStopAll();
+        } catch (e) { keys = 'THROW ' + e.message; }
+        SETTINGS.lowSpec = keep;
+        return keys === 'curse@1,curse@2';
+      })());
+    __ok('v0.64.0 fxSeek 是纯 setter：钉在第 i 帧、**不进 FX_LIVE**（不进表就不会被 rAF 推进，'
+      + 'headless 下 rAF 拿不到帧，钉帧才能出稳定对照图）',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
+        var pos = '?', live = -1;
+        try {
+          var el = fxSeek('lei', 9, null, { scale: 1 });   // 96px 盒子：第 9 帧 = 第 2 排第 2 格 ⇒ (-96,-96)
+          pos = el ? el.style.backgroundPosition : 'no-el';
+          live = Object.keys(FX_LIVE).length;
+        } catch (e) { pos = 'THROW ' + e.message; }
+        SETTINGS.lowSpec = keep;
+        fxStopAll();
+        return pos === '-96px -96px' && live === 0;
+      })());
+    __ok('v0.64.0 playFx / fxSeek 真的把 i0 算进去了（i0 是「素材开头那几格全透明不播」的偏移）：'
+      + 'curse 的 i0=4，钉第 0 帧落在第 5 格（-384px 0px）而不是第 1 格；钉第 9 帧落在第 2 排第 6 格',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
+        var a = '?', b = '?', ok = false;
+        try {
+          if (FX_SHEETS.curse.i0 === 4) {
+            var e0 = fxSeek('curse', 0, null, { scale: 1 });   // 96px 盒子、i0=4 ⇒ 第 5 格 ⇒ (-384, 0)
+            a = e0 ? e0.style.backgroundPosition : 'no-el';
+            var e1 = fxSeek('curse', 9, null, { scale: 1 });   // 4+9=13 ⇒ 第 2 排第 6 格 ⇒ (-480, -96)
+            b = e1 ? e1.style.backgroundPosition : 'no-el';
+          }
+        } catch (e) { a = 'THROW ' + e.message; }
+        SETTINGS.lowSpec = keep;
+        fxStopAll();
+        return a === '-384px 0px' && b === '-480px -96px';
+      })());
+    __ok('v0.64.0 fxSeek 越界会被夹回素材范围内（i0+f-1 之后不再往下走，不会切到第 3 排别的特效身上）',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
+        var a = '?';
+        try {
+          var el = fxSeek('lei', 999, null, { scale: 1 });   // lei: i0=0, f=11 ⇒ 夹到第 10 帧 = 第 2 排第 3 格
+          a = el ? el.style.backgroundPosition : 'no-el';
+        } catch (e) { a = 'THROW ' + e.message; }
+        SETTINGS.lowSpec = keep;
+        fxStopAll();
+        return a === '-192px -96px';
+      })());
+    /* ---------- F7. 接线是否还在（源码级，防静默移除） ---------- */
+    __ok('v0.64.0 引擎的 9 个收口点都真的挂了 playFx：受击/格挡/回血/吸血/诅咒/尸气/血怒 + 敌人意图(蓄力·虚弱·勾魂·灼烧·召唤·业火·忘忧)',
+      (function () {
+        var want = [[dealDamageToPlayer, "'hurt'"], [gainBlock, "'block'"], [heal, "'heal'"],
+                    [duhunFlush, "'lifesteal'"], [applyCurse, "'curse'"],
+                    [gainShiqi, "'shiqi'"], [gainRage, "'xuenu'"]];
+        var missing = want.filter(function (p) { return String(p[0]).indexOf('playFx(' + p[1]) < 0; })
+                           .map(function (p) { return p[1]; });
+        // ⚠️ 必须用 __realEnemyAct：全局 enemyAct 在本文件第 34 行被 stub 成 __sil 了，
+        //    String(它) === 'function () {}'，直接扫全局会得到「一个都没挂」的假红。
+        var ea = String(__realEnemyAct);
+        ["'charge'", "'weak'", "'gouhun'", "'burn'", "'jiangshi'", "'yehuo'", "'wangyou'"].forEach(function (x) {
+          if (ea.indexOf('playFx(' + x) < 0) missing.push('enemyAct' + x);
+        });
+        return missing.length === 0;
+      })());
+    __ok('v0.64.0 startBattle 开头调 fxStopAll()（有的一直播到帧尾才自删，不清会跨场景残影）',
+      String(startBattle).indexOf('fxStopAll()') >= 0);
+    __ok('v0.64.0 cardPlayFx 先查 CARD_FX、**没查到的牌退回 CSS 四件套**（不是 return 掉）',
+      (function () {
+        var s = String(cardPlayFx);
+        var i = s.indexOf('CARD_FX');
+        return i >= 0 && s.indexOf('attackFx(targetEl)') > i && s.indexOf('defenseFx()') > i &&
+          s.indexOf('spiritFx()') > i && s.indexOf('skillFx()') > i;
+      })());
+    __ok('v0.64.0 卡牌真的走通：打过 CARD_FX 的牌 → FX_LIVE 出现对应特效；没登记的牌 → FX_LIVE 不变',
+      (function () {
+        var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
+        var got = '?';
+        try {
+          fxStopAll();
+          cardPlayFx({ id: 'leifu', type: 'attack' });        // 登记过 → lei
+          var a = Object.keys(FX_LIVE).join(',');
+          fxStopAll();
+          cardPlayFx({ id: 'xueji', type: 'skill' });         // 没素材 → CSS 兜底，不进 FX_LIVE
+          var b = Object.keys(FX_LIVE).length;
+          got = a + '|' + b;
+          fxStopAll();
+        } catch (e) { got = 'THROW ' + e.message; }
+        SETTINGS.lowSpec = keep;
+        return got === 'lei|0';
+      })());
+    __ok('v0.64.0 **30 个特效一个都没白做**：CARD_FX 与引擎收口点合起来覆盖了 FX_SHEETS 的全部键'
+      + '（素材做了但没接线 = 白花钱出图，这条就是防它）',
+      (function () {
+        var used = {};
+        var RE = /playFx\('([a-z_]+)'/g;
+        [dealDamageToPlayer, gainBlock, heal, duhunFlush, applyCurse, gainShiqi, gainRage, __realEnemyAct].forEach(function (fn) {
+          var s = String(fn), m;
+          RE.lastIndex = 0;
+          while ((m = RE.exec(s)) !== null) { used[m[1]] = 1; }   // 取捕获组；别对整段 match 去字符（那是 'playFx('hurt'' → 'playxhurt'）
+        });
+        Object.keys(CARD_FX).forEach(function (k) { used[CARD_FX[k].n] = 1; });
+        var orphan = Object.keys(FX_SHEETS).filter(function (k) { return !used[k]; });
+        if (orphan.length) { globalThis.__orphanFx = orphan; }
+        return orphan.length === 0;
+      })());
   })();
 
   rep.pass = _p; rep.fail = _f;

@@ -54,3 +54,9 @@ _patch/_chk_*
 /_frame.html
 /_probe.html
 _patch/_shot_*.png
+# 特效对照图夹具（_patch/shot_fx.py + _drvfx.js）的运行产物，同上：每次重建，不进库
+/_shotfx.html
+/_framefx.html
+_patch/_manual*.png
+# 特效钉帧的逐帧裁片（_patch/shot_fx.py --dump 产物）
+_patch/_probe/

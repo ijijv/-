@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.63.0</title>
+<title>志怪塔 · 原型 v0.64.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -394,6 +394,10 @@
   .ricon{width:100%; height:56px; object-fit:contain; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.2);}
   /* —— 战斗特效（juice） —— */
   #fx-layer{position:fixed; inset:0; pointer-events:none; z-index:5; overflow:hidden;}
+  /* v0.64.0：精灵图特效（8 列纵向图，background-position 逐帧步进 —— 见 js/00_base.js 的 playFx）。
+     尺寸/位置/background-* 全由 JS 内联写，这里只管「不要边框、不吃点击、铺满格子」。
+     不需要 mix-blend-mode：源图是真 RGBA（实测 88~97% 像素 alpha=0），直接 alpha 合成即可。 */
+  .fx-sheet{position:absolute; pointer-events:none; background-repeat:no-repeat; will-change:background-position;}
   .fx-dmg{position:absolute; font-family:var(--font-kai); font-weight:bold; font-size:22px; color:#ff7b5a; text-shadow:0 0 8px rgba(0,0,0,.85), 0 2px 3px rgba(0,0,0,.6); animation:fxDmg .9s ease-out forwards; white-space:nowrap; letter-spacing:1px; transform:translate(-50%,-50%);}
   .fx-dmg.to-player{color:#ff4b4b; font-size:24px;}
   .fx-dmg.heal{color:var(--green);}
@@ -630,7 +634,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.63.0</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.64.0</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>
