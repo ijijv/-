@@ -303,6 +303,20 @@ function mapCamFromRatio(ratio, maxY){
   if(y>maxY) y=maxY;
   return y;
 }
+/* v0.64.1：滚轮位移 → 相机位置。**纯函数**（与 mapDragCam 同理，滚轮事件在 VM 里测不了）。
+   方向与拖动一致：往下滚(deltaY>0) = 想看更**下**面的层（第 1 层在画心底端、Boss 在顶端）
+   ⇒ camY 变大（camY 越大画心越往上走）。与普通文档「往下滚 = 看下面」的直觉一致。
+   deltaMode：0=像素、1=行、2=页 —— Firefox 常见**行模式**，不换算的话滚一格几乎不动（值只有 3）。
+   仍是 [0, maxY] 夹取，与拖动共用同一套边界，不吸附、不越界。 */
+function mapWheelCam(startCam, deltaY, deltaMode, maxY, vpH){
+  let d=(typeof deltaY==='number' && isFinite(deltaY)) ? deltaY : 0;
+  if(deltaMode===1) d=d*16;                      // 行 → 像素（16 与浏览器默认行高同量级）
+  else if(deltaMode===2) d=d*((vpH>0)?vpH:600); // 页 → 像素
+  let y=(startCam||0)+d;
+  if(!(y>0)) y=0;
+  if(y>maxY) y=maxY;
+  return y;
+}
 function bindMapDrag(){
   if(_mapDragBound || typeof document==='undefined' || !document.addEventListener) return;
   _mapDragBound=true;
@@ -337,6 +351,34 @@ function bindMapDrag(){
   };
   document.addEventListener('pointerup', up);
   document.addEventListener('pointercancel', up);
+  /* —— v0.64.1：滚轮 ——
+     地图是**变换驱动**的（画心靠 --camY 位移、窗口 overflow:hidden），里面没有任何可原生滚动的
+     内容 ⇒ 不接管的话滚轮**完全没反应**（用户报的「鼠标滚轮无法滚动地图，必须按住中键」）。
+     passive:false 是必须的：默认 passive 下 preventDefault() 无效，页面会跟着一起滚。
+     每次从 mapCamNow() 读当前值再累加，不用「一格 = 一行」那种量化步进 —— 与拖动同为自由滑动。 */
+  document.addEventListener('wheel', function(ev){
+    const vp=document.getElementById('map-viewport');
+    if(!vp || !ev || !ev.target) return;
+    let inside=false;
+    try{ inside = vp.contains ? vp.contains(ev.target) : (ev.target===vp); }catch(e){ inside=false; }
+    if(!inside) return;
+    const C=mapCamRange();
+    if(!(C.maxY>0)) return;                  // 一屏装得下：没有可滚的余地，让页面自己滚
+    if(ev.cancelable) ev.preventDefault();
+    const y=mapWheelCam(mapCamNow(), ev.deltaY, ev.deltaMode, C.maxY, C.vpH);
+    setMapCam(y, false, 0);                  // 与拖动同一条落位路径：无过渡、跟手
+    _mapUserScrolled=true;
+    _mapCamRatio = C.maxY>0 ? y/C.maxY : 0;
+  }, {passive:false});
+  /* 兜底护栏：画心窗口内一律掐掉原生拖拽。CSS 的 -webkit-user-drag:none 与 artImg 的
+     draggable="false" 已经各拦一道，这里再拦一道 —— 将来谁往地图里加个可拖元素也不会复发。 */
+  document.addEventListener('dragstart', function(ev){
+    const vp=document.getElementById('map-viewport');
+    if(!vp || !ev || !ev.target) return;
+    let inside=false;
+    try{ inside = vp.contains ? vp.contains(ev.target) : false; }catch(e){ inside=false; }
+    if(inside && ev.cancelable) ev.preventDefault();
+  });
 }
 /* 描边分档（用户要求：「达到的关卡的图标要有淡白色的描边，过去的关卡白色描边消失」）：
    past → 描边消失；choice → 淡白描边（当前层再叠暗金发光）；preview/hidden → 还是锁，无描边。

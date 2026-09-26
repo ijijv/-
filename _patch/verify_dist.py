@@ -353,6 +353,15 @@ def main():
                   '.map-viewport', '.map-sheet', '.map-roller',
                   '.o-reached', '.o-past', '.o-locked'):
         check(_need in html, '产物保留 %s 样式' % _need)
+    # v0.64.1：地图的原生拖拽护栏（-webkit-user-drag:none）。冒烟读不到 CSS，只能在这里拦 ——
+    # 被误删则节点图标又变回「天生可拖」，左键拖地图会被浏览器抢去当拖图并抛 pointercancel
+    # ⇒ 症状是「左键拖不动、得按住中键」，非常难联想到，所以必须有一条自动化守住。
+    check('-webkit-user-drag:none' in html,
+          '产物保留 -webkit-user-drag:none（地图原生拖图护栏，删了左键又拖不动）')
+    # ⚠️ 这里**故意不**去产物里找 draggable="false"：它在 artImg 的**模板字符串**里，而 _build/obf.js
+    #    开了 stringArray + base64 编码（阈值 0.75）⇒ 产物里是字符串数组里的一串 base64，明文搜不到。
+    #    那条护栏由冒烟在**源码**层面钉（__code(artImg) 含 draggable="false"），这里只守 CSS 那条
+    #    （CSS 不参与混淆，明文可搜）。两条各守一层，别把「搜不到」误判成「被删了」。
     # v0.62.0：地图不再是不透明面板，必须是**实心**底色 —— 半透明就是 Image#6 那个 bug 本身。
     # 这条防的是「以后有人手滑把 #overlay.map-scene 的 background 改回 rgba(...)」。
     import re as _re

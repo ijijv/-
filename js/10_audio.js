@@ -318,8 +318,12 @@ const BGM_EXTS = ['.ogg','.mp3','.wav','.m4a'];
 var ASSET_MAP = null;
 function assetURL(rel){ return (ASSET_MAP && ASSET_MAP[rel]) ? ASSET_MAP[rel] : ASSET_BASE + rel; }
 function imgFail(el){ el.outerHTML = el.dataset.fallback || ''; }
+/* ⚠️ v0.64.1：`draggable="false"` 是修 bug 的，别删 —— <img> **默认就是可拖的**，左键按住一移，
+   浏览器会开始原生拖图并抛 pointercancel，把所有自绘的指针拖拽（地图滑动、出牌）**当场掐断**。
+   症状是「左键拖不动 / 一拖就断」，而中键反而正常（中键不触发原生拖拽）—— 这是最难联想到的一类。
+   全项目图片都从这里出，所以在这一处掐掉最省事；CSS 侧另有一道 -webkit-user-drag:none 兜底。 */
 function artImg(src, fallback, cls){
-  return `<img class="${cls||''}" src="${assetURL(src)}" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
+  return `<img class="${cls||''}" src="${assetURL(src)}" draggable="false" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
 }
 function cardArt(c){ return `<div class="cart-wrap">${artImg('card/'+c.id+'.png', '', 'cart')}</div>`; }
 function relicIcon(r){ return artImg('relic/'+r.id+'.png', '', 'ricon'); }

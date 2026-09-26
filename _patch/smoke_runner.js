@@ -42,6 +42,14 @@
     rep.errors.push(name + (detail !== undefined ? ' | ' + detail : ''));
     return false;
   }
+  /* 源码形态断言前**必须**先过这里：Function.toString() 会把注释一起带出来，于是「断言某个标记
+     存在」会被**我自己解释这个标记的注释**判绿（记忆里踩过：v0.61.42 的计数类断言就是这样被自己的
+     注释判红的）。凡是要断「代码里有没有 X」，一律 __code(fn).indexOf(X)，不要 String(fn)。 */
+  function __code(fn) {
+    return String(fn)
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')        // 块注释
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');    // 行注释（[^:] 防吃掉 http:// 之类）
+  }
   function __card(id) { return CARDS.find(function (c) { return c.id === id; }); }
   function __fresh() {
     var keys = ['youhun', 'jiangshi']; // 普通怪：避开 boss/精英 特效与词缀分支
@@ -5611,6 +5619,49 @@
       })());
     __ok('v0.63.0 拖动 拖完吃掉紧随的那一次 click（否则从节点上起拖会误触 chooseNode）',
       String(bindMapDrag).indexOf('_mapEatClickUntil') >= 0 && String(chooseNode).indexOf('_mapEatClickUntil') >= 0);
+
+    /* ---------- C2. v0.64.1 滚轮能滚 + 原生拖图不再掐断指针（用户报的 bug）---------- */
+    __ok('v0.64.1 滚轮 mapWheelCam 方向：往下滚(deltaY>0) = 看更下面的层 ⇒ camY 变大（与拖动同向）',
+      mapWheelCam(500, 120, 0, 900, 834) === 620 && mapWheelCam(500, -120, 0, 900, 834) === 380 &&
+      mapWheelCam(500, 0, 0, 900, 834) === 500);
+    __ok('v0.64.1 滚轮 仍夹在 [0, maxY]（与拖动共用同一套边界：夹取不是吸附，不越界）',
+      mapWheelCam(50, -120, 0, 900, 834) === 0 && mapWheelCam(880, 120, 0, 900, 834) === 900 &&
+      mapWheelCam(10, -10, 0, 0, 834) === 0 && mapWheelCam(9999, 1, 0, 0, 834) === 0);
+    __ok('v0.64.1 滚轮 deltaMode 换算：行模式 ×16、页模式 ×视口高（Firefox 给的是「3 行」不是像素，'
+      + '不换算滚一格几乎不动）',
+      mapWheelCam(0, 3, 1, 900, 834) === 48 && mapWheelCam(0, 1, 2, 900, 834) === 834 &&
+      mapWheelCam(0, 1, 2, 900, 0) === 600 && mapWheelCam(0, 100, 0, 900, 834) === 100);
+    __ok('v0.64.1 滚轮 脏输入不产生 NaN（deltaY 非数/无穷 → 原地不动，与 mapDragCam 同口径）',
+      mapWheelCam(300, NaN, 0, 900, 834) === 300 && mapWheelCam(300, undefined, 0, 900, 834) === 300 &&
+      mapWheelCam(300, Infinity, 0, 900, 834) === 300 && mapWheelCam(300, -Infinity, 0, 900, 834) === 300);
+    __ok('v0.64.1 滚轮 bindMapDrag 真的绑了 wheel 且 **passive:false**'
+      + '（默认 passive 下 preventDefault() 无效 ⇒ 页面跟着一起滚）',
+      (function () {
+        var s = __code(bindMapDrag);
+        return s.indexOf("addEventListener('wheel'") >= 0 && s.indexOf('{passive:false})') >= 0 &&
+          s.indexOf('mapWheelCam') >= 0 && s.indexOf('ev.deltaMode') >= 0 &&
+          s.indexOf('preventDefault') >= 0;
+      })());
+    __ok('v0.64.1 滚轮 滚轮与拖动**共用同一条落位路径** setMapCam(y,false,0)（无过渡=跟手，不各写一套）',
+      (function () {
+        var s = __code(bindMapDrag);
+        return s.indexOf('setMapCam(y, false, 0)') >= 0 && s.indexOf('mapCamRange()') >= 0 &&
+          s.indexOf('mapCamNow()') >= 0;
+      })());
+    /* 这个 bug 的根因：节点图标是裸 <img>，天生可拖 ⇒ 左键一拖就触发原生拖图并抛 pointercancel，
+       指针流被掐断（中键不触发原生拖拽，所以「按住中键反而能拖」）。三道护栏缺一不可。 */
+    __ok('v0.64.1 原生拖图 artImg 出的图带 draggable="false"（根因：<img> 默认可拖，'
+      + '左键拖图标会被浏览器抢去当「拖图」并抛 pointercancel）',
+      __code(artImg).indexOf('draggable="false"') >= 0);
+    __ok('v0.64.1 原生拖图 bindMapDrag 里另有 dragstart 拦截兜底（将来往地图加可拖元素也不会复发）',
+      __code(bindMapDrag).indexOf("addEventListener('dragstart'") >= 0 &&
+      __code(bindMapDrag).indexOf('ev.preventDefault()') >= 0);
+    __ok('v0.64.1 断言前提自检 __code() 真的剥掉了注释（否则上面几条会被我自己的注释判绿）',
+      __code(function () { /* 标记FOO */ return 1; }).indexOf('标记FOO') < 0 &&
+      __code(function () { // 标记BAR
+        return 2;
+      }).indexOf('标记BAR') < 0 &&
+      __code(function () { return 'keepME'; }).indexOf('keepME') >= 0);
     __ok('v0.63.0 拖动 showMap 里绑一次 + 重置「用户手动滑过」标记（否则 resize 会把镜头拽回当前层）',
       (function () {
         var s = String(showMap);

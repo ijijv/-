@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.64.0</title>
+<title>志怪塔 · 原型 v0.64.1</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -335,7 +335,13 @@
   /* 画心窗口：overflow:hidden ⇒ 一个屏幕装不下的那张长图只能从这里看到一段（用户要的正是这个）
      v0.63.0：加 touch-action:none —— 触屏上不加的话浏览器会把「手指拖」抢去当页面滚动，
      指针事件根本收不到（全项目只有 body / #hand / .card 三处有这个，地图一直漏了）。 */
+  /* v0.64.1：再加 -webkit-user-drag:none —— 节点图标是 artImg() 出的**裸 <img>**，天生可拖：
+     左键按住图标一移，浏览器立刻开始「原生拖图」并抛 pointercancel，把我们的 pointermove 流**掐断**
+     ⇒ 症状正是「左键拖不动、按住中键才行」（中键不触发原生拖拽，所以那条路反而是通的）。
+     body 上已有的 user-select:none **拦不住图片拖拽**，必须显式关掉 user-drag。
+     user-drag 在 Blink 里是继承属性，写在这一层就覆盖了里面的所有图标。 */
   .map-viewport{flex:1 1 auto; min-height:0; position:relative; overflow:hidden; touch-action:none;
+    -webkit-user-drag:none; user-select:none;
     background:#12100d; box-shadow:inset 0 0 60px rgba(0,0,0,.75);}
   /* 画心本体：只有它在动。transform 由 --camY 驱动，类切换（.cam-nofx / 内联 transition-duration）
      控制有没有动画 —— 不手写 rAF 插值，交给 CSS transition。
@@ -634,7 +640,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.64.0</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.64.1</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>
