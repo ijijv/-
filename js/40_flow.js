@@ -78,6 +78,14 @@ function showBossReward(){
     <button class="btn ghost" onclick="hideOverlay(); goNext();">继续前进</button>`);
 }
 function goNext(){
+  /* v0.61.42：记下**刚打通的这条边**，交给随后的 showMap → drawMapLinks 做一次
+     「淡黄色浅浅的光边沿着路径延长过去」的动画。必须在本行之前取 —— G.mapPath 的最后两项
+     正是「上一层那格 → 刚清掉的这格」。唯一的推进出口就是这里（全仓只有这一处 G.mapRow++），
+     所以其它入口（重开地图 / 续档 / 换幕 / resize）都不会误放动画。 */
+  const __p=G.mapPath||[];
+  _mapGlowEdge = (__p.length>=2)
+    ? mapEdgeKey(__p[__p.length-2].r, __p[__p.length-2].c, __p[__p.length-1].r, __p[__p.length-1].c)
+    : null;
   G.mapRow++;
   if(G.endless) G.endlessFloor++;
   G.shopWares=null;

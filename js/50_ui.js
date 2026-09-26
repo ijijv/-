@@ -18,8 +18,25 @@ const MAP_ICON_DIR = 'map/';
 const NODE_ICON  = { fight:'combat.png', elite:'ellite.png', unknown:'unknown.png', camp:'rest.png', shop:'shop.png', boss:'boss.png' };
 /* 没解锁的关卡：一律挂锁，**不泄露它的类型**（用户给的 locked.png） */
 const NODE_ICON_LOCKED = 'locked.png';
-/* 道路贴图：两张图各是一条 45° 斜路，走左用 path-left、走右用 path-right */
-const MAP_ROAD_ICON = { left:'map/path-left.png', right:'map/path-right.png' };
+/* 道路贴图（MAP_ROAD_ICON = path-left/right.png）在 v0.61.42 随「路径回到代码自绘」一并**退役**：
+   曲线改由 drawMapLinks 用 SVG 二次贝塞尔现画（还要做沿路径延长的光边动画，贴图做不到）。
+   两张图仍留在 素材/map/ 下**没有删**（用户的素材不擅自删），只是不再被请求 —— verify_dist 的
+   「从未被请求」盘点里把它们排除掉，免得每次跑都提示「可考虑删掉」。 */
+/* v0.61.42：地图落位 —— 5 个槽位（%），每格随机占一个 + 抖动，故而不再整齐排成等距列。
+   槽位间距 21%，抖动上限 ±4% / ±7px ⇒ 不会越槽、也不会与相邻列撞在一起。 */
+const MAP_SLOT_PCT = [8, 29, 50, 71, 92];
+function mapSlotPct(node){
+  const i = (node && typeof node.sx==='number') ? node.sx : 2;
+  return MAP_SLOT_PCT[Math.max(0, Math.min(MAP_SLOT_PCT.length-1, i))];
+}
+/* 每格的内联落位（left 用 %、top 用 px 抖动）。生成器保证 sx/jx/jy 一定有值，
+   这里仍做兜底：老档（v<=3 的存档只存 mapSeed，地图是重算的）与手造 fixture 可能没有这三个字段。 */
+function mapNodeStyle(node){
+  if(!node) return '';
+  const left=mapSlotPct(node)+(node.jx||0);
+  const top=(node.jy||0);
+  return 'left:'+left.toFixed(2)+'%;top:'+top+'px;';
+}
 const NODE_TIP   = { fight:'普通战斗', elite:'精英战：更强的敌人，更好的奖励', unknown:'未知事件', camp:'篝火：休整或锻造', shop:'鬼市：买卖与删牌', boss:'守关 Boss' };
 /* ⚠ endless 必须显式给，否则 act4 会 404 丢背景图。
    v0.61.41：地图背景改用用户给的 素材/bg/bg_map.jpg（setBg 已支持带扩展名的名字），
@@ -93,27 +110,62 @@ function showMap(){
       // v0.61.41：未解锁的格子不再留白，改挂 NODE_ICON_LOCKED（用户给的 locked.png）——
       // 每格都有内容 ⇒ 行高与坐标仍然恒定，解锁进度变化时不抖动；
       // preview（下一步会亮）与 hidden（更远/同层走不到）都挂锁，只有 past/choice 才露出真实图标。
-      if(tier==='hidden'){ html+=`<div class="map-node locked" ${dc} title="尚未解锁">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
+      if(tier==='hidden'){ html+=`<div class="map-node locked" ${dc} style="${mapNodeStyle(node)}" title="尚未解锁">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
       const tip=NODE_TIP[node.t]||'';
-      if(tier==='choice'){ html+=`<button class="map-node" ${dc} title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
-      if(tier==='preview'){ html+=`<div class="map-node preview" ${dc} title="下一步可以走到这里（尚未解锁）">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
-      html+=`<div class="map-node" ${dc} title="${tip}">${nodeHTML(node)}</div>`;
+      if(tier==='choice'){ html+=`<button class="map-node" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
+      if(tier==='preview'){ html+=`<div class="map-node preview" ${dc} style="${mapNodeStyle(node)}" title="下一步可以走到这里（尚未解锁）">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
+      html+=`<div class="map-node" ${dc} style="${mapNodeStyle(node)}" title="${tip}">${nodeHTML(node)}</div>`;
     }
     html+=`</div>`;
   }
   html+=`</div>`; // 收 .map-wrap
   html+=`<div style="margin-top:12px"><button class="btn ghost" onclick="openMenu()">菜单（重开 / 退出）</button></div>`;
   showOverlay(html);
+  /* v0.61.42：给 #overlay 打上 .map-scene —— 地图页的黑幕降到 .22、面板改半透明，
+     地图背景（#bg，z-index:0）才看得见。**必须在 showOverlay 之后加**：
+     showOverlay 自己会把 .map-scene 清掉，其它所有面板（奖励/商店/图鉴/结算）因此保持原来的深色底。 */
+  const __ov=document.getElementById('overlay');
+  if(__ov && __ov.classList) __ov.classList.add('map-scene');
   // 行布局完成后才有坐标可量，所以推到下一帧再画
-  try{ requestAnimationFrame(drawMapLinks); }catch(e){ drawMapLinks(); }
+  /* v0.61.42：推帧的闭包里**再补一次 _mapGlowEdge=null**。drawMapLinks 的守卫
+     （量不到 .map-lines / 拿不到 getBoundingClientRect）会让它在**清标记之前**就 return ——
+     那样这一次没画成的光边标记会**留到下一次** showMap（例如续档后打开地图）才放动画，
+     玩家看到的是一条与「刚打通」毫无关系的旧边在生长。清在这里，标记就只活在它该活的那一帧。 */
+  try{ requestAnimationFrame(function(){ drawMapLinks(); _mapGlowEdge=null; }); }
+  catch(e){ drawMapLinks(); _mapGlowEdge=null; }
 }
-/* v0.61.20(P2) / v0.61.40 / v0.61.41：地图路径连线。
+/* v0.61.20(P2) / v0.61.40 / v0.61.41 / v0.61.42：地图路径连线。
    三种线：暗线 = 当前可走节点 → 它连到的**下一层可见**格；
-           金虚线 = 现在这一步能走到的； 金实线 = 已经走过的。
+           金虚线 = 现在这一步能走到的； 淡黄浅光边 = 已经走过的。
    v0.61.40 起连边来自节点自带的 next（显式拓扑），不再用「列差≤1」猜；
    且**两端都必须可见** —— 否则一条暗线就出卖了未解锁层的拓扑。
-   v0.61.41：画法由「自绘 SVG 贝塞尔」换成**用户给的道路贴图**（MAP_ROAD_ICON）。
-   贴图是一条 45° 斜路，所以按「起点→终点」的夹角旋转对齐；走左走右各一张。 */
+   v0.61.41 曾换成用户给的道路贴图；v0.61.42 按用户要求**回到代码自绘** —— 因为要做
+   「打通一关后，淡黄色浅浅的光边沿着路径延长过去」的动画，贴图做不到「沿路径生长」。
+   现在每条边是一条 **SVG 二次贝塞尔弧**（控制点沿垂直方向偏移，所以永不画直线），
+   贝塞尔弯曲方向由两端坐标哈希决定 ⇒ 同一张地图每次画都一样，不会闪。 */
+/* 一次性标记：刚打通的那条边（由 goNext 写入，drawMapLinks 消费一次后清空）。
+   只在「打完一关往上走」时动画；重开地图 / 续档 / 换幕 / 窗口 resize 都不动画。 */
+let _mapGlowEdge = null;
+function mapEdgeKey(r0,c0,r1,c1){ return r0+','+c0+'>'+r1+','+c1; }
+/* 端点坐标 → 弯曲量。返回 [-1,1]，且**远离 0**（保证任何一条边都看得出弧，不是直线）。 */
+function mapArcBow(key){
+  let h=2166136261;
+  for(let i=0;i<key.length;i++){ h^=key.charCodeAt(i); h=Math.imul(h,16777619); }
+  const u=((h>>>0)%2000)/1000-1;                 // -1..1
+  const mag=0.45+0.55*Math.abs(u);               // 0.45..1.00，绝不接近 0
+  return (u<0 ? -mag : mag);
+}
+/* 纯函数：给定两端坐标与边的 key，给出 SVG 的 d。抽出来是为了冒烟能直接对拍（不用真 DOM）。 */
+function mapArcD(a, b, key){
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const dist=Math.hypot(dx,dy);
+  if(dist<4) return '';
+  const nx=-dy/dist, ny=dx/dist;                 // 连线方向的垂直单位向量
+  const bow=Math.min(dist*0.14, 42)*mapArcBow(key);   // 夹住外凸量，别让弧线窜出面板
+  const cx=(a.x+b.x)/2+nx*bow, cy=(a.y+b.y)/2+ny*bow;
+  const R=function(v){ return Math.round(v*10)/10; };
+  return 'M'+R(a.x)+','+R(a.y)+' Q'+R(cx)+','+R(cy)+' '+R(b.x)+','+R(b.y);
+}
 let _mapLinkBound=false;
 function drawMapLinks(){
   const layer=document.getElementById('map-lines');
@@ -135,24 +187,35 @@ function drawMapLinks(){
     if(!b.width && !b.height) return null;
     return { x:b.left-wb.left+b.width/2, y:b.top-wb.top+b.height/2 };
   }
-  /* 道路贴图：中心对齐两点中点，尺寸按两点距离取（贴图对角线 = 边长 ⇒ 显示边长 = 距离/√2），
-     再旋转到两点连线方向（贴图本身是 ±45°，所以补一个 ±45°）。 */
-  function seg(a,b,cls){
+  const NS='http://www.w3.org/2000/svg';
+  let svg=null;
+  try{
+    svg=document.createElementNS(NS,'svg');
+    svg.setAttribute('class','map-svg');
+    svg.setAttribute('width', Math.max(1, Math.round(wb.width)));
+    svg.setAttribute('height', Math.max(1, Math.round(wb.height)));
+    svg.setAttribute('viewBox','0 0 '+Math.max(1,Math.round(wb.width))+' '+Math.max(1,Math.round(wb.height)));
+    layer.appendChild(svg);
+  }catch(e){ return; }
+  /* 一条边 = 一条 <path>。newest=true 时额外做「光边沿路径延长」：
+     取路径真实长度喂给 CSS 变量 --len，由 @keyframes mapGlowGrow 把 stroke-dashoffset 从 len 收到 0。
+     取不到长度（老浏览器 / 没有 getTotalLength）就**不加 link-new** —— 只有 .link-past 的淡黄浅光边，
+     降级后依然是对的观感，不会变成一条虚线或干脆看不见。 */
+  function seg(a,b,cls,newest,key){
     if(!a||!b) return;
-    const dx=b.x-a.x, dy=b.y-a.y;
-    const dist=Math.hypot(dx,dy);
-    if(dist<4) return;
-    const im=document.createElement('img');
-    im.className='map-road '+cls;
-    im.src=assetURL(MAP_ROAD_ICON[dx<0 ? 'left' : 'right']);
-    im.alt='';
-    im.style.left=((a.x+b.x)/2)+'px';
-    im.style.top=((a.y+b.y)/2)+'px';
-    const size=Math.max(42, Math.min(200, Math.round(dist*0.72)));
-    im.style.width=size+'px'; im.style.height=size+'px';
-    const ang=Math.atan2(dy,dx)*180/Math.PI;
-    im.style.transform='translate(-50%,-50%) rotate('+((dx<0 ? ang-45 : ang+45))+'deg)';
-    layer.appendChild(im);
+    const d=mapArcD(a,b,key);
+    if(!d) return;
+    const p=document.createElementNS(NS,'path');
+    p.setAttribute('d', d);
+    p.setAttribute('class', 'map-path '+cls);
+    svg.appendChild(p);
+    if(!newest) return;
+    let L=0;
+    try{ L=(typeof p.getTotalLength==='function') ? p.getTotalLength() : 0; }catch(e){ L=0; }
+    if(L>1 && p.style && p.style.setProperty){
+      p.style.setProperty('--len', String(Math.round(L*10)/10));
+      p.setAttribute('class', 'map-path '+cls+' link-new');
+    }
   }
   // ① 暗线：当前可走的每一格 → 它连到的下一层可见格
   const __cur=MAP[G.mapRow]||[];
@@ -162,20 +225,26 @@ function drawMapLinks(){
     for(let k=0;k<nx.length;k++){
       const j=nx[k];
       if(!fogVisible(G.mapRow+1,j)) continue;
-      seg(nodeAt(G.mapRow,c), nodeAt(G.mapRow+1,j), 'link-dim');
+      seg(nodeAt(G.mapRow,c), nodeAt(G.mapRow+1,j), 'link-dim', false, mapEdgeKey(G.mapRow,c,G.mapRow+1,j));
     }
   }
-  // ② 金色实线：已经走过的路径
+  // ② 淡黄浅光边：已经走过的路径。**最后一条**（刚打通的那条）若是本次的一次性标记，就带生长动画
   const path=G.mapPath||[];
-  for(let i=0;i<path.length-1;i++) seg(nodeAt(path[i].r,path[i].c), nodeAt(path[i+1].r,path[i+1].c), 'link-past');
-  // ③ 金色虚线：上一步站的那格 → 现在能走的每一格
+  for(let i=0;i<path.length-1;i++){
+    const p0=path[i], p1=path[i+1];
+    const key=mapEdgeKey(p0.r,p0.c,p1.r,p1.c);
+    seg(nodeAt(p0.r,p0.c), nodeAt(p1.r,p1.c), 'link-past', (key===_mapGlowEdge), key);
+  }
+  // ③ 金虚线：上一步站的那格 → 现在能走的每一格
   if(G.mapRow>0 && G.mapCol>=0){
     const a=nodeAt(G.mapRow-1, G.mapCol);
     for(let c=0;c<__cur.length;c++){
       if(!mapReachable(G.mapRow,c)) continue;
-      seg(a, nodeAt(G.mapRow,c), 'link-reach');
+      seg(a, nodeAt(G.mapRow,c), 'link-reach', false, mapEdgeKey(G.mapRow-1,G.mapCol,G.mapRow,c));
     }
   }
+  // 动画是**一次性**的：这一次画完就消费掉，重开地图 / resize 重画都不会再放一遍
+  _mapGlowEdge=null;
   if(!_mapLinkBound && typeof window!=='undefined' && window.addEventListener){
     _mapLinkBound=true;
     window.addEventListener('resize',()=>{ if(document.getElementById('map-lines')) drawMapLinks(); });
@@ -858,7 +927,12 @@ function viewDeck(){
    两个调用点只剩一行转发（那两行不可达，已如实记在更新日志里）。 */
 function overlaySfx(){ sfx('ui_panel'); }
 function showOverlay(html, closable){ overlaySfx();   // v0.61.32：面板开合（设置/图鉴/成就/牌库/结算）
-  document.getElementById('overlayContent').innerHTML=html; document.getElementById('overlay').classList.remove('hidden'); const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none'; }
+  document.getElementById('overlayContent').innerHTML=html;
+  const ov=document.getElementById('overlay');
+  // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
+  // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
+  if(ov && ov.classList) ov.classList.remove('map-scene');
+  ov.classList.remove('hidden'); const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none'; }
 function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
   document.getElementById('overlay').classList.add('hidden'); }
 function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }

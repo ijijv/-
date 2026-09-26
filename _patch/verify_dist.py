@@ -39,10 +39,13 @@ def dump_ids():
           ".concat(Object.keys(MAP_BG).map(k=>MAP_BG[k])).map(bgRel),"
           # v0.61.41：把 bgRel 的两条规则各钉一个样本，规则被改坏时这里立刻红
           "bgRule:['menu','map.jpg','map.jpeg'].map(bgRel),"
-          # v0.61.41：地图素材清单从游戏作用域取（6 种节点 + 未解锁 + 左右两条路），
-          # 改名/漏填会让 [1] 立刻红，而不是等玩到地图页才发现图标 404
+          # v0.61.41：地图素材清单从游戏作用域取（6 种节点 + 未解锁），
+          # 改名/漏填会让 [1] 立刻红，而不是等玩到地图页才发现图标 404。
+          # v0.61.42：路径回到代码自绘 ⇒ MAP_ROAD_ICON 已退役，两条道路 PNG **仍在磁盘上没删**
+          # （用户的素材不擅自删），只是不再被游戏请求；从这份清单里去掉，
+          # 否则 Map_ROAD_ICON 是 undefined，这行求值会直接抛错。
           "mapIcons:Object.keys(NODE_ICON).map(k=>MAP_ICON_DIR+NODE_ICON[k])"
-          ".concat([MAP_ICON_DIR+NODE_ICON_LOCKED,MAP_ROAD_ICON.left,MAP_ROAD_ICON.right]),"
+          ".concat([MAP_ICON_DIR+NODE_ICON_LOCKED]),"
           # 必须命中：缺任何一个都是 bug
           "music:['menu','map','battle'],"
           # v0.61.31 起代码支持这三条升级轨，但**缺文件时会退回基础轨**（Boss/精英→battle、商店→map），
@@ -90,9 +93,10 @@ def main():
           'bgRel 两条规则：带扩展名只补 bg_ 前缀 / 不带补 bg_<name>.png（%s）'
           % ','.join(ids.get('bgRule') or []))
     want += ids['bg']
-    # v0.61.41：地图图标（6 种节点 + 未解锁 + 左右两条路）—— 清单来自游戏作用域，改名/漏填会被抓
-    check(len(ids['mapIcons']) == 9 and len(set(ids['mapIcons'])) == 9,
-          '地图图标清单 9 条且互不重复（%s）' % ','.join(ids['mapIcons']))
+    # v0.61.41：地图图标（6 种节点 + 未解锁）—— 清单来自游戏作用域，改名/漏填会被抓
+    # v0.61.42：9 → 7（两条道路贴图随「路径回到代码自绘」退役，见 dump_ids）
+    check(len(ids['mapIcons']) == 7 and len(set(ids['mapIcons'])) == 7,
+          '地图图标清单 7 条且互不重复（%s）' % ','.join(ids['mapIcons']))
     want += ids['mapIcons']
     # v0.61.36：运行时废牌「怨气」的卡图（旧版漏掉 → 真在用的图被误报为 unused）
     want += [('card/%s.png' % i) for i in ids['junk']]
@@ -265,6 +269,13 @@ def main():
     print('\n[5] 结构')
     check(html.count('<script>') == 1, '只有 1 个 <script> 标签（实际 %d）' % html.count('<script>'))
     check(html.count('</script>') == 1, '只有 1 个 </script> 标签（实际 %d）' % html.count('</script>'))
+    # v0.61.42：本批三处 CSS 必须活到产物里 —— 混淆只碰 <script> 正文，CSS 是纯文本，
+    # 但「CSS 被误删/误并」这种事冒烟查不到（冒烟不读文件），只能在这里钉住：
+    #   .map-scene    = 地图页半透明底（地图背景看得见的唯一开关）
+    #   mapGlowGrow   = 沿路径延长的淡黄光边动画
+    #   .fx-sign      = 浮字正负号的配色（用户报的「加号减号颜色没变」）
+    for _need in ('.map-scene', 'mapGlowGrow', '.fx-sign'):
+        check(_need in html, '产物保留 v0.61.42 的 %s 样式' % _need)
     # 提示项，不作断言：stringArrayThreshold=0.75 意味着约 1/4 的字符串保留明文，
     # 哪些字符串被编码随输入变化（同样输入 + 固定 seed 才稳定），命中与否都不影响功能与隐私。
     print('  注: 产物中 %s "%s" 明文' % ('存在' if '素材/' in html else '不存在', '素材/'))
@@ -279,7 +290,11 @@ def main():
     optional_music = set('music/bgm_%s%s' % (t, e)
                          for t in (ids['music'] + ids['musicOptional']) for e in bgm_exts)
     # v0.61.36：数字图（交付即生效）与 musicOptional 同理 —— 只用来排重，不做「必须命中」
-    unused = sorted(k for k in (keys - set(want) - set(num_want))
+    # v0.61.42：两条道路贴图（map/path-left.png、map/path-right.png）随「路径回到代码自绘」退役。
+    # 它们**仍在 素材/ 里没删**（用户的素材不擅自删），只是游戏不再请求 —— 这里显式排掉，
+    # 免得每跑一次就提示「可考虑删掉」，那会诱导以后真去删用户的东西。
+    retired = {'map/path-left.png', 'map/path-right.png'}
+    unused = sorted(k for k in (keys - set(want) - set(num_want) - retired)
                     if not k.startswith('sfx/') and k not in optional_music)
     if unused:
         tot = sum(os.path.getsize(os.path.join(ASSD, u)) for u in unused if os.path.exists(os.path.join(ASSD, u)))

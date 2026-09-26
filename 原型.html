@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.61.41</title>
+<title>志怪塔 · 原型 v0.61.42</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -122,20 +122,30 @@
   .intent{margin-top:8px; font-size:14px; color:var(--gold);}
   .intent::before{content:"⚠ 意图："; color:var(--dim);}
   .summon{font-size:12px; padding:3px 10px; border-radius:16px; border:1px solid var(--gold); color:var(--gold); background:rgba(224,179,65,.08);}
-  /* v0.61.41：道路改用用户给的贴图（素材/map/path-left|right.png），不再自绘 SVG 贝塞尔；
-     节点也不再是「带边框的按钮」，而是「图标 + 小字」—— 原边框/底色/圆角/内边距**全部去掉**。
-     三档线的语义不变：暗线=可选→下一层可见格、金虚线=上一步→现在能走、金实线=已走。 */
-  .map-wrap{position:relative;}
-  .map-lines{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; overflow:visible; z-index:0;}
-  .map-road{position:absolute; object-fit:contain; pointer-events:none;}
-  .map-road.link-dim{opacity:.38; filter:grayscale(.75) brightness(.7);}
-  .map-road.link-reach{opacity:.95; filter:sepia(1) saturate(2.6) hue-rotate(-12deg) brightness(1.25);}
-  .map-road.link-past{opacity:.9; filter:sepia(1) saturate(2.2) hue-rotate(-12deg) brightness(1.1);}
-  .map-row{position:relative; z-index:1; display:flex; justify-content:center; align-items:flex-start; gap:14px; margin:6px 0;}
-  .map-node{min-width:0; padding:0; border:none; background:none; color:var(--text); font-size:12px; letter-spacing:1px; cursor:default; text-align:center; display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.25;}
+  /* v0.61.41：节点不再是「带边框的按钮」，而是「图标 + 小字」—— 原边框/底色/圆角/内边距全部去掉。
+     三档线的语义不变：暗线=可选→下一层可见格、金虚线=上一步→现在能走、已走=淡黄色浅光边。
+     注：v0.61.41 那一版把路径换成了用户给的道路贴图，v0.61.42 已按用户要求改回代码自绘。 */
+  /* v0.61.42：路径回到「代码自绘」，并做出**淡黄色浅光边沿路径延长**的动画（用户要求）。
+     图标不再整齐排在等距列里 —— 每格落在 5 个槽位中随机一个，再叠 ±4% 横向 / ±7px 纵向抖动，
+     所以路径天然不等长、不平行；线本身也改成**二次贝塞尔弧**（控制点垂直偏移），不画直线。 */
+  .map-wrap{position:relative; padding:30px 0;}   /* 上下留白：弧线外凸时不会被面板裁掉 */
+  .map-lines{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:0;}
+  .map-svg{position:absolute; left:0; top:0; overflow:visible; pointer-events:none;}
+  .map-path{fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .map-path.link-dim{stroke:rgba(154,143,120,.30); stroke-width:3; stroke-dasharray:5 9;}
+  .map-path.link-reach{stroke:rgba(224,179,65,.85); stroke-width:3.5; stroke-dasharray:9 7; filter:drop-shadow(0 0 3px rgba(224,179,65,.35));}
+  .map-path.link-past{stroke:rgba(255,226,150,.55); stroke-width:3.5; filter:drop-shadow(0 0 4px rgba(255,226,150,.45));}
+  .map-path.link-new{stroke:rgba(255,236,178,.95); stroke-width:4; stroke-dasharray:var(--len,0); animation:mapGlowGrow 1.1s cubic-bezier(.35,0,.25,1) forwards; filter:drop-shadow(0 0 7px rgba(255,232,160,.95));}
+  @keyframes mapGlowGrow{from{stroke-dashoffset:var(--len,0);} to{stroke-dashoffset:0;}}
+  .map-row{position:relative; z-index:1; height:88px; margin:0;}
+  /* v0.61.42：改**绝对定位** —— left/top 由每格自带的槽位 + 抖动内联给出（showMap 里的 mapNodeStyle）。
+     left:50% / top:0 只是没有内联样式时的兜底，保证任何情况下都不是全叠在左上角。 */
+  .map-node{position:absolute; left:50%; top:0; transform:translateX(-50%); min-width:0; padding:0; border:none; background:none; color:var(--text); font-size:12px; letter-spacing:1px; cursor:default; text-align:center; display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.25;}
   .map-node.empty{visibility:hidden;}   /* v0.61.41 兜底：当前没有任何档会渲染它（未解锁改挂 locked.png） */
   .map-node .node-ico{width:56px; height:56px; object-fit:contain; display:block; pointer-events:none; transition:transform .15s ease; filter:drop-shadow(0 2px 4px rgba(0,0,0,.85));}
-  .map-node .node-label{white-space:nowrap; color:var(--dim);}
+  /* v0.61.42：地图改成**半透明面板 + 看得见的背景图**（详见 #overlay.map-scene），
+     小字直接压在照片上，必须自带描边才读得清 */
+  .map-node .node-label{white-space:nowrap; color:var(--dim); text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 7px rgba(0,0,0,.85);}
   .map-node.locked{opacity:.4;}
   .map-node.locked .node-ico{width:42px; height:42px; filter:grayscale(.55) brightness(.7) drop-shadow(0 2px 4px rgba(0,0,0,.85));}
   .map-node.preview{opacity:.7;}
@@ -255,6 +265,14 @@
   /* —— 外置素材（有则增强，无则优雅回退） —— */
   #bg{position:fixed; inset:0; z-index:0; width:100%; height:100%; object-fit:cover; pointer-events:none;}
   body.has-bg{background:transparent;}
+  /* v0.61.42：**地图背景终于看得见了** —— 这是「地图背景怎么没有改」的真正根因。
+     地图页是渲染进 #overlay 的（showMap → showOverlay），而 #overlay 老样式是 rgba(10,8,6,.88)
+     的全屏黑幕、它里面的 .panel 又是**完全不透明**的 var(--ink2)；#bg 在 z-index:0、#overlay 在 10，
+     所以换哪张背景图都被黑幕 + 不透明卡片压成一片黑 —— 看不出变化不是图没装，是被盖住了。
+     现在地图场景给 #overlay 打上 .map-scene（见 showOverlay/showMap），黑幕降到 .22、面板改半透明。 */
+  #overlay.map-scene{background:rgba(10,8,6,.22);}
+  #overlay.map-scene #overlayWrap{max-width:720px;}
+  #overlay.map-scene .panel{background:rgba(12,9,7,.30); border-color:rgba(224,179,65,.22);}
   .eportrait{width:auto; height:186px; max-width:100%; object-fit:contain; object-position:bottom center; border-radius:0; margin-bottom:2px; background:transparent; display:block; filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));}
   .cart{display:block;}
   .ricon{width:100%; height:56px; object-fit:contain; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.2);}
@@ -278,6 +296,24 @@
   /* v0.61.33/36：数字素材字形（素材/num/{dmg,hurt,block,heal}/0.png…9.png，四档共 40 张）。
      高度按 1.15em 等比缩放 → 一套尺寸覆盖全部字号档（含下面的 .crit 28px），文字与图片都用同一套尺寸。 */
   .fx-num{height:1.15em; width:auto; vertical-align:-.18em; margin:0 -.03em; pointer-events:none;}
+  /* v0.61.42：正负号（+ / -）的配色 —— 用户报「前面的加号和减号颜色没变，导致突兀」。
+     数字是 PNG，颜色**烤死在图里**；符号是文字，原来继承的是 .fx-dmg 的**文字色**（上面那四条），
+     与数字的真实填充色明度差一截。下面四个色值是用 PIL 从 素材/num/<档>/0..9.png
+     的**不透明像素主色簇**里取的均值（不是目测）：dmg #fc3802 / hurt #c90902 / block #0398fa / heal #05c504。
+     盒子几何与 .fx-num **完全对齐**（同高 1.15em、同 vertical-align:-.18em），
+     这样「＋12」的符号与数字在同一基线上，不会再一高一低。
+     ⚠ 四档字形本身**没有黑描边** —— 实测「近黑像素（RGB 和 <150）」占比 ≤0.04%；
+     四档最暗的像素都是**自己色相的暗部**（hurt 最暗 #770000、heal 最暗 #005900、dmg #b22102、block #16285a），
+     那是字形的内阴影/渐变，不是描边。所以这里**不加黑描边** —— 加了反而更突兀。
+     （盒子几何是按 .fx-num 的数值对齐推出来的，**没有在真浏览器里逐像素量过**。） */
+  .fx-sign{display:inline-block; height:1.15em; line-height:1.15em; vertical-align:-.18em; margin:0 -.02em; font-weight:bold; pointer-events:none;}
+  .fx-dmg .fx-sign{color:#fc3802;}
+  .fx-dmg.to-player .fx-sign{color:#c90902;}
+  .fx-dmg.block .fx-sign{color:#0398fa;}
+  .fx-dmg.heal .fx-sign{color:#05c504;}
+  /* 拖拽预伤害（#drag-dmg）恒定用 dmg 档字形（numHTML('', …)），所以符号也必须恒用 dmg 档色，
+     **不能**跟着 .weak 的蓝色文字走 —— 那又变成「符号一个色、数字另一个色」 */
+  #drag-dmg .fx-sign{color:#fc3802;}
   /* v0.61.36 · 浮字抖动 + 闪烁（纯 CSS，图片到位前文字一样抖）
      分工：外层 .fx-dmg 管位移（fxDmg 的 translate/scale），内层 .fx-in 管抖动/闪烁 —— 不抢 transform */
   .fx-in{display:inline-block; animation:fxJitter .16s ease-in-out 2;}
@@ -306,6 +342,8 @@
   #actions button#endTurn{font-size:18px; padding:12px 36px; letter-spacing:3px;}
   .map-node{min-height:0;}
   .map-node .node-ico{width:52px; height:52px;}
+  /* v0.61.42：节点改绝对定位后行高由 CSS 定死，窄屏图标变小就得同步收行高，否则空档过大 */
+  .map-row{height:82px;}
   #overlay .close-x{width:44px; height:44px; line-height:42px; font-size:22px;}
   #hand .card.pressed{z-index:60; transform:rotate(var(--rot,0deg)) translateY(-16px) scale(1.18); box-shadow:0 8px 24px rgba(0,0,0,.65), 0 0 0 2px var(--gold);}
   /* 流畅模式（低配机）：关闭震动/抖动/飘字等重动画 */
@@ -384,7 +422,8 @@
     h1.title{font-size:22px; letter-spacing:3px;}
     h1.title small{font-size:11px;}
     .title-actions{position:static; transform:none; justify-content:center; margin-top:6px;}
-    .map-row{gap:4px; margin:4px 0;}
+    .map-row{height:68px;}
+    .map-wrap{padding:22px 0;}
     .map-node{font-size:10px; letter-spacing:0;}
     .map-node .node-ico{width:40px; height:40px;}
     .map-node.locked .node-ico,.map-node.preview .node-ico{width:32px; height:32px;}
@@ -458,7 +497,8 @@
     .map-node{font-size:9px; padding:0; min-width:0;}
     .map-node .node-ico{width:34px; height:34px;}
     .map-node.locked .node-ico,.map-node.preview .node-ico{width:27px; height:27px;}
-    .map-row{gap:2px;}
+    .map-row{height:58px;}
+    .map-wrap{padding:18px 0;}
     .relic{width:100px; min-height:80px; padding:6px;}
     .relic .cname{font-size:12px;}
     .relic .cdesc{font-size:9px;}
@@ -472,7 +512,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.41</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.61.42</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

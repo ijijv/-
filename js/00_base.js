@@ -162,7 +162,12 @@ function numGlyphSrc(kind){
 function numAppend(parent, kind, text){
   const sp=numSplit(text); if(!sp) return false;
   const imgs=numGlyphSrc(kind); if(!imgs) return false;
-  if(sp.sign) parent.appendChild(document.createTextNode(sp.sign));
+  /* v0.61.42：符号也包一层 .fx-sign。原来这一处只塞**裸文本**（createTextNode），
+     于是它继承的是 .fx-dmg 的**文字色**（dmg #ff7b5a / 受伤 #ff4b4b / 格挡 #7fb0d8 / 治疗 #3fa060），
+     而紧跟其后的数字是**烤死在 PNG 里**的色（#fc3802 / #c90902 / #0398fa / #05c504）——
+     色相虽同、明度差一截 ⇒ 用户报的「加号减号颜色没变，突兀」。numHTML 那条路径本来就有 .fx-sign，
+     两条路（飘字 / 拖拽预伤害）必须表现一致，所以这里补齐，配色统一交给 CSS 的分档规则。 */
+  if(sp.sign){ const sg=document.createElement('span'); sg.className='fx-sign'; sg.textContent=sp.sign; parent.appendChild(sg); }
   for(const ch of sp.digits){ const im=new Image(); im.className='fx-num'; im.src=imgs[+ch].src; im.alt=ch; parent.appendChild(im); }
   return true;
 }

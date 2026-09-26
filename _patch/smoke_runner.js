@@ -6,6 +6,7 @@
   var __realSfx = sfx; // v0.61.25 金快照探针要用真 sfx（第 631 行会把全局 sfx 顶成 __sil）
   var __realFloatDamage = floatDamage; // v0.61.36：第 658 行会把全局 floatDamage 顶成 __sil，结构断言要用真的
   var __realSaveRun = saveRun; // v0.61.06：saveRun 会被 stub，但「存档里带没带随机态」只有真函数测得出
+  var __realShowOverlay = showOverlay; // v0.61.42：showOverlay 会被 stub（第 14 行），但「摘 .map-scene」只有真函数里看得到
   var __gcInit = goldCompensation; // v0.61 B6：捕获金卡补偿初值（后续用例会改动这个全局）
   try { render = __sil; } catch (e) {}
   try { saveRun = __sil; } catch (e) {}
@@ -4674,9 +4675,11 @@
       NODE_ICON.shop === 'shop.png' && NODE_ICON.boss === 'boss.png',
       JSON.stringify(NODE_ICON));
     __ok('v0.61.41 UI 未解锁用 locked.png（用户给的锁图）', String(NODE_ICON_LOCKED) === 'locked.png');
-    __ok('v0.61.41 UI 道路贴图左右两张齐备',
-      MAP_ROAD_ICON.left === 'map/path-left.png' && MAP_ROAD_ICON.right === 'map/path-right.png',
-      JSON.stringify(MAP_ROAD_ICON));
+    /* v0.61.42：MAP_ROAD_ICON 这张表**已退役**（路径回到代码自绘，见下面 B 段）。
+       两张 PNG 仍留在 素材/map/ 下**没有删**（用户的素材不擅自删），只是不再被请求 ——
+       所以这里断言的正是「表没了」，而不是「图没了」。 */
+    __ok('v0.61.42 UI MAP_ROAD_ICON 已退役（typeof 取不到，不再有第二份路径真相）',
+      typeof MAP_ROAD_ICON === 'undefined');
     __ok('v0.61.41 UI 图标目录前缀只有一处真相（MAP_ICON_DIR）', MAP_ICON_DIR === 'map/');
     __ok('v0.61.41 UI 六种节点都能拼出带 node-ico 的图标 HTML',
       SIX.every(function (k) { return String(nodeHTML({ t: k })).indexOf('node-ico') >= 0; }));
@@ -4688,23 +4691,65 @@
       Object.keys(NODE_LABEL).filter(function (k) { return /[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(NODE_LABEL[k]); }).length === 0,
       JSON.stringify(NODE_LABEL));
 
-    /* ============ B. 道路贴图取代自绘 SVG ============ */
-    __ok('v0.61.41 UI 连线改成道路贴图（不再自绘 SVG 贝塞尔）',
-      String(drawMapLinks).indexOf('MAP_ROAD_ICON') >= 0 &&
-      String(drawMapLinks).indexOf('createElementNS') < 0);
-    __ok('v0.61.41 UI 连线层由 <svg> 改成 <div>（贴图用 <img>）',
-      String(showMap).indexOf('class="map-lines" id="map-lines"') >= 0 &&
-      String(showMap).indexOf('<svg class="map-lines"') < 0);
-    __ok('v0.61.41 UI 走左走右按终点相对起点的左右选（dx<0 用 path-left）',
-      String(drawMapLinks).indexOf("dx<0 ? 'left' : 'right'") >= 0);
-    __ok('v0.61.41 UI 贴图按两点夹角旋转对齐（贴图本身是 ±45° 斜路）',
-      String(drawMapLinks).indexOf('atan2') >= 0 && String(drawMapLinks).indexOf('rotate(') >= 0);
-    __ok('v0.61.41 UI 连线仍只在「两端都可见」时画（不泄露未解锁层的拓扑）',
-      String(drawMapLinks).indexOf('fogVisible') >= 0);
-    __ok('v0.61.41 UI 三种线语义没丢（暗线 / 金虚线 / 金实线）',
+    /* ============ B. 路径回到代码自绘（SVG 二次贝塞尔弧）+ 沿路径延长的淡黄光边动画 ============ */
+    __ok('v0.61.42 路径 回到代码自绘 SVG（createElementNS），不再请求道路贴图',
+      String(drawMapLinks).indexOf('createElementNS') >= 0 &&
+      String(drawMapLinks).indexOf('MAP_ROAD_ICON') < 0);
+    __ok('v0.61.42 路径 连线层仍是 <div class="map-lines" id="map-lines">（svg 由 JS 现建，不进静态 HTML）',
+      String(showMap).indexOf('class="map-lines" id="map-lines"') >= 0);
+    __ok('v0.61.42 路径 每条边是二次贝塞尔 Q（不是直线 L，也不是贴图）——纯函数 mapArcD 直接对拍',
+      (function () {
+        var d = mapArcD({ x: 0, y: 0 }, { x: 200, y: 0 }, 'edge-a');
+        return /^M0,0 Q-?[\d.]+,-?[\d.]+ 200,0$/.test(d) && d.indexOf('Q') > 0 && d.indexOf('L') < 0;
+      })(), String(mapArcD({ x: 0, y: 0 }, { x: 200, y: 0 }, 'edge-a')));
+    __ok('v0.61.42 路径 竖直边的控制点**横向**偏移（弧线确实拱起来，不是直线）',
+      (function () {
+        var d = mapArcD({ x: 0, y: 0 }, { x: 0, y: 200 }, 'edge-b');
+        var m = /^M0,0 Q(-?[\d.]+),(-?[\d.]+) 0,200$/.exec(d);
+        return !!m && Math.abs(parseFloat(m[1])) > 5 && Math.abs(parseFloat(m[2]) - 100) < 1;
+      })(), String(mapArcD({ x: 0, y: 0 }, { x: 0, y: 200 }, 'edge-b')));
+    __ok('v0.61.42 路径 弯曲量 mapArcBow 绝不接近 0（任何一条边都看得出弧，不是直线）',
+      (function () {
+        var near = 0, pos = 0, neg = 0;
+        for (var i = 0; i < 400; i++) {
+          var v = mapArcBow('k' + i);
+          if (Math.abs(v) < 0.45) near++;
+          if (v > 0) pos++; else if (v < 0) neg++;
+        }
+        return near === 0 && pos > 0 && neg > 0;
+      })());
+    __ok('v0.61.42 路径 同一条边每次画都弯同一边（mapArcBow 纯函数、无随机）',
+      mapArcBow('0,0>1,0') === mapArcBow('0,0>1,0') && mapArcBow('0,0>1,1') !== mapArcBow('0,0>1,0'));
+    __ok('v0.61.42 路径 长边的外凸量被夹住（不会窜出面板）',
+      (function () {
+        var d = mapArcD({ x: 0, y: 0 }, { x: 600, y: 0 }, 'edge-c');
+        var m = /^M0,0 Q(-?[\d.]+),(-?[\d.]+) 600,0$/.exec(d);
+        return !!m && Math.abs(parseFloat(m[2])) <= 42.001;
+      })());
+    __ok('v0.61.42 路径 两端几乎重合（<4px）时不画边，返回空串', mapArcD({ x: 0, y: 0 }, { x: 2, y: 1 }, 'edge-d') === '');
+    __ok('v0.61.42 路径 边的 key 是**有向**的（r0,c0>r1,c1，正反不同串）',
+      mapEdgeKey(0, 0, 1, 0) === '0,0>1,0' && mapEdgeKey(1, 0, 0, 0) === '1,0>0,0' &&
+      mapEdgeKey(0, 0, 1, 0) !== mapEdgeKey(1, 0, 0, 0));
+    __ok('v0.61.42 路径 光边生长动画：CSS 变量 --len + getTotalLength + 降级守卫',
+      String(drawMapLinks).indexOf("setProperty('--len'") >= 0 &&
+      String(drawMapLinks).indexOf('getTotalLength') >= 0 &&
+      String(drawMapLinks).indexOf('if(L>1') >= 0 &&
+      String(drawMapLinks).indexOf('link-new') >= 0);
+    __ok('v0.61.42 路径 取不到长度时不加 link-new（降级后仍是淡黄浅光边，不会变虚线或消失）',
+      String(drawMapLinks).indexOf('if(!newest) return;') >= 0);
+    /* 只看「赋了个非 null 的值」的写法（`_mapGlowEdge = <非n>`）—— showMap 里一处都不许有；
+         showMap 那两处 `_mapGlowEdge=null` 是**消费后清空**，是有意为之。 */
+    __ok('v0.61.42 路径 一次性标记只在 goNext 里被赋值；showMap 只会把它清空（只消费不生产）',
+      String(goNext).indexOf('_mapGlowEdge = (__p.length>=2)') >= 0 &&
+      (String(showMap).match(/_mapGlowEdge\s*=\s*[^n]/g) || []).length === 0 &&
+      String(showMap).indexOf('_mapGlowEdge=null') >= 0 &&
+      String(drawMapLinks).indexOf('_mapGlowEdge=null') >= 0);
+    __ok('v0.61.42 路径 三种线语义没丢（暗线 / 金虚线 / 淡黄浅光边）',
       String(drawMapLinks).indexOf("'link-dim'") >= 0 &&
       String(drawMapLinks).indexOf("'link-reach'") >= 0 &&
       String(drawMapLinks).indexOf("'link-past'") >= 0);
+    __ok('v0.61.42 路径 连线仍只在「两端都可见」时画（不泄露未解锁层的拓扑）',
+      String(drawMapLinks).indexOf('fogVisible') >= 0);
 
     /* ============ C. 背景：地图改用 bg_map.jpg（setBg 支持扩展名）============ */
     __ok('v0.61.41 背景 带扩展名只补 bg_ 前缀、不补 .png（素材/bg/ 的命名约定不破）',
@@ -4841,6 +4886,181 @@
       __ok('v0.61.41 未知关卡 直入随机未抛错', false, String(e && e.message));
     } finally {
       rng = __keepRng;
+    }
+  })();
+
+  /* ====================================================================
+   * v0.61.42：路径回到代码自绘（弯曲 + 沿路径延长的淡黄光边动画）
+   *           + 图标随机落位（不规整 / 不紧凑）+ 2~3 条初始路线 + 少分叉
+   *           + 地图背景终于看得见（#overlay.map-scene）+ 浮字符号配色对齐数字
+   * ==================================================================== */
+  (function () {
+    /* ============ A. 落位表两处一致 + mapNodeStyle 形状与兜底 ============ */
+    __ok('v0.61.42 落位 MAP_SLOT_PCT 的槽数与生成器 MAP_SLOT_N 一致（不一致就会越槽/撞在一起）',
+      MAP_SLOT_PCT.length === MAP_SLOT_N && MAP_SLOT_N === 5, MAP_SLOT_PCT.length + '/' + MAP_SLOT_N);
+    __ok('v0.61.42 落位 槽位百分比严格升序、首尾留边（不贴死面板左右边）',
+      MAP_SLOT_PCT.every(function (v, i) { return i === 0 || v > MAP_SLOT_PCT[i - 1]; }) &&
+      MAP_SLOT_PCT[0] >= 5 && MAP_SLOT_PCT[MAP_SLOT_PCT.length - 1] <= 95);
+    __ok('v0.61.42 落位 槽间距 21% 是抖动上限 8%（±4%）的两倍以上 ⇒ 抖动绝不越槽',
+      (MAP_SLOT_PCT[1] - MAP_SLOT_PCT[0]) > 8);
+    __ok('v0.61.42 落位 mapSlotPct 越界夹紧（老档 / 手造 fixture 传 9 或 -3 也不炸）',
+      mapSlotPct({ sx: 9 }) === 92 && mapSlotPct({ sx: -3 }) === 8 && mapSlotPct({ sx: 0 }) === 8);
+    __ok('v0.61.42 落位 mapNodeStyle 输出 left%/top px 的内联串',
+      mapNodeStyle({ sx: 4, jx: -4, jy: 7 }) === 'left:88.00%;top:7px;' &&
+      mapNodeStyle({ sx: 0, jx: 0, jy: 0 }) === 'left:8.00%;top:0px;',
+      mapNodeStyle({ sx: 4, jx: -4, jy: 7 }));
+    __ok('v0.61.42 落位 mapNodeStyle 缺字段有兜底（居中槽 + 零抖动，不是全叠在左上角）',
+      mapNodeStyle({ t: 'fight' }) === 'left:50.00%;top:0px;' && mapNodeStyle(null) === '',
+      mapNodeStyle({ t: 'fight' }));
+    __ok('v0.61.42 落位 showMap 四档分支**都**带内联落位（少一处就会有格子叠在左上角）',
+      (String(showMap).match(/mapNodeStyle\(node\)/g) || []).length === 4,
+      String((String(showMap).match(/mapNodeStyle\(node\)/g) || []).length));
+
+    /* ============ B. 生成器形状：2~3 条初始路线 + 少分叉（参照杀戮尖塔）============ */
+    var __firstRow = {}, __maxBr = 0, __fN = [], __fR = [], __slotBad = [], __orderBad = 0;
+    for (var a5 = 1; a5 <= 3; a5++) {
+      for (var s5 = 1; s5 <= 40; s5++) {
+        var M5 = genAct(a5, s5);
+        __firstRow[M5[0].length] = (__firstRow[M5[0].length] || 0) + 1;
+        var fn5 = 0, fr5 = 0;
+        for (var r5 = 0; r5 < M5.length; r5++) {
+          var rowHas5 = false, seen5 = {};
+          for (var c5 = 0; c5 < M5[r5].length; c5++) {
+            var nd5 = M5[r5][c5];
+            if (typeof nd5.sx !== 'number' || nd5.sx < 0 || nd5.sx > MAP_SLOT_N - 1) __slotBad.push('sx@' + r5 + ',' + c5);
+            if (Math.abs(nd5.jx) > 4) __slotBad.push('jx@' + r5 + ',' + c5);
+            if (Math.abs(nd5.jy) > 7) __slotBad.push('jy@' + r5 + ',' + c5);
+            if (seen5[nd5.sx]) __slotBad.push('同行两格同槽@' + r5);
+            seen5[nd5.sx] = 1;
+            if (nd5.next.length >= 2) { fn5++; rowHas5 = true; }
+            if (nd5.next.length > __maxBr) __maxBr = nd5.next.length;
+          }
+          for (var i5 = 1; i5 < M5[r5].length; i5++) if (M5[r5][i5 - 1].sx >= M5[r5][i5].sx) __orderBad++;
+          if (rowHas5) fr5++;
+        }
+        __fN.push(fn5); __fR.push(fr5);
+      }
+    }
+    __ok('v0.61.42 形状 首层恒 2~3 格（旧形状 40 个种子里有 17 个只有 1 格 = 开局就没得选）',
+      __firstRow[2] > 0 && __firstRow[3] > 0 && (__firstRow[2] + __firstRow[3]) === 120 &&
+      Object.keys(__firstRow).length === 2, JSON.stringify(__firstRow));
+    __ok('v0.61.42 形状 单格最多分 2 条（旧形状有一次分 4 条的「路口爆开」，是「路口太多」的来源）',
+      __maxBr <= 2, 'maxBr=' + __maxBr);
+    __ok('v0.61.42 形状 分叉节点 ≤3、分叉层 ≤3（3幕×40种子）',
+      Math.max.apply(null, __fN) <= 3 && Math.max.apply(null, __fR) <= 3,
+      'fN max=' + Math.max.apply(null, __fN) + ' fR max=' + Math.max.apply(null, __fR));
+    __ok('v0.61.42 形状 每格 sx/jx/jy 都在范围内、同行槽位互不相同（3幕×40种子）',
+      __slotBad.length === 0, __slotBad.slice(0, 5).join(' | '));
+    __ok('v0.61.42 形状 槽位号随列号单调递增 ⇒ 抖动不会让两条边交叉拧成一团',
+      __orderBad === 0, 'bad=' + __orderBad);
+    __ok('v0.61.42 形状 末层 Boss 居中且零抖动（它要收拢所有路线，摆边上会拉出一条很斜的长线）',
+      (function () {
+        for (var a7 = 1; a7 <= 3; a7++) {
+          var b7 = genAct(a7, 5)[MAP_ROWS - 1][0];
+          if (b7.sx !== 2 || b7.jx !== 0 || b7.jy !== 0) return false;
+        }
+        return true;
+      })());
+    __ok('v0.61.42 形状 同种子同地图 / 异种子不同图（落位也吃生成器自带的 R）',
+      JSON.stringify(genAct(2, 9)) === JSON.stringify(genAct(2, 9)) &&
+      JSON.stringify(genAct(2, 9)) !== JSON.stringify(genAct(2, 10)));
+    __ok('v0.61.42 形状 genAct 前后全局 rng 快照完全不变（落位没偷吃主随机流）',
+      (function () {
+        var b9 = JSON.stringify(rngSnapshot());
+        genAct(3, 77); genAct(1, 12345);
+        return b9 === JSON.stringify(rngSnapshot());
+      })());
+
+    /* ============ C. 地图背景终于看得见：overlay 打 .map-scene，showOverlay 负责摘 ============ */
+    __ok('v0.61.42 背景 showMap 在 showOverlay **之后**给 #overlay 加 .map-scene（提前加会被 showOverlay 清掉）',
+      (function () {
+        var s = String(showMap), a = s.indexOf('showOverlay(html)'), b = s.indexOf("classList.add('map-scene')");
+        return a >= 0 && b > a;
+      })());
+    __ok('v0.61.42 背景 showOverlay 开任何面板都先摘 .map-scene（奖励/商店/图鉴保持原来的深色底）',
+      String(__realShowOverlay).indexOf("classList.remove('map-scene')") >= 0);
+    __ok('v0.61.42 背景 .map-scene 只由地图页加、由 showOverlay 统一摘（不是各面板各自擦屁股）',
+      String(__realShowOverlay).indexOf("'map-scene'") >= 0 && String(showMap).indexOf("'map-scene'") >= 0 &&
+      String(__realShowOverlay).indexOf("classList.add('map-scene')") < 0);
+
+    /* ============ D. 浮字：符号走 .fx-sign，且**真的**产出一个带 fx-sign 的 span ============ */
+    __ok('v0.61.42 浮字 两条渲染路都带 .fx-sign（numAppend 的 DOM 路 + numHTML 的 innerHTML 路）',
+      String(numAppend).indexOf('fx-sign') >= 0 && String(numHTML).indexOf('fx-sign') >= 0);
+    /* numHTML 要真跑一次也得先把字形灌成「可用」——原因见下面那段的长注释。 */
+    (function () {
+      var ks = NUM_STATE, ki = NUM_IMG, gs = [], h = null;
+      for (var i = 0; i < 10; i++) gs.push({ src: 'num/dmg/' + i + '.png' });
+      try { NUM_STATE = { dmg: 1 }; NUM_IMG = { dmg: gs }; h = numHTML('', '-12'); }
+      catch (e) { h = 'ERR:' + (e && e.message); }
+      finally { NUM_STATE = ks; NUM_IMG = ki; }
+      __ok('v0.61.42 浮字 numHTML 拼出的符号带 .fx-sign（拖拽预伤害那条路本来就有，不许回退）',
+        typeof h === 'string' && h.indexOf('<span class="fx-sign">-</span>') >= 0, String(h));
+    })();
+    /* 行为级验证：vm 里 Image 永不 load ⇒ NUM_STATE 恒为 -1 ⇒ numAppend 会在**取字形**那一步提前 return，
+       根本走不到「塞符号」那几行。所以这里临时把 NUM_STATE/NUM_IMG 灌成可用，
+       再把 createElement / Image 换成**记录器**，才能真的看见它产出了什么。
+       注：vm_host.js 的 appendChild 是空实现，所以只能记「造了什么元素」，不能记「挂上去了没有」。*/
+    (function () {
+      var __keepState = NUM_STATE, __keepImg = NUM_IMG, __keepCE = document.createElement, __keepImage = Image;
+      var __rec = [];
+      function __recWrap(el, tag) {
+        __rec.push({ tag: tag, cls: '', text: '' });
+        var r = __rec[__rec.length - 1];
+        Object.defineProperty(el, 'className', { configurable: true, get: function () { return r.cls; }, set: function (v) { r.cls = String(v); } });
+        Object.defineProperty(el, 'textContent', { configurable: true, get: function () { return r.text; }, set: function (v) { r.text = String(v); } });
+        return el;
+      }
+      var glyphs = [];
+      for (var g = 0; g < 10; g++) glyphs.push({ src: 'num/dmg/' + g + '.png' });
+      try {
+        NUM_STATE = { dmg: 1 }; NUM_IMG = { dmg: glyphs };
+        document.createElement = function (tag) { return __recWrap(__keepCE.call(document, tag), String(tag)); };
+        Image = function () { return __recWrap(__keepImage(), 'Image'); };
+        var host = __keepCE.call(document, 'i');
+        var ret = numAppend(host, '', '-12');
+        var sign = __rec.filter(function (o) { return o.cls === 'fx-sign'; })[0];
+        var nums = __rec.filter(function (o) { return o.cls === 'fx-num'; });
+        __ok('v0.61.42 浮字 numAppend 真的造出 1 个 .fx-sign(span) + 2 个 .fx-num(img)',
+          ret === true && __rec.length === 3 && !!sign && sign.tag === 'span' && sign.text === '-' && nums.length === 2,
+          JSON.stringify(__rec));
+        __ok('v0.61.42 浮字 符号那行**只**造一个带 fx-sign 的 span（不再有 createTextNode 裸文本分支）',
+          String(numAppend).indexOf("sg.className='fx-sign'") >= 0 &&
+          String(numAppend).indexOf('parent.appendChild(sg)') >= 0);
+        var rec2 = __rec.length;
+        __rec.length = 0;
+        numAppend(__keepCE.call(document, 'i'), '', '7');
+        __ok('v0.61.42 浮字 没有符号时不造 fx-sign（正数无号 / 纯数字不凭空多一个 span）',
+          __rec.length === 1 && !__rec.some(function (o) { return o.cls === 'fx-sign'; }), JSON.stringify(__rec));
+      } catch (e) {
+        __ok('v0.61.42 浮字 numAppend 行为级验证未抛错', false, String(e && e.message));
+      } finally {
+        NUM_STATE = __keepState; NUM_IMG = __keepImg;
+        document.createElement = __keepCE; Image = __keepImage;
+      }
+    })();
+
+    /* ============ E. 光边动画端到端：goNext 记下「刚打通的这条边」============ */
+    var __keepMAP = MAP, __keepG = G, __keepScene = SCENE, __keepEdge = _mapGlowEdge;
+    try {
+      G = __base('yincha'); SCENE = 'map';
+      MAP = genAct(1, 4242); G.act = 1;
+      G.mapRow = 0; G.mapCol = -1;
+      G.mapPath = [{ r: 0, c: 0 }, { r: 1, c: 0 }];
+      _mapGlowEdge = null;
+      goNext();
+      __ok('v0.61.42 光边 goNext 把「刚打通的那条边」记成**有向** key（淡黄光边就是沿它生长）',
+        _mapGlowEdge === '0,0>1,0', String(_mapGlowEdge));
+      __ok('v0.61.42 光边 goNext 同时真的推进了一层', G.mapRow === 1, 'mapRow=' + G.mapRow);
+      __ok('v0.61.42 光边 边只有 1 个点时不硬凑（mapPath 短于 2 ⇒ 标记为 null，不会放错边）',
+        (function () {
+          G.mapPath = [{ r: 1, c: 0 }];
+          _mapGlowEdge = null; goNext();
+          return _mapGlowEdge === null;
+        })(), String(_mapGlowEdge));
+    } catch (e) {
+      __ok('v0.61.42 光边 goNext 端到端未抛错', false, String(e && e.message));
+    } finally {
+      MAP = __keepMAP; G = __keepG; SCENE = __keepScene; _mapGlowEdge = __keepEdge;
     }
   })();
 

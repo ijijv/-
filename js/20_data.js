@@ -1046,8 +1046,14 @@ function rollAffixes(def){
      ② continueRun 先 rngRestore 再重建地图，若地图吃主随机流，牌序/奖励/词缀会整体错位；
      ③ 冒烟要能对拍「生成前后 rngSnapshot 完全不变」。 */
 const MAP_ROWS = 14;   // 层数不变 ⇒ 战斗场次、calcScore 的 act*1000+mapRow*50、顶栏「第 X/14 层」全部不变
-/* 每层宽度区间：窄宽交替 → 天然制造分叉点/汇合点；末层恒为 1（Boss） */
-const ROW_SHAPE = [[1,2],[2,3],[3,4],[1,2],[2,3],[3,4],[1,2],[3,4],[2,3],[1,2],[3,4],[2,3],[1,2],[1,1]];
+/* v0.61.42（用户要求，参照杀戮尖塔）——形状与旧版的差别都在这里：
+   · **2~3 条初始路线**：第 1 层恒 2~3 格。旧形状是 [1,2]，实测 40 个种子里有 17 个**只有 1 格**
+     （第 1 层就没得选，等于没有路线规划）。
+   · **分叉路口少**：分叉只可能发生在「往上变宽」的层间过渡（linkRows 的构造性质，见其注释），
+     所以形状设计成**基本只收不放**：13 次层间过渡里只有 2~3 次会变宽，且每次只 +1
+     ⇒ 单格最多分出 2 条。旧形状有 [1,2]→[3,4] 这种一次分 4 条的，正是「路口太多」的来源。
+   · 除末层 Boss 行外每层恒 2~3 格：不会宽到眼花，也不会窄到没得选。 */
+const ROW_SHAPE = [[2,3],[3,3],[3,3],[2,3],[2,2],[2,3],[2,2],[2,3],[2,2],[2,2],[2,2],[2,2],[2,2],[1,1]];
 /* 每幕特殊节点配额（其余填普通战）。elite 对齐旧图密度（2/3/4），**不要**放大成 3/5/7 —— 那会让精英遭遇翻倍 */
 const TYPE_QUOTA = { 1:{camp:2, shop:2, elite:2, unknown:5}, 2:{camp:2, shop:2, elite:3, unknown:4}, 3:{camp:2, shop:2, elite:4, unknown:3} };
 const ACT1_MINIONS = ['youhun','zhizharen','huyao','jiangshi','shanxiao','shuigui','mengpo'];
@@ -1150,6 +1156,32 @@ function assignTypes(act, R, rows, minionPool, elitePool, bossPool, quotaOverrid
   return q;
 }
 
+/* —— v0.61.42 落位（用户要求「图标不要规规整整 / 不要紧凑」）——
+   每格随机占 5 个槽位之一，再叠 ±4% 横向 / ±7px 纵向抖动 ⇒ 图标不再排成等距直列，
+   路径随之变得长短不一、互不平行。槽位由 R 洗牌后取前 n 个**再升序**，
+   所以「列序 = 槽位序」—— linkRows 的「边不交叉」性质靠它保住（否则线会拧成一团）。
+   槽位百分比表在 50_ui.js 的 MAP_SLOT_PCT，两边的槽数必须一致（冒烟有断言）。 */
+const MAP_SLOT_N = 5;
+function pickSlots(R, n){
+  const all=[]; for(let i=0;i<MAP_SLOT_N;i++) all.push(i);
+  for(let i=all.length-1;i>0;i--){ const j=Math.floor(R()*(i+1)); const t=all[i]; all[i]=all[j]; all[j]=t; }
+  return all.slice(0, Math.max(0, Math.min(n, MAP_SLOT_N))).sort(function(a,b){ return a-b; });
+}
+function assignSlots(R, rows){
+  for(let r=0;r<rows.length;r++){
+    const n=rows[r].length;
+    const sl=pickSlots(R, n);
+    for(let c=0;c<n;c++){
+      const nd=rows[r][c]; if(!nd) continue;
+      // 末层 Boss **居中**且不抖：它要收拢所有路线，摆到边上会拉出一条很斜的长线
+      if(r===rows.length-1){ nd.sx=2; nd.jx=0; nd.jy=0; continue; }
+      nd.sx=(typeof sl[c]==='number') ? sl[c] : Math.round(c*(MAP_SLOT_N-1)/Math.max(1,n-1));
+      nd.jx=Math.round((R()*2-1)*4);   // ±4%：槽间距 21%，绝不越槽
+      nd.jy=Math.round((R()*2-1)*7);   // ±7px：行高 88px 撑得住，也不会碰到上下行
+    }
+  }
+}
+
 /* —— 入口：一个种子 → 一整幕树状图 —— */
 function genAct(act, seed, opts){
   const O=opts||{};
@@ -1164,6 +1196,9 @@ function genAct(act, seed, opts){
   const elitePool=O.elites||ELITES_BY_ACT[act]||ELITES_BY_ACT[1];
   const bossPool=O.bosses||BOSS_POOL[act]||BOSS_POOL[1];
   assignTypes(act, R, rows, minionPool, elitePool, bossPool, O.quota);
+  // v0.61.42：落位放在 assignTypes **之后** —— assignTypes 会把每格重建成新对象（含末层 Boss），
+  // 先落位的话 sx/jx/jy 会被整个抹掉。
+  assignSlots(R, rows);
   for(let r=0;r<MAP_ROWS-1;r++){
     const L=linkRows(rows[r+1].length, rows[r].length);
     for(let i=0;i<rows[r].length;i++) rows[r][i].next=L.nextOf[i].slice().sort(function(a,b){ return a-b; });
