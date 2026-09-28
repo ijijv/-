@@ -406,6 +406,93 @@ function applyMapTextures(){
   set(q('.map-roller.bot'), u('map/scroll_bottom.png'));
   set(q('#map-sheet'), u('bg/bg_map.jpg')+', '+u('map/scroll_paper.jpg'));
 }
+/* v0.66.0：主菜单三张背景轮换。**每次进主界面**前进一格 —— 开游戏 / 死亡回菜单 /
+   从设置重开回菜单，三条路径都走 showStartScreen()，所以在那里调用就天然全覆盖。
+   索引存 SAVE（跨启动续上；老存档没有这个字段 ⇒ `undefined|0` = 0，从第一张开始）。
+   ⚠️ 必须走 assetURL() 内联 background-image（同 v0.65.0 的约定）：打包.py 只把 素材/ 收进
+      ASSET_MAP（base64），**不重写 CSS 里的 url()** —— 在 原型.html 写
+      url(素材/bg/menu/menu_1.jpg) 在 dist 里会 404，且 _patch/verify_dist.py 的 [5] 结构门禁会 FAIL
+      （判据：url() 里的相对路径须在产物 <script> 段里找得到**字面量**）。
+   ⚠️ 也不能用 bgRel() —— 它固定拼 'bg/bg_' + name + '.png'，套不进 bg/menu/ 这个子目录。
+   取不到 .menu-bgimg（非主菜单场景 / 冒烟桩）就整体跳过，退回 CSS 的渐变兜底，观感不塌。 */
+var MENU_BGS = ['bg/menu/menu_1.jpg','bg/menu/menu_2.jpg','bg/menu/menu_3.png'];
+function menuBgRotate(){
+  var n=MENU_BGS.length;
+  if(!n) return 0;
+  /* 负值与越界都兜住：`%` 在 JS 里对负数返回负值，只做一次 % 会让下标变负、取到 undefined */
+  var i=(((SAVE.menuBgIdx|0) % n) + n) % n;
+  SAVE.menuBgIdx=(i+1)%n;
+  try{ persistSave(); }catch(e){}
+  const q=function(sel){ try{ return document.querySelector(sel); }catch(e){ return null; } };
+  const set=function(el,v){ if(el && el.style) el.style.backgroundImage=v; };
+  set(q('.menu-bgimg.a'), 'url("'+assetURL(MENU_BGS[i])+'")');
+  set(q('.menu-bgimg.b'), '');   // 双缓冲的另一片：本批只做硬切，留空备用（见 CSS 的 .menu-bgimg 注释）
+  return i;
+}
+/* 演出是否该被跳过：低配模式或系统「减弱动态效果」。CSS 会把那几条 keyframes 全置 none，
+   此时再等满 1 秒就是纯粹的干等 ⇒ 缩短到几乎立刻切场景（但**不能**不等，见 steleBreak 的注释）。 */
+function menuFxOff(){
+  try{ if(SETTINGS.lowSpec) return true; }catch(e){}
+  try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  catch(e){ return false; }
+}
+/* —— 按键演出 ——
+   ⚠️ MENU_BUSY 是**必须的**：没有它，1 秒演出窗口里连点会调两次 startGame()（冒烟有专门断言）。
+      除了这个闸，.menu-stage.is-busy 还会把整块舞台的 pointer-events 关掉。
+   ⚠️ 收尾一律用**定时器**而不是 animationend：碎片是 5 片 × 1 条 keyframes，animationend 会触发
+      5 次；而且 low-spec / prefers-reduced-motion 下动画被 CSS 关掉时 animationend **永远不来**，
+      靠它收尾会当场卡死 —— 定时器在这两种情况下照跑。 */
+var MENU_BUSY=false;
+function menuBusy(on){
+  MENU_BUSY=!!on;
+  const st=(function(){ try{ return document.querySelector('.menu-stage'); }catch(e){ return null; } })();
+  if(st && st.classList) st.classList.toggle('is-busy', !!on);
+}
+/* 石碑按下：裂 → 崩碎 → 全屏闪，峰值处切场景。
+   时间轴：0 挂 .is-breaking（碎片 keyframes 自身包含「裂 0~53%」与「崩 53%~100%」两段，
+   5 片各错 0/.04/.08/.12/.16s，最晚一片 1.01s 收尾）→ 800ms 起闪（0.26s，峰值在 +130ms）
+   → 930ms 调 fn()，正好落在全屏最黑那一刻。 */
+function steleBreak(btn, fn){
+  if(MENU_BUSY || !btn || btn.disabled) return;
+  menuBusy(true);
+  if(btn.classList) btn.classList.add('is-breaking');
+  const off=menuFxOff();
+  const tFlash=off?0:800, tGo=off?60:930;   // off 时闪被 CSS 关掉 ⇒ 不留 800ms 干等，直接 60ms 切
+  setTimeout(function(){
+    const f=(function(){ try{ return document.querySelector('.menu-flash'); }catch(e){ return null; } })();
+    if(f && f.classList) f.classList.add('on');
+    setTimeout(function(){ menuBusy(false); if(typeof fn==='function') fn(); }, tGo-tFlash);
+  }, tFlash);
+}
+/* 符纸按下：纸下拉 3px 弹回（.tug，150ms）→ 面板以「卷轴从顶落下·带回弹」展开。
+   卷轴那半边由 showOverlay 的第 3 参 scene='scroll-scene' 驱动（见 CSS 的 scrollDrop），
+   三个调用点各补一个参数。 */
+function talisOpen(btn, fn){
+  if(MENU_BUSY) return;
+  menuBusy(true);
+  if(btn && btn.classList) btn.classList.add('tug');
+  const off=menuFxOff();
+  /* v0.68.1：150ms → 420ms。符纸按下从「下沉 3px 一闪」改成「向下拉然后回弹」（用户原话），
+     menuTug 的 keyframes 也拉长到 .42s。
+     ⚠️ 这个数必须与 CSS 的 `animation:menuTug .42s` 对齐：短了会在回弹途中切走场景（纸卡半途），
+        长了就是白等一个已经静止的动画。两处一起改。 */
+  setTimeout(function(){
+    if(btn && btn.classList) btn.classList.remove('tug');
+    menuBusy(false);
+    if(typeof fn==='function') fn();
+  }, off?0:420);
+}
+/* 石碑崩碎的 5 片。**同一个 src** ⇒ 浏览器复用解码结果，零额外体积（素材没多一张）。
+   位置与大小由 CSS 给：.menu-shards{inset:0} 铺满 .menu-artbox（与图等大的紧贴盒），
+   .menu-shard{width/height:100%} 让 5 片都按原尺寸拉伸到画布 —— 5 条 clip-path 精确拼满，
+   所以裂开前重建出的图与原图逐像素一致，不会闪接缝。
+   ⚠️ 必须包在 .menu-artbox 里而不是直接铺在 <button> 上：按钮有 min-width:48px 补热区，
+      会比图宽，clip-path 的百分比就对不上石头本体了。 */
+function menuShardsHTML(src){
+  let h='<span class="menu-shards" aria-hidden="true">';
+  for(let i=1;i<=5;i++) h+=artImg(src,'','menu-shard s'+i);
+  return h+'</span>';
+}
 /* opts.entry=true：进场动画（选完英雄 / 换幕 / 续档进地图）。
    不带则不会播进场动画（goNext 走的是「只上一行」，见 goNext 里写的 _mapStepFrom）。 */
 function showMap(opts){
@@ -693,7 +780,7 @@ function doUnknown(ev){
 }
 function unknownRemove(){
   if(G.deck.length<=1){ unknownEmpty(); return; }
-  const cards=G.deck.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="doUnknownRemove(${i})">${cardBody(c)}</div>`).join('');
+  const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="doUnknownRemove(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>净 坛</h2><p>一座祭坛，香火缭绕。你可以焚掉一张牌，净化牌组。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`);
 }
 function doUnknownRemove(i){
@@ -704,20 +791,37 @@ function doUnknownRemove(i){
 }
 function unknownPotion(){
   const p=randomPotion(); G.potions.push(p);
-  showOverlay(`<h2>灵 泉</h2><p>一泓清泉自石缝渗出，隐隐有灵光。<br>你取一瓢饮下，得了一瓶【${p.name}】。</p><div class="reward-cards"><div class="relic r-blue"><div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
+  showOverlay(`<h2>灵 泉</h2><p>一泓清泉自石缝渗出，隐隐有灵光。<br>你取一瓢饮下，得了一瓶【${p.name}】。</p><div class="reward-cards"><div class="relic r-blue">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
+/* v0.68.1：古井许愿**先问后扣**（用户报「他要你八点生命换一个遗物，你又不想要换，
+   但没有设置取消或者路过的选项，让玩家无可奈何」）。
+   ⚠️ 这不违反 v0.61.41 的「未知关卡不要三选一」—— 那条说的是**不要让玩家挑事件**，
+   随机抽事件这件事原样保留；改的是抽到之后玩家对**代价**有没有说「不」的权利。
+   同类一并补：鬼市黑商（强塞一张牌，牌组里多一张废牌同样是代价）。 */
 function unknownWell(){
+  showOverlay(`<h2>古井许愿</h2><p>你俯身探井，井底有微光浮动。<br>井灵低语：留下 <b style="color:var(--red)">8 点生命</b>，便赐你一件遗物。</p>
+    <button class="btn" onclick="doWellOffer()">献祭 8 点生命</button>
+    <button class="btn ghost" onclick="hideOverlay(); log('古井许愿：你按下井沿的微光，转身离开'); goNext();">转身离开</button>`);
+}
+function doWellOffer(){
   G.hp=Math.max(1,G.hp-8); sfx('hurt'); log('古井许愿：以 8 点生命为代价，换取一件遗物');
   const relic=weightedRelic();
   if(!hasRelic(relic.id)) G.relics.push(relic.id);
   sfx(relicSfxFor(relic)); log(`获得遗物【${relic.name}】`);   // v0.61.32：铃/幡·符/笔/剑·镜/录 三类分化
-  showOverlay(`<h2>古井许愿</h2><p>你俯身探井，井底有微光浮动。<br>你以 <b style="color:var(--red)">8 点生命</b>为代价，换取了一件遗物：</p>
-    <div class="reward-cards"><div class="relic ${RCOLOR[relic.rarity]}"><div class="cname">${relic.name}</div><div class="cdesc">${relic.desc}</div><div class="ctype">遗物</div></div></div>
+  showOverlay(`<h2>古井许愿</h2><p>井水翻涌，一件旧物浮上水面：</p>
+    <div class="reward-cards"><div class="relic ${RCOLOR[relic.rarity]}">${relicIcon(relic)}<div class="cname">${relic.name}</div><div class="cdesc">${relic.desc}</div><div class="ctype">遗物</div></div></div>
     <button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
 function unknownBlackMarket(){
-  const c=weightedCard(); G.deck.push(c); log(`黑商塞给你一张【${c.name}】`);
-  showOverlay(`<h2>鬼市黑商</h2><p>蒙面黑商打量你一番，塞来一张牌：</p><div class="reward-cards"><div class="card ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div><button class="btn" onclick="hideOverlay(); goNext();">收下并继续</button>`);
+  const c=weightedCard();
+  showOverlay(`<h2>鬼市黑商</h2><p>蒙面黑商打量你一番，从袖中摸出一张牌递来。<br>他说不要钱 —— 但牌进了牌组，就再也甩不掉了。</p>
+    <div class="reward-cards"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div>
+    <button class="btn" onclick="doBlackMarketTake('${c.id}')">收下</button>
+    <button class="btn ghost" onclick="hideOverlay(); log('鬼市黑商：你摆手谢绝，黑商耸耸肩隐入阴影'); goNext();">摆手谢绝</button>`);
+}
+function doBlackMarketTake(id){
+  const c=cardById(id)||weightedCard(); G.deck.push(c); log(`黑商塞给你一张【${c.name}】`);
+  showOverlay(`<h2>鬼市黑商</h2><p>黑商把牌按进你掌心，转身没入人群。</p><div class="reward-cards"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
 function unknownTemple(){
   // 无头古庙：随机赐福（恢复生命 / 最大生命 / 金币 / 卡牌）
@@ -883,7 +987,7 @@ function showReward(){
 
   const _TYPE_ORD={attack:0,defense:1,skill:2,spirit:3,junk:4};
   const cards=picks.map((c,i)=>({c,i})).sort((a,b)=>(_TYPE_ORD[a.c.type]??9)-(_TYPE_ORD[b.c.type]??9)||a.i-b.i)
-    .map(({c,i})=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickReward(${i})">${cardBody(c)}</div>`).join('');
+    .map(({c,i})=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickReward(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>战斗胜利 · 三选一</h2><p>点击一张卡牌加入你的牌组（或跳过）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="skipReward()">跳过</button>`);
 }
 function pickReward(i){
@@ -968,7 +1072,7 @@ function showRestConfirm(){
 }
 function campRemoveCard(){
   if(G.deck.length<=1){ floatMsg('牌组只剩一张了'); return; }
-  const cards=G.deck.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="doCampRemove(${i})">${cardBody(c)}</div>`).join('');
+  const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="doCampRemove(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>篝火 · 删牌</h2><p>选择一张牌从牌组移除（仅限一张，免费）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="renderCampfire()">返回</button>`);
 }
 function doCampRemove(i){
@@ -1015,8 +1119,8 @@ function showShop(){
   renderShop();
 }
 function renderShop(){
-  const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" onclick="buyCard(${i})">${cardBody(c)}<div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
-  const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const ok=G.gold>=price; return `<div class="relic r-blue ${ok?'':'disabled'}" onclick="buyPotion(${i})"><div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${price} 金币</div></div>`; }).join('');
+  const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" onclick="buyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
+  const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const ok=G.gold>=price; return `<div class="relic r-blue ${ok?'':'disabled'}" onclick="buyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${price} 金币</div></div>`; }).join('');
   showOverlay(`<h2>鬼 市</h2>${runStatusHTML()}<p>你带着 <b style="color:var(--gold)">${G.gold}</b> 金币。<br>买卡价格随购买递增，跨商店延续；灵汁每买一瓶更贵。</p>
     <div class="reward-cards">${cards}</div>
     <div style="color:var(--gold);margin:8px 0 2px">— 灵汁 —</div>
@@ -1050,7 +1154,7 @@ function removeCard(){
 function renderRemoveList(){
   if(G.deck.length<=1){ log('牌组只剩一张了'); renderShop(); return; }
   const cost=removeCost();
-  const cards=G.deck.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="doRemove(${i})">${cardBody(c)}</div>`).join('');
+  const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="doRemove(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>删除牌组（${cost} 金币/张）</h2><p style="font-size:13px;color:var(--dim)">可连续删多张，费用随删除次数递增。当前金币 <b style="color:var(--gold)">${G.gold}</b>${G.gold<cost?'　<span style="color:var(--red)">金币不足</span>':''}</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="renderShop()">完成 · 返回商店</button>`);
 }
 function doRemove(i){
@@ -1140,7 +1244,7 @@ function viewBestiary(){
     }
     return `<div class="bcard"><div class="bname">${e.name}${tag?` <span style="font-size:12px;color:var(--red)">${tag}</span>`:''}</div><div class="bmeta">${KIND_ICON[e.kind]||''}${KIND_LABEL[e.kind]||'怪'} · 生命 ${e.hp}</div><div class="bstory">${STORIES[k]||''}</div></div>`;
   }).join('');
-  showOverlay(`<h2>志 怪 图 鉴</h2><p style="font-size:13px;color:var(--dim)">已收录 <b style="color:var(--gold)">${got}</b> / ${total} · 击败妖怪，把它们的志怪故事收进你的百鬼谱。</p><div id="bestiary-grid">${cards}</div>`, true);
+  showOverlay(`<h2>志 怪 图 鉴</h2><p style="font-size:13px;color:var(--dim)">已收录 <b style="color:var(--gold)">${got}</b> / ${total} · 击败妖怪，把它们的志怪故事收进你的百鬼谱。</p><div id="bestiary-grid">${cards}</div>`, true, 'scroll-scene');
 }
 /* ===================== 成就 & 收集（卡背 / 头像框） ===================== */
 const COSMETICS = {
@@ -1324,13 +1428,41 @@ function viewDeck(){
    （与 startBGM 同一个处境），写在这两个函数体里就永远验不到。拆出来才验得到，
    两个调用点只剩一行转发（那两行不可达，已如实记在更新日志里）。 */
 function overlaySfx(){ sfx('ui_panel'); }
-function showOverlay(html, closable){ overlaySfx();   // v0.61.32：面板开合（设置/图鉴/成就/牌库/结算）
+/* v0.65.0：新增可选第 3 参 scene（'menu-scene'），并加 .ov-enter 入场门闩。
+   ⚠️ 「同类场景内刷新不重播入场」只能靠**移除类**实现，不能靠「加一次就留着」——
+      因为下面这行 innerHTML= 每次都重建 DOM，**新元素一定会跑匹配到的 CSS 动画**。
+   ⚠️ wasOpen 必须在摘 'hidden' 之前读，否则永远是 false。 */
+/* v0.68.2 —— `.ov-enter` 门闩补「**换场景**也算新进场」这一条。
+   ⚠️ 起因：用户要的「拉下鬼录 → 卷轴从屏幕上方坠落」在**真实路径上根本没播**。
+      图鉴/排行榜/设置的唯一入口是主菜单，而点它们时 overlay **本来就开着**（就是主菜单）
+      ⇒ wasOpen=true ⇒ ov-enter 被摘 ⇒ `#overlay.scroll-scene.ov-enter #overlayWrap`
+      这条选择器永远匹配不上。冒烟测不到（它看不见 CSS 与 classList 的实际取值），
+      `_drvmenu3.js --q &pull=1` 一量就露：class=scroll-scene 但 `wrap an=none`。
+   ⚠️ 不能图省事把选择器里的 `.ov-enter` 删掉：那样「设置面板里拨一下音量开关」会重跑
+      showOverlay ⇒ 面板再掉一次，比不播更烦人。**判据必须是"换了场景"而不是"开了面板"**。 */
+function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面板开合（设置/图鉴/成就/牌库/结算）
   document.getElementById('overlayContent').innerHTML=html;
   const ov=document.getElementById('overlay');
+  const wasOpen = !!(ov && !ov.classList.contains('hidden'));
+  // v0.68.2：摘之前先记下"原来挂的是哪个场景" —— 下一行的 remove 之后就问不出来了。
+  // v0.71.0：+ hero-scene（选英雄屏专属的 700px 放宽限宽）。
+  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene'];
+  const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
   // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
   // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
-  if(ov && ov.classList) ov.classList.remove('map-scene');
-  ov.classList.remove('hidden'); const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none'; }
+  // v0.65.0：.menu-scene 同理（主菜单整屏场景）。
+  // v0.66.0：.scroll-scene 同理（图鉴/排行榜/设置的卷轴落下）—— 漏摘的话，从主菜单看完图鉴
+  // 再回战斗，奖励面板也会带着卷轴动画从顶上掉下来。
+  if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
+    ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); }
+  ov.classList.remove('hidden');
+  // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
+  // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。
+  // 无场景的普通面板（战斗奖励/商店）行为与 v0.65.0 完全一致（只有 !wasOpen 才播）。
+  const sceneChanged = !!scene && scene !== wasScene;
+  if(ov && ov.classList) ov.classList.toggle('ov-enter', !wasOpen || sceneChanged);
+  if(scene && ov.classList) ov.classList.add(scene);
+  const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none'; }
 function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
   document.getElementById('overlay').classList.add('hidden'); }
 function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }
@@ -1353,19 +1485,23 @@ function exhaustChip(c){
   return ` <span data-tip="kw:消耗" style="cursor:help;color:#fff;background:var(--red2);border-radius:4px;padding:0 5px;font-size:11px;letter-spacing:1px">消耗</span>`;
 }
 function cardBody(c){
-  return `${cardArt(c)}${exhaustMark(c)}<div class="cost">${cardCost(c)}</div><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
+  /* v0.69.0：`.ctype` 从 `.cplate` **里面**移到闭标签**之后**。
+     原因见 原型.html 里 .card.has-frame .ctype 的注释：它现在是相对 .card 绝对定位的，
+     留在 .cplate 里会按 .cplate 的高度解析 top:48.02%（差 4 倍以上），且被 .cplate 的
+     overflow:hidden 裁掉。这三个模板（cardBody / forgeCardHTML / handCardHTML）必须一起改。 */
+  return `${cardFrame()}${cardArt(c)}${exhaustMark(c)}<div class="cost">${cardCost(c)}</div><div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
 }
 function forgeCardHTML(c,i){
   const lock = !c.up && !canUpgrade(c);   // 升级无变化的牌：置灰、不可锻造
   const body = (c.up || lock)
-    ? `<div class="cdesc">${wrapKw(c.t(c.up))}</div>`
-    : `<div class="cdesc">${wrapKw(c.t(false))}<div class="upgrade-preview">升级 → ${wrapKw(c.t(true))}</div></div>`;
-  return `<div class="card ${RCOLOR[c.rarity]}${lock?' locked':''}" onclick="forgeCard(${i})">
-    ${cardArt(c)}${exhaustMark(c)}
+    ? `<div class="cdesc">${wrapKw(cardText(c,c.up))}</div>`
+    : `<div class="cdesc">${wrapKw(cardText(c,false))}<div class="upgrade-preview">升级 → ${wrapKw(cardText(c,true))}</div></div>`;
+  return `<div class="card has-frame ${RCOLOR[c.rarity]}${lock?' locked':''}" onclick="forgeCard(${i})">
+    ${cardFrame()}${cardArt(c)}${exhaustMark(c)}
     <div class="cost">${cardCost(c)}</div>
-    <div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${lock?'<span class="noup">不可升级</span>':''}</div>
+    <div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${lock?'<span class="noup">不可升级</span>':''}</div>
     ${body}
-    <div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>
+    </div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>
   </div>`;
 }
 function groupHand(){
@@ -1381,9 +1517,13 @@ function handCardHTML(c, disabled, i, n){
      原因：徽章按「上次锁定的敌人」算，拖动改指向另一只时数字不跟着变，会显示错伤害。
      预伤改为只在拖拽时浮在**目标敌人头顶**（60_boot.js showDragPreview），并跟随所指目标变化。 */
   const sealed = c.sealed>0;
-  const sealTag = sealed ? `<div class="exhaust-tag">忘忧封印 ${c.sealed} 回合</div>` : '';
+  /* v0.69.0：文案缩到「封印 N」（封条只有 16px 高、横跨图窗，放不下「忘忧封印 N 回合」）。
+     完整语义在长按放大弹窗与关键词说明里，牌面只留一眼可辨的记号。 */
+  const sealTag = sealed ? `<div class="exhaust-tag">封印 ${c.sealed}</div>` : '';
   const rot=((i-(n-1)/2)*3).toFixed(1);
-  return `<div class="card ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(c.t(c.up))}</div>${sealTag}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
+  /* sealTag 与 ctype 都在 .cplate **之后**（两者都是相对 .card 绝对定位的）——
+     .exhaust-tag 改绝对定位后不再吃 ~16px 行高，这才是「被封印的牌描述看不全」的根因。 */
+  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div>${sealTag}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
 }
 function intentText(e){
   const st=(e.strength||0); // v0.61 C2：力量每点 +1
@@ -1420,12 +1560,30 @@ function battleHeadroom(){
   (G.enemies||[]).forEach((e,i)=>{ if(alive(e)||e.dying) mx=Math.max(mx, RISE_LIFT[i%RISE_LIFT.length]); });
   return mx;
 }
+/* v0.70.0：后排上抬幅度的**倍率**。基准档 =1（与 v0.69.0 逐像素相同），
+   矮屏档由 CSS 的 --rise-unit 压小 —— 390px 高的屏上抬 60px 会把后排顶进顶栏。
+   ⚠️ RISE_LIFT 与 battleHeadroom() 本身**一个字都不能改**：冒烟逐条钉死了
+      0/42/60/20 与 max(RISE_LIFT[i%len]) —— 倍率只能加在调用点。
+   ⚠️ 必须带 window.getComputedStyle 守卫（照 mapCamRange 的写法）：冒烟宿主里
+      既没有它也没有 innerWidth，漏了守卫会算出 NaN，而 NaN 会一路写进
+      内联 transform 与 z-index。 */
+let _riseK=1;
+function refreshRiseK(){
+  try{
+    const cs=(typeof window!=='undefined' && window.getComputedStyle) ? window.getComputedStyle(document.documentElement) : null;
+    if(!cs) return;
+    const v=parseFloat(cs.getPropertyValue('--rise-unit'));
+    _riseK=(isFinite(v) && v>0) ? v : 1;
+  }catch(e){ _riseK=1; }
+}
 function enemyPanelHTML(e, idx){
   const ehp=Math.max(0,e.hp/e.maxHp*100);
   const ehPrev=(ENEMY_HP_PREV[e.uid]===undefined)?ehp:ENEMY_HP_PREV[e.uid];
   ENEMY_HP_PREV[e.uid]=ehp;
   /* v0.61.33：删除「点击锁定」后不再有选中态 —— 目标只由拖拽落点决定（拖拽中的高亮是 .drag-target） */
-  const liftY=(idx>=0?RISE_LIFT[idx%RISE_LIFT.length]:0); // 纵深错落（振幅见 RISE_LIFT）
+  // 纵深错落（振幅见 RISE_LIFT）。v0.70.0：再乘矮屏倍率 _riseK —— 基准档是 1，
+  // 所以这里的输出与 v0.69.0 逐像素相同。
+  const liftY=Math.round((idx>=0?RISE_LIFT[idx%RISE_LIFT.length]:0)*_riseK);
   const edef=ENEMIES[e.key];
   const eSize=e.boss?'e-boss':e.elite?'e-elite':(edef&&edef.summon)?'e-summon':'e-normal';
   let badges='';

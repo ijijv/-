@@ -326,12 +326,80 @@ function artImg(src, fallback, cls){
   return `<img class="${cls||''}" src="${assetURL(src)}" draggable="false" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
 }
 function cardArt(c){ return `<div class="cart-wrap">${artImg('card/'+c.id+'.png', '', 'cart')}</div>`; }
-function relicIcon(r){ return artImg('relic/'+r.id+'.png', '', 'ricon'); }
+/* v0.68.0：真美术牌框（ui/card/front.png = 385x583 木框 + 上「图窗」下「铭牌窗」）。
+   三处独立渲染（cardBody / forgeCardHTML / handCardHTML）都从这里取，免得各写一份飘掉。
+
+   ⚠️ 加载失败必须**连 .has-frame 一起摘**。只摘 <img>（imgFail 的老行为）的话，
+   `.card.has-frame` 那套绝对定位还挂着，但底图没了 —— 卡面会散架：
+   图窗/铭牌窗都还在原位，却没有框兜住它们，文字和卡图会浮在纸底上错位。
+   摘掉类之后卡片原样退回 v0.67 的纯 CSS 版面（旧规则一条没删）。 */
+function cardFrameFail(el){
+  var p = el && el.parentNode;
+  if(p && p.classList) p.classList.remove('has-frame');
+  imgFail(el);
+}
+function cardFrame(){
+  return `<img class="cframe" src="${assetURL('ui/card/front.png')}" draggable="false" onerror="cardFrameFail(this)" alt="">`;
+}
+/* v0.69.0：抽牌堆 / 弃牌堆的两张图（back.png 顶面、side.png 侧棱）。
+   走的是和 cardFrame() **同一条** assetURL 的路：把地址写进 CSS 变量，
+   由 .pile-face / .pile-slab 用 var() 取。
+
+   ⚠️ 为什么不在 原型.html 里直接写：那两张是 CSS 背景（不是 <img>），
+      在页内 CSS 写 `url(素材/ui/card/back.png)` 会被 verify_dist.py 的 _css_urls 闸判红
+      （打包后 素材/ 全变成 data: URI，页内写死的老路径会 404 成一片空白）。
+
+   ⚠️ 整个 try/catch 不是摆设：vm_host.js 的 DOM 桩里 `documentElement.style` 是个**纯对象**，
+      没有 setProperty ⇒ 冒烟沙箱里这行必然抛 TypeError。
+      吞掉它，冒烟才不红；浏览器里正常写进变量。 */
+function pileInit(){
+  try{
+    var r = document.documentElement && document.documentElement.style;
+    if(!r || !r.setProperty) return;
+    r.setProperty('--pile-back-img', 'url("'+assetURL('ui/card/back.png')+'")');
+    r.setProperty('--pile-side-img', 'url("'+assetURL('ui/card/side.png')+'")');
+  }catch(e){}
+}
+/* v0.69.0：抽牌堆 / 弃牌堆的计数徽章。
+   单独成一个函数是为了能在**不止 render()** 的地方刷新 —— 见 30_engine.js 的
+   finishEndTurn()：那里批量 concat 进弃牌堆之后紧接着就是 enemyAct()，
+   中间**没有 render()**，徽章会整整滞后一段敌人行动。 */
+function refreshPileCounts(){
+  try{
+    const dn=document.getElementById('pile-draw-n');    if(dn) dn.textContent=G.drawPile.length;
+    const cn=document.getElementById('pile-discard-n'); if(cn) cn.textContent=G.discard.length;
+  }catch(e){}
+}
+/* v0.67.0：有灵石图的 id 走 lingshi/（朱砂笔/护身符/返魂香），其余遗物照旧 relic/。
+   尺寸不另立类，**原样复用 .ricon** —— 它 `object-fit:contain` + 是 flex 列的子项，
+   「超出边框」和「压住文字」在结构上就不可能发生；与既有 9 个遗物卡也是同一套观感。 */
+function relicIcon(r){ return artImg(lingshiSrc(r.id) || ('relic/'+r.id+'.png'), '', 'ricon'); }
+/* v0.67.0：灵汁图标。有贴图的出 <img>；**没贴图的出「字牌」占位**（.ricon-fb，写名字末字）。
+   为什么不是空串也不是空底框：
+     · 空串 —— 同排的 .reward-cards 是 `align-items:stretch`，一排放 4 张卡时，
+       有图的会把整行撑高，无图那张就只剩顶部两行字 + 一大片空白，像「图裂了」。
+     · 空底框（照常输出 <img> 但 onerror 后 outerHTML=''）—— 只剩 .ricon 那层
+       background:rgba(0,0,0,.2) 的暗底，读起来就是个空格子，比不出图更糟。
+   字牌把这块填满，四张卡等高且都有内容；用户哪天补上贴图，这里自动走 <img> 分支，
+   占位不再生成 —— 不必回来删代码。（`p` 为空时 name 取不到 ⇒ 末字为空 ⇒ 返回空串，不抛错。） */
+function potionIcon(p){
+  var o = p || {};
+  var s = lingshiSrc(o.id);
+  if(s) return artImg(s, '', 'ricon');
+  var ch = String(o.name || '').slice(-1);
+  return ch ? '<div class="ricon ricon-fb">' + ch + '</div>' : '';
+}
 /* v0.61.41：name 带扩展名（如 'map.jpg'）时只补 bg_ 前缀、**不再补 .png**，否则沿用 bg_<name>.png ——
    用户给的地图背景是 .jpg，不想为了一个后缀去转码重压（转成 PNG 只会更大）。
    路径拼法单独抽成 bgRel 是为了能被冒烟直接对拍（setBg 本体要真 DOM，沙箱里量不到）。 */
 function bgRel(name){ return (/\.[A-Za-z0-9]+$/.test(name)) ? ('bg/bg_'+name) : ('bg/bg_'+name+'.png'); }
 function setBg(name){
+  /* v0.68.2：`body.at-menu` 的**唯一**开关（CSS: `body.at-menu #app{display:none}`）。
+     语义 = "屏幕背后是主菜单，不是战局"。setBg 本来就是"背后该铺什么"的 owner：
+     只有 setBg('menu') 是在主菜单，其余每一张背景都意味着战局已经接管 ⇒ 清掉。
+     ⚠️ 别把这条挪进 showStartScreen：那样「图鉴/排行榜/设置」摘掉 .menu-scene 之后
+        战斗 HUD 又会透出来（它们只摘场景类，不重进主菜单）。挂在 setBg 上才与面板解耦。 */
+  if(document.body && document.body.classList) document.body.classList.toggle('at-menu', name==='menu');
   var el=document.getElementById('bg'); if(!el) return;
   var path=assetURL(bgRel(name));
   el.onload=function(){ document.body.classList.add('has-bg'); };

@@ -6,7 +6,9 @@
   var __realSfx = sfx; // v0.61.25 金快照探针要用真 sfx（第 631 行会把全局 sfx 顶成 __sil）
   var __realFloatDamage = floatDamage; // v0.61.36：第 658 行会把全局 floatDamage 顶成 __sil，结构断言要用真的
   var __realSaveRun = saveRun; // v0.61.06：saveRun 会被 stub，但「存档里带没带随机态」只有真函数测得出
+  var __realSetBg = setBg; // v0.68.2：setBg 会被 stub（下面那排），但「body.at-menu 的开关」只有真函数里看得到
   var __realShowOverlay = showOverlay; // v0.61.42：showOverlay 会被 stub（第 14 行），但「摘 .map-scene」只有真函数里看得到
+  var __realHideOverlay = hideOverlay; // v0.65.0：hideOverlay 同样被顶成空桩（第 16 行），但「关→开该重播入场」只有真函数测得出
   var __gcInit = goldCompensation; // v0.61 B6：捕获金卡补偿初值（后续用例会改动这个全局）
   try { render = __sil; } catch (e) {}
   try { saveRun = __sil; } catch (e) {}
@@ -715,12 +717,30 @@
     resolveEndBlock();
     __ok('⑦ 卸甲 D 敌后结算 余7盾→3诅咒', g.block === 0 && g.endBlockKind === null && __sumCurse() === 3, 'block=' + g.block + ' sum=' + __sumCurse());
 
-    g = __base('tianshi'); en = g.enemies[0]; g.enemies[1].hp = 0; // 只剩 en：resolveEndBlock 的随机目标必然命中它
+    g = __base('tianshi'); en = g.enemies[0]; g.enemies[1].hp = 0;
     en.affixes = null; en.strength = 0; en.curse = 6;
     c = __card('xiejiashengyuan'); c.eff(true, c);
     dealDamageToPlayer(5, en);
     resolveEndBlock();
-    __ok('⑦ 卸甲 D 满6溢出转回格挡(余7盾→3层全溢出→3盾)不清零', g.block === 3 && g.endBlockKind === null && en.curse === 6, 'block=' + g.block);
+    /* v0.68.1：这条以前断言的是「resolveEndBlock 之后 g.block===3」。那个值是对的，
+       但**玩家永远拿不到** —— 紧跟着的 startTurn 第 693 行把非武僧的格挡清零。
+       断言卡在 bug 中间，所以一直是绿的。现在改成断真正能用的那个量。 */
+    __ok('⑦ 卸甲 D 满6溢出不着落到 block(会被 startTurn 清零)，改挂 pendingBlockStart',
+      g.block === 0 && g.pendingBlockStart === 3 && g.endBlockKind === null && en.curse === 6,
+      'block=' + g.block + ' pending=' + g.pendingBlockStart);
+    startTurn();
+    /* 3（结转）+ 1（咒印道体对满层敌施咒溢出 1）= 4。分开写清楚，别让后面的改动看不出来源。 */
+    __ok('⑦ 卸甲 D 结转的格挡在下回合真的能用（block=3 结转 +1 被动溢出）',
+      g.block === 4 && g.pendingBlockStart === 0, 'block=' + g.block + ' pending=' + g.pendingBlockStart);
+
+    /* ⑦c 卸甲 D 大额格挡：旧写法 Math.min(6,…) 的预裁会让 >12 的格挡凭空蒸发 */
+    g = __base('tianshi'); en = g.enemies[0]; g.enemies[1].hp = 0;
+    en.affixes = null; en.strength = 0; en.curse = 6;
+    c = __card('xiejiashengyuan'); c.eff(true, c);
+    g.block = 24;                                  // 直接压到 24：12 层全溢出 → 12 点格挡回手
+    resolveEndBlock();
+    __ok('⑦c 卸甲 D 余24盾 敌满6层 → 12 层全溢出、12 盾回手（旧写法只回 6）',
+      g.block === 0 && g.pendingBlockStart === 12 && en.curse === 6, 'pending=' + g.pendingBlockStart);
 
     /* ⑧b 阴兵过境：锁定“上一次施咒的敌人”+🎯标记 + 转移 + 死亡回落 */
     g = __base('tianshi'); e0 = g.enemies[0]; e1 = g.enemies[1];
@@ -4884,16 +4904,32 @@
       G = __base('yincha'); SCENE = 'map'; G.mapRow = 1; G.mapCol = 0; G.mapPath = [];
       var hpB = G.hp, nRelic = G.relics.length;
       showUnknown();
-      __ok('v0.61.41 未知关卡 直接结算（抽到古井许愿 → 扣 8 血），不再等玩家三选一',
-        G.hp === hpB - 8, 'hp=' + hpB + '→' + G.hp);
-      __ok('v0.61.41 未知关卡 事件真的给了东西（遗物 +1）',
-        G.relics.length === nRelic + 1, 'relics=' + nRelic + '→' + G.relics.length);
+      __ok('v0.68.1 古井许愿 先问后扣：弹窗阶段血量不减', G.hp === hpB, 'hp=' + hpB + '→' + G.hp);
+      __ok('v0.68.1 古井许愿 先问后扣：弹窗阶段不给遗物', G.relics.length === nRelic, 'relics=' + G.relics.length);
+      doWellOffer();
+      __ok('v0.68.1 古井许愿 点了「献祭」才扣 8 血 + 给遗物',
+        G.hp === hpB - 8 && G.relics.length === nRelic + 1, 'hp=' + G.hp + ' relics=' + G.relics.length);
       __ok('v0.61.41 未知关卡 场景标记仍是 unknown（续档能落回来）', SCENE === 'unknown', 'SCENE=' + SCENE);
       __ok('v0.61.41 未知关卡 源码里不再有 evs / descs 三张卡面',
         String(showUnknown).indexOf('evs') < 0 && String(showUnknown).indexOf('descs') < 0 &&
         String(showUnknown).indexOf('doUnknown(') >= 0);
       __ok('v0.61.41 未知关卡 抽到什么用 floatMsg 报一声（没有三选一预告了，总得让玩家知道）',
         String(showUnknown).indexOf('floatMsg(') >= 0);
+      /* v0.68.1：「不让玩家挑事件」（v0.61.41）和「抽到事件后能不能拒绝代价」是两件事。
+         后者是这批补的 —— 两边都得有出路，且「离开」必须真的零副作用。 */
+      G = __base('yincha'); G.hp = 60; G.relics = [];
+      __ok('v0.68.1 古井许愿 源码里有「转身离开」出路',
+        __code(unknownWell).indexOf('转身离开') >= 0);
+      unknownWell();
+      __ok('v0.68.1 古井许愿 光是弹窗出来不产生副作用', G.hp === 60 && G.relics.length === 0,
+        'hp=' + G.hp + ' relics=' + G.relics.length);
+      var __nDeck = G.deck.length;
+      __ok('v0.68.1 鬼市黑商 源码里有「摆手谢绝」出路',
+        __code(unknownBlackMarket).indexOf('摆手谢绝') >= 0);
+      unknownBlackMarket();
+      __ok('v0.68.1 鬼市黑商 光是弹窗出来不往牌组塞牌', G.deck.length === __nDeck, 'deck=' + G.deck.length);
+      var __n2 = G.deck.length; doBlackMarketTake('leifu');
+      __ok('v0.68.1 鬼市黑商 点了「收下」才进牌组', G.deck.length === __n2 + 1, 'deck=' + G.deck.length);
     } catch (e) {
       __ok('v0.61.41 未知关卡 直入随机未抛错', false, String(e && e.message));
     } finally {
@@ -5931,6 +5967,619 @@
         if (orphan.length) { globalThis.__orphanFx = orphan; }
         return orphan.length === 0;
       })());
+  })();
+
+  /* ===================== v0.65.0：主菜单整屏场景 + 小窗开合门闩 ===================== */
+  (function () {
+    /* ---------- G1. 源码形态：门闩必须「每次重算」，且只能挂在「从关到开」上 ---------- */
+    __ok('v0.65.0 showOverlay 在摘 hidden **之前**读 wasOpen（摘完再读永远是 false ⇒ 门闩恒为「刚打开」）',
+      (function () {
+        var s = __code(__realShowOverlay);
+        var i = s.indexOf("contains('hidden')"), j = s.indexOf("remove('hidden')");
+        return i >= 0 && j > i;
+      })());
+    __ok('v0.65.0 showOverlay 的门闩是 classList.toggle(\'ov-enter\', …) —— '
+      + '**不是 add(\'ov-enter\')**：后者会让弃牌/易物/守一这些「点一张牌就重渲染一次」的窗口每点一下重播一次入场',
+      (function () {
+        var s = __code(__realShowOverlay);
+        return s.indexOf("toggle('ov-enter'") >= 0 && s.indexOf("add('ov-enter')") < 0;
+      })());
+    __ok('v0.65.0 showOverlay 同时摘 .map-scene 与 .menu-scene（漏一个 ⇒ 后续普通面板会继承整屏不透明底）',
+      (function () {
+        var s = __code(__realShowOverlay);
+        return s.indexOf("remove('map-scene')") >= 0 && s.indexOf("remove('menu-scene')") >= 0;
+      })());
+    /* ---------- v0.68.2：门闩补「换场景也算新进场」 ---------- */
+    __ok('v0.68.2 门闩是 `!wasOpen || sceneChanged`（只留 !wasOpen ⇒ 从主菜单点图鉴时 overlay 本来就开着，'
+      + 'ov-enter 被摘 ⇒ 用户要的卷轴坠落**在真实路径上一次都不播**）',
+      (function () {
+        var s = __code(__realShowOverlay);
+        return /toggle\('ov-enter'\s*,\s*!wasOpen\s*\|\|\s*sceneChanged\s*\)/.test(s);
+      })());
+    __ok('v0.68.2 wasScene 必须在 remove 场景类**之前**读（与 wasOpen 同一个坑：摘完再问恒为空串）',
+      (function () {
+        var s = __code(__realShowOverlay);
+        var i = s.indexOf('wasScene'), j = s.indexOf("remove('map-scene')");
+        return i >= 0 && j > i && s.indexOf('SCENES.filter') > i;
+      })());
+    __ok('v0.68.2 sceneChanged 判的是「换了场景」而非「开了面板」——'
+      + '设置里拨一下音量开关会重跑 showOverlay，判错成"总该播"就会让面板每拨一次掉一次',
+      (function () {
+        var s = __code(__realShowOverlay);
+        return s.indexOf('scene !== wasScene') >= 0;
+      })());
+    __ok('v0.68.2 showOverlay 与 showCardZoom **两条**开面板路径都连 .scroll-scene 一起摘（三缺一 ⇒ 漏网的面板会挂上卷轴）',
+      (function () {
+        var a = __code(__realShowOverlay), b = __code(showCardZoom);
+        return a.indexOf("remove('scroll-scene')") >= 0 && b.indexOf("remove('scroll-scene')") >= 0;
+      })());
+    /* 行为验：真函数换回来跑一遍 —— 源码形态对了、跑起来不对，是最常见的一种"绿着坏"。
+       三条覆盖门闩的三种输入：换场景(该播) / 同场景(不该播) / 无场景(沿用老规矩)。 */
+    (function () {
+      var keepGEBI = document.getElementById, keepOv = showOverlay;
+      try {
+        var cls = ['hidden'];
+        var fake = { classList: {
+          contains: function (c) { return cls.indexOf(c) >= 0; },
+          add: function (c) { if (cls.indexOf(c) < 0) cls.push(c); },
+          remove: function (c) { var i = cls.indexOf(c); if (i >= 0) cls.splice(i, 1); },
+          toggle: function (c, on) { if (on) this.add(c); else this.remove(c); } } };
+        document.getElementById = function (id) {
+          return id === 'overlay' ? fake : { innerHTML: '', style: {} };
+        };
+        showOverlay = __realShowOverlay;
+        function go(fromScene, toScene, hidden) {
+          cls.length = 0;
+          if (fromScene) cls.push(fromScene);           // 场景类在 ⇒ 也是"开着"（除非显式给 hidden）
+          if (hidden) cls.push('hidden');
+          showOverlay('<p>x</p>', false, toScene);
+          return { enter: cls.indexOf('ov-enter') >= 0, cls: cls.join(' ') };
+        }
+        var a = go('menu-scene', 'scroll-scene');            // 主菜单 → 图鉴：换场景 ⇒ 该播
+        var b = go('scroll-scene', 'scroll-scene');          // 设置里拨开关：同场景 ⇒ 不播
+        var c = go('', undefined);                           // 局内开普通面板：沿用 v0.65.0 老规矩 ⇒ 不播
+        var d = go('', 'scroll-scene');                      // 局内「菜单→设置」：换场景 ⇒ 播（见下方说明）
+        var e = go('scroll-scene', 'menu-scene', true);      // 图鉴 X → 回主菜单：hideOverlay 先落 .hidden
+        __ok('v0.68.2 行为：menu-scene→scroll-scene 补上 ov-enter（卷轴坠落真的会播）', a.enter === true, a.cls);
+        __ok('v0.68.2 行为：scroll-scene→scroll-scene **不**补 ov-enter（设置里拨开关不重播卷轴）', b.enter === false, b.cls);
+        __ok('v0.68.2 行为：局内普通面板（无 scene）行为与 v0.65.0 完全一致', c.enter === false, c.cls);
+        /* ⚠️ 这一条记的是**行为变化**，不是"应该这样"：判据是"换了场景"，局内「菜单→设置」也算换
+           ⇒ 设置面板从此会像卷轴一样从顶上落下（v0.66.0 写的"已接受的副作用"从**惰性**变成了**可见**）。
+           想只留主菜单那条路，把 sceneChanged 收成 `wasScene === 'menu-scene'` 即可 —— 那是个产品选择，
+           已如实报给用户；在他给话之前，这里钉住**现状**，免得改动悄悄漂移。 */
+        __ok('v0.68.2 行为：局内「菜单→设置」也算换场景 ⇒ 会播卷轴（现状，非缺陷；收窄口径见上方注释）',
+          d.enter === true, d.cls);
+        __ok('v0.68.2 行为：图鉴 X → 回主菜单经 hideOverlay（落 .hidden）⇒ 走 !wasOpen 分支照播入场',
+          e.enter === true, e.cls);
+        __ok('v0.68.2 行为：showOverlay 每次都把三个场景类摘干净，只留本次传入的那一个',
+          (function () {
+            function only(c, want) {
+              var hit = ['map-scene', 'menu-scene', 'scroll-scene'].filter(function (x) {
+                return c.split(' ').indexOf(x) >= 0;
+              });
+              return want === '' ? hit.length === 0 : (hit.length === 1 && hit[0] === want);
+            }
+            return a.cls === 'ov-enter scroll-scene' && e.cls === 'ov-enter menu-scene'
+              && only(a.cls, 'scroll-scene') && only(e.cls, 'menu-scene') && only(c.cls, '');
+          })(), a.cls + ' | ' + e.cls + ' | ' + c.cls);
+      } finally {
+        document.getElementById = keepGEBI; showOverlay = keepOv;
+      }
+    })();
+    __ok('v0.65.0 showOverlay 第 3 参 scene 是**可选**的（48 个老调用点一个都不用改）',
+      (function () {
+        var s = __code(__realShowOverlay);
+        return /function\s+showOverlay\s*\(\s*html\s*,\s*closable\s*,\s*scene\s*\)/.test(s) &&
+          s.indexOf('if(scene && ov.classList)') >= 0;
+      })());
+    __ok('v0.65.0 showCardZoom 这条**平行开面板路径**也摘两个场景类（它绕过 showOverlay 直接写 innerHTML）',
+      (function () {
+        var s = __code(showCardZoom);
+        return s.indexOf("remove('map-scene')") >= 0 && s.indexOf("remove('menu-scene')") >= 0 &&
+          s.indexOf("remove('hidden')") >= 0;
+      })());
+
+    /* ---------- G2. 行为：门闩在真函数里按预期开关 ----------
+       坑①：vm_host 的 getElementById 每次返回**新** dummy（写进去读不回来）⇒ 换成按 id 缓存的版本。
+       坑②：那个 dummy 的 classList 是空操作、contains 恒 false ⇒ 换成**真维护集合**的版本，
+            否则 wasOpen 永远算不出 false，本组断言全是假绿。 */
+    (function () {
+      var keepGEBI = document.getElementById, keepOv = showOverlay, keepHide = hideOverlay;
+      var els = {};
+      function mkCL() {
+        var s = [];
+        return {
+          _list: s,
+          add: function () { for (var i = 0; i < arguments.length; i++) if (s.indexOf(arguments[i]) < 0) s.push(arguments[i]); },
+          remove: function () { for (var i = 0; i < arguments.length; i++) { var k = s.indexOf(arguments[i]); if (k >= 0) s.splice(k, 1); } },
+          toggle: function (c, force) {
+            var has = s.indexOf(c) >= 0, want = (force === undefined) ? !has : !!force;
+            if (want && !has) s.push(c);
+            if (!want && has) s.splice(s.indexOf(c), 1);
+            return want;
+          },
+          contains: function (c) { return s.indexOf(c) >= 0; }
+        };
+      }
+      function has(c) { return !!(els['overlay'] && els['overlay'].classList.contains(c)); }
+      function cls() { return els['overlay'] ? els['overlay'].classList._list.join(' ') : '<no-el>'; }
+      try {
+        document.getElementById = function (id) {
+          if (!els[id]) { var e = keepGEBI.call(document, id); e.classList = mkCL(); e.style = {}; els[id] = e; }
+          return els[id];
+        };
+        /* 坑③：showOverlay / hideOverlay 在本文件第 15/16 行已被顶成空桩，必须换回真身 */
+        showOverlay = __realShowOverlay; hideOverlay = __realHideOverlay;
+        document.getElementById('overlay').classList.add('hidden');   // 与 原型.html:738 的初始态一致
+
+        showOverlay('<div class="menu-root">A</div>', false, 'menu-scene');
+        var opened = has('ov-enter') && has('menu-scene') && !has('map-scene') && !has('hidden');
+        __ok('v0.65.0 关→开且带 menu-scene：.ov-enter + .menu-scene 都挂上，.map-scene 被摘、.hidden 被摘',
+          opened, '类=[' + cls() + ']');
+
+        /* 这一条是「签到后 doSignIn→showStartScreen 重渲染」的回归闸 */
+        showOverlay('<div class="menu-root">B</div>', false, 'menu-scene');
+        __ok('v0.65.0 **同一场景内刷新不重播入场**：紧接着再开一次 ⇒ .ov-enter 被摘掉、.menu-scene 还在',
+          !has('ov-enter') && has('menu-scene'), '类=[' + cls() + ']');
+
+        /* 这一条护的是用户点名的弃牌/易物/守一：它们每点一张牌就 showOverlay 一次 */
+        for (var _k = 0; _k < 5; _k++) showOverlay('<h2>焚 符</h2>已选 ' + _k, false);
+        __ok('v0.65.0 弃牌/易物式「点一下就重渲染」连开 5 次，仍然一次都不重播（面板不会每点一下抖一下）',
+          !has('ov-enter'), '类=[' + cls() + ']');
+
+        __ok('v0.65.0 普通面板开之前 .map-scene / .menu-scene 都被摘干净（不会继承整屏底）',
+          !has('map-scene') && !has('menu-scene'), '类=[' + cls() + ']');
+
+        hideOverlay();
+        __ok('v0.65.0 hideOverlay 同步落 .hidden（本批**没有**退场定时器 ⇒ 不存在「排了定时器又被 showOverlay 取消」那类竞态）',
+          has('hidden'), '类=[' + cls() + ']');
+        showOverlay('<div class="menu-root">C</div>', false, 'menu-scene');
+        __ok('v0.65.0 关掉再开 ⇒ 入场**重新播**（.ov-enter 回来了；这条对应「战败→回主菜单」）',
+          has('ov-enter') && has('menu-scene'), '类=[' + cls() + ']');
+      } catch (e) {
+        __ok('v0.65.0 门闩行为组不抛错', false, 'THROW ' + e.message);
+      }
+      document.getElementById = keepGEBI; showOverlay = keepOv; hideOverlay = keepHide;
+    })();
+
+    /* ---------- G3. 主菜单背景走 JS 内联（不能在 CSS 写 url()） ---------- */
+    __ok('v0.65.0 bgRel(\'menu\') 仍是 bg/bg_menu.png（#bg 那条兜底底图，setBg(\'menu\') 还在调）',
+      bgRel('menu') === 'bg/bg_menu.png', String(bgRel('menu')));
+    /* v0.66.0：主菜单真背景换成三张轮换图 —— 路径**必须**写全（不能用 bgRel：它固定拼
+       'bg/bg_'+name+'.png'，套不进 bg/menu/ 这个子目录）。三张都要在包内，否则轮换到某一张就是一片黑。 */
+    __ok('v0.66.0 MENU_BGS 恰好三张、路径写全（bg/menu/ 子目录 ⇒ 不能用 bgRel 拼）',
+      MENU_BGS.length === 3 && MENU_BGS[0] === 'bg/menu/menu_1.jpg'
+      && MENU_BGS[1] === 'bg/menu/menu_2.jpg' && MENU_BGS[2] === 'bg/menu/menu_3.png',
+      JSON.stringify(MENU_BGS));
+    __ok('v0.66.0 menuBgRotate 独占取图门：含 assetURL(，且**不含**裸 素材/ 字面量'
+      + '（打包.py 不重写 CSS 的 url()，写死路径在 dist 里会 404，verify_dist 的 [5] 门禁会 FAIL）',
+      (function () {
+        var s = __code(menuBgRotate);
+        return s.indexOf('assetURL(') >= 0 && s.indexOf('素材/') < 0;
+      })());
+    __ok('v0.66.0 menuBgRotate 取不到 .menu-bgimg（非主菜单场景 / 冒烟桩）时不抛错，退回 CSS 渐变兜底',
+      (function () { try { menuBgRotate(); return true; } catch (e) { return false; } })());
+    /* 轮换语义：**每次进主界面**前进一格 ⇒ 三张顺序循环，第 4 次回到第 1 张。 */
+    __ok('v0.66.0 menuBgRotate 连调 4 次索引走 0→1→2→0（三张顺序循环，第 4 次回到第 1 张）',
+      (function () {
+        var keep = SAVE.menuBgIdx, seq = [];
+        try {
+          SAVE.menuBgIdx = 0;
+          for (var i = 0; i < 4; i++) seq.push(menuBgRotate());
+        } finally { SAVE.menuBgIdx = keep; }
+        return seq.join(',') === '0,1,2,0';
+      })(), 'seq=' + (function () {
+        var keep = SAVE.menuBgIdx, seq = [];
+        SAVE.menuBgIdx = 0;
+        for (var i = 0; i < 4; i++) seq.push(menuBgRotate());
+        SAVE.menuBgIdx = keep; return seq.join(',');
+      })());
+    __ok('v0.66.0 menuBgRotate 对负值/越界索引都兜住（JS 的 % 对负数返回负值，只做一次 % 会取到 undefined）',
+      (function () {
+        var keep = SAVE.menuBgIdx, bad = [];
+        try {
+          [-1, -4, -7, 7, 999].forEach(function (v) {
+            SAVE.menuBgIdx = v;
+            var i = menuBgRotate();
+            if (!(i >= 0 && i < MENU_BGS.length)) bad.push(v + '=>' + i);
+          });
+        } finally { SAVE.menuBgIdx = keep; }
+        return bad.length === 0;
+      })());
+
+    /* ---------- G4. showStartScreen 重写：分层齐、入口一个不少 ---------- */
+    __ok('v0.65.0 主菜单真的换了整屏场景：showStartScreen 传了 menu-scene',
+      __code(showStartScreen).indexOf("'menu-scene'") >= 0);
+    __ok('v0.66.0 每次进主界面都轮换背景：showStartScreen 里调了 menuBgRotate()'
+      + '（开游戏 / 死亡回菜单 / 设置重开三条路径都走这里，所以在这一处调就全覆盖）',
+      __code(showStartScreen).indexOf('menuBgRotate()') >= 0);
+    __ok('v0.66.0 主菜单新分层容器全部产出（缺一个就退回 v0.65.0 的「按钮挤在中央一列」）',
+      (function () {
+        var s = __code(showStartScreen);
+        var need = ['menu-root', 'menu-bgwrap', 'menu-bgimg', 'menu-veil', 'menu-stage',
+                    'menu-titlebar', 'menu-title', 'menu-col-stele', 'menu-row-talis',
+                    'menu-flash', 'menu-tier', 'is-main', 'is-list'];
+        var miss = need.filter(function (c) { return s.indexOf(c) < 0; });
+        if (miss.length) { globalThis.__missMenu = miss; }
+        return miss.length === 0;
+      })(), '缺=' + JSON.stringify(globalThis.__missMenu || []));
+    __ok('v0.66.0 真美术全接上了：5 个入口 + 标题都走 artImg(\'ui/menu/*.png\')，且模板里**没有**裸 素材/ 字面量',
+      (function () {
+        var s = __code(showStartScreen);
+        var art = ['ui/menu/topic.png', 'ui/menu/start.png', 'ui/menu/continue.png',
+                   'ui/menu/collection.png', 'ui/menu/leaderboard.png', 'ui/menu/setting.png'];
+        var miss = art.filter(function (p) { return s.indexOf(p) < 0; });
+        if (miss.length) { globalThis.__missMenuArt = miss; }
+        return miss.length === 0 && s.indexOf('素材/') < 0;
+      })(), '缺=' + JSON.stringify(globalThis.__missMenuArt || []));
+    __ok('v0.66.0 两块石碑（入塔/续）都带 5 片崩碎碎片（少了就只剩淡出，没有「碎」）',
+      (function () {
+        var s = __code(showStartScreen);
+        var i0 = s.indexOf('menuShardsHTML('), i1 = s.indexOf('menuShardsHTML(', i0 + 1);
+        var d = __code(menuShardsHTML);
+        /* 5 片是 CSS 里 5 条 clip-path 的对应物：这里少一片，那边就有一块石头永远不动（不是全碎） */
+        return i0 >= 0 && i1 > i0 && d.indexOf('i<=5') >= 0 && d.indexOf('menu-shard') >= 0;
+      })());
+    __ok('v0.66.0 **开始爬塔仍落在 .is-main 段内、且在 .is-list 之前**（不是只加了 class 没包住）',
+      (function () {
+        var s = __code(showStartScreen);
+        var iMain = s.indexOf('menu-tier is-main'), iStart = s.indexOf('steleBreak(this,startGame)'),
+            iList = s.indexOf('menu-tier is-list');
+        return iMain >= 0 && iStart > iMain && iList > iStart;
+      })());
+    __ok('v0.66.0 主菜单 5 个入口一个不少、且**都包在演出函数里**（石碑走 steleBreak / 符纸走 talisOpen；'
+      + '重写模板时最容易漏绑 onclick，这条就是防它）',
+      (function () {
+        var s = __code(showStartScreen);
+        var must = ['onclick="steleBreak(this,continueRun)"', 'onclick="steleBreak(this,startGame)"',
+                    'onclick="talisOpen(this,viewBestiary)"', 'onclick="talisOpen(this,viewLeaderboard)"',
+                    'onclick="talisOpen(this,showSettings)"'];
+        var miss = must.filter(function (a) { return s.indexOf(a) < 0; });
+        if (miss.length) { globalThis.__missMenuEntry = miss; }
+        return miss.length === 0;
+      })(), '缺=' + JSON.stringify(globalThis.__missMenuEntry || []));
+    __ok('v0.66.0 主菜单 9 → 5：4 个被移除的入口不再出现在模板里'
+      + '（⚠️ 只是摘入口，startEndless / viewAchievements / viewStats / showTutorial 的**函数本体一律保留**）',
+      (function () {
+        var s = __code(showStartScreen);
+        var gone = ['startEndless', 'viewAchievements', 'viewStats', 'showTutorial'];
+        return gone.every(function (f) { return s.indexOf(f) < 0; });
+      })());
+    __ok('v0.66.0 签到整块取消：模板里没有 signInPanelHTML（用户：『没有实际意义』）',
+      __code(showStartScreen).indexOf('signInPanelHTML') < 0);
+    __ok('v0.66.0 「续」总是渲染、无存档时 disabled（不再按 hasRunSave 条件渲染 —— 石碑忽隐忽现会破构图）',
+      (function () {
+        var s = __code(showStartScreen);
+        var iBtn = s.indexOf('is-continue'), iDis = s.indexOf("hasRunSave()?'':' disabled'", iBtn);
+        return iBtn >= 0 && iDis > iBtn && iDis - iBtn < 120;
+      })());
+    /* v0.68.1：石碑改**左右并排**（用户：「这两个石碑图标你应该左右摆放」）。
+       旧版是竖列（续在上、入塔在下），DOM 顺序也是续在前。这里钉 DOM 顺序 ——
+       光有 CSS 的 flex-direction:row 不够（那半边在产物门禁 verify_dist 里），
+       顺序反了就是**小的那个在左边当主 CTA**，正好是用户要的反面。 */
+    __ok('v0.68.1 石碑并排后 DOM 里**入塔在续之前**（主 CTA 先读到，续退成右手边的次级项）',
+      (function () {
+        var s = __code(showStartScreen);
+        var iStart = s.indexOf('is-start'), iCont = s.indexOf('is-continue');
+        return iStart >= 0 && iCont > iStart;
+      })());
+    /* v0.68.1：符纸「向下拉然后回弹」的定时器必须够长。旧值是 150ms（配 .15s 的动画）。
+       ⚠️ CSS 那半边（`animation:menuTug .42s`）在产物门禁里断，这里断 JS 半边 ——
+          两边对不齐的两种错法都不报错：CSS 长了会在回弹中途切走场景（纸卡半途），短了就是白等。 */
+    __ok('v0.68.1 talisOpen 的演出定时器 ≥400ms（配得上 menuTug 的回弹时长，不再是 150）',
+      (function () {
+        var m = /off\s*\?\s*0\s*:\s*(\d+)/.exec(__code(talisOpen));
+        return !!m && parseInt(m[1], 10) >= 400;
+      })());
+    __ok('v0.66.0 主菜单版本号仍在 <h2 class="menu-title"> 里（三处版本号同步是项目惯例，别在重写时丢）',
+      (function () {
+        var s = __code(showStartScreen);
+        var iT = s.indexOf('menu-title">'), iV = s.indexOf('v0.', iT);
+        return iT >= 0 && iV > iT && iV - iT < 200;
+      })());
+
+    /* ---------- v0.68.2：body.at-menu —— 「背后是主菜单」时整个战斗界面不渲染 ---------- */
+    /* 起因：实拍 `_drvmenu3.js --q "&pull=300&anim=1&at=250"` 时，卷轴面板四周透出战斗 HUD
+       （结束回合 / 灵气珠 / 出牌提示）。`#app` 一直挂在 DOM 里 z-index:1 压着 #bg，
+       只是 v0.65.0 之后被主菜单那层不透明底挡住了 —— 图鉴一走半透明底就露馅。 */
+    __ok('v0.68.2 setBg 是 body.at-menu 的**唯一**开关，判据是 name===\'menu\''
+      + '（挂在 showStartScreen 上不行：图鉴只摘 .menu-scene，不会重进主菜单）',
+      (function () {
+        var s = __code(__realSetBg);   // ⚠️ 必须用 __realSetBg：全局 setBg 在本文件顶部被顶成了空桩
+        return /classList\.toggle\(\s*'at-menu'\s*,\s*name\s*===\s*'menu'\s*\)/.test(s);
+      })());
+    __ok('v0.68.2 setBg 里 at-menu 的读写排在 `if(!el) return` **之前**'
+      + '（排在后面 ⇒ DOM 桩/异常路径下永远不开关）',
+      (function () {
+        var s = __code(__realSetBg);
+        var i = s.indexOf("'at-menu'"), j = s.indexOf("if(!el) return");
+        return i >= 0 && j > i;
+      })());
+    __ok('v0.68.2 continueRun 落 camp/shop/unknown 三支时显式清 at-menu'
+      + '（那三支不经过 setBg ⇒ 从主菜单续档进营地会让 #app 一直不渲染）',
+      (function () {
+        var s = __code(continueRun);
+        var i = s.indexOf("remove('at-menu')"), j = s.indexOf("d.scene==='camp'");
+        return i >= 0 && j > i;
+      })());
+    __ok('v0.68.2 行为：setBg(\'menu\') 亮 at-menu、setBg(\'act1\') 灭 —— 且全程不抛异常',
+      (function () {
+        /* ⚠️ 沙箱的 document.body.classList 是**空操作桩**（add/remove/toggle 都是空函数、
+           contains 恒 false），直接跑 setBg 只会量到 false/false，看着像"没生效"。
+           这里临时换一个**真记账**的 classList，才验得到真实的开关语义。 */
+        var keepBody = document.body, keepBg = setBg;
+        try {
+          var set = [];
+          document.body = { classList: {
+            contains: function (c) { return set.indexOf(c) >= 0; },
+            add: function (c) { if (set.indexOf(c) < 0) set.push(c); },
+            remove: function (c) { var i = set.indexOf(c); if (i >= 0) set.splice(i, 1); },
+            toggle: function (c, on) { if (on) this.add(c); else this.remove(c); } } };
+          setBg = __realSetBg;
+          setBg('menu');
+          var on = set.indexOf('at-menu') >= 0;
+          setBg('act1');
+          var off = set.indexOf('at-menu') >= 0;
+          setBg('menu');                       // 再回到菜单，确认可逆（不是单向锁死）
+          var back = set.indexOf('at-menu') >= 0;
+          return on === true && off === false && back === true;
+        } catch (e) { return false; } finally { document.body = keepBody; setBg = keepBg; }
+      })());
+
+    /* ---------- G5. 演出闸：防连点 / 不卡死 ---------- */
+    /* 没有 MENU_BUSY，1 秒演出窗口里连点会调两次 startGame()。这两条是它的回归闸。 */
+    __ok('v0.66.0 steleBreak 在 MENU_BUSY 为真时**不**加 is-breaking、**不**调 fn（防连点）',
+      (function () {
+        var called = 0, added = [];
+        var btn = { disabled: false, classList: { add: function (c) { added.push(c); }, remove: function () {} } };
+        var keep = MENU_BUSY; MENU_BUSY = true;
+        try { steleBreak(btn, function () { called++; }); } finally { MENU_BUSY = keep; }
+        return called === 0 && added.indexOf('is-breaking') < 0;
+      })());
+    __ok('v0.66.0 talisOpen 在 MENU_BUSY 为真时**不**加 tug、**不**调 fn（防连点）',
+      (function () {
+        var called = 0, added = [];
+        var btn = { classList: { add: function (c) { added.push(c); }, remove: function () {} } };
+        var keep = MENU_BUSY; MENU_BUSY = true;
+        try { talisOpen(btn, function () { called++; }); } finally { MENU_BUSY = keep; }
+        return called === 0 && added.indexOf('tug') < 0;
+      })());
+    __ok('v0.66.0 无存档时「续」不可点：steleBreak 对 disabled 的按钮直接返回（不演出、不调 continueRun）',
+      (function () {
+        var called = 0, added = [];
+        var btn = { disabled: true, classList: { add: function (c) { added.push(c); }, remove: function () {} } };
+        try { steleBreak(btn, function () { called++; }); } catch (e) { return false; }
+        return called === 0 && added.indexOf('is-breaking') < 0;
+      })());
+    /* ⚠️ 收尾必须用定时器而不是 animationend：low-spec / prefers-reduced-motion 下 CSS 会把动画
+       全置 none，animationend **永远不来** —— 靠它收尾会当场卡死，连主菜单都点不动了。 */
+    __ok('v0.66.0 演出收尾走 setTimeout 而不是 animationend（动画被 CSS 关掉时 animationend 永远不来，会卡死）',
+      (function () {
+        var s = __code(steleBreak) + __code(talisOpen);
+        return s.indexOf('setTimeout') >= 0 && s.indexOf('animationend') < 0;
+      })());
+    __ok('v0.66.0 menuFxOff() 兜住低配/减弱动态：low-spec 与 prefers-reduced-motion 都返回 true'
+      + '（否则开着「减弱动态」反而要干等满 1 秒才切场景）',
+      (function () {
+        var s = __code(menuFxOff);
+        return s.indexOf('lowSpec') >= 0 && s.indexOf('prefers-reduced-motion') >= 0;
+      })());
+  })();
+
+  /* ===================== v0.67.0：灵石图标（道具 / 灵汁的贴图） ===================== */
+  (function () {
+    var relicIds = RELICS.map(function (r) { return r.id; });
+    var potionIds = POTIONS.map(function (p) { return p.id; });
+    var keys = Object.keys(LINGSHI_FILE);
+
+    __ok('v0.69.0 LINGSHI_FILE 恰好 7 条', keys.length === 7, keys.join(','));
+    __ok('v0.69.0 表覆盖 3 个遗物 + 4 瓶灵汁',
+      keys.filter(function (k) { return relicIds.indexOf(k) >= 0; }).length === 3 &&
+      keys.filter(function (k) { return potionIds.indexOf(k) >= 0; }).length === 4);
+    /* 键写错一个字 ⇒ 永远不生效、也不报错，只有肉眼能发现。这条是它的闸。 */
+    __ok('v0.67.0 表里每个键都是真实的遗物/灵汁 id',
+      keys.filter(function (k) { return relicIds.indexOf(k) < 0 && potionIds.indexOf(k) < 0; }).length === 0,
+      keys.join(','));
+    __ok('v0.67.0 表里每个值都形如 lingshi/lingshi_<名>.png',
+      keys.filter(function (k) { return !/^lingshi\/lingshi_[a-z]+\.png$/.test(LINGSHI_FILE[k]); }).length === 0,
+      keys.map(function (k) { return LINGSHI_FILE[k]; }).join(','));
+
+    /* ⚠️ 这条的来历（v0.67.0 起、v0.69.0 改）：**黄泉酒的文件名曾经少一个 an** ——
+       磁盘上是 lingshi_huangqujiu.png，物品 id 是 huangquanjiu。当时这条断言是**反向**的：
+       钉住那个不一致、防止有人"顺手统一"成硬拼 'lingshi/lingshi_'+id+'.png'。
+       为什么那种"统一"是危险的：请求一个不存在的路径，而 artImg 的 onerror 降级是
+       outerHTML='' ⇒ **静默少一张图**，不抛错、不空框、只有肉眼看得出（首屏实测就是一张碎图）。
+
+       v0.69.0 用户批准把文件改名对齐了（见 _patch/verify_dist.py 的素材命中闸），
+       所以这条断言**翻面**：从"钉住不一致"改成"钉住一致"。留成一条**活的不变量**而不是
+       删掉历史注记 —— 表的值与键同名这件事一旦再漂移，这里立刻响，而不是等玩家看见碎图。
+       若将来某个素材**确实**无法与 id 同名，就在这一条上写明理由（它的新职责就是这个）。 */
+    var stemOf = function (v) { return String(v).replace(/^lingshi\/lingshi_/, '').replace(/\.png$/, ''); };
+    __ok('v0.69.0 表里每个值都与它的键同名（表值 == 磁盘文件名 == 物品 id；漂移即响）',
+      keys.filter(function (k) { return stemOf(LINGSHI_FILE[k]) !== k; }).length === 0,
+      keys.map(function (k) { return k + '→' + LINGSHI_FILE[k]; }).join(' | '));
+    __ok('v0.67.0 lingshiSrc：表内 id 返回 lingshi 路径、表外 id 返回空串',
+      lingshiSrc('zhushabi') === 'lingshi/lingshi_zhushabi.png' && lingshiSrc('zhaohunfan') === '');
+    __ok('v0.67.0 lingshiSrc 对未知/空 id 不抛错（typeof 兜底：本表在 20_data.js，relicIcon 在更早的 10_audio.js）',
+      (function () { try { return lingshiSrc(undefined) === '' && lingshiSrc('') === ''; } catch (e) { return false; } })());
+
+    var icZhu = relicIcon(relById('zhushabi')), icZhao = relicIcon(relById('zhaohunfan'));
+    __ok('v0.67.0 朱砂笔的遗物图标改走 lingshi/', icZhu.indexOf('lingshi/lingshi_zhushabi.png') >= 0, icZhu.slice(0, 130));
+    __ok('v0.67.0 招魂幡（表外）仍走 relic/，没被带坏', icZhao.indexOf('relic/zhaohunfan.png') >= 0, icZhao.slice(0, 130));
+    /* 尺寸就靠这个类：object-fit:contain + 是 flex 列的子项 ⇒「超出边框」「压住文字」结构上不可能。
+       两个 id 一个在表内一个在表外，这条断的是「不管走哪条路，外壳都是同一个类」——
+       外壳不同就会出现两种观感（见 v0.67.0 把横板改方框那次的尺寸档位）。 */
+    __ok('v0.67.0 两条路都仍带 .ricon（表内表外同一个外壳类）',
+      icZhu.indexOf('ricon') >= 0 && icZhao.indexOf('ricon') >= 0);
+    __ok('v0.67.0 12 个遗物每个都出得出一张 <img>（表内 3 个 + 表外 9 个都算）',
+      RELICS.every(function (r) { var s = relicIcon(r); return typeof s === 'string' && s.indexOf('<img') >= 0; }));
+
+    var pQ = potionIcon(POTIONS.filter(function (p) { return p.id === 'huangquanjiu'; })[0]);
+    var pH = potionIcon(POTIONS.filter(function (p) { return p.id === 'huanyanglu'; })[0]);
+    __ok('v0.69.0 黄泉酒出图，且指到与 id 同名的真文件',
+      pQ.indexOf('lingshi/lingshi_huangquanjiu.png') >= 0 && pQ.indexOf('ricon') >= 0, pQ.slice(0, 130));
+    /* v0.69.0：还阳露 / 孟婆汤**补上了贴图**（用户 2026-09-28 交付），从此 4 瓶灵汁全有图。
+       这两条以前断的是「走 .ricon-fb 字牌占位」—— 现在翻面断「出真图」。
+       ⚠️ 字牌分支本身**仍然被覆盖**，靠下面那两条用合成 id（__nope__）的断言，不是靠真灵汁；
+       否则 4 瓶全有图之后那条分支就再没人走，会静默烂掉（这正是"占位不再生成"的既定口径）。 */
+    __ok('v0.69.0 还阳露出图（v0.67.0 时它还是无图的字牌占位）',
+      pH.indexOf('lingshi/lingshi_huanyanglu.png') >= 0 && pH.indexOf('ricon') >= 0 &&
+      pH.indexOf('ricon-fb') < 0, pH.slice(0, 130));
+    __ok('v0.69.0 孟婆汤出图（同上）',
+      (function () {
+        var s = potionIcon(POTIONS.filter(function (p) { return p.id === 'mengpotang'; })[0]);
+        return s.indexOf('lingshi/lingshi_mengpotang.png') >= 0 && s.indexOf('ricon-fb') < 0;
+      })());
+    __ok('v0.69.0 4 瓶灵汁**每瓶都出真图**（不再是 2 图 + 2 字牌）',
+      POTIONS.length === 4 && POTIONS.every(function (p) {
+        var s = potionIcon(p);
+        return typeof s === 'string' && s.indexOf('<img') >= 0 && s.indexOf('ricon-fb') < 0;
+      }));
+    /* 断的是**表外且有名字**的灵汁（将来加新灵汁、或某瓶还没图）——
+       它没有贴图 ⇒ 走字牌分支，取到的末字是「汁」。 */
+    __ok('v0.67.0 potionIcon 对表外的灵汁 id 不抛错（表是子集，将来加新灵汁不会炸）',
+      (function () {
+        try { var s = potionIcon({ id: '__nope__', name: '无名汁' }); return s.indexOf('ricon-fb') >= 0 && s.indexOf('汁') >= 0; }
+        catch (e) { return false; }
+      })());
+    /* 连 name 都没有（理论上三个调用点不会出现）⇒ 末字取空 ⇒ 空串，同样不抛错。 */
+    __ok('v0.67.0 potionIcon 连 name 都没有时退化为空串，不抛错',
+      (function () { try { return potionIcon({ id: '__nope__' }) === ''; } catch (e) { return false; } })());
+    __ok('v0.67.0 遗物图标**没有**被字牌化（relicIcon 永远出 <img>，占位只管灵汁）',
+      icZhu.indexOf('ricon-fb') < 0 && icZhao.indexOf('ricon-fb') < 0);
+
+    /* 只加函数不插调用点 = 等于没接。三个渲染点逐个断，并且断插入位置在 .cname **之前**
+       （插到 .cdesc 之后会被 flex 排到文字下面，读起来像"图标掉到卡底了"）。 */
+    var sSelect = __code(showPotionSelect), sWell = __code(unknownPotion), sShop = __code(renderShop);
+    __ok('v0.67.0 战斗「使用灵汁」面板插了 potionIcon', sSelect.indexOf('potionIcon(p)') >= 0);
+    __ok('v0.67.0 灵泉事件插了 potionIcon', sWell.indexOf('potionIcon(p)') >= 0);
+    __ok('v0.67.0 鬼市商店插了 potionIcon', sShop.indexOf('potionIcon(p)') >= 0);
+    /* v0.67.0：遗物图标此前**只在两处**接了（选遗物面板 + 详情页 chip），其余几处
+       「给你一件遗物」的弹窗仍是纯文字卡 —— 同一个功能里一半有图一半没图最刺眼。
+       这批把剩下三处补齐（Boss 战利品 x2 / 古井许愿 x1）。 */
+    var sBoss = __code(showBossReward), sWellEv = __code(doWellOffer);
+    __ok('v0.67.0 Boss 战利品弹窗的遗物卡接了 relicIcon', sBoss.indexOf('relicIcon(relic)') >= 0);
+    __ok('v0.67.0 Boss 战利品弹窗的灵汁卡接了 potionIcon', sBoss.indexOf('potionIcon(potion)') >= 0);
+    /* v0.68.1：古井许愿拆成「弹窗（unknownWell）+ 接受（doWellOffer）」，遗物卡在后者里 */
+    __ok('v0.67.0 古井许愿弹窗的遗物卡接了 relicIcon', sWellEv.indexOf('relicIcon(relic)') >= 0);
+    /* 「图标排在它自己那张卡的 .cname 之前」——**不能拿全文第一个 cname 比**：
+       Boss 那张卡里有两张卡（遗物 + 灵汁），遗物的 cname 排在灵汁的图标前面，
+       拿全文第一个 cname 去比 potionIcon 必然假红（本批踩过）。
+       所以逐个图标各自往后找**它后面最近的那个** cname。 */
+    var _iconBeforeCname = function (src, tok) {
+      var i = src.indexOf(tok); if (i < 0) return false;
+      var j = src.indexOf('cname', i); return j > i;
+    };
+    __ok('v0.67.0 这两处的图标都排在各自那张卡的 .cname 之前（插到 cdesc 之后会被 flex 排到文字下面）',
+      _iconBeforeCname(sBoss, 'relicIcon(relic)') &&
+      _iconBeforeCname(sBoss, 'potionIcon(potion)') &&
+      _iconBeforeCname(sWellEv, 'relicIcon(relic)'));
+    __ok('v0.67.0 三处的 potionIcon 都排在 .cname 之前（排在后面会被 flex 压到文字下面）',
+      [sSelect, sWell, sShop].every(function (s) {
+        var i = s.indexOf('potionIcon(p)'), j = s.indexOf('cname', i);
+        return i >= 0 && j > i;
+      }));
+    /* 灵汁的名称/描述文案本批一个字没动（只插图）—— 防"顺手美化"把文案改了。 */
+    __ok('v0.67.0 POTIONS 仍是 4 瓶、id 一个不少（只插图，没动数据）',
+      potionIds.length === 4 && ['huanyanglu', 'huangquanjiu', 'zhenhunshui', 'mengpotang']
+        .every(function (i) { return potionIds.indexOf(i) >= 0; }), potionIds.join(','));
+  })();
+
+  /* ===================== v0.69.0：卡面短文案（§D 双层文案）=====================
+     背景：牌框换真美术后铭牌窗只占卡高 28%，132x200 的卡上 .cdesc **只装得下 3 行**。
+     行宽是实拍标定的（_patch/_drvfit.js，headless Chrome）：30 个纯汉字 = 正好 3 行，
+     32 个 = 4 行开始截断。而卡池里 34 张牌的 t() 最长到 88 列宽（尸王）——
+     **静默截断，玩家读不到后半句**。
+     解法是「双层」：t() 仍是唯一真相源（长按弹窗读它，一字未删），
+     牌面改读 cardText()，超长的卡再补一个 ts() 短版。
+
+     ⚠️ 为什么闸门落在这里而不是 verify_dist.py：产物 _build/obf.js 开了
+        stringArray+base64（verify_dist.py:410-413 有明文告诫），约 3/4 的文案在产物里
+        是 base64，中文串 grep 必然假缺失。文案闸只能在源码侧跑。
+     ⚠️ 这两条是**硬闸**，只测两个能机器判定的量：列宽、数字多重集。
+        运算符（×/≥/%/+/）**故意不测** —— 压缩的**目的**就是改句式，
+        「造成 4 点伤害，并获得 2 点格挡」→「伤4，格挡2」必然改变运算符数量，
+        把它设成硬闸等于把合法重写全判红。 */
+  (function () {
+    var MAXCOL = 30;   /* 实拍：30 个纯汉字 = 3 行，正好放满；31 个就开始截断 */
+
+    /* 列宽模型：ASCII（0x20-0x7E）记 0.5 列，其余（汉字 / 全角标点 / 【】）记 1 列。
+       ⚠️ 这是**近似**，不是精确排版：实测有约 ±3 列的抖动（断行不能填满整行，
+          长串数字/【】词条会把余量顶到下一行）。所以 30 这个阈值取的是
+          **纯汉字的实测安全值**，不是模型算出来的 —— 真实排版由 _drvfit.js 兜底复验。 */
+    var _cols = function (t) {
+      t = String(t); var w = 0;
+      for (var i = 0; i < t.length; i++) {
+        var c = t.charCodeAt(i);
+        w += (c >= 0x20 && c <= 0x7e) ? 0.5 : 1;
+      }
+      return w;
+    };
+    var _nums = function (t) { return String(t).match(/\d+(?:\.\d+)?/g) || []; };
+    var _sameNums = function (a, b) {
+      var x = _nums(a), y = _nums(b);
+      if (x.length !== y.length) return false;
+      for (var i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+      return true;
+    };
+
+    var HEROES = ['ganshiren', 'wuseng', 'yincha', 'tianshi'];
+    var savedHero = G.hero;
+    var overLen = [], numBad = [], withTs = 0, total = 0;
+    var noTsOver = [];
+
+    HEROES.forEach(function (h) {
+      G.hero = h;
+      CARDS.forEach(function (c) {
+        var hasTs = (typeof c.ts === 'function');
+        if (hasTs) withTs++;
+        [false, true].forEach(function (up) {
+          total++;
+          var face, full;
+          try { face = cardText(c, up); full = c.t(up); }
+          catch (e) { overLen.push(c.id + '/' + h + ':' + e.message); return; }
+          if (_cols(face) > MAXCOL) overLen.push(c.id + '/' + h + '/' + (up ? '升' : '基') + '=' + _cols(face).toFixed(1) + '列');
+          /* 数字硬闸：牌面短版与全文的数字**逐元素**相等（含顺序）——
+             「改文案不许改数值」的机器实现。 */
+          if (!_sameNums(full, face)) {
+            numBad.push(c.id + '/' + h + '/' + (up ? '升' : '基')
+              + ' [' + _nums(full).join(',') + ']≠[' + _nums(face).join(',') + ']');
+          }
+          /* 没写 ts 的卡必须自己就放得下，否则就是「漏写了短版」 */
+          if (!hasTs && _cols(full) > MAXCOL) noTsOver.push(c.id + '/' + h + '/' + (up ? '升' : '基'));
+        });
+      });
+    });
+    G.hero = savedHero;
+
+    __ok('v0.69.0 卡面文案列宽全部 ≤' + MAXCOL + '（132x200 实测 3 行上限；超过就是静默截断）',
+      overLen.length === 0, overLen.slice(0, 12).join(' '));
+    __ok('v0.69.0 牌面短版的数字与全文逐元素相等（压缩只许删字，不许改数值）',
+      numBad.length === 0, numBad.slice(0, 12).join(' '));
+    __ok('v0.69.0 没写 ts 的卡自己就放得下（不许靠「没写」绕过列宽闸）',
+      noTsOver.length === 0, noTsOver.slice(0, 12).join(' '));
+    /* 覆盖度断言：short 表不许被清空（清空后前两条会「假绿」——
+       全部回落成 t，而 t 若恰好都在 30 列内就没人发现双层没了）。 */
+    __ok('v0.69.0 SHORT_TEXT 表仍在用（写了 ts 的卡数 ≥30，防"整个表被删掉后闸门假绿"）',
+      withTs >= 30, 'withTs=' + withTs + ' / 抽查 ' + total + ' 条');
+
+    /* 长按放大弹窗必须继续读全文 —— 这是「双层文案」的另一半，
+       改回 cardText() 就等于把 34 张牌被压掉的从句**永久弄丢**。 */
+    var _zoomSrc = String(showCardZoom);
+    __ok('v0.69.0 长按放大弹窗仍读全文 c.t()（读 cardText 会把机制说明弄丢）',
+      _zoomSrc.indexOf('c.t(c.up)') >= 0 && _zoomSrc.indexOf('cardText') < 0);
+    /* 三份卡面模板必须都走 cardText —— 漏一处那张卡就还是截断的 */
+    __ok('v0.69.0 三份卡面模板都走 cardText（cardBody / forgeCardHTML / handCardHTML）',
+      String(cardBody).indexOf('cardText') >= 0 &&
+      String(forgeCardHTML).indexOf('cardText') >= 0 &&
+      String(handCardHTML).indexOf('cardText') >= 0);
+    /* 全文不许被顺手删短：尸王 t() 仍是 88 列那种长文。
+       若有人「顺手把 t 也压短」，数字闸查不出来（数字没变），只有这条拦得住。 */
+    G.hero = 'ganshiren';
+    var _shiwang = cardById('shi_wang');
+    __ok('v0.69.0 全文 t() 未被压缩（尸王仍 ≥70 列；双层里的"全文"那一层不许被顺手削）',
+      _cols(_shiwang.t(false)) >= 70, _cols(_shiwang.t(false)).toFixed(1) + ' 列');
+    G.hero = savedHero;
   })();
 
   rep.pass = _p; rep.fail = _f;

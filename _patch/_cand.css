@@ -1,0 +1,6 @@
+@media (max-height:560px){
+.enemy .eportrait.e-summon{height:clamp(44px,calc(44px + (100vh - 360px)*0.11),67px);}
+.enemy .eportrait.e-normal{height:clamp(50px,calc(50px + (100vh - 360px)*0.50),123px);}
+.enemy .eportrait.e-elite{height:clamp(68px,calc(68px + (100vh - 360px)*0.55),151px);}
+.enemy .eportrait.e-boss{height:clamp(85px,calc(85px + (100vh - 360px)*0.60),179px);}
+}

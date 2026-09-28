@@ -56,6 +56,9 @@ _patch/_chk_*
 /_probedrag.html
 /_probedrag_dist.html
 _patch/_shot_*.png
+# 其余以 _ 开头的截图/对照图（手工 headless 实拍、A/B 对比图等）同理：都是运行产物，不进库。
+# 与上面两条 `_patch/_*.json` / `_patch/_*.log` 同一惯例。_patch/ 下**没有任何**带 _ 前缀的 png 是进库的。
+_patch/_*.png
 # 特效对照图夹具（_patch/shot_fx.py + _drvfx.js）的运行产物，同上：每次重建，不进库
 /_shotfx.html
 /_framefx.html

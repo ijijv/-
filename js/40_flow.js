@@ -71,8 +71,8 @@ function showBossReward(){
   log(`击败幕主，获得遗物【${relic.name}】和灵汁【${potion.name}】`);
   showOverlay(`<h2>Boss 战利品</h2><p>你击败了幕主，收获丰厚：</p>
     <div class="reward-cards">
-      <div class="relic ${RCOLOR[relic.rarity]}"><div class="cname">${relic.name}</div><div class="cdesc">${relic.desc}</div><div class="ctype">遗物</div></div>
-      <div class="relic r-blue"><div class="cname">${potion.name}</div><div class="cdesc">${potion.desc}</div><div class="ctype">灵汁</div></div>
+      <div class="relic ${RCOLOR[relic.rarity]}">${relicIcon(relic)}<div class="cname">${relic.name}</div><div class="cdesc">${relic.desc}</div><div class="ctype">遗物</div></div>
+      <div class="relic r-blue">${potionIcon(potion)}<div class="cname">${potion.name}</div><div class="cdesc">${potion.desc}</div><div class="ctype">灵汁</div></div>
     </div>
     <button class="btn" onclick="hideOverlay(); showForgePicker('boss');">锻造（升级一张牌）</button>
     <button class="btn ghost" onclick="hideOverlay(); goNext();">继续前进</button>`);
@@ -279,6 +279,11 @@ function continueRun(){
   PLAYER_HP_PREV=null; ENEMY_HP_PREV={};
   log(`继续旅程：第 ${G.act} 幕（生命 ${G.hp}/${G.maxHp} · 金币 ${G.gold}）`);
   hideOverlay();
+  /* v0.68.2：camp / shop / unknown 三支**不经过 setBg** ⇒ 得在这儿显式退出「主菜单壳」状态，
+     否则从主菜单续档落进营地/鬼市/未知之地时，body.at-menu 还亮着 ⇒ #app 整块不渲染
+     （那三个页面自己铺在 #overlay 里，看不出缺什么，但背后的玩家面板/顶栏/日志全没了，
+      下次回到地图才会突然"长回来"）。进战斗与进地图两支由 setBg 自己清，不用重复。 */
+  if(document.body && document.body.classList) document.body.classList.remove('at-menu');
   if(d.scene==='battle'){ SCENE='battle'; setBg(G.endless?'act3':'act'+G.act); setBGM(battleBgmFor(G.enemies)); render(); } // v0.61.31：读档进 Boss 房也走 Boss 轨（上一行已恢复 G.enemies）
   else if(d.scene==='camp'){ SCENE='camp'; renderCampfire(); }
   else if(d.scene==='shop'){ SCENE='shop'; renderShop(); }
@@ -291,6 +296,6 @@ function viewLeaderboard(){
     const where = h.mode==='endless' ? `镇妖塔 · 第 ${h.floor} 层` : `第 ${h.act} 幕`;
     return `<p>${i+1}. <b style="color:var(--gold)">${h.score}</b> 分　${where} · ${h.date}</p>`;
   }).join('') || '<p style="color:var(--dim)">本周暂无记录</p>';
-  showOverlay(`<h2>周 榜 行 榜</h2><p style="font-size:12px;color:var(--dim)">每周一重置 · 本机 Top 10 · ${wk}</p><div class="kwlist">${list}</div>`, true);
+  showOverlay(`<h2>周 榜 行 榜</h2><p style="font-size:12px;color:var(--dim)">每周一重置 · 本机 Top 10 · ${wk}</p><div class="kwlist">${list}</div>`, true, 'scroll-scene');
 }
 

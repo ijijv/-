@@ -142,7 +142,10 @@ function showDragPreview(idx){
   el.style.top=r.top+'px';
   el.classList.remove('off');
 }
-/* 长按卡牌放大查看描述（小屏字小的解决） */
+/* 长按卡牌放大查看描述（小屏字小的解决）
+   ⚠️ v0.69.0：这里**故意继续读 c.t()（全文）而不是 cardText()/c.ts（牌面短版）** ——
+      这是「双层文案」的落点。牌面只有 3 行、34 张牌的机制说明被压成短版，
+      但全文一个字都没删，全在这里。**改这行等于把机制说明弄丢**，别顺手统一成 cardText。 */
 function showCardZoom(i){
   const c=G.hand[i]; if(!c) return;
   if(DRAG){ DRAG.el.classList.remove('dragging','lift','pressed'); DRAG.el.style.transform=''; DRAG.el.style.pointerEvents=''; DRAG=null; hideDragArrow(); ARROW_TIP=null; setDragTarget(null); }
@@ -152,7 +155,15 @@ function showCardZoom(i){
     ${effectiveCost(c)>0?`<p style="color:var(--gold)">符文费用：${effectiveCost(c)}</p>`:''}
     ${isOneUse(c)?`<p style="color:var(--red2);font-weight:bold">消耗 · 每场战斗限用一次，战斗结束后回到牌库</p>`:''}
     <button class="btn ghost" onclick="hideOverlay()">收起</button>`;
-  document.getElementById('overlay').classList.remove('hidden');
+  /* v0.65.0：这条是**第二条开面板路径**（绕过 showOverlay 直接写 innerHTML）。
+     场景类必须在这里也摘（v0.68.2 补上 .scroll-scene）—— 否则在 #overlay 还带着
+     .menu-scene / .map-scene 时长按放大，
+     会继承那套「整屏不透明底 + .panel 去掉底色」的样式，卡牌详情变成一张铺满屏幕的裸字。
+     今天进战斗必经 showHeroSelect→showOverlay（已会摘），所以现在碰不到；
+     但把不变量补在两个入口上是这一处的既定口径（showOverlay 里那条 v0.61.42 注释同理）。 */
+  const __ov=document.getElementById('overlay');
+  if(__ov && __ov.classList){ __ov.classList.remove('map-scene'); __ov.classList.remove('menu-scene'); __ov.classList.remove('scroll-scene'); }
+  __ov.classList.remove('hidden');
   const x=document.getElementById('overlayCloseX'); if(x) x.style.display='';
 }
 document.addEventListener('pointermove', onDragMove);
@@ -221,6 +232,10 @@ function renderTopbar(){
 }
 function render(){
   if(!G) return;
+  /* v0.70.0：读一次 --rise-unit（后排敌人上抬幅度的倍率，基准档=1、矮屏档压小）。
+     为什么必须放在这里：每个敌人读一次 getComputedStyle 会付 N 次强制样式重算，
+     违反「读一遍→写一遍，中间不读」；render() 开头是唯一合规的位置。 */
+  refreshRiseK();
   const hpPct=Math.max(0,G.hp/G.maxHp*100);
   const hpPrev=(PLAYER_HP_PREV===null)?hpPct:PLAYER_HP_PREV;
   PLAYER_HP_PREV=hpPct;
@@ -237,15 +252,28 @@ function render(){
   renderTopbar();
   const _epEl=document.getElementById('enemy-panel');
   _epEl.innerHTML=G.enemies.filter(e=>alive(e)||e.dying).map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
-  _epEl.style.paddingTop=(2+battleHeadroom())+'px'; // v0.60：给后排错落留出净空，别顶到顶部栏
+  /* v0.60：给后排错落留出净空，别顶到顶部栏。
+     v0.70.0：从**内联 paddingTop** 改成写 CSS 变量。内联样式 CSS 打不过（除非 !important），
+     矮屏档没法把它归零，5 敌时这 62px 会白吃掉矮屏预算的两成。走变量后，
+     矮屏档写一条同特异度、书写更后的 `#enemy-panel{padding-top:2px}` 就盖掉了，
+     **JS 完全不需要知道当前是哪个档**。 */
+  _epEl.style.setProperty('--headroom', (2+battleHeadroom())+'px');
   document.getElementById('turn-summary').innerHTML=G.turnSummary || '';
   if(!G.discardSelect && !G.exchange && !G.retainSelect) groupHand();
   document.getElementById('hand').innerHTML=G.hand.map((c,i)=>handCardHTML(c, G.energy<effectiveCost(c), i, G.hand.length)).join('') || '<div style="color:var(--dim)">（无手牌）</div>';
   const runeCount=document.getElementById('rune-count'); if(runeCount) runeCount.textContent=G.energy;
+  refreshPileCounts();   // v0.69.0：抽牌堆/弃牌堆的计数徽章（startBattle 里补的那次 render 是它们的首次填充点）
   renderLogBox();   // v0.61.20(P5)：筛选 chip + 每行独立成块（原先各行直接 join('') 会挤成一坨）
   renderEndTurnHint(); // v0.61.20(P1)
   HITFX.enemies.clear();
   animateHpBars();
+  /* v0.69.0：面板位置**刚刚**变过 —— #enemy-panel 的 padding-top 按敌人数重排（上面那行），
+     而 .battle 是 align-items:flex-end（原型.html:92），敌人变多会把 #player-panel 顶上去。
+     所有还活着的特效必须在这一刻重新量一次锚点，否则就是用户报的
+     「三个敌人/Boss 出场，玩家面板挪了，特效留在原地」。
+     放在**最后一行**：上面全是写操作，这里才读 rect ⇒ 整个 render 只付一次强制同步布局。
+     没事可做时 fxReanchor 在任何 getBoundingClientRect 之前就返回（见 00_base.js）。 */
+  if(typeof fxReanchor==='function') fxReanchor();
 }
 
 /* ===================== 开局 ===================== */
@@ -293,7 +321,7 @@ function renderEndTurnHint(){
 
 function showHeroSelect(){
   const cards=HEROES.map(h=>`<div class="relic" onclick="pickHero('${h.id}')"><div class="cname" data-tip="hero:${h.id}">${h.name}</div><div class="cdesc">${h.desc}</div><div class="cdesc" style="color:var(--gold);margin-top:6px">被动 · ${h.passive}</div><div class="ctype">选择英雄</div></div>`).join('');
-  showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="reward-cards">${cards}</div>`);
+  showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="reward-cards">${cards}</div>`, false, 'hero-scene');
 }
 function pickHero(id){
   G.hero=id;
@@ -359,7 +387,7 @@ function showOpeningChoice(){
   // 恢复原来的奖励层级设置
   G.rewardTier = originalRewardTier;
 
-  const cards=picks.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickOpening(${i})">${cardBody(c)}</div>`).join('');
+  const cards=picks.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickOpening(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>开 局 抉 择</h2><p>天师赠你一道符，挑一张加入起始牌组（或跳过）。</p><div class="reward-cards">${cards}</div>
     <button class="btn ghost" onclick="rerollOpening()">看广告 · 重随一次</button>
     <button class="btn ghost" onclick="skipOpening()">跳过</button>`);
@@ -387,21 +415,51 @@ function skipOpening(){
   // v0.62.0：跳过开局选牌也走同一条进场动画（与 pickOpening 口径一致）
   showMap({entry:true});
 }
+/* v0.66.0：主菜单重做为**全屏横屏**版 —— 真美术接入 + 三背景轮换 + 点击演出。
+   v0.65.0 已把它做成整屏场景，但按钮仍是 CSS 画的、挤在中央一列，用户给的美术一张没用上；
+   且整机此前是按**竖屏**调的适配（前提就是错的）。本批只动主菜单，全局横屏返工另立批次。
+   布局权威 = 志怪塔UI重设计\主菜单demo.html：顶标题 / 左石碑列 / 右符纸行 / 全屏背景。
+   入口 9 → 5：删 startEndless(无尽) / viewAchievements(成就) / viewStats(统计) / showTutorial(引导)
+   —— 用户原话『真实的9个按键只要是那5个入口没提的，就默认删去』。**函数本体一律保留**，只摘入口。
+   签到整块取消（用户：『没有实际意义』）。
+   ⚠️ 版本号字符串必须留在 <h2> 里（提交.py 的 read_version() 读 原型.html，但三处保持一致是项目惯例）。
+   ⚠️ 「续」不再按 hasRunSave() 条件渲染，而是**总是渲染、无存档则 disabled** —— 石碑忽隐忽现会破构图。 */
 function showStartScreen(){
   setBg('menu'); setBGM('menu');
-  showOverlay(`<h2>志 怪 塔 · v0.64.2</h2>
-    <p>中式志怪 · Roguelike 卡牌爬塔原型<br>三幕九 Boss（每幕随机其一），每过一幕敌人更强。</p>
-    ${signInPanelHTML()}
-    <p style="font-size:13px">击败妖怪解锁【志怪图鉴】，每个精怪都藏有一段志怪故事。<br>篝火/商店很稀有，得规划路线才能绕到；精英掉更多金币但更危险。</p>
-    ${hasRunSave()?`<button class="btn" onclick="continueRun()">继续上次爬塔</button>`:''}
-    <button class="btn" onclick="startGame()">开始爬塔</button>
-    ${SAVE.endlessUnlocked?`<button class="btn ghost" onclick="startEndless()">镇妖塔 · 无尽模式</button>`:''}
-    <button class="btn ghost" onclick="viewBestiary()">志怪图鉴 · 已收录 ${SAVE.unlocked.length}/${BESTIARY_ORDER.length}</button>
-    <button class="btn ghost" onclick="viewAchievements()">成就 · 收藏（卡背 / 头像框）</button>
-    <button class="btn ghost" onclick="viewStats()">数据统计</button>
-    <button class="btn ghost" onclick="viewLeaderboard()">排行榜</button>
-    <button class="btn ghost" onclick="showTutorial(1)">新手引导</button>
-    <button class="btn ghost" onclick="showSettings()">设置</button>`);
+  showOverlay(`<div class="menu-root">
+    <div class="menu-bgwrap"><div class="menu-bgimg a"></div><div class="menu-bgimg b"></div></div>
+    <div class="menu-veil"></div>
+
+    <div class="menu-stage">
+      <div class="menu-titlebar menu-tier" style="--i:0">
+        <h2 class="menu-title">${artImg('ui/menu/topic.png','<span class="menu-fb">志怪塔</span>','menu-art')}
+          <small>· v0.69.0</small></h2>
+      </div>
+
+      <div class="menu-col-stele menu-tier is-main" style="--i:1">
+        <button class="menu-hit is-start" aria-label="开始爬塔"
+                onclick="steleBreak(this,startGame)"><span class="menu-artbox">${artImg('ui/menu/start.png','<span class="menu-fb">入塔</span>','menu-art')}${menuShardsHTML('ui/menu/start.png')}</span></button>
+        <button class="menu-hit is-continue" aria-label="继续上次爬塔"${hasRunSave()?'':' disabled'}
+                onclick="steleBreak(this,continueRun)"><span class="menu-artbox">${artImg('ui/menu/continue.png','<span class="menu-fb">续</span>','menu-art')}${menuShardsHTML('ui/menu/continue.png')}</span></button>
+      </div>
+
+      <div class="menu-row-talis menu-tier is-list" style="--i:2">
+        <button class="menu-hit is-collection" aria-label="志怪图鉴"
+                onclick="talisOpen(this,viewBestiary)"><span class="menu-artbox">${artImg('ui/menu/collection.png','<span class="menu-fb">图鉴</span>','menu-art')}</span></button>
+        <button class="menu-hit is-leaderboard" aria-label="排行榜"
+                onclick="talisOpen(this,viewLeaderboard)"><span class="menu-artbox">${artImg('ui/menu/leaderboard.png','<span class="menu-fb">排行</span>','menu-art')}</span></button>
+        <button class="menu-hit is-setting" aria-label="设置"
+                onclick="talisOpen(this,showSettings)"><span class="menu-artbox">${artImg('ui/menu/setting.png','<span class="menu-fb">设置</span>','menu-art')}</span></button>
+      </div>
+    </div>
+
+    <div class="menu-flash"></div>
+  </div>`, false, 'menu-scene');
+  /* ⚠️ 轮换必须在 showOverlay **之后**：showOverlay 会把 overlayContent.innerHTML 整个换掉，
+     先调的话 menuBgRotate 写的是**上一帧那个已被丢弃的** .menu-bgimg.a —— 索引照样前进（所以
+     看起来"在轮换"），但屏幕上永远是空的，背景直接消失。实测症状：bgimg 的 computed
+     background-image 恒为 none，而单独调一次 menuBgRotate() 却立刻正常。 */
+  menuBgRotate();   // 每次进主界面前进一格背景：开游戏 / 死亡回菜单 / 设置重开都走这里
 }
 /* ===================== 菜单 / 重开 / 退出 ===================== */
 function openMenu(){
@@ -438,7 +496,7 @@ function showSettings(){
     <p style="margin-top:16px">结束回合软提示：<b style="color:${SETTINGS.endTurnHint!==false?'var(--green)':'var(--red)'}">${SETTINGS.endTurnHint!==false?'开':'关'}</b></p>
     <button class="btn ghost" onclick="toggleEndTurnHint()">${SETTINGS.endTurnHint!==false?'关闭软提示':'开启软提示'}</button>
     <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
-    <button class="btn ghost" onclick="openMenu()">返回菜单</button>`);
+    <button class="btn ghost" onclick="openMenu()">返回菜单</button>`, undefined, 'scroll-scene');
 }
 function setMusicVol(v){
   SETTINGS.musicVol=+v/100; persistSettings();
@@ -531,6 +589,18 @@ function quitToMenu(){ saveRun(); showStartScreen(); }
 document.getElementById('endTurn').addEventListener('click', endTurn);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
 document.getElementById('viewDeck').addEventListener('click', viewDeck);
+/* 战报栏开关 —— 关 ⇄ 右侧抽屉。
+   v0.70.0 试玩期这里是三态循环（关 → 抽屉 → 底部条），用来拿真机比手感；
+   v0.71.0 用户定稿为抽屉，底部条那套 CSS 已删（见原型.html 矮屏档）。
+   按钮只在矮屏档显示（基准档的 #log 是常驻左栏，不需要它）。 */
+(function(){
+  const b=document.getElementById('logToggle'); if(!b) return;
+  b.addEventListener('click', function(){
+    const cls=document.body.classList;
+    if(cls.contains('log-open')){ cls.remove('log-open'); b.textContent='战报'; }
+    else { cls.add('log-open'); b.textContent='战报·抽屉'; }
+  });
+})();
 document.addEventListener('keydown', function(e){
   if(!G) return;
   const overlay=document.getElementById('overlay');
@@ -551,5 +621,6 @@ loadSettings();
 applyLowSpec();
 numPrewarm();   // v0.61.41：四档字形开局就预加载 —— 否则本局第一次飘字必然回落文字
 applyCosmetics();
+pileInit();     // v0.69.0：把 back.png / side.png 的地址写进 CSS 变量（抽牌堆·弃牌堆）
 trackLaunch();
 document.addEventListener('DOMContentLoaded', showStartScreen);

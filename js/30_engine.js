@@ -404,7 +404,7 @@ function showWangyouChoice(){
   // v0.61 B8：快照存「卡对象引用」而非下标 —— 同帧若还有缠绕/业火等 splice 手牌，下标会错位（弃错牌 / undefined.type）
   const pool=G.hand.slice();
   G.wangyouPool=pool;
-  const cards=pool.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="drinkWangyou(${i})">${cardBody(c)}</div>`).join('');
+  const cards=pool.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="drinkWangyou(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>忘 忧 汤</h2><p>孟婆的汤还萦绕在喉头——选择 1 张手牌「饮下」（弃置，进弃牌堆而非封印），或拒绝（受 <b style="color:var(--red)">8 点真实伤害</b>）。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="refuseWangyou()">拒绝 · 受 8 点真实伤害</button>`);
 }
 function drinkWangyou(i){
@@ -439,7 +439,7 @@ function renderDiscardSelect(){
   const s=G.discardSelect; if(!s) return;
   const cards=G.hand.map((c,i)=>{
     const sel=s.picked.includes(i);
-    return `<div class="card ${RCOLOR[c.rarity]} ${sel?'selected':''}" onclick="toggleDiscardPick(${i})">${cardBody(c)}${sel?'<div style="color:var(--green);margin-top:4px">✓ 已选</div>':''}</div>`;
+    return `<div class="card has-frame ${RCOLOR[c.rarity]} ${sel?'selected':''}" onclick="toggleDiscardPick(${i})">${cardBody(c)}${sel?'<div class="card-extra" style="color:var(--green)">✓ 已选</div>':''}</div>`;
   }).join('');
   showOverlay(`<h2>焚 符 · 弃 牌</h2><p style="color:var(--red)">可弃任意张手牌，每弃 1 张触发一次效果（已选 <b>${s.picked.length}</b> 张）</p><div class="reward-cards">${cards}</div>
     <button class="btn" onclick="confirmDiscardSelect()">${s.picked.length>0?`弃掉 ${s.picked.length} 张`:'请选择要弃的牌'}</button>
@@ -488,7 +488,7 @@ function startHuofuSelect(srcCard, up, target, dmg){
 }
 function renderHuofuSelect(){
   const s=G.huofuSelect; if(!s) return;
-  const cards=G.hand.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickHuofuDiscard(${i})">${cardBody(c)}</div>`).join('');
+  const cards=G.hand.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickHuofuDiscard(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>火 符 · 弃 牌</h2><p style="color:var(--red)">挑选 <b>1</b> 张手牌弃掉；若弃掉的是【鬼怪牌】，获得 ${s.up?2:1} 点【尸气】</p><div class="reward-cards">${cards}</div>
     <button class="btn ghost" onclick="cancelHuofuSelect()">取消（不弃牌 · 退符文 · 火符回手）</button>`);
 }
@@ -531,10 +531,10 @@ function cancelExchangeSelect(){
 function renderExchange(){
   const ex=G.exchange; if(!ex) return;
   if(ex.phase==='pickHand'){
-    const cards=G.hand.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickExchangeHand(${i})">${cardBody(c)}</div>`).join('');
+    const cards=G.hand.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickExchangeHand(${i})">${cardBody(c)}</div>`).join('');
     showOverlay(`<h2>易物 · 选一张手牌</h2><p>选择一张要交换出去的手牌（还剩 <b>${ex.times}</b> 次交换）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃继续交易</button>`);
   } else if(ex.phase==='pickNew'){
-    const cards=ex.pool.map((c,i)=>`<div class="card ${RCOLOR[c.rarity]}" onclick="pickExchangeNew(${i})">${cardBody(c)}</div>`).join('');
+    const cards=ex.pool.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickExchangeNew(${i})">${cardBody(c)}</div>`).join('');
     showOverlay(`<h2>易物 · 牌堆随机三张</h2><p>选一张换入你的手牌</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃交换</button>`);
   }
 }
@@ -579,7 +579,7 @@ function pickExchangeNew(i){
 }
 function renderRetainSelect(){
   const s=G.retainSelect; if(!s) return;
-  const cards=G.hand.map((c,i)=>{ const sel=s.picked.includes(i); return `<div class="card ${RCOLOR[c.rarity]} ${sel?'selected':''}" onclick="toggleRetainPick(${i})">${cardBody(c)}${sel?'<div style="color:var(--green);margin-top:4px">✓ 已选</div>':''}</div>`; }).join('');
+  const cards=G.hand.map((c,i)=>{ const sel=s.picked.includes(i); return `<div class="card has-frame ${RCOLOR[c.rarity]} ${sel?'selected':''}" onclick="toggleRetainPick(${i})">${cardBody(c)}${sel?'<div class="card-extra" style="color:var(--green)">✓ 已选</div>':''}</div>`; }).join('');
   showOverlay(`<h2>守一 · 保留手牌</h2><p>选择最多 <b>${s.need}</b> 张牌保留到下一回合（已选 <b>${s.picked.length}</b> 张），其余弃掉。</p><div class="reward-cards">${cards}</div>
     <button class="btn" onclick="confirmRetainSelect()">确认保留</button>
     <button class="btn ghost" onclick="skipRetainSelect()">不保留 · 全部弃掉</button>`);
@@ -659,6 +659,13 @@ function startBattle(keys){
       const _sw = G.drawPile.find(c=>c.id==='shi_wang');
       if(_sw){ G.drawPile = G.drawPile.filter(c=>c!==_sw); G.hand.push(_sw); log('【尸王】已在手牌，随时可召唤'); }
     }
+    /* v0.69.0：startTurn 之前先 render 一次。startTurn 里玩家侧的 gainBlock/heal
+       （见本文件 :390/:392 的 playFx('block'|'heal','player')）跑在它自己的 render 之前，
+       而本函数此前**通篇没有 render** —— 一局的第一场战斗打到这儿时 #player-panel 还是空的
+       （上一屏是英雄选择/地图），fxAnchorRect('player') 量到 0×0 ⇒ 掉进「屏幕中心」兜底
+       ⇒ 玩家在**屏幕正中**看到一个 96px 的小特效，而不是贴在自己身上。
+       G.enemies 到这里已经就绪，render 幂等无害；这也顺带成为两个牌堆计数徽章的首次填充点。 */
+    if(typeof render==='function') render();
     if(!tutorialSeen()) startGuidedTutorial(); startTurn();
   };
   if(G.enemies.some(e=>e.boss)) bossIntro(beginBattle);
@@ -873,6 +880,11 @@ function finishEndTurn(){
   // 守一保留 + 尸王（赶尸人）：未打出的【尸王】留手，不弃（打出/死亡后才入循环）
   const kept=G.hand.filter(c=>c.retain || (G.hero==='ganshiren' && c.id==='shi_wang'));
   G.discard=G.discard.concat(G.hand.filter(c=>!c.retain && !(G.hero==='ganshiren' && c.id==='shi_wang')));
+  /* v0.69.0：弃牌堆徽章在这里刷一次。本函数接下来是 triggerSummons → enemyAct，
+     **全程没有 render()**（要等下一次 startTurn 才渲染），徽章会整整滞后一段敌人行动；
+     而「这回合弃了多少张」正是玩家此刻最想看的数。
+     只刷徽章、**不调 render()** —— render 会连手牌一起重排，把弃牌动作的视觉反馈抹掉。 */
+  refreshPileCounts();
   kept.forEach(c=>c.retain=false);
   G.hand=kept;
   aliveEnemies().forEach(e=>{ if(e.curse>0) e.curse=Math.max(0,e.curse-2); }); // v0.60：诅咒每回合末掉 2 层
@@ -908,7 +920,23 @@ function resolveEndBlock(){
   if(bk>0){
     if(G.endBlockKind==='A'){ const q=Math.floor(bk/2); if(q>0){ gainShiqi(q); log(`卸甲生元：${bk} 点格挡转为 ${q} 点【尸气】`); } }
     else if(G.endBlockKind==='C'){ const __hc=G.xiejiaHealCap||99; const __hb2=Math.min(__hc,bk); heal(__hb2); log(`卸甲生元：${bk} 点格挡转为 ${__hb2} 点生命（上限 ${__hc}）`); }
-    else if(G.endBlockKind==='D'){ const cAmt=Math.min(6, Math.floor(bk/2)); if(cAmt>0){ const re=randomAlive(); if(re){ applyCurse(re,cAmt); log(`卸甲生元：${bk} 点格挡转为 ${cAmt} 层【诅咒】`); } } }
+    /* v0.68.1：D 列两处修正（用户报「诅咒满了并不会转回护盾」）——
+       ① 旧写法 `Math.min(6, Math.floor(bk/2))` 把**要转化的层数先裁到 6** 才递给 applyCurse：
+          24 格挡只递 6 层进去，剩下 18 格挡既没变成诅咒、也没回成格挡，凭空蒸发。
+          上限 6 该由 applyCurse 去卡 —— 只有让它看见真实的层数，超出部分才会走它的溢出分支
+          转回格挡，这正是卡面写的「敌人满 6 层时溢出部分会转回格挡」。
+       ② 转回来的那笔格挡**活不过下一行**：本函数紧跟着就是 startTurn，而 startTurn 里
+          「非武僧格挡清零」会把刚发的格挡抹掉 —— 玩家浮字看到 +N 格挡，下回合一点用不上。
+          改投 pendingBlockStart（移形换影 / 反震 用的就是这条「上回合结转」通道），
+          下一回合开始再发回来，格挡才真的能挡刀。两处缺一不可。 */
+    else if(G.endBlockKind==='D'){
+      const want=Math.floor(bk/2);
+      const __before=G.block;
+      if(want>0){ const re=randomAlive(); if(re){ applyCurse(re,want); log(`卸甲生元：${bk} 点格挡转为 ${want} 层【诅咒】`); } }
+      const back=Math.max(0, G.block-__before);   // applyCurse 溢出分支当场 gainBlock 回来的那份
+      if(back>0){ G.block=__before; G.pendingBlockStart=(G.pendingBlockStart||0)+back;
+        log(`卸甲生元：诅咒溢出 ${back} 层转回格挡（下回合开始生效）`); }
+    }
   }
   G.block=Math.max(0, G.block-bk);
   G.endBlockKind=null; G.xiejiaHealCap=0;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.64.2</title>
+<title>志怪塔 · 原型 v0.71.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -13,19 +13,53 @@
     --font-kai:"KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  body{font-family:"Microsoft YaHei","PingFang SC",sans-serif; color:var(--text); min-height:100vh; min-height:100dvh;
+  /* v0.71.0 整页上锁 —— 用户点名的「严重问题」：界面永远不能上下滑。
+     原先 html 根本没有规则，body 只有 min-height:100vh/100dvh + overscroll-behavior:none
+     （那两条都**不阻止滚动**），#app 纯自然高度 ⇒ documentElement 一律可滚。
+     ⚠️ 用 height:100% 而**不是** min-height:100dvh：
+        dvh 在手机地址栏收放时会跳变，body 跟着长高 ⇒ 「上锁了却还能滑」又回来。
+        html/body 的 100% 走的是初始包含块（固定视口），不随地址栏变。
+     ⚠️ html 也铺底色：手机地址栏收起时 body 下沿会露出 ~几十 px，
+        不铺就是一条白边。
+     ⚠️ 这一条只禁掉**视口层面**的滚动，不改任何版面 ——
+        各个面板自己的内部滚动（.panel / 图鉴 / 地图 / 锻造 / 战报）全部照旧。 */
+  html{height:100%; background:#120e0b;}
+  body{font-family:"Microsoft YaHei","PingFang SC",sans-serif; color:var(--text); height:100%; min-height:0; overflow:hidden;
     background:
       radial-gradient(circle at 15% 12%, rgba(178,59,46,.10), transparent 40%),
       radial-gradient(circle at 85% 8%, rgba(224,179,65,.06), transparent 35%),
       linear-gradient(180deg, #241d16 0%, var(--ink) 30%, #120e0b 100%);
     background-attachment:fixed;
     touch-action:manipulation; overscroll-behavior:none; -webkit-user-select:none; user-select:none;}
-  #app{max-width:1060px; margin:0 auto; padding:14px 14px 30px; position:relative; z-index:1;}
+  /* v0.71.0：`#app` 变成**定高弹性列** —— 上锁之后还得「装得下」，光裁不装等于把用户
+     看不到的东西藏起来（用户要的是「显示完整」）。三件事缺一不可：
+       height:100%      —— 钉死在视口高；body 已上锁，这里不会溢出
+       flex column      —— 让 #field 成为唯一可伸缩的那一项，把余量/亏空都吃掉
+       overflow:hidden  —— 最后一道：万一仍超出，裁掉而不是长出滚动条
+     ⚠️ 加了 display:flex 之后 margin 不再折叠，实测 h1(6px) / #topbar(10px) 的
+        下边距本来就是相邻同向、折叠与否都一样，所以基准档间距零变化。 */
+  #app{max-width:1060px; margin:0 auto; padding:10px 14px 8px; position:relative; z-index:1;
+       height:100%; display:flex; flex-direction:column; overflow:hidden;}
   @media (max-width:520px){ #app{padding:6px 6px 24px;} }
-  h1.title{font-family:var(--font-kai); font-size:28px; letter-spacing:6px; color:var(--gold); margin-bottom:6px; text-align:center; text-shadow:0 0 18px rgba(224,179,65,.25); position:relative;}
+  /* v0.68.2：`body.at-menu` = "屏幕背后是主菜单，不是战局" ⇒ 整个战斗界面（#app）不渲染。
+     ⚠️ 这条是实拍抓出来的，不是推理出来的：`_drvmenu3.js --q "&pull=300&anim=1&at=250"`
+        那一帧里，卷轴面板四周明明白白透出**战斗 HUD**（结束回合按钮、红色灵气珠「3」、出牌提示行）。
+     根因不在本批 —— `#app` 从开局起就一直挂在 DOM 里、z-index:1 压在 #bg 之上；v0.65.0 之前
+        **全靠主菜单那层不透明底盖住**才看不见。而图鉴/排行榜/设置走的是普通半透明底，
+        `.menu-scene` 一摘，战斗界面就露出来了 —— 偏偏这正是用户点名要做的那条交互路。
+     ⚠️ 为什么不做在「#overlay 挂 menu-scene 时」：那层底会被 showOverlay 摘掉（图鉴要的就是
+        摘掉它），而"背后有没有战局"这件事跟当前开的是哪个面板无关 —— 挂在 body 上才与面板解耦。
+     ⚠️ 为什么不用 display:none 之外的办法：`#app` 里全是会自己跑的东西（飘字定时器、
+        震屏 class、血条宽度过渡），visibility:hidden 会让它们继续算，纯属白烧。
+     ⚠️ 唯一写入口是 setBg（见 js/10_audio.js）—— 它本来就是"背后该铺什么"的owner：
+        setBg('menu') 亮起，其余任何一张背景（actN / map / camp 三种）都清掉。**风险为零**：
+        战局里每一次进战斗、进地图都必经 setBg，卡在 at-menu 只可能是"人确实在主菜单"。
+     安全网：continueRun 落进 camp/shop/unknown 三支时不经过 setBg，故在那三支前显式清一次。 */
+  body.at-menu #app{display:none;}
+  h1.title{flex:0 0 auto; font-family:var(--font-kai); font-size:28px; letter-spacing:6px; color:var(--gold); margin-bottom:4px; text-align:center; text-shadow:0 0 18px rgba(224,179,65,.25); position:relative;}
   h1.title small{color:var(--dim); font-size:12px; letter-spacing:0; font-family:"Microsoft YaHei",sans-serif;}
 
-  #topbar{display:flex; flex-wrap:wrap; gap:12px; align-items:center; background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:10px 14px; margin-bottom:10px;}
+  #topbar{flex:0 0 auto; display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:7px 14px; margin-bottom:6px;}
   .stat{font-size:14px;}
   .stat b{color:var(--gold); font-size:16px;}
   .stat-xuenu b{color:var(--red);}
@@ -72,9 +106,21 @@
   .stat-deck{color:var(--dim);}
   .stat-deck b{color:var(--dim);}
 
-  #field{display:flex; gap:14px; align-items:flex-start;}
-  #col-main{flex:1 1 auto; min-width:0;}
-  .battle{display:flex; gap:14px; align-items:flex-end; margin-bottom:4px;}
+  /* ⚠️ `align-items:flex-start` **不许改成 stretch**：基准档 #log 曾经靠它 + sticky
+     钉在顶部，现在 #log 已改 fixed 不再受影响，但 .battle / #player-panel 的对齐
+     仍吃这条（改成 stretch 会把玩家面板拉到与敌人面板等高，整块下移）。 */
+  #field{display:flex; gap:14px; align-items:flex-start; flex:1 1 auto; min-height:0;}
+  /* 弹性列的第二段：`#col-main` 吃掉 #field 的全部余量，内部再按「敌人区可缩、
+     手牌与提示行不可缩」分配。min-height:0 是**必须**的 —— 少了它 flex 子项
+     不会缩到内容高以下，上面那层的 overflow:hidden 就白写（项目里已有三处
+     正确示范：.map-scroll / .map-frame / .map-viewport）。 */
+  #col-main{flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column;}
+  /* ⚠️ `.battle` 是 `flex:0 0 auto`（**不许**改成可缩的 1 1 auto）：
+     它内部 `align-items:flex-end` ⇒ 一旦被压到比敌人矮，敌人的**头**会从 .battle
+     顶边戳出去，而 #topbar 是 static、绘制顺序在前 ⇒ 敌人直接盖在顶栏上，
+     再被 #app{overflow:hidden} 裁掉一截。要省高度只能缩立绘本身（见矮屏档的
+     clamp 那套），不能靠压缩容器。 */
+  .battle{display:flex; gap:14px; align-items:flex-end; margin-bottom:2px; flex:0 0 auto;}
   #player-panel{flex:0 0 200px; background:transparent; border:none; border-radius:0; padding:0; text-align:center; display:flex; flex-direction:column; align-items:center; position:relative; z-index:2100;}
   .hero-art-box{width:100%; height:186px; margin-bottom:4px; border-radius:0; overflow:visible; background:transparent; display:flex; align-items:flex-end; justify-content:center; position:relative;}
   .hero-art-box::after{content:''; position:absolute; bottom:-2px; left:8%; right:8%; height:3px; background:radial-gradient(ellipse at center, rgba(224,179,65,.28), transparent 80%); pointer-events:none; border-radius:50%;}
@@ -92,7 +138,26 @@
   #player-panel .hpbar{width:100%; margin:4px 0;}
   #player-panel .badges{justify-content:center;}
   .prelics{font-size:11px; color:var(--gold); margin-top:8px; line-height:1.8;}
-  #enemy-panel{display:flex; flex-direction:row-reverse; flex-wrap:wrap; justify-content:flex-start; align-items:flex-end; gap:24px 30px; flex:1 1 auto; min-width:0; padding:2px 2px 0;}
+  /* v0.70.0：净空与后排上抬幅度改成**从 CSS 读的数**，不再由 JS 写死。
+     为什么必须改：原先 JS 直接写 `_epEl.style.paddingTop`（内联样式），
+     而内联样式 CSS 打不过（除非 !important）⇒ 矮屏档没法把它归零，
+     5 个敌人时这 62px 会白吃掉矮屏预算的两成。
+     现在 JS 只写 `--headroom`，矮屏档写一条同特异度、书写更后的
+     `#enemy-panel{padding-top:2px}` 就能盖掉，**JS 完全不需要知道当前是哪个档**。
+     `--rise-unit` 同理：它是后排敌人上抬幅度（RISE_LIFT）的**倍率**，
+     基准档 =1（与今天逐像素相同），矮屏档压小。
+     ⚠️ RISE_LIFT 数组与 battleHeadroom() 本身一个字都不能动 ——
+        冒烟逐条钉死了 0/42/60/20 与 max(RISE_LIFT[i%len])，倍率只能加在调用点。 */
+  :root{--rise-unit:1;}
+  /* ⚠️ isolation:isolate 不是装饰，是**层叠闸**。
+     每个 .enemy 带**内联** `z-index:2000-上抬量`（js/50_ui.js 的 refreshRiseK 那一段，
+     用来让后排压前排）。1500+ 级别的内联 z-index 在**同一个层叠上下文**里会完胜
+     #log(9) 和 #hand(1) ⇒ 抽屉一开，战报栏和手牌都被敌人盖住
+     （用户实机报的「战报背景是透明的、字和敌人重叠、卡牌盖不住敌人」就是这一条，
+      不是背景色问题 —— #log 的背景是实心 var(--ink2)）。
+     isolate 把内部那个 2000 关在自己家里，只在**敌人之间**排序，对外整体落到 0 级。
+     ⚠️ 不许改成 position:relative+z-index —— 那会改 .enemy::after 热区的定位解析链。 */
+  #enemy-panel{isolation:isolate; display:flex; flex-direction:row-reverse; flex-wrap:wrap; justify-content:flex-start; align-items:flex-end; gap:24px 30px; flex:1 1 auto; min-width:0; padding:var(--headroom,2px) 2px 0;}
   .enemy{position:relative; background:transparent; border:none; border-radius:0; padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; text-align:center; flex:0 0 auto; min-width:0; transition:filter .12s ease; -webkit-tap-highlight-color:transparent;}
   /* v0.61.20(P7)：触屏下用伪元素把点击热区撑到 ≥120px 宽、上下各多 18px。
      伪元素不参与 DOM，elementFromPoint 仍返回宿主 .enemy，所以 enemyAtPoint() 一行不用改。
@@ -104,10 +169,26 @@
   .enemy.e-normal{width:184px;}
   .enemy.e-elite{width:280px;}
   .enemy.e-boss{width:372px;}
-  .enemy .eportrait.e-summon{height:93px;}
-  .enemy .eportrait.e-normal{height:186px;}
-  .enemy .eportrait.e-elite{height:280px;}
-  .enemy .eportrait.e-boss{height:372px;}
+  /* v0.71.0：立绘高度换成**一条 vh 连续公式**，取代原来写死的四个定值。
+     为什么非改不可（无头实拍，`--headroom` 与灌满的战报都在位的满负荷场景）：
+     基档（>700）原来四个高度全是定值、**视口再矮也不缩**，于是 boss 单只（372px）
+     把 1280×720 顶穿 **117px**、精英+小怪顶穿 89px，而且溢出一直拖到 vh≈860 才归零
+     （1366×768 顶穿 ≈70px）。整页上锁之后这些多出来的像素**不再变成滚动条**，
+     而是被 #app 直接裁掉 —— 那正是用户点名要消灭的状态换了个样子回来。
+     公式与原来 T-mid 那条同构，但**锚点从 700 抬到 880**：
+        calc(基档值 + (100vh - 880px) × k)
+     vh ≥ 880 时它算出 ≥ 基档值，被 clamp 上界压回基档值 ⇒
+     **1920×1080 与 1440×900 逐像素不变**（只有 701–860 这一段会缩）。
+     斜率按基数等比（k = 0.871 × 基档值 ÷ 372）⇒ 缩的是**整族**，
+     体型差 boss:elite:normal:summon = 1:0.75:0.5:0.25 在任何视口都保住。
+     下限同样近似等比（≈0.26 倍），只在 vh<600 才生效。
+     ⚠️ 这四条**同时管基档与 T-mid**（T-mid 原来那四条已删）—— 两档必须共用同一个函数。
+        各写一套的话，vh=701 与 vh=700 会算出差上百像素的两个值，拖窗口时敌人瞬间胀缩。
+     ⚠️ 别再退回「每个档一套台阶写法」：那正是这四条的成因。 */
+  .enemy .eportrait.e-summon{height:clamp(24px,calc(93px + (100vh - 880px)*0.2178),93px);}
+  .enemy .eportrait.e-normal{height:clamp(48px,calc(186px + (100vh - 880px)*0.4355),186px);}
+  .enemy .eportrait.e-elite{height:clamp(73px,calc(280px + (100vh - 880px)*0.6555),280px);}
+  .enemy .eportrait.e-boss{height:clamp(97px,calc(372px + (100vh - 880px)*0.871),372px);}
   .enemy .enemyhpbar{width:134px;}
   .enemy.e-elite .enemyhpbar{width:194px;}
   .enemy.e-boss .enemyhpbar{width:262px;}
@@ -176,9 +257,30 @@
   /* 锁破裂过渡中的节点：真实图标先藏着，等碎片飞散（t≥0.20）那一帧再显形 + 描边淡入 */
   .map-node .node-ico.o-reveal{opacity:0; transition:opacity .18s ease;}
 
-  #turn-summary{margin-bottom:6px; padding:8px 12px; background:rgba(224,179,65,.08); border:1px solid var(--gold); border-radius:8px; font-size:13px; color:var(--gold); line-height:1.6;}
+  /* v0.71.0：收成一行。它是「上一回合结算」的回顾条，`finishEndTurn` 后**常驻**
+     （不是一闪而过的提示），在 1280×720 上是一块实打实的 43px ——
+     而同一段文字 `js/30_engine.js:1003` 已经写进战报了，不需要这么大的版位。 */
+  #turn-summary{flex:0 0 auto; margin-bottom:4px; padding:5px 12px; background:rgba(224,179,65,.08); border:1px solid var(--gold); border-radius:8px; font-size:12.5px; color:var(--gold); line-height:1.45;}
   #turn-summary:empty{display:none;}
-  #log{flex:0 0 236px; min-width:0; height:clamp(360px, calc(100vh - 190px), 660px); overflow-y:auto; background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:10px 12px; font-size:11.5px; color:var(--dim); line-height:1.6; box-sizing:border-box; position:sticky; top:8px; word-break:break-word;}
+  /* v0.71.0 定稿：战报栏**全档只有这一种形态**（关 ⇄ 右侧抽屉）。
+     为什么不保留「基准档常驻左栏」这个旧默认：实测 base 档 3 敌时**每一个桌面分辨率都竖滚**
+     （1280×720 +365 / 1366×768 +317 / 1440×900 +185 / 1600×900 +185 / 1920×1080 +5），
+     成因完全相同 —— 左栏要吃 236px 宽，敌人面板只剩 568px，而 3 个敌人写死 184px
+     + 2×30px 间隙 = 612 > 568 ⇒ **flex-wrap 折成两排**，`.battle` 从 332 涨到 664。
+     而 pickFightFrom 每场必出 2–3 敌（没有 1 敌的战斗），所以这不是边缘情况。
+     改 fixed 后它脱离弹性流，236px 全还给敌人（#enemy-panel 568→818），不再折行。
+     ⚠️ 位移用 transform 是安全的：红线只钉 `.hand-area` 与 `#hand`
+        （它们一旦有 transform 就成了 position:fixed 后代的包含块、会摧毁 #fx-layer
+         的视口坐标系），`#log` 不是 #fx-layer 的祖先。
+     ⚠️ 别改成「留在 #field 里但宽度为 0」那种写法 —— 只要它还是 flex 子项，
+        那 14px 的 gap 照吃，flex-basis 也仍参与分配。 */
+  #log{position:fixed; top:0; right:0; bottom:0; left:auto; height:auto; max-height:none;
+       width:min(300px,68vw); min-width:0; overflow-y:auto; box-sizing:border-box;
+       background:var(--ink2); border:1px solid var(--ink3); border-radius:0;
+       padding:10px 12px; font-size:11.5px; color:var(--dim); line-height:1.6;
+       z-index:9; transform:translateX(100%); transition:transform .22s ease;
+       word-break:break-word;}
+  body.log-open #log{transform:none;}
   #log .log-head{color:var(--gold); font-family:var(--font-kai); font-size:14px; letter-spacing:2px; margin-bottom:6px; border-bottom:1px solid var(--ink3); padding-bottom:4px;}
   #log .log-sep{color:#e0b060; font-weight:bold; margin:5px 0 2px;}
   /* v0.61.20(P5)：战报筛选 chip（伤害 / 获得 / 状态），空选=全部 */
@@ -190,12 +292,80 @@
   #log .log-chip.on{background:var(--gold); border-color:var(--gold); color:#241a10; font-weight:bold;}
   #log .log-line{margin:1px 0;}
 
-  #hand{display:flex; flex-wrap:nowrap; min-height:200px; align-items:flex-end; justify-content:center; padding:8px 0 16px; touch-action:none;}
-  .hand-area{display:flex; align-items:flex-end; gap:8px;}
+  #hand{flex:0 0 auto; display:flex; flex-wrap:nowrap; min-height:200px; align-items:flex-end; justify-content:center; padding:6px 0 var(--hand-pad-b,6px); touch-action:none; position:relative; z-index:1;}
+  .hand-area{flex:0 0 auto; display:flex; align-items:flex-end; gap:8px;}
   .hand-area #hand{flex:1 1 auto; min-width:0;}
   .hand-area #endTurn{flex:0 0 auto; align-self:center; writing-mode:vertical-rl; letter-spacing:5px; font-size:17px; padding:16px 10px; min-height:132px;}
   /* v0.61.20(P1)：结束回合软提示 —— 竖排按钮左侧浮一枚小气泡，不挡手牌也不弹窗 */
-  .hand-area .endcol{position:relative; flex:0 0 auto; align-self:center; display:flex; align-items:center;}
+  /* v0.71.0：+ `z-index:2`。`#end-turn-hint` 是 `right:calc(100% + 10px)` 向左伸的气泡，
+     必然横穿手牌区；而 `#hand{position:relative; z-index:1}`（:295）在同一个层叠上下文里
+     把它压住 ⇒ 「还有 N 张可打」被卡面切成半截（矮屏档卡片还有 hover 的 scale 上浮，更严重）。
+     `.endcol` 的盒子只有气泡（`pointer-events:none`）和结束按钮两个子项，抬到 2 既让气泡
+     盖住手牌，又**不会**抢走手牌点击。 */
+  .hand-area .endcol{position:relative; z-index:2; flex:0 0 auto; align-self:center; display:flex; align-items:center;}
+  /* ===== v0.69.0 抽牌堆 / 弃牌堆（手牌两端）=====
+     版面：.hand-area = [弃牌堆][灵符][手牌][结束回合][抽牌堆]。
+     两堆是**真的 flex 兄弟**，不是绝对定位 —— 这样它们自动与 #hand 同底对齐，
+     也不会压到灵符球和结束按钮（那两块都在 flex 流里，绝对定位会直接盖上去）。
+
+     ⚠️ 宽度从哪来（v0.69.0 实测，别照直觉算）：#hand 是 `flex-wrap:nowrap`，
+        而手牌 `.card` 默认 flex-shrink:1 ⇒ **牌会自己变窄去适配容器**。
+        所以两堆吃掉的 2×49 + 2×8(gap) = 114px 并不会让手牌「溢出」，
+        只会让每张牌窄一点（1280 档 8 张：#hand 611→497、卡宽 131→116，仍然刚好铺满）。
+        ⇒ plan §C5 里「必须把 #log 从 236 收到 200 才放得下」和「margin-left 要改 -76」
+          这两条是**按「不收缩」推算的，与浏览器实测不符**，已按实测作废 ——
+          两个旋钮都没动，战报栏宽度和手牌重叠度保持原样。 */
+  .hand-area{--pile-w:50px; --pile-h:76px; --pile-spine:5px; --hand-pad-b:6px;}
+  .pile{position:relative; flex:0 0 auto; align-self:flex-end;
+        margin-bottom:var(--hand-pad-b,6px);
+        width:calc(var(--pile-w) + var(--pile-spine)); height:var(--pile-h);}
+  /* 侧棱（一摞牌的书口）：木纹来自 side.png。
+     ⚠️ 必须「高度对齐 + 宽度裁切」，不能 100% 100% 硬塞：
+        side.png 是 227×583 的**竖**板，它的 583 是照 front.png 的 583 做的，
+        **不是**照 back.png 的 389 ⇒ 两张图高度天然不匹配。
+        硬塞 100% 100% 会把木纹**横向压 26 倍**：纹理变成竖向涂抹，
+        上下那两条倒角亮边被拉粗成两条黑杠 —— 反而比不放图更难看。
+        正确做法：auto 100% 等比缩到堆高（227 → 227×66/583 ≈ 25.7px 宽），
+        再靠 background-position 只露最左 / 最右的一条。 */
+  .pile-slab{position:absolute; bottom:0; width:var(--pile-spine); height:100%;
+             transform-origin:bottom center;   /* 旋转绕**底边**：一摞牌是坐在桌上的，
+                                                  底边必须留在原地、只有上沿歪出去，
+                                                  绕中心转会连底边一起甩开，看着像几块漂着的木板 */
+             background-color:#6b4a2e;                 /* 图没加载出来时的兜底木色，不是装饰 */
+             background-image:var(--pile-side-img,none);
+             background-repeat:no-repeat; background-size:auto 100%; border-radius:1px;}
+  /* 顶面：完整牌背 back.png（257×389，比例 0.6607）。堆是 44×66（0.6667），
+     差 0.9% —— 直接铺满，肉眼不可辨，不值得为它引入含空边的 auto 100%。 */
+  .pile-face{position:absolute; top:0; width:var(--pile-w); height:100%;
+             background-color:#2a2119;
+             background-image:var(--pile-back-img,none);
+             background-repeat:no-repeat; background-size:100% 100%;
+             border-radius:3px; box-shadow:0 2px 6px rgba(0,0,0,.55);}
+  .pile-n{position:absolute; right:1px; bottom:0; font-size:11px; font-weight:bold;
+          color:var(--gold); text-shadow:0 1px 3px #000,0 0 5px #000; pointer-events:none;}
+  /* 左右朝向：书口一律朝**外**（背离手牌），两堆才像夹住手牌的两摞书；
+     朝里会顶着手牌，看着像把书摆反了。所以两张图的 background-position 必须逐堆写：
+     弃牌堆在左端 ⇒ 露木板的**左**缘；抽牌堆在右端 ⇒ 露**右**缘。 */
+  .pile-discard .pile-slab{left:0;  background-position:left center;}
+  .pile-discard .pile-face{left:var(--pile-spine);}
+  .pile-draw    .pile-slab{right:0; background-position:right center;}
+  .pile-draw    .pile-face{right:var(--pile-spine);}
+  /* 整齐 vs 凌乱：抽牌堆是「码齐的一摞」，弃牌堆是「随手一扔」—— 这是区分两堆的主要视觉线索
+     （两堆顶面都是同一张 back.png，不看侧棱分不出来）。
+     ⚠️ 姿态一律**写死在 CSS 里**，绝不用 JS 的 Math.random()：render() 一回合要跑好几次，
+        随机化会让弃牌堆每帧抖动，看着像在抽搐。
+     ⚠️ 用 rotate / translate **独立属性**，把 transform 通道整个让给将来的抽牌/弃牌动画
+        （.card 的 transform 已经被扇形展开占满了，见 §C6）。 */
+  .pile-draw .pile-slab{translate:0 0;}
+  .pile-draw .pile-slab:nth-child(2){translate:2px 0;}
+  .pile-draw .pile-slab:nth-child(3){translate:4px 0;}
+  /* 弃牌堆：高度与角度都各不相同 ⇒ 上沿参差、底边仍压在桌上。
+     translate 只往**外**挪 1~3px（不是 5~7px）—— 挪太多那几片会与顶面脱开，
+     看着像书旁边散落的两块木板，而不是「一摞扔歪的牌」；凌乱感交给 rotate 和高度差。 */
+  .pile-discard .pile-slab:nth-child(1){translate:-3px 0; height:96%; rotate:-9deg;}
+  .pile-discard .pile-slab:nth-child(2){translate:-1px 0; height:88%; rotate: 6deg;}
+  .pile-discard .pile-slab:nth-child(3){translate:-2px 0; height:93%; rotate:-4deg;}
+  .pile-discard .pile-face{rotate:-4deg; translate:-4px 1px;}
   #end-turn-hint{position:absolute; right:calc(100% + 10px); top:50%; transform:translateY(-50%); white-space:nowrap; pointer-events:none;
     background:rgba(24,18,12,.95); border:1px solid var(--gold); color:var(--gold); border-radius:8px; padding:6px 12px; font-size:12.5px; letter-spacing:1px;
     box-shadow:0 4px 14px rgba(0,0,0,.55); animation:hintPulse 1.8s ease-in-out infinite;}
@@ -205,6 +375,10 @@
   @keyframes hintPulse{0%,100%{opacity:.78;} 50%{opacity:1;}}
   .title-actions{position:absolute; right:4px; top:50%; transform:translateY(-50%); display:flex; gap:8px;}
   .title-actions .btn{min-width:0; padding:6px 12px; font-size:13px;}
+  /* v0.71.0：战报栏全档统一成右侧抽屉（理由见基档 #log 那条），所以这个开合按钮
+     **全档都要显示**。v0.70.0 那条「基准档隐藏」的前提（基准档 #log 是常驻左栏）
+     已被实机量测推翻 —— 它正是桌面三敌换行竖滚的成因。 */
+  .title-actions #logToggle{display:inline-block;}
   .rune-display{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; padding-bottom:14px; min-width:110px;}
   .rune-icon{width:105px; height:105px; object-fit:contain; filter:drop-shadow(0 0 8px rgba(180,140,220,.45));}
   .rune-fallback{font-size:90px; color:rgba(180,140,220,.6); line-height:1; display:none;}
@@ -219,6 +393,37 @@
   .card .cdesc{flex:1; color:#4a3f2f; line-height:1.32; font-size:10.5px; padding:0 8px; overflow:hidden; word-break:break-word;}
   .card .ctype{font-size:9px; color:#7a6c52; padding:3px 8px 6px; letter-spacing:1px;}
   .reward-cards .card{height:auto; min-height:200px;}
+  /* v0.71.0：`.card.selected` 此前**全项目没有任何规则** —— 全仓 `.selected` 只有
+     `.enemy.selected`（:197）。而选牌小窗（焚符/火符/守一/忘忧汤/易物 五处共用
+     `.reward-cards` 模板）里 `renderXxxSelect()` 拼的就是 `.card.selected`
+     （js/30_engine.js:442 / :582）⇒ **点一张牌，除了右下角一行 9.5px 的「✓ 已选」小字，
+     卡面零反馈**。这就是用户说的「选牌小窗看着奇怪」最可能的根因。
+     视觉与 `.enemy.selected` 同族（金边 + 外发光），但**只动 border-color 与 box-shadow**：
+     `.card{border:2px solid transparent}` ⇒ 改颜色不引起任何位移；
+     ⚠️ 绝不能碰 `transform` —— `#hand .card` 的 `rotate(var(--rot))` 占着这条通道，
+     在扇形手牌上叠一个位移会把整条弧线打乱。
+     ⚠️⚠️ 真正在起作用的是 box-shadow 那圈**实心金环**，不是 border-color：
+     `.card.has-frame{border:0}`（:461）把边框宽度归零了，而选牌小窗里的卡**全都带
+     `has-frame`**（`cardBody()` 拼的）⇒ `border-color` 算了也是白算（改宽度会顶内容 2px，
+     选中/取消时卡面会跳）。`box-shadow` 的扩散环画在盒子**外面**，零布局代价、
+     观感与 2px 实心边框一致 ⇒ 保留 `border-color` 只为 `cardFrameFail()` 摘掉
+     `has-frame` 之后那条退路。
+     ⚠️⚠️⚠️ 上面这段说明**必须留在同一个注释块里**。曾经在「打乱。」后面多写了一个
+     注释结束符（星号加斜杠），把「选择器必须是…」那几行变成了裸 CSS ——
+     解析器把它们当成一个**非法选择器**一路吞到规则真身的 `{`，整条规则被判无效丢弃
+     ⇒ 金环根本没生效。
+     ⚠️⚠️⚠️⚠️ 连**写「注释结束符」这三个字都不许用那两个字面字符** —— 本注释自己
+     就踩过一次：说明里直接写出那两个字符，等于当场把注释关掉，后半段全变裸 CSS，
+     连 `#overlay` 的 `position:fixed` 都被一起吃掉（面板跑到 y=1145）。
+     凡是要提这件事，一律用「注释结束符」描述，绝不写出字符本身。
+     冒烟与越界表都发现不了（CSS 静默失败），是靠 `_drvclip.js` 的 `dialog=N` 模式读
+     `.card.selected` 的 `getComputedStyle` 才挖出来的。
+     ⚠️ 选择器必须是 `.reward-cards .card.selected`（0,3,0）而**不能**是 `.card.selected`（0,2,0）：
+     `.card.r-blue/.r-purple/.r-gold` 那三条（:414-416）**特异度相同 (0,2,0) 且写在后面**
+     ⇒ 平局看顺序，稀有度边框会把金色选中边框整个盖掉，只有白卡看得见选中效果
+     （发光还在，但「金边」这个主信号没了）。多带一层 `.reward-cards` 就压过去了 ——
+     而这五处选牌弹窗本来就都在 `.reward-cards` 里（js/30_engine.js:444/492/583…）。 */
+  .reward-cards .card.selected{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold), 0 6px 20px rgba(0,0,0,.55), 0 0 24px rgba(224,179,65,.55);}
   #hand .card{margin-left:-62px; transform-origin:bottom center; transform:rotate(var(--rot,0deg));}
   #hand .card:first-child{margin-left:0;}
   #hand .card:hover{z-index:40; transform:rotate(var(--rot,0deg)) translateY(-28px) scale(1.3);}
@@ -231,10 +436,109 @@
   .card.r-purple{border-color:var(--purple);} .card.r-purple .cname{color:#7a3fa0;}
   .card.r-gold{border-color:var(--gold);} .card.r-gold .cname{color:#b8860b;}
   .upgrade-preview{color:#8c2b21; margin-top:5px; padding-top:5px; border-top:1px dashed #c9a; font-weight:bold;}
-  .exhaust-tag{display:inline-block; font-size:10px; color:#fff; background:var(--red2); border-radius:4px; padding:1px 6px; margin:4px 0 2px; letter-spacing:1px;}
+  /* v0.69.0 改「朱砂封条」。
+     ⚠️ 旧版是 in-flow 的 `display:inline-block; margin:4px 0 2px` ⇒ 在 .cplate 的 flex 列里
+        实打实吃掉约 16px，把 .cdesc 从 2 行压到 1 行 —— **这才是「被封印的牌描述看不全」的根因**
+        （不是字号问题）。改成绝对定位后**零行高成本**。
+     ⚠️ 原来的 `margin:4px 0 2px` 必须删掉：绝对定位下 margin 依然生效，会把封条顶偏。
+     left/right/top 复用图窗（.cart-wrap）那组实测百分比 ⇒ 三档分辨率自适应：
+        left 11.69% / right 12.99%（=100−11.69−75.32）/ top = 图窗垂直中心 − 8px（封条半高）。
+     ⚠️ verify_dist.py 有「注释配平」闸 —— 写注释时**绝不能在正文里写出注释起止符那两个
+        字面符号**。CSS 注释**不嵌套**：正文里一旦出现结束符，浏览器**当场就把注释关掉**，
+        正文后半句 + 原本的结束符一起变成**裸 CSS**，被解析器当成非法选择器前奏、
+        一路吞到下一个 `{`，**把紧随其后的那条真规则整个丢弃**（本行下方 `.exhaust-tag`
+        就曾被这么吞掉过 —— 而那条规则正是本条注释要解释的那个修复，等于注释把修复吃了）。
+        要提这两个符号，一律用「注释起止符」四个字描述，不写出字符本身。 */
+  .exhaust-tag{position:absolute; left:11.69%; right:12.99%;
+    top:calc(12.86% + 35.16%/2 - 8px); height:16px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; color:#fff; letter-spacing:2px; z-index:4;
+    background:repeating-linear-gradient(-45deg, rgba(150,26,22,.92) 0 8px, rgba(110,18,15,.92) 8px 16px);
+    border-top:1px solid rgba(255,220,180,.5); border-bottom:1px solid rgba(0,0,0,.5);
+    box-shadow:0 2px 6px rgba(0,0,0,.6); pointer-events:none;}
   /* 消耗牌标记：左侧红条（扇形手牌只露左缘，靠它一眼认出）+ 右上角「消耗」角标 */
   .card .oneuse-bar{position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--red2); z-index:3;}
   .card .oneuse{position:absolute; top:5px; right:5px; z-index:3; font-size:9px; line-height:1.35; color:#fff; background:var(--red2); border-radius:4px; padding:1px 5px; letter-spacing:1px; box-shadow:0 1px 3px rgba(0,0,0,.55); cursor:help;}
+
+  /* ===== 卡牌换真美术牌框（ui/card/front.png）=====
+     旧卡面是 CSS 画的（纸底 + 顶部色条 + 80px 图窗 + 米黄文字区）。现在改挂真牌框图。
+
+     窗位是**实测**的，不是目测：原图 385x583 上量出
+       图窗    x  45..335  y  75..280 → left 11.69%  top 12.86%  w 75.32%  h 35.16%
+       铭牌窗  x  42..341  y 344..508 → left 10.91%  top 59.01%  w 77.66%  h 28.13%
+     量法踩了两个坑，都记在这儿免得重走：
+       · 按亮度分不开「图窗」与「木框」—— 两者都暗（木纹 lum 35~57，图窗也在这个区间），
+         阈值一放就整张卡连成一片；
+       · 按颜色找「米黄铭牌窗」会被木框上的**金描边**污染 —— 窗内米黄 (207,175,109) 与
+         描边金 (188,154,88) 是同一色系，bbox 直接圈住整张卡。
+     最后是**按金色描边的位置**定的边界（描边是细线，位置干净）。
+
+     ⚠️ 上面那批旧规则**一条都没删**：牌框图加载失败时 cardFrameFail() 会摘掉 .has-frame，
+        卡片原样退回 v0.67 的纯 CSS 版面。所以这一整段只做「有牌框时」的覆写。 */
+  /* ⚠️ 必须 border:0 —— 全站 `*{box-sizing:border-box}`，`.card` 那圈 2px 边框会把
+     子元素的定位基准从 132 缩到 128（子元素按 **padding box** 定位，而量窗位时用的
+     getBoundingClientRect 给的是 **border box**）。实测窗位因此整体缩了约 4.5px/385，
+     两个窗加起来偏 9px —— 卡图会离开图窗的金边、文字会离开铭牌窗。 */
+  .card.has-frame{border:0; border-radius:5px; background:none;}
+  .card.has-frame::before{height:3px; opacity:.9;}
+  /* 牌框底图：绝对定位铺满，z-index:0 压在所有内容下面 */
+  .card .cframe{position:absolute; left:0; top:0; width:100%; height:100%; display:block; z-index:0; pointer-events:none;}
+  .card.has-frame .cart-wrap{position:absolute; left:11.69%; top:12.86%; width:75.32%; height:35.16%;
+    background:#2a2119; flex:none;}
+  /* 文字三件套包一层 .cplate：
+     无牌框时 display:contents ⇒ 孩子照旧直接参与 .card 的 flex 列排版（与 v0.67 完全一致）；
+     有牌框时 .cplate 才变成铭牌窗里那个绝对定位的窄列。
+     用 display:contents 而不是「有条件地在 JS 里加/不加这层」—— 因为加载失败是**异步**的，
+     结构不能事后补。 */
+  .card .cplate{display:contents;}
+  /* v0.69.0 版面收紧：目标是让描述装下 3 行（原为 2 行）。
+     ⚠️ 百分比 padding 是按**包含块宽度**解析的，不是高度 —— 132px 宽的卡上 `2.6%` 纵 padding
+        实际是 3.43px 而不是 3.43% 卡高。所以「缩小纵 padding」这件事比看上去省得多：
+        纵合计 8.184px → 6.864px，而每行可用宽度反而从 91.95 涨到 93.53。
+     验算（默认档 132×200，铭牌窗高 56.26）：
+        56.26 − 6.864(padding) − 15.375(cname 行盒) = 34.02 ≥ 3 × 11.25(cdesc 行高) ✓
+        每行 93.53 / 9 ≈ 10.4 字 ⇒ 整卡 3 行 × 10 字 = 30 字。
+     ⚠️ 余量只有 0.27px ⇒ 字号与 padding 是拿无头 Chrome 实拍扫参定的，别凭感觉改。
+       （⚠️ 这段注释会**原样进产物**（CSS 注释不被混淆器剥掉，JS 注释才会）⇒
+        这里不许写仓库内部路径，否则打包的隐私自检每次都报一笔。） */
+  .card.has-frame .cplate{display:flex; flex-direction:column; position:absolute;
+    left:10.91%; top:59.01%; width:77.66%; height:28.13%; box-sizing:border-box;
+    padding:2.6% 3.4% 2.6%; overflow:hidden; z-index:1;}
+  .card.has-frame .cname{padding:0 0 1px; font-size:12.5px; letter-spacing:0; line-height:1.15;}
+  .card.has-frame .cdesc{flex:1; font-size:9px; line-height:1.25; padding:0; overflow:hidden;}
+  /* 类型标签放进图窗与铭牌窗之间那条空木带。
+     ⚠️ v0.69.0 纠正一个先前的错推论：旧版把它写成 .cplate 里的 `bottom:100%`，
+        并以为它「吃掉了约 11px 行高」。**两条都不成立**：
+        · 它是 position:absolute ⇒ 不产生 flex item、**不占任何行高**；
+        · .cplate 有 overflow:hidden，而 bottom:100% 把它整个顶到 .cplate 上沿**外侧**
+          ⇒ 它 100% 被裁掉，**本来就没被看见过**。
+        所以这里不是「腾地方」，是「把 .ctype 从裁剪区里救出来」。
+     `top:48.02% / height:10.99%` 与 .cart-wrap 下沿、.cplate 上沿**同源**（都由 385x583
+     原图的实测像素推出：图窗 y 75..280 → 12.86%+35.16%=48.02%，铭牌窗 y 344 → 59.01%）
+     ⇒ 三档分辨率下**自适应，不用各写一遍**。那条木带实测高 21.98 / 17.36 / 14.95px，
+     而 .ctype 字号本来就是 8.5 / 7.5 / 7px ⇒ 塞得进，字号不用改。
+     ⚠️ 必须保持 `.card.has-frame` 前缀 —— 裸 `.ctype{…}` 会污染 `.relic .ctype`（遗物与灵汁卡在用）。
+     用 flex 居中而不是 text-align:center —— 绝对定位 + 明确高度时 text-align 管不了垂直方向。 */
+  .card.has-frame .ctype{position:absolute; left:0; right:0; top:48.02%; height:10.99%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:8.5px; padding:0; letter-spacing:1px;
+    color:#d8bd82; text-shadow:0 1px 2px rgba(0,0,0,.8);}
+  /* 关键词【】在旧卡面上是金褐色，但铭牌窗本身就是米黄 —— 原色压上去几乎看不见。
+     换深琥珀才有对比度。 */
+  .card.has-frame .kw{color:#8a5a14; border-bottom-color:rgba(110,80,30,.5);}
+  /* 费用牌：木框左上角，压在回纹角饰上（用户 2026-09-28 选定）。
+     改黄铜币 —— 旧版是「墨黑底 + 金字」，那是在米黄纸底上才压得住；
+     现在底色是深色木纹，墨黑会直接糊掉。 */
+  .card.has-frame .cost{top:4.5%; left:3.6%; width:23px; height:23px; font-size:13px;
+    background:radial-gradient(circle at 35% 30%, #f2d894, #c9a44e 62%, #96762c);
+    color:#2a2119; border:1.5px solid #5e4415;
+    box-shadow:0 1px 3px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.45);
+    text-shadow:0 1px 0 rgba(255,255,255,.3);}
+  /* 卡面下方多出来的那行小字（「✓ 已选」/ 商店价格）。
+     有牌框时把它放到铭牌窗下沿那条空木带上 —— 不加这条的话它会成为 .card 里
+     唯一在流内的孩子，被挤到左上角压住费用牌。 */
+  .card.has-frame > .card-extra{position:absolute; left:8%; right:8%; bottom:3.2%; text-align:center;
+    font-size:9.5px; line-height:1.2; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,.75);}
   .relic{width:150px; min-height:110px; background:var(--ink2); color:var(--text); border-radius:8px; padding:10px; display:flex; flex-direction:column; cursor:pointer; border:2px solid var(--ink3); text-align:left; font-size:12px; transition:border .1s;}
   .relic:hover{border-color:var(--gold);}
   .relic .cname{font-family:var(--font-kai); font-weight:bold; font-size:15px; margin-bottom:6px; color:var(--gold); letter-spacing:1px;}
@@ -242,23 +546,57 @@
   .relic .ctype{font-size:10px; color:var(--dim); margin-top:6px; letter-spacing:1px;}
 
   #actions{display:flex; justify-content:center; gap:12px; padding:10px 0; flex-wrap:wrap;}
-  button.btn{background:var(--red); color:#fff; border:none; padding:10px 26px; border-radius:8px; font-size:16px; cursor:pointer; letter-spacing:2px;}
+  button.btn{background:var(--red); color:#fff; border:none; padding:10px 26px; border-radius:8px; font-size:16px; cursor:pointer; letter-spacing:2px;
+    transition:background .15s ease, transform .1s ease, box-shadow .15s ease;}
   button.btn:hover{background:var(--red2);}
-  button.btn.ghost{background:transparent; border:1px solid var(--ink3); color:var(--dim); font-size:13px; padding:8px 16px; letter-spacing:1px;}
+  button.btn:active{transform:scale(.97);}
+  button.btn:disabled{opacity:.5; cursor:not-allowed; filter:grayscale(.5);}
+  button.btn:disabled:hover{background:var(--red);}
+  button.btn.ghost{background:transparent; border:1px solid var(--ink3); color:var(--dim); font-size:13px; padding:8px 16px; letter-spacing:1px;
+    transition:color .15s ease, border-color .15s ease, background .15s ease, transform .1s ease;}
   button.btn.ghost:hover{color:var(--text); border-color:var(--dim);}
+  button.btn.ghost:active{transform:scale(.97);}
+  button.btn:focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
 
-  #overlay{position:fixed; inset:0; background:rgba(10,8,6,.88); display:flex; align-items:center; justify-content:center; z-index:10;}
-  #overlay.hidden{display:none;}
+  /* v0.65.0：小窗开合过渡。#overlay.hidden 原为 display:none（不可过渡 ⇒ 硬切），
+     改为 opacity + visibility 延迟翻（淡出完才隐藏，无定时器、无竞态）。
+     ⚠️ **类名 .hidden 必须保留** —— 它是语义查询，不只样式：
+        js/50_ui.js:1335 加 / :1333 摘 / js/60_boot.js:155 showCardZoom 直接摘 /
+        js/60_boot.js:537 用 !contains('hidden') 判断「有没有面板开着」（Esc 与交互引导依赖）
+        / 冒烟夹具同查（别在这段里写仓库内部路径 —— 打包.py 的隐私自检会当成泄漏，
+        verify_dist 的「不含 仓库文件」门禁会 FAIL；基线里本文件此类引用数是 0）。三处触碰点全是 classList.add/remove/contains，无一处依赖 display。
+     visibility:hidden 仍阻止命中测试 ⇒ 关着时不挡点击。 */
+  #overlay{position:fixed; inset:0; background:rgba(10,8,6,.88); display:flex; align-items:center; justify-content:center; z-index:10;
+    opacity:0; visibility:hidden;
+    transition:opacity .22s ease, visibility 0s linear .22s;}
+  #overlay:not(.hidden){opacity:1; visibility:visible; transition:opacity .28s cubic-bezier(.2,.8,.2,1);}
+  /* 面板推入。挂 #overlayWrap 而非 .panel —— .panel 是滚动容器（max-height:88vh/overflow-y:auto），
+     不动它就完全避开「transform 与 overflow 交互」这类坑。
+     门闩 .ov-enter 由 showOverlay 每次重算（见 js/50_ui.js）：刷新同一场景不重播。 */
+  @keyframes overlayIn{from{opacity:0; transform:translateY(10px) scale(.985);} to{opacity:1; transform:none;}}
+  #overlay.ov-enter #overlayWrap{animation:overlayIn .3s cubic-bezier(.2,.8,.2,1) both;}
+  /* 地图有自己的相机进场（js/50_ui.js mapCamInit 2000ms），不要叠一层。
+     取消语义是安全的：.map-scene 加上后本条生效 ⇒ 运行中的动画被取消 ⇒ 直接落到终态。 */
+  #overlay.ov-enter.map-scene #overlayWrap{animation:none;}
   #overlay .close-x{position:absolute; top:8px; right:8px; width:34px; height:34px; line-height:32px; text-align:center; font-size:20px; color:#fff; background:var(--red); border:1px solid #5a1d16; border-radius:50%; cursor:pointer; font-weight:bold; z-index:11;}
   #overlay .close-x:hover{background:var(--red2);}
   #overlayWrap{position:relative; max-width:620px; width:94%;}
+  /* v0.71.0：选英雄屏**放不下**（无头实测 #overlay .panel 内部溢出：640×360 → 62px、
+     844×390 → 33px、**1280×720 → 20px**）—— 用户报的「选英雄的时候它显示不完全所以导致
+     它还能上下滑动」在桌面档同样成立。根因不是字号，是**宽度**：四张 `.relic` 各 150px
+     + 3×10px 间距 = 630px，而 `.panel` 内容宽只有 566px（620 限宽 − 26×2 padding）
+     ⇒ 折成 3+1 两行，高度 503px 顶穿 88dvh 的 633px。
+     所以这里只给**选英雄屏**放宽限宽到 700px（内容宽 648 ≥ 630 ⇒ 一排放下，高度回到单行
+     ~255px），其余面板一律维持 620px 不变 —— 用户已验收过的面板观感不动。
+     ⚠️ `.relic` 的 150px 与 `.panel` 的 padding 都没动 ⇒ 卡片本身的长相零变化。 */
+  #overlay.hero-scene #overlayWrap{max-width:700px;}
   .panel{background:var(--ink2); border:1px solid var(--ink3); border-radius:12px; padding:26px; text-align:center; width:100%; max-height:88vh; max-height:88dvh; overflow-y:auto; -webkit-overflow-scrolling:touch;}
   .panel h2{font-family:var(--font-kai); font-size:24px; color:var(--gold); letter-spacing:3px; margin-bottom:14px;}
   .panel p{color:var(--dim); line-height:1.8; margin-bottom:14px;}
   .reward-cards{display:flex; gap:10px; justify-content:center; margin:14px 0; flex-wrap:wrap;}
   .kwlist{text-align:left; font-size:13px; line-height:1.9;}
   .kwlist b{color:var(--gold);}
-  .hint{font-size:12px; color:var(--dim); text-align:center; margin-top:4px;}
+  .hint{flex:0 0 auto; font-size:12px; color:var(--dim); text-align:center; margin-top:2px;}
   /* v0.61 B12：浮字改为小堆叠容器（最多 3 条并存，同类不再互相顶掉） */
   #float-msg{position:fixed; left:50%; top:34%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none; z-index:20;}
   #float-msg .fm{font-family:var(--font-kai); font-size:26px; color:var(--gold); text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.8); letter-spacing:3px; white-space:nowrap; opacity:0; animation:floatUpItem 1.6s ease-out forwards;}
@@ -296,6 +634,253 @@
   #overlay.map-scene{background:#0b0a09;}
   #overlay.map-scene #overlayWrap{width:100%; height:100%; max-width:none;}
   #overlay.map-scene .panel{background:none; border:0; border-radius:0; padding:0; max-height:none; overflow:visible; text-align:left;}
+
+  /* —— v0.66.0 主菜单重做：全屏横屏 + 真美术 + 三背景轮换 + 石碑崩碎 / 符纸卷轴 ——
+     起因：v0.65.0 虽已整屏，但按钮仍是 CSS 画的、挤在中央一列，用户给的真美术一张没用上；
+     且整机此前是按**竖屏**调的适配 —— 前提就是错的，目标形态是 16:9 横屏（桌面与手机横屏统一）。
+     布局权威 = 志怪塔UI重设计\主菜单demo.html（顶标题 / 左石碑列 / 右符纸行 / 全屏背景）。
+     ⚠️ 素材入库时已裁掉透明边距（画布 = 可见内容），所以尺寸一律按裁后实测比例给：
+        start 483×1028 / continue 511×936 / 符纸 57~64×224~238 / topic 2015×709。
+        石碑与符纸都是**细高**的（0.25~0.55:1），用 width 定尺寸会在矮屏把整列撑爆
+        （640×360 实测 top 算出负值）⇒ 一律**以高度驱动**（vh + height + width:auto）。
+     三层覆盖与地图一致：① #overlay 换不透明底；② #overlayWrap 铺满、去掉限宽；③ .panel 退化成纯容器。
+     ⚠️ #overlay.menu-scene .panel 带 id ⇒ 优先级高于下面 @media 里的 .panel{padding:16px 10px}，
+        不受书写顺序影响（map-scene 今天能正常工作也是这个原因）。 */
+  #overlay.menu-scene{background:#0b0a09;}
+  /* ⚠️ 三条 `height:100%` 必须成链，缺一条背景就只铺中间一条带（实测：只写 wrap 时
+     #overlay 862px、.menu-root 只有 516px，上下两条露出 #0b0a09 纯黑，不叫整屏场景）。
+     链：#overlay(定高) → #overlayWrap(height:100%) → .panel(height:100%) → .menu-root(height:100%)。
+     最后那条 `.panel{height:100%}` 是最容易漏的一环 —— `.panel` 默认 auto 高，
+     百分比高度拿不到确定参照时会退化成内容高，于是 .menu-root 也跟着塌。 */
+  #overlay.menu-scene #overlayWrap{width:100%; height:100%; max-width:none;}
+  #overlay.menu-scene .panel{background:none; border:0; border-radius:0; padding:0; height:100%; max-height:none; overflow:visible; text-align:center;}
+  /* 场景根：CSS 渐变兜底；真背景由 menuBgRotate() 内联铺在 .menu-bgimg 上（有则增强，无则回退，同 #bg 约定）。
+     ⚠️ 这里**不再**居中排版 —— 全部按键由 .menu-stage 里的绝对定位组承载，不然「全屏铺开」就退回了中间一列。 */
+  .menu-root{position:relative; width:100%; height:100%; overflow:visible;
+    background:radial-gradient(ellipse at 50% 30%, #1a1714, #0d0c0a 70%);}
+  /* —— 背景双缓冲 ——
+     A 是当前图，B 预留给交叉淡入（本轮只有硬切，所以 B 常空）。
+     ⚠️ 呼吸动画**必须挂在 .menu-bgimg 上，不能挂 .menu-root** —— 挂根节点会把石碑/符纸/标题一起缩放。 */
+  .menu-bgwrap{position:absolute; inset:0; z-index:0; overflow:hidden;}
+  .menu-bgimg{position:absolute; inset:0; opacity:0;
+    background-size:cover; background-position:center; background-repeat:no-repeat;}
+  /* 只给 A 片上呼吸：`infinite alternate` 让它推近推远，22s 极慢 —— 要的是「画面在活着」，不是能看出的缩放 */
+  .menu-bgimg.a{opacity:1; transform-origin:50% 46%; animation:menuBgBreathe 22s ease-in-out infinite alternate;}
+  /* 暗角（抄 demo 的 .vignette）+ 上下压暗渐变：保证**任何一张**背景上按钮都压得住。
+     用 inset 阴影而不是图片 ⇒ 零素材、零体积。 */
+  .menu-veil{position:absolute; inset:0; z-index:1; pointer-events:none;
+    box-shadow:inset 0 0 200px rgba(0,0,0,.9);
+    background:linear-gradient(180deg, rgba(10,8,6,.74), rgba(10,8,6,.16) 26%, rgba(10,8,6,.20) 60%, rgba(10,8,6,.84));}
+  .menu-stage{position:absolute; inset:0; z-index:2; overflow:visible;}
+  /* 演出期间封住整个舞台 —— 没有这条，1 秒演出窗口里连点会调两次 startGame()（见 steleBreak 的 MENU_BUSY） */
+  .menu-stage.is-busy{pointer-events:none;}
+  /* 标题：topic.png 是横幅书法（2015×709 ⇒ 2.84:1），按宽度定尺寸 */
+  /* ⚠️ 标题栏用 left:0;right:0 + text-align 居中，**不能用 left:50%+translateX(-50%)**：
+     它是 .menu-tier，入场动画 menuRise 的 `to{transform:none}` 带 forwards 填充，
+     会**永久压掉**基样式里的 transform —— 实测 1280×720 下标题左沿量到 640（=left:50% 处），
+     等于"只居中了一半身位"，右沿顶到 947，肉眼明显偏右。换成 text-align 后不依赖 transform。 */
+  .menu-titlebar{position:absolute; top:5%; left:0; right:0; z-index:3; pointer-events:none; text-align:center;}
+  .menu-title{margin:0; line-height:0; font-family:var(--font-kai); color:var(--gold);}
+  /* v0.68.1：标题放大到 1.5 倍 + 「特效渲染字迹边框」（用户：「应该在放大 1.5 倍左右，并且有特效渲染字迹边框」）。
+     尺寸改**高度驱动**：topic.png 是 2.84:1 的横幅，只给宽度的话矮屏会出事 ——
+     640×360 上 36vw = 230px 宽 ⇒ 81px 高，标题栏底沿压到 99px，离石碑只剩 24px 余量。
+     加一层 min(...,25vh) 让矮屏优先按高度收，宽屏才吃 vw。
+     ⚠️ 「字迹边框」只能用 **filter:drop-shadow** —— 它是按 **alpha 轮廓**扩散的，描的正是笔画的边。
+        box-shadow / text-shadow 对 <img> 无效（图里没有"字形盒"可描）。
+        四层叠出「贴边亮线 + 朱砂内辉 + 暗金外晕 + 落影」，再用 4.5s 缓慢呼吸让它活起来。 */
+  .menu-title .menu-art{width:auto; height:clamp(88px, min(12.6vw, 25vh), 240px);
+    display:block; margin:0 auto;
+    filter:drop-shadow(0 0 1px rgba(255,214,140,.9))
+           drop-shadow(0 0 6px rgba(184,46,36,.55))
+           drop-shadow(0 0 16px rgba(168,139,58,.42))
+           drop-shadow(0 2px 6px rgba(0,0,0,.9));
+    animation:menuTitleEdge 4.5s ease-in-out infinite alternate;}
+  .menu-title small{display:block; line-height:1.6; margin-top:4px; color:var(--dim);
+    font-size:12px; letter-spacing:1px; font-family:"Microsoft YaHei",sans-serif;}
+  /* —— 左下两块石碑：**左右并排**（v0.68.1，用户：「这两个石碑图标你应该左右摆放」）——
+     旧版是竖列（续在上、入塔在下，照抄 demo 的 bottom:15% / 48%）。改成 row + align-items:flex-end：
+     两块石碑**底沿对齐**，「谁高谁大」因此一眼可读 —— 这正是用户要的
+     「入塔的图标要明显比续的图标大一点」。DOM 顺序也换成入塔在前：主 CTA 先读到，续退成右手边的次级项。 */
+  .menu-col-stele{position:absolute; left:6%; bottom:14%; z-index:3; margin:0;
+    display:flex; flex-direction:row; align-items:flex-end; gap:clamp(14px, 2.4vh, 34px);}
+  /* —— 右锚符纸行 ——
+     demo 用 right:18%/12%/6% 逐个百分比平铺 —— 小尺寸 16:9（如 640×360）下三张会互相重叠。
+     改成 flex+gap 后任何尺寸都不重叠，且「间距均匀」由 gap 保证，不用手算三个百分比。 */
+  .menu-row-talis{position:absolute; top:0; right:6%; z-index:3; margin:0;
+    display:flex; flex-direction:row; align-items:flex-start; gap:2.2vw;}
+  /* —— 图片按钮 ——
+     显式清掉 <button> 的默认底/边框/padding（不清会在真美术上压出一块灰底）。
+     min-width/min-height 补热区：符纸在矮屏只有 ~24px 宽，视觉不变但热区回到 48px。 */
+  .menu-hit{display:flex; align-items:center; justify-content:center;
+    min-width:48px; min-height:48px; padding:0; margin:0; line-height:0;
+    background:none; border:0; cursor:pointer; overflow:visible; color:inherit;
+    -webkit-tap-highlight-color:transparent;
+    transition:transform .16s ease-out;}
+  /* 图的**紧贴盒**：碎片与 sway 都要与图 1:1 对齐，所以不能让它们直接铺在按钮上
+     （按钮有 min-width:48px，会比图宽 ⇒ clip-path 的百分比就对不上石头了） */
+  .menu-artbox{position:relative; display:block; line-height:0;}
+  .menu-hit .menu-art{display:block; width:auto; pointer-events:none;}   /* height 由各档分别给 */
+  /* v0.68.1：两块石碑都**放大到两倍**（用户：「目前这个尺寸放在界面上会显得比较小，两个都起码放大到两倍」），
+     入塔继续压着续一头（52vh vs 40vh，上限 600 vs 452），把主 CTA 顶出来。 */
+  .menu-hit.is-continue .menu-art{height:clamp(184px, 40vh, 452px);}   /* 511×936 ⇒ 0.55:1 */
+  .menu-hit.is-start .menu-art{height:clamp(240px, 52vh, 600px);       /* 483×1028 ⇒ 0.47:1 */
+    animation:menuBreathe 2.5s ease-in-out infinite;}
+  /* 三张符纸：挂在绳上的轻微摆动。
+     v0.68.1 两处调整（用户：「可以再小一点 然后浮动的动画可以更轻盈 和 自然一点」）：
+       · 尺寸收到约 0.65 倍（250 → 170 上限），免得跟放大的石碑抢视线；
+       · 飘动交给 menuSway 的新曲线（幅度收到 1deg 内 + 叠垂直起伏 + 7s 一圈），
+         错峰改用**负延迟** —— 正延迟会让第 2、3 张先呆立 2.3s / 4.6s 才动，负延迟一上来就在动。 */
+  .menu-hit.is-collection .menu-art,
+  .menu-hit.is-leaderboard .menu-art,
+  .menu-hit.is-setting .menu-art{height:clamp(58px, 15vh, 170px);      /* 57~64×224~238 ⇒ ~0.26:1 */
+    transform-origin:top center; animation:menuSway 7s ease-in-out infinite;}
+  .menu-hit.is-leaderboard .menu-art{animation-delay:-2.3s;}
+  .menu-hit.is-setting .menu-art{animation-delay:-4.6s;}
+  .menu-hit:active{transform:scale(.96);}
+  .menu-hit:disabled{cursor:not-allowed; filter:grayscale(1) opacity(.45);}
+  .menu-hit:focus-visible{outline:2px solid var(--gold); outline-offset:4px;}
+  /* ⚠️ 悬停只是**桌面增强** —— 手机横屏没有 hover，任何信息都不能只存在于 hover 里，
+     触屏一律靠上面的 :active 兜底。用 @media(hover) 包住，免得触屏出现"按下后悬停态卡住"。 */
+  @media (hover:hover){ .menu-hit:hover{transform:scale(1.04);} }
+  /* 符纸「纸下拉」：挪到**按下**（demo 里这是 hover 态）。
+     ⚠️ 这条必须写在上面 menuSway 那几条**之后** —— 同特异度 (0,3,0)，靠书写顺序取胜，
+        写前面会被 sway 盖掉，下拉就完全看不见。 */
+  /* v0.68.1：符纸按下 = 「向下拉然后回弹」（用户原话）。旧版只下沉 3px、150ms，
+     在真美术上几乎看不见。新版拉 12px 并配合 scaleY 把纸**拽长**
+     （transform-origin 是 top center ⇒ 是"从钉子上被拽下来"，不是整体平移），再带回弹收回。
+     ⚠️ 时长必须与 js/50_ui.js 里 talisOpen 的定时器一致：定时器短于动画会在回弹中途切走场景
+        （纸卡在半途），长于动画则白等。两处一起改。 */
+  .menu-hit.tug .menu-art{animation:menuTug .42s cubic-bezier(.4,0,.5,1);}
+  /* —— 石碑崩碎：同一张图切 5 片 ——
+     每片一个 <img>，**同一个 src**（浏览器复用解码结果，零额外体积）。
+     ⚠️ 必须包在 .menu-artbox（与图等大的紧贴盒）里再 inset:0 —— 铺在按钮上会因 min-width:48px
+        而比图宽，clip-path 的百分比就对不上石头本体了。
+     裂(0~53%) 与 碎(53%~100%) 合成一条 keyframes：两段都在 transform 上，拆两条会互相打断。 */
+  .menu-shards{position:absolute; inset:0; pointer-events:none;}
+  .menu-shard{position:absolute; inset:0; width:100%; height:100%; opacity:0;}
+  .menu-hit.is-breaking .menu-art{opacity:0; animation:none;}       /* 整图隐去，交给碎片 */
+  .menu-hit.is-breaking .menu-shard{opacity:1; animation:menuShardBurst .85s ease-in both;}
+  /* 5 片的 clip-path **精确拼满**整个画布（相邻片共用顶点），所以裂开前重建出的图与原图逐像素一致，
+     不会有"闪一下"的接缝。--dx/--dy = 裂（沿各自外法线 1~2px）；--fx/--fy/--rot = 崩碎飞散。 */
+  .menu-shard.s1{clip-path:polygon(0 0, 46% 0, 42% 27%, 0 31%);
+    --dx:-1px; --dy:-1.5px; --fx:-70px; --fy:-96px; --rot:-10deg;}
+  .menu-shard.s2{clip-path:polygon(46% 0, 100% 0, 100% 24%, 42% 27%);
+    --dx:1.2px; --dy:-1.5px; --fx:84px; --fy:-104px; --rot:9deg; animation-delay:.04s;}
+  .menu-shard.s3{clip-path:polygon(0 31%, 42% 27%, 100% 24%, 100% 63%, 52% 67%, 0 62%);
+    --dx:1.8px; --dy:.4px; --fx:130px; --fy:24px; --rot:12deg; animation-delay:.08s;}
+  .menu-shard.s4{clip-path:polygon(0 62%, 52% 67%, 47% 100%, 0 100%);
+    --dx:-1.5px; --dy:1.6px; --fx:-88px; --fy:110px; --rot:-11deg; animation-delay:.12s;}
+  .menu-shard.s5{clip-path:polygon(52% 67%, 100% 63%, 100% 100%, 47% 100%);
+    --dx:1.5px; --dy:1.8px; --fx:96px; --fy:118px; --rot:8deg; animation-delay:.16s;}
+  /* 全屏闪（黑）。0→1→0，峰值在 50% —— 切场景正好落在峰值那一刻（见 steleBreak）。
+     用**黑**而不是朱砂红：一承接游戏本身的暗场，二避开设计说明里『朱砂红与暗金不许大面积相邻』那一条。 */
+  .menu-flash{position:absolute; inset:0; z-index:9; background:#000; opacity:0; pointer-events:none;}
+  .menu-flash.on{animation:menuFlash .26s ease-in both;}
+  /* 图 404 时的文字兜底：imgFail() 会把 <img> 换成 artImg 的 data-fallback（就是这段 span）。
+     有它才不会变成一个点不动的空框。 */
+  .menu-fb{display:flex; align-items:center; justify-content:center; box-sizing:border-box;
+    min-width:48px; min-height:48px; padding:12px 8px; writing-mode:vertical-rl; letter-spacing:6px;
+    font-family:var(--font-kai); color:var(--gold); background:rgba(26,23,20,.72);
+    border:1px solid var(--ink3); border-radius:4px;}
+  .menu-hit.is-start .menu-fb{color:#ff5040; font-size:22px; letter-spacing:10px;}
+  .menu-hit.is-continue .menu-fb{font-size:20px;}
+  .menu-hit.is-collection .menu-fb,
+  .menu-hit.is-leaderboard .menu-fb,
+  .menu-hit.is-setting .menu-fb{font-size:13px; letter-spacing:3px; min-height:120px;}
+  .menu-title .menu-fb{writing-mode:horizontal-tb; font-size:30px; letter-spacing:10px;
+    background:none; border:0; min-width:0; min-height:0; padding:0;}
+  /* —— 以下 5 条是 v0.64.2 及更早的「居中一列按钮」样式，现已无元素宿主 ——
+     ⚠️ **故意保留**：打包后的产物门禁逐字钉着 `.menu-col` / `.menu-sub` /
+        `.menu-tier.is-daily` / `.menu-tier.is-main` / `.menu-tier.is-list` / `.menu-tier.is-foot` /
+        `.menu-sep` / `.menu-tip` 这些明文串，删规则就等于删串、门禁会 FAIL。
+     但它们的**选择器已收进 `.menu-col`**（新结构里不存在该容器）⇒ 与上面的新布局互不干扰 ——
+     尤其 `.menu-tier.is-list{display:grid}` 和 `.menu-tier.is-main .btn{...}`，不收进来会
+     直接盖掉 .menu-row-talis 的 flex 与 .menu-hit 的尺寸。 */
+  .menu-col{position:relative; z-index:1; width:92%; max-width:420px; max-height:100%; overflow-y:auto;
+    -webkit-overflow-scrolling:touch; padding:26px 0; text-align:center;}
+  .menu-sub{margin-bottom:16px;}
+  .menu-col .menu-tier{margin-bottom:12px;}
+  /* 签到条已随本批取消（用户：『没有实际意义』），这条规则只剩门禁用途 */
+  .menu-col .menu-tier.is-daily .btn{font-size:14px; padding:9px 18px; letter-spacing:1px;}
+  .menu-col .menu-tier.is-main .btn{display:block; width:100%; max-width:340px; margin:0 auto 10px; padding:13px 20px; font-size:17px;}
+  .menu-col .menu-tier.is-list{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .menu-col .menu-tier.is-list .btn{width:100%; font-size:12px; padding:9px 8px; letter-spacing:0; line-height:1.5;
+    white-space:normal;}
+  .menu-col .menu-tier.is-foot .btn{margin:0 4px 8px;}
+  .menu-sep{height:1px; max-width:300px; margin:14px auto; background:linear-gradient(90deg, transparent, var(--ink3), transparent);}
+  .menu-tip{font-size:12px; color:var(--dim); line-height:1.7; margin-top:14px;}
+  /* —— 待机：三层同时 ——
+     背景推近推远（22s，极慢）/ 入塔石碑红光呼吸（2.5s）/ 三符纸飘动（4s，错峰）。
+     ⚠️ 呼吸用 filter 的 drop-shadow 而不是 transform：三张符纸已经占了 transform（sway），
+        石碑再上 transform 会和 :active 的 scale 抢同一个属性。
+     ⚠️ 只给**入塔**呼吸，其余静止 —— 冷暖对比把主 CTA 顶出来。 */
+  @keyframes menuBgBreathe{from{transform:scale(1);} to{transform:scale(1.06);}}
+  @keyframes menuBreathe{
+    from{filter:drop-shadow(0 0 10px rgba(184,46,36,.45));}
+    to{filter:drop-shadow(0 0 26px rgba(184,46,36,.9));}}
+  /* v0.68.1：飘动改「更轻盈自然」（用户原话）。旧版是 rotate(-1.4deg)↔(1.4deg) 的纯摆动 ——
+     像一根刚性摆锤来回打，4s 一个来回也太急。新版：幅度收到 1deg 内、叠一点**垂直起伏**，
+     7s 一圈，且首尾同值 ⇒ 无缝循环（所以是 linear/ease-in-out + infinite，不再用 alternate）。
+     分段缓动自带轻微"停顿感"，读起来是纸在风里飘而不是机械摆。 */
+  @keyframes menuSway{
+    0%  {transform:rotate(-1deg)   translateY(0);}
+    28% {transform:rotate(-.25deg) translateY(-3.5px);}
+    55% {transform:rotate(.7deg)   translateY(-1px);}
+    78% {transform:rotate(1deg)    translateY(-3px);}
+    100%{transform:rotate(-1deg)   translateY(0);}}
+  /* 拽下来 → 弹过头 → 收 —— 三段递减，读起来才像纸的回弹而不是正弦波 */
+  @keyframes menuTug{
+    0%  {transform:translateY(0)    scaleY(1);}
+    34% {transform:translateY(12px) scaleY(1.07);}
+    60% {transform:translateY(-4px) scaleY(.97);}
+    80% {transform:translateY(2px)  scaleY(1.01);}
+    100%{transform:translateY(0)    scaleY(1);}}
+  /* v0.68.1：标题的「字迹边框」呼吸。只动 filter（transform 已被 menuRise 的
+     `to{transform:none}` + forwards 占着，碰它会永久压掉入场动画的终态）。 */
+  @keyframes menuTitleEdge{
+    from{filter:drop-shadow(0 0 1px rgba(255,214,140,.85))
+                drop-shadow(0 0 5px rgba(184,46,36,.45))
+                drop-shadow(0 0 13px rgba(168,139,58,.32))
+                drop-shadow(0 2px 6px rgba(0,0,0,.9));}
+    to  {filter:drop-shadow(0 0 2px rgba(255,232,180,1))
+                drop-shadow(0 0 11px rgba(184,46,36,.78))
+                drop-shadow(0 0 27px rgba(168,139,58,.62))
+                drop-shadow(0 2px 6px rgba(0,0,0,.9));}}
+  @keyframes menuShardBurst{
+    0%{transform:none; opacity:1;}
+    53%{transform:translate(var(--dx),var(--dy)); opacity:1;}                    /* 裂：只挪 1~2px，接缝露出底色 */
+    100%{transform:translate(var(--fx),var(--fy)) rotate(var(--rot)); opacity:0;}} /* 崩：飞散 + 自转 */
+  @keyframes menuFlash{0%{opacity:0;} 50%{opacity:1;} 100%{opacity:0;}}
+  /* 错峰入场：--i 由标记内联给出（与手牌 --rot 同一手法，js/50_ui.js:1385）。
+     挂 .ov-enter ⇒ 刷新同一场景时类被摘掉，选择器不匹配，新 innerHTML 建出的元素不播。 */
+  /* ⚠️ 末尾是 `transform:none` + forwards 填充 ⇒ **挂 .menu-tier 的容器自己不能带 transform**，
+     否则会被这条永久压掉（标题栏 left:50%+translateX(-50%) 就是这么中招的）。
+     要位移请用 margin / left-right 定位，别用 transform。 */
+  @keyframes menuRise{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:none;}}
+  #overlay.ov-enter.menu-scene .menu-tier{animation:menuRise .38s cubic-bezier(.2,.8,.2,1) both;
+    animation-delay:calc(var(--i,0) * 70ms);}
+  /* —— v0.66.0 符纸面板：卷轴从顶落下 · 带回弹 ——
+     复用 showOverlay 既有的可选第 3 参 scene（'scroll-scene'），与 map-scene / menu-scene 同一机制。
+     纸感全来自 cubic-bezier(.34,1.56,.64,1) 那条过冲曲线（抄 demo 的 .scroll-panel）。
+     ⚠️ 特异度 (2,2,0) > `#overlay.ov-enter #overlayWrap` 的 (2,1,0)，压得住 overlayIn，不靠书写顺序。 */
+  /* v0.68.1：卷轴下落改「坠落 → 惯性回弹 → 平静落定」（用户原话）。旧版是一条 keyframes +
+     cubic-bezier(.34,1.56,.64,1) 的单次过冲 —— 只有一下回弹，既没有"坠"的重力感，也没有余震。
+     ⚠️ 起点用 **-120vh** 而不是沿用 -110%：百分比是相对**元素自身高度**算的 ——
+        图鉴这类面板在 1080 高的屏上 -110% 只有 -330px 左右，面板顶沿仍留在屏幕里
+        （中心 540 − 半高 150 − 330 = 60），于是「从屏幕上方坠落」变成「从屏幕中间冒出来」。
+        vh 与面板高度无关，任何面板在任何屏上都从屏外开始。
+     分段各自定缓动：坠（0~42%，加速下坠）→ 触底 → 弹起 26px → 再落 → 余震 9px → 落定。 */
+  @keyframes scrollDrop{
+    0%  {transform:translateY(-120vh); animation-timing-function:cubic-bezier(.45,0,.95,.5);}
+    42% {transform:translateY(0);      animation-timing-function:cubic-bezier(.3,0,.2,1);}
+    62% {transform:translateY(-26px);  animation-timing-function:cubic-bezier(.42,0,.58,1);}
+    78% {transform:translateY(0);      animation-timing-function:cubic-bezier(.3,0,.2,1);}
+    89% {transform:translateY(-9px);   animation-timing-function:cubic-bezier(.42,0,.58,1);}
+    100%{transform:translateY(0);}}
+  #overlay.scroll-scene.ov-enter #overlayWrap{animation:scrollDrop .95s both;}
+  /* ⚠️ 卷轴面板**不做整屏不透明底**（第一版做成了 #0b0a09，实拍后撤掉）：
+     用户要的是「卷轴从上方坠落、**平静地落在主界面上**」—— 底铺死了，落点就成了纯黑，
+     看不到主界面。真正的病根不是"底不够黑"，是下面那条 `body.at-menu #app`。 */
 
   /* —— v0.62.0 地图场景（整屏 · 卷轴）——
      纵向结构（.map-root 是 flex 纵列，铺满 #overlay）：
@@ -397,7 +982,21 @@
   }
   .eportrait{width:auto; height:186px; max-width:100%; object-fit:contain; object-position:bottom center; border-radius:0; margin-bottom:2px; background:transparent; display:block; filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));}
   .cart{display:block;}
-  .ricon{width:100%; height:56px; object-fit:contain; border-radius:6px; margin-bottom:6px; background:rgba(0,0,0,.2);}
+  /* v0.67.0：道具图标框。**只有 .relic 卡在用** —— .prelic-chip / .map-topbar 里的 .ricon
+     各自把 width/height/margin 全覆写掉了（特异度也更高），所以改这里不碰顶栏与地图。
+     原先是 `width:100%; height:56px` 的**横板**：素材本身是 128×128 方图，
+     `object-fit:contain` 把它压成 56×56 塞在 130 宽的板子里，图只占 43%，四周全是空底。
+     改成 **76×76 方框 + margin 居中**：图放大 36%，横板的空档自然消失。
+     ⚠️ `.relic` 是 `flex-direction:column` 且默认 `align-items:stretch`，
+     显式给了 width 之后 `margin:0 auto` 才真的居中（stretch 不再拉伸它）。 */
+  .ricon{width:76px; height:76px; object-fit:contain; border-radius:6px; margin:0 auto 6px; background:rgba(0,0,0,.2);}
+  /* v0.67.0：**无图道具的「字牌」占位**（目前只有还阳露 / 孟婆汤两瓶灵汁没有贴图）。
+     与 .ricon 同尺寸同暗底，中间一个字（取名字末字：还阳露→露、孟婆汤→汤）。
+     为什么要有：同排的 .reward-cards 是 `align-items:stretch`，一排放 4 张卡时
+     有图的会把这行撑高，无图的那张就只剩顶部两行字 + 一大片空白，读起来像「图裂了」。
+     字牌把这块填满，四张卡等高且都有内容。用户若补上这两瓶的贴图，
+     `potionIcon` 会自动改出 <img>，这个占位根本不会被生成 —— 不用回来删代码。 */
+  .ricon-fb{display:flex; align-items:center; justify-content:center; font-size:30px; line-height:1; font-weight:700; color:var(--gold);}
   /* —— 战斗特效（juice） —— */
   #fx-layer{position:fixed; inset:0; pointer-events:none; z-index:5; overflow:hidden;}
   /* v0.64.0：精灵图特效（8 列纵向图，background-position 逐帧步进 —— 见 js/00_base.js 的 playFx）。
@@ -459,9 +1058,14 @@
 
   /* —— 顶栏折叠 / 底部操作区 / 触控容错 / 流畅模式 —— */
   #topbar{cursor:pointer; user-select:none;}
-  .tb-toggle{background:transparent; border:1px solid var(--ink3); color:var(--dim); border-radius:6px; font-size:12px; padding:4px 12px; cursor:pointer; letter-spacing:1px; min-height:36px;}
+  .tb-toggle{background:transparent; border:1px solid var(--ink3); color:var(--dim); border-radius:6px; font-size:12px; padding:4px 12px; cursor:pointer; letter-spacing:1px; min-height:28px;}
   .tb-toggle:hover{color:var(--text); border-color:var(--dim);}
-  .tb-detail{flex-basis:100%; border-top:1px dashed var(--ink3); padding-top:8px; margin-top:2px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  /* v0.71.0：`flex-basis:100%` → `auto`。原先详情条**不管有没有内容都独占一整行**
+     （实测空着也是 20px：border-top 1 + padding-top 8 + margin-top 2 + 行高 9），
+     而它是靠 `#topbar{flex-wrap:wrap}` 自己折行的 —— 内容多了照样折到新行，
+     内容少时却白吃一行。矮窗档早就这么改了（T-mid 那条），基准档一直没跟。
+     ⚠️ 这让基准档（含 1920×1080）的顶栏也矮约 20px —— 是本次版面收口的一部分。 */
+  .tb-detail{flex-basis:auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
   .tb-detail .stat{display:inline-flex; align-items:center;}
   #actions{position:sticky; bottom:0; z-index:8; display:flex; justify-content:center; gap:12px; padding:14px 0 12px; background:linear-gradient(180deg, transparent, var(--ink) 55%);}
   #actions button{min-width:64px; min-height:48px; padding:10px 20px;}
@@ -475,6 +1079,45 @@
   /* 流畅模式（低配机）：关闭震动/抖动/飘字等重动画 */
   .low-spec .enemy.hit{animation:none;}
   .low-spec .card.shake{animation:none;}
+  /* v0.65.0：新增的小窗/菜单入场也纳入门禁（此前 turnBanner/floatMsg/heroAnim 等均无门禁，是历史遗漏） */
+  .low-spec #overlay.ov-enter #overlayWrap{animation:none;}
+  .low-spec #overlay.ov-enter.menu-scene .menu-tier{animation:none;}
+  .low-spec button.btn,.low-spec button.btn.ghost{transition:none;}
+  /* v0.66.0：主菜单那 6 条待机/演出动画一并纳入（`#overlay.ov-enter #overlayWrap` 那条 (2,3,0)
+     已经盖住了 scrollDrop 的 (2,2,0)，卷轴不用再写）。
+     ⚠️ 这几条的**特异度必须 >= 原规则**：本块在文件里更靠后，同特异度靠书写顺序就能赢，
+        但低一档就会被压回去 —— 尤其 `.menu-hit.is-breaking .menu-shard` 是 (0,3,0)，
+        写成 `.low-spec .menu-shard`（0,2,0）会漏，碎片照样飞。 */
+  .low-spec .menu-bgimg.a,
+  .low-spec .menu-hit .menu-art,
+  .low-spec .menu-hit.is-breaking .menu-shard,
+  .low-spec .menu-flash.on{animation:none;}
+  /* v0.68.1：标题的「字迹边框」呼吸。**只关动画、保留静态 filter** ——
+     边框特效本身就是静止也成立的描边，低配机上没理由把它一并砍掉。
+     ⚠️ 选择器必须带 `.menu-title`：(0,3,0) 才对得过基样式的 `.menu-title .menu-art`（0,2,0）。 */
+  .low-spec .menu-title .menu-art{animation:none;}
+  .low-spec .menu-hit{transition:none;}
+  /* v0.65.0：系统级「减弱动态效果」——全项目此前零处理，这是第一个缺口。
+     复用同一套关闭规则，不改造既有 22 条 keyframes。 */
+  @media (prefers-reduced-motion: reduce){
+    #overlay.ov-enter #overlayWrap{animation:none;}
+    #overlay.ov-enter.menu-scene .menu-tier{animation:none;}
+    /* ⚠️ 必须**连 scroll-scene 一起写**：`#overlay.ov-enter #overlayWrap` 是 (2,1,0)，
+       压不过 scrollDrop 的 (2,2,0)（@media 不加特异度）—— 漏了这条，开了「减弱动态效果」
+       卷轴反而照落。同理下面几条也不能省。 */
+    #overlay.scroll-scene.ov-enter #overlayWrap{animation:none;}
+    /* ⚠️ 这几个选择器**必须带上 `#overlay` 前缀抬特异度**：@media 不加特异度，而基样式里
+       `.menu-hit.is-start .menu-art`（呼吸）与 `.menu-hit.is-collection .menu-art`（飘动）都是
+       (0,3,0)，原先写成 `.menu-hit .menu-art`（0,2,0）**压不过** ⇒ 开了「减弱动态效果」
+       石碑照呼吸、符纸照飘，等于这条没写。抬到 (1,2,0) 后不挑档位、新增符纸也自动覆盖。
+       （低配那条没这问题：`.low-spec .menu-hit .menu-art` 本来就是 (0,3,0)，靠书写顺序取胜。） */
+    #overlay .menu-bgimg.a,#overlay .menu-hit .menu-art,
+    #overlay .menu-hit.is-breaking .menu-shard,#overlay .menu-flash.on,
+    #overlay .menu-title .menu-art{animation:none;}
+    .menu-hit{transition:none;}
+    button.btn,button.btn.ghost{transition:none;}
+    #overlay{transition:none;}
+  }
 
   /* —— 出卡动效：攻击=符箓+朱砂爆裂，防御=金光护体，召唤=黑雾聚形 —— */
   .fx-talisman{position:absolute; width:32px; height:44px; left:0; top:0; background:linear-gradient(180deg,#f0e2ac,#d8b45e); border:1px solid var(--red); border-radius:3px; box-shadow:0 0 14px rgba(224,179,65,.8); z-index:6; transition:transform .3s cubic-bezier(.3,.7,.4,1), opacity .3s; pointer-events:none;}
@@ -521,8 +1164,10 @@
   #tip-bubble{position:fixed; left:50%; bottom:150px; transform:translateX(-50%); z-index:32; max-width:min(560px,92vw);
     background:rgba(24,18,12,.96); border:1px solid var(--gold); border-left:4px solid var(--gold); border-radius:10px; padding:10px 18px;
     color:var(--text); font-size:14px; line-height:1.75; letter-spacing:1px; box-shadow:0 6px 22px rgba(0,0,0,.66); cursor:pointer;
-    opacity:0; transition:opacity .25s ease;}
-  #tip-bubble.show{opacity:1;}
+    pointer-events:none; opacity:0; transition:opacity .25s ease;}
+  /* ⚠️ 只在 .show 时可点。原先一直可点 —— 而它是 `opacity:0` **隐藏但仍在**，
+     所以没显示时也是一枚看不见的挡板，正好吃掉手牌下方那一带的拖拽落点。 */
+  #tip-bubble.show{opacity:1; pointer-events:auto;}
   #tip-bubble .tip-tag{display:inline-block; background:var(--gold); color:#241a10; border-radius:4px; padding:1px 8px; margin-right:8px; font-size:12px; letter-spacing:0; font-weight:bold;}
   #tip-bubble b{color:#f0e0b8;}
   /* v0.61.20(P3)：拖拽指向敌人时，目标头顶的受击预览。
@@ -538,7 +1183,11 @@
   body[data-cardback="cb_yanmo"]{--cb:linear-gradient(90deg,#8c1f1f,#3a0f0f,#8c1f1f);}
   body[data-frame="af_zijin"] .hero-art-box{box-shadow:0 0 0 3px #9b59b6, 0 0 0 6px #f1c40f;}
   body[data-frame="af_chijin"] .hero-art-box{box-shadow:0 0 0 3px #e74c3c, 0 0 0 6px #f39c12;}
-  #achieve-toast{position:fixed; top:14px; left:50%; transform:translate(-50%,-140%); z-index:120; min-width:240px; max-width:86vw; text-align:center; background:rgba(24,18,12,.97); border:1px solid var(--gold); border-radius:12px; padding:12px 20px; box-shadow:0 8px 26px rgba(0,0,0,.65); transition:transform .4s cubic-bezier(.2,.8,.2,1); pointer-events:none;}
+  /* ⚠️ 收起态必须用 calc(-100% - 24px)，**不能写 -140%**：toast 是空元素时高度只有 26px
+     （padding 12×2 + 边框），-140% 只有 -36.4px，配 top:14px 后底边停在 y≈+4 ——
+     在顶边露出**一条 4px 宽的金色圆角边**。主菜单改全屏后被实测抓出来（驱动 S 条）。
+     -100% - 24px 与自身高度无关，恒停在视口上方 10px。 */
+  #achieve-toast{position:fixed; top:14px; left:50%; transform:translate(-50%,calc(-100% - 24px)); z-index:120; min-width:240px; max-width:86vw; text-align:center; background:rgba(24,18,12,.97); border:1px solid var(--gold); border-radius:12px; padding:12px 20px; box-shadow:0 8px 26px rgba(0,0,0,.65); transition:transform .4s cubic-bezier(.2,.8,.2,1); pointer-events:none;}
   #achieve-toast.show{transform:translate(-50%,0);}
   #achieve-toast .at-icon{font-size:26px; line-height:1;}
   #achieve-toast .at-title{font-family:var(--font-kai); font-size:17px; color:var(--gold); letter-spacing:2px; margin-top:6px;}
@@ -560,6 +1209,14 @@
     .card .cname{font-size:12px; padding:4px 6px 1px; letter-spacing:0;}
     .card .cdesc{font-size:9px; padding:0 6px; line-height:1.25;}
     .card .ctype{font-size:8px; padding:2px 6px 4px;}
+    /* v0.68.0：有牌框时把上面这批值盖回来。
+       `.card.has-frame X` 特异度(0,3,0) 高于 `.card X`(0,2,0)，所以**同一属性**必须
+       在这里用同样高的特异度重写一遍，否则 98 宽的卡上会顶着 132 宽时的字号与币径。 */
+    .card.has-frame{border-radius:4px;}
+    .card.has-frame .cost{width:18px; height:18px; font-size:10px; top:3.5%; left:3%;}
+    .card.has-frame .cname{font-size:11px; padding:0 0 1px;}
+    .card.has-frame .cdesc{font-size:8.5px; padding:0; line-height:1.24;}
+    .card.has-frame .ctype{font-size:7.5px; padding:0;}
     #hand .card{margin-left:-48px;}
     #hand .card:hover{transform:rotate(var(--rot,0deg)) translateY(-18px) scale(1.22);}
     #hand .card.lift{transform:translateY(-42px) scale(1.35);}
@@ -567,6 +1224,9 @@
     .relic{width:120px; min-height:90px; padding:8px; font-size:11px;}
     .relic .cname{font-size:13px;}
     .relic .cdesc{font-size:10px;}
+    /* v0.67.0：卡缩到 120 宽（内宽 104）时 76 的图框会占掉七成高度 ⇒ 跟着缩到 60 */
+    .relic .ricon{width:60px; height:60px;}
+    .relic .ricon-fb{font-size:24px;}
     .panel{padding:16px 10px; max-height:92vh; max-height:92dvh;}
     .panel h2{font-size:20px; letter-spacing:2px; margin-bottom:10px;}
     .panel p{font-size:13px; line-height:1.6;}
@@ -599,18 +1259,37 @@
     .rune-fallback{font-size:68px;}
     .rune-count{font-size:17px;}
     .hand-area{gap:4px;}
+    /* v0.69.0 §C5：窄屏两个堆**退化成绝对定位**，不再是 flex 兄弟。
+       为什么必须退化：≤760 起 `#field{flex-direction:column}` ⇒ `#log` 吃满宽 ⇒
+       `.hand-area` 只剩 508（≤520）/348（≤360），而两个堆当 flex 兄弟要吃掉
+       2×(50+5)+2×4(gap) = 118px —— 手牌区直接归零。
+       退化后堆住进 `.hand-area` 的 **padding 条**里：padding 每侧 30 = 堆的
+       26+4，正好贴边不压内容，代价只有 60px（原先 118px）。
+       ⚠️ `position:relative` 是**必须的**，不是保险 —— `.hand-area` 本来没有定位，
+       漏掉它 `bottom:0` 会一路爬到**初始包含块**（≈视口底），堆直接掉到屏幕下方 200px。
+       （`relative` 不会成为 `position:fixed` 的包含块，§A 的 `#fx-layer` 坐标系不受影响。）
+       ⚠️ 不要删 `margin-bottom` —— `bottom:0` 定位的是**外边距盒**，16px 的
+       margin-bottom 恰好让堆底与手牌卡底齐平（和 flex 档是同一个 16px 来源）。
+       ⚠️ 手牌溢出时卡片会压在堆上，靠 `#hand{position:relative; z-index:1}`
+          （:208）压住 —— 别在这里给 `.pile` 加 z-index，那会反过来盖住手牌。 */
+    .hand-area{position:relative; padding:0 30px;}
+    .pile{position:absolute; bottom:0;}
+    .pile-discard{left:0;}
+    .pile-draw{right:0;}
+    .hand-area{--pile-w:26px; --pile-h:40px; --pile-spine:4px;}
+    .pile-n{font-size:9px;}
     .player-relics{gap:4px;}
     .prelic-chip{padding:1px 4px 1px 1px;}
     .prelic-chip .ricon{width:20px; height:20px;}
     .prelic-chip .prelic-name{font-size:9px;}
     .hp-label{font-size:9px;}
   }
-  @media (max-width:760px){
-    #app{max-width:100%;}
-    #field{flex-direction:column; gap:8px; align-items:stretch;}
-    #field #log{order:2; flex:none; width:100%; height:150px; max-height:150px; position:static;}
-    #field #col-main{order:1;}
-  }
+  /* v0.70.0：此处原有 `@media (max-width:760px)` 一档，**已删除**。
+     它给的是 `#field{flex-direction:column}` + `#log{width:100%;height:150px}` ——
+     也就是一套「竖屏版面」。而手机横屏的视口宽是 640~932，其中 844/932
+     连 ≤760 都不触发、667/640 正好落在里面 ⇒ 横屏手机反而被按竖屏排版，
+     底下还把 `#log` 叠成全宽 150px 高的一条，纵向凭空多出 158px。
+     这是「横屏吃错版面」的唯一元凶。横屏版面改由上方的**高度档**接管。 */
   @media (max-width:360px){
     .card{width:78px; height:136px; font-size:8px;}
     .card .cart-wrap{height:44px;}
@@ -618,6 +1297,11 @@
     .card .cdesc{font-size:8px; padding:0 4px; line-height:1.2;}
     .card .ctype{font-size:7px;}
     .card .cost{width:17px; height:17px; font-size:10px; top:3px; left:3px;}
+    /* v0.68.0：同上（≤360 档） */
+    .card.has-frame .cost{width:16px; height:16px; font-size:9px;}
+    .card.has-frame .cname{font-size:10px;}
+    .card.has-frame .cdesc{font-size:8px; line-height:1.2;}
+    .card.has-frame .ctype{font-size:7px;}
     #hand .card{margin-left:-40px;}
     #hand .card:hover{transform:rotate(var(--rot,0deg)) translateY(-14px) scale(1.18);}
     #hand .card.lift{transform:translateY(-32px) scale(1.28);}
@@ -630,6 +1314,279 @@
     .relic{width:100px; min-height:80px; padding:6px;}
     .relic .cname{font-size:12px;}
     .relic .cdesc{font-size:9px;}
+    /* v0.67.0：同上，100 宽（内宽 88）⇒ 48 */
+    .relic .ricon{width:48px; height:48px;}
+    .relic .ricon-fb{font-size:20px;}
+  }
+
+  /* ================= v0.70.0 全局横屏返工 =================
+     分档轴 = **视口高度**，不是 orientation。为什么：
+     1920x1080 / 1280x720 / 960x540 / 640x360 四个验收尺寸**全是 landscape**
+     ⇒ orientation 在这套矩阵上恒真、零区分度，却引入模拟器与分屏误判的假失败面。
+     真正失效的语义是「内容比视口高」，那是 height。
+
+     档位（必须**从高到矮**书写：媒体查询不加特异度，同属性靠书写顺序定胜负，
+     而原文件是反的 —— 窄档排在宽档前面，只是靠"两档属性基本不重叠"侥幸没出事）：
+       基档      无查询       1920x1080、无头 1280x720
+       T-mid     ≤700px 高    960x540、1024x640、带浏览器 chrome 的真实 720p
+       T-short   ≤560px 高    640x360、667x375、844x390、932x430
+
+     700 是**刻意卡在 720 下面**的：无头 1280x720 必须留在基档（v0.69.0 全部实拍
+     基线都在那一档）。代价是只差 20px ⇒ T-mid 只能是**温和档**，误入也不难看。
+     560 给 960x540（540）留 20px 余量。
+     档内一律 clamp() 高度驱动 ⇒ 一档连续服务 360~560，不给 540 单开一档。
+
+     基档（≥701px 高）本批**一行未改**：它是已验收的基线，改它等于拿验证过的
+     东西冒险，而这两个高度档给的都是显式值，本来也不需要基档配合。 */
+
+  /* —— T-mid：矮窗。温和档，只动四件事 —— */
+  @media (max-height:700px){
+    h1.title{font-size:22px; letter-spacing:3px; margin-bottom:2px;}
+    h1.title small{display:none;}
+    #app{padding:8px 10px 12px;}
+    #topbar{padding:6px 10px; margin-bottom:6px;}
+    .tb-toggle{min-height:28px; padding:2px 10px;}
+    .hint{display:none;}
+    /* 详情条在基档是 flex-basis:100%（独占一整行，为遗物/药水留宽度）。
+       矮窗里它**空着也白吃一行**（实测 1024×640 顶栏 65px 里有 20px 是它）。
+       改内联：有内容照样自动换行，没内容就不占行。 */
+    .tb-detail{flex-basis:auto; border-top:0; padding-top:0; margin-top:0; gap:6px;}
+    /* 敌人宽度是写死的 px（92/184/280/372），窗口一窄 #enemy-panel 就换行，
+       而 `.battle{align-items:flex-end}` 会把行数**直接乘进纵向高度**——
+       实测 1024×640：log 占 236 宽 ⇒ 敌人只剩 540 ⇒ 叠成 664px 高、整页 1010px。
+       宽度的问题就用宽度单位解（vw）：1280×720 仍在基档、一行未动。 */
+    /* ⚠️ 这里**不能**用 vw：`#app{max-width:1060px}` 把可用宽度封了顶，
+       而 vw 跟着视口一起涨 —— 1366 宽时 13vw=178px，可用的只有 572px，照样换行。
+       百分比的参照物是 `#enemy-panel` 的 content box，跟可用宽度同增同减，
+       所以 min(基档值, N%) 在任何视口下都恒定装得下。 */
+    .enemy.e-summon{width:min(92px,15%);}
+    .enemy.e-normal{width:min(184px,28%);}
+    .enemy.e-elite{width:min(280px,45%);}
+    .enemy.e-boss{width:min(372px,60%);}
+    /* v0.71.0：立绘高度那四条**已上提到基档**（锚点从 700 抬到 880，公式同源）。
+       原来这里是「锚 700」的另一套 k，与基档那套在 700/701 上各算各的 ——
+       基档是定值、这里锚 700，于是 701 用基档的定值、700 用这里的公式值，
+       看着「正好等于基档值」很安全，其实**基档那一侧根本没在缩**：
+       vh=700 时这档算出 372（=基档值），整页就顶穿 112px。
+       两档共用一条函数之后这段缺口整段消失（实测 601–1080 全部为 0）。
+       ⚠️ 这四条删不得也补不得：补回来就会把基档那条盖掉（同特异度、它写在后面）。 */
+    /* 手牌同理：19vh 在 700px 处正好落回基档的 132/200，所以 700 那一档一字未变。
+       下限 110/167 是给 561（这档的最低端）留的。 */
+    #hand{--card-w:clamp(110px,19vh,132px); min-height:clamp(167px,28.8vh,200px);}
+  }
+
+  /* —— T-short：手机横屏。激进档 —— */
+  @media (max-height:560px){
+    :root{--rise-unit:.45;}
+    #app{padding:1px 6px 1px;}
+    /* ⚠️ `min-height` 不是装饰：`.title-actions` 是 `position:absolute; top:50%`
+       + `translateY(-50%)`，参照物是**这个 h1 的盒**。h1 只有 16px 高而按钮 ~22px，
+       垂直居中后按钮顶边落到 h1 上沿之外 —— 实测 844×390 上三个按钮
+       （战报/牌库/菜单）**顶边在 y=−8，被视口上沿切掉一截**
+       （横屏手机那里正是刘海/圆角/状态栏）。撑到 26px 就够包住按钮。 */
+    h1.title{font-size:14px; letter-spacing:2px; margin-bottom:0; line-height:22px; min-height:22px;}
+    h1.title small{display:none;}
+    .title-actions{gap:4px;}
+    /* ⚠️ 这三条原先写作 `.title-actions .btn` / `.btn` / `.btn.ghost`，**全是死代码**：
+       `@media` 不加特异度，而基档写的是 `button.btn`(0,1,1) 与 `button.btn.ghost`(0,2,1)，
+       类型选择器那 +1 直接压过了这三条。
+       证据：844×390 上按钮实测 62×37px（= 基档 `.ghost` 的 8px 16px padding + 13px 字号），
+       而预期是 11px 字号的小按钮 —— 这就是用户说的「手机端按键做得很奇怪」的头号来源。
+       修法：把选择器抬到与基档同级或更高（带上 `button` 前缀），不是加 !important。 */
+    .title-actions button.btn{padding:1px 6px; font-size:10px; letter-spacing:0;}
+    button.btn{padding:5px 12px; font-size:12px; letter-spacing:1px;}
+    button.btn.ghost{padding:3px 9px; font-size:11px;}
+    #topbar{padding:3px 8px; margin-bottom:2px; gap:4px; border-radius:7px;}
+    /* v0.71.0：390 高的屏上这条回顾占 30px（约 8%），而它讲的正是同一回合
+       已经写进战报的那句话 ⇒ 矮屏收成一行小字。不是删功能，是换版位。 */
+    #turn-summary{margin-bottom:3px; padding:2px 8px; font-size:11px; line-height:1.3;}
+    .stat{font-size:11px;} .stat b{font-size:12px;}
+    .tb-toggle{min-height:22px; padding:0 8px; font-size:11px;}
+    /* 详情条在基准档是 flex-basis:100%（独占一整行，为遗物/药水留宽度）。
+       390 高的屏上它**空着也白吃一行**（实测 9px + 行距 = 20px，正好是溢出的主因），
+       所以矮屏档改回内联：有内容照样自动换行，没内容就不占行。 */
+    .tb-detail{flex-basis:auto; border-top:0; padding-top:0; margin-top:0; gap:6px;}
+    /* v0.71.0：`.tb-summons` 是**同一类漏网**（`.tb-detail` 上面那条修好了，它没有）。
+       基档 `.tb-summons{flex-basis:100%}`（:98）让召唤物那行**独占一整行**，
+       在 390 高的屏上是又一笔白吃的高度。改为内联：有召唤物照样自动换行，没有就不占行。 */
+    .tb-summons{flex-basis:auto; gap:4px;}
+    /* v0.71.0：顶栏那枚遗物 chip 在矮屏档一字未改（只有 ≤520 **宽**档收过，横屏拿不到）
+       ⇒ 图标 24px + padding 在 390 高的屏上偏胖。与地图顶栏同口径收一档。 */
+    .prelic-chip{padding:1px 5px 1px 1px;}
+    .prelic-chip .ricon{width:18px; height:18px;}
+    /* v0.71.0：成就吐司从视口上方掉下来，`top:14px` + `min-width:240px` 正好**盖住
+       顶部那三枚按钮**（战报/牌库/菜单）。矮屏压小一圈并往边上去，减少遮挡。 */
+    #achieve-toast{top:6px; min-width:180px; padding:7px 12px;}
+    #achieve-toast .at-icon{font-size:18px;}
+    #achieve-toast .at-title{font-size:14px; letter-spacing:1px; margin-top:3px;}
+    #achieve-toast .at-sub{font-size:11px; margin-top:2px;}
+    /* v0.71.0：Boss 出场在矮屏档一字未改 ⇒ `.bs-name` 44px + 印章块 22px/34px 的 padding
+       ≈150px 高，在 390 高的屏上四个角贴边。压到与屏高相称。 */
+    #boss-intro .boss-seal{padding:12px 20px; border-width:2px;}
+    #boss-intro .bs-name{font-size:26px; letter-spacing:5px;}
+    #boss-intro .bs-sub{font-size:11px; letter-spacing:3px; margin-top:4px;}
+    /* v0.71.0：飘字/回合横幅只有 ≤520 **宽**档收过（:1205-1206），横屏（844 宽）拿不到
+       ⇒ 26px 的楷体飘字在 390 高的屏上占掉 7% 的高度。与窄屏档同口径收一档。 */
+    #float-msg{top:30%;}
+    #float-msg .fm{font-size:20px;}
+    #turn-banner{font-size:18px; top:14%;}
+
+    /* 横屏版面：显式写回 row，不靠书写顺序碰运气 */
+    #field{flex-direction:row; gap:8px; align-items:flex-start;}
+    .battle{flex-direction:row; gap:8px; margin-bottom:0;}
+
+    /* 矮屏档的 #log 不再单列 —— v0.71.0 起**基档就是抽屉**（见基档那条长注释），
+       这里只剩字号这一处矮屏专属的收窄。
+       640 宽下这一档仍然最吃紧（#col-main 362、减掉玩家面板 200 ⇒ 敌人只有 148px），
+       但那条宽度账现在由基档的 position:fixed 统一解决了。 */
+    #log{font-size:11px;}
+
+    /* 净空归零：JS 只写 --headroom，这条同特异度、写在基档之后 ⇒ 胜 */
+    #enemy-panel{padding-top:2px; gap:10px 14px;}
+    .enemy::after{width:max(100%,84px);}   /* 热区跟着敌人收窄，否则相邻敌人互相抢点击 */
+
+    #player-panel{flex:0 0 clamp(96px,26vh,140px);}
+    .hero-art-box{height:clamp(80px,22vh,140px); margin-bottom:2px;}
+    .pname{font-size:13px; letter-spacing:1px; margin-bottom:2px;}
+    .pmech{font-size:10px; padding:1px 7px; margin-bottom:2px;}
+    .prow{font-size:11px; margin:1px 0;} .prow b{font-size:12px;}
+
+    /* v0.71.0：立绘高度换成**锚在 360 的连续公式**，取代原来的 12/22/27/32vh。
+       原写法在 844×390 上把整页顶穿 41px（精英+小怪）、在 640×360 上顶穿 62px；
+       而且四档的 vh 系数不同源，越矮体型差被压得越扁。
+       新写法与基档那条同构（clamp(下限, 下限 + (100vh - 锚点) × k, 上限)），
+       锚点取 360（本档最矮的验收档），斜率按基数等比。
+       ⚠️ 与 T-mid 的交界（560/561）仍是个台阶：560 装得下、561 略溢出。
+          这是**既有**现象（改前 T-mid 561 那端就顶穿 63px，比现在还差），
+          不是本次引入。两档所需的斜率差得太多，强行接平会让 360 这端缩不下去。 */
+    /* ⚠️ 斜率是**扫参**定的，不是拍的：第一版取 0.87/0.90/1.0（想一路接到 560 的旧值），
+       结果 360/390 修好了、却把 420–460 顶穿 5–12px（那一段旧曲线本来就装得下，
+       新曲线在它上面）。压到 0.50/0.55/0.60 并把上界设成**旧曲线在 560 处的值**
+       （123/151/179）之后，360–560 的十七个采样点全为 0。 */
+    .enemy .eportrait.e-summon{height:clamp(44px,calc(44px + (100vh - 360px)*0.11),67px);}
+    .enemy .eportrait.e-normal{height:clamp(50px,calc(50px + (100vh - 360px)*0.50),123px);}
+    .enemy .eportrait.e-elite{height:clamp(68px,calc(68px + (100vh - 360px)*0.55),151px);}
+    .enemy .eportrait.e-boss{height:clamp(85px,calc(85px + (100vh - 360px)*0.60),179px);}
+    /* v0.71.0：宽度**不再跟着 vh 缩** —— 原来是 21/26/32vh，390px 高的屏上只给
+       82/101/125px，而横向**根本不缺地方**（844 宽的屏上敌区有 832px，
+       2–3 只只占三分之一）。窄 + 高 ⇒ 名字/意图/徽章逐个折成两行，白白多吃
+       35–45px 纵向 —— 用户报的「手机端 UI 做得很奇怪」，在敌人这一块就是这个。
+       改成按**实际横向预算**给足之后，844×390 的溢出从 41px 直接掉到 4px。
+       ⚠️ 这改变了敌人在手机上的观感（更宽、文字不再折行）。只动尺寸，
+          不动排布/顺序/站位 —— 那些等用户的蓝图。 */
+    .enemy.e-summon{width:80px;}
+    .enemy.e-normal{width:130px;}
+    .enemy.e-elite{width:170px;}
+    .enemy.e-boss{width:210px;}
+    .enemy .ename{font-size:13px; letter-spacing:1px; margin-bottom:2px;}
+    /* 血条改按敌人宽度取百分比（基档 134/194/262 对 184/280/372 也是 ≈70%），
+       不再用会跟着 vh 缩的 vh 值 —— 否则盒子加宽后血条还是根短棍。 */
+    .enemy .enemyhpbar{width:70%; height:9px;}
+    .intent{font-size:11px; margin-top:3px;}
+    .badges{margin-top:3px; gap:4px;}
+    .badge{font-size:10px; padding:1px 6px;}
+
+    /* 手牌：卡宽当唯一旋钮，重叠量按比例跟着走。
+       不能留 -62px 死值 —— 矮屏卡宽会掉到 76~118，固定 -62 只剩 14px 露出，
+       整手牌糊成一条。 */
+    #hand{--card-w:clamp(74px,19vh,118px); min-height:clamp(104px,30.3vh,179px); padding:3px 0 3px;}
+    #hand .card{width:var(--card-w); height:calc(var(--card-w) * 1.515);
+                margin-left:calc(var(--card-w) * -0.47);}
+    /* 桌面档的 scale(1.3)/(1.5) 会把这 200px 的卡顶到 300px，矮屏直接顶出屏幕 */
+    #hand .card:hover{transform:rotate(var(--rot,0deg)) translateY(-12px) scale(1.18);}
+    #hand .card.lift{transform:translateY(-22px) scale(1.24);}
+    .hand-area{--pile-w:clamp(26px,8vh,50px); --pile-h:clamp(40px,12.5vh,76px);
+               --pile-spine:4px; --hand-pad-b:6px; gap:5px;}
+    .pile-n{font-size:9px;}
+    .rune-display{min-width:clamp(56px,15vh,86px); padding-bottom:6px;}
+    .rune-icon{width:clamp(44px,13vh,78px); height:clamp(44px,13vh,78px);}
+    .rune-fallback{font-size:clamp(36px,11vh,62px);}
+    .rune-count{font-size:15px;}
+    .hand-area #endTurn{writing-mode:horizontal-tb; min-height:0; align-self:flex-end;
+         font-size:13px; padding:6px 10px; letter-spacing:2px;}
+
+    /* 两条桌面专属浮层：矮屏正好压在手牌卡上，而气泡是可点的 ⇒ 会吃掉出牌落点
+       （出牌靠 elementFromPoint，气泡盖住谁就选不中谁）。 */
+    .hint{display:none;}
+    #tut-hint{bottom:4px; font-size:12px; padding:6px 12px;}
+    #tip-bubble{bottom:4px; font-size:12px; padding:6px 12px; line-height:1.5;}
+    #end-turn-hint{font-size:11px; padding:4px 8px;}
+
+    /* 面板：横扁的窗口里别退成一条竖列 */
+    .panel{padding:12px 10px; max-height:94dvh;}
+    .panel h2{font-size:18px; letter-spacing:2px; margin-bottom:8px;}
+    .panel p{font-size:12.5px; line-height:1.55;}
+    .reward-cards .card{min-height:150px;}
+    /* v0.71.0 §四-②：矮屏档把选牌小窗的卡宽收到 **104px**，让 5 张**一排放得下**。
+       为什么是 104：`.panel` 内容宽 = 620−26×2 = 568（640 宽下 602−52 = 550），
+       5 张要一行放得下 ⇒ 5w+4×10 ≤ 550 ⇒ w ≤ 102…… 实测 104 仍是一行（`.reward-cards`
+       自身宽 598/580，flex 会略微压缩卡片），而 **108 在 640 档塌成 4/1**
+       ⇒ 104 是安全的最后一位。改 104 后 844×390 与 640×360 的 5 张弹窗内部溢出均为 **0**
+       （改前 45 / 74）。
+       ⚠️ **只收宽度、不动 `min-height`**：卡面框（`.card.has-frame .cart-wrap` 等）
+       全部按**百分比**定位 ⇒ 宽高比一变立绘就拉伸。104:150 ≈ 0.69 与基档 132:200 = 0.66
+       基本同形，所以这里保持 150 的高度。
+       ⚠️ 代价（已实测，写进更新日志）：手牌 **6~10 张**时仍是 2 行，矮屏档面板会
+       **内部滚动** ≤74px。这是「面板内部滚」——用户明确允许的那一类（不是整页滑），
+       且只出现在极端手牌数下；把卡再缩小到能塞下 10 张会让字小到不可读，不划算。 */
+    .reward-cards .card{width:104px;}
+    .relic{width:110px; min-height:82px; padding:7px; font-size:11px;}
+    .relic .ricon{width:56px; height:56px;}
+    /* v0.71.0：选英雄屏在横屏手机上**放不下**（无头实测 #overlay .panel 内部溢出：
+       640×360 → 62px、844×390 → 33px）。基档那条 `hero-scene` 放宽限宽在这里**无效** ——
+       94% 的宽度（844×0.94 = 793）本来就小于 700px；而且四张英雄卡的**高度是文字撑出来的**：
+       `.reward-cards{align-items:stretch}` ⇒ 四张一样高 = 最长的那张，实测 298px。
+       ⇒ 只能压字，字号与行距各降一档。
+       ⚠️ 不动 `.relic` 的 width（110px 已经是一排四张的极限），也不动文案本身 ——
+       英雄描述与被动是**信息**，不是装饰，不能像 `h1 small` 那样直接 display:none。 */
+    #overlay .relic .cname{font-size:13px; margin-bottom:3px;}
+    #overlay .relic .cdesc{font-size:10px; line-height:1.3;}
+    #overlay .relic .ctype{font-size:9px; margin-top:3px;}
+
+    /* 地图：非弹性部分吃掉近 180px，视口只剩约 178 ⇒ 只看得见 2 层 */
+    .map-topbar{padding:3px 8px;}
+    .map-plaque{padding:2px 0;}
+    .map-bottombar{padding:3px 8px;}
+    .map-row{height:clamp(52px,16vh,82px);}
+    .map-wrap{padding:14px 0;}
+    .map-node .node-ico{width:38px; height:38px;}
+    .map-node.locked .node-ico,.map-node.preview .node-ico{width:30px; height:30px;}
+  }
+
+  /* v0.71.0：把 `.tb-toggle` 的**触控命中区**放大到 ~34px 高，但**不加一点布局高度**。
+     为什么不用 `min-height:30px`：实测 22→30 在 640×360 上白吃 8px、把整页从 1px 顶到 9px
+     溢出，而且换 `min-height:28px` + 收顶栏 padding 也只压回 3px —— **这笔高度在最小的
+     那一档买不起**。命中区用 `::after` 撑出去则是零布局成本的（实测 640×360 仍 1px、
+     844×390 仍 0、960×540 仍 0）。
+     ⚠️ 为什么用 `pointer:coarse` 分轴而不是再切一档 max-height：T-short 同时覆盖真手机横屏
+        （844×390 起，手指操作）和 640×360 这类**桌面窗口**（有鼠标，只需点得中），
+        `pointer:coarse` 正好是这条分界线（与竖屏闸 :1530 同一套判据）。
+     ⚠️ 写在 T-short **之后** —— 同特异度靠书写顺序取胜（`@media` 不加特异度）。
+     ⚠️ 无头夹具是 fine pointer，**这条在夹具里不生效** ⇒ 上面那组数是用 `css=` 注入
+        同一份声明在 640×360 / 844×390 / 960×540 上单独量出来的（见更新日志）。
+     ⚠️ 上下各撑 6px 会吃进顶栏 `gap:4px` 的 2px —— 顶栏本来就是折行的密集区，
+        这 2px 换的是命中区从 22px 到 34px（触屏推荐值的 3/4），是划算的。 */
+  @media (max-height:560px) and (pointer:coarse){
+    .tb-toggle{position:relative;}
+    .tb-toggle::after{content:""; position:absolute; inset:-6px -4px;}
+  }
+
+  /* —— 竖屏闸 ——
+     ⚠️ 必须带 (pointer:coarse)。裸写 orientation:portrait 会把 900x1200 的桌面窗口
+        （devtools 停靠、竖屏副屏）当场锁死 —— 那是这条方案最大的代价，必须挡掉。
+     隐藏沿用 `body.at-menu #app{display:none}` 那套已验收的写法，不新造轮子。
+     ⚠️ 冒烟测不到这条：冒烟宿主里 innerWidth / matchMedia 零命中，
+        只能用实拍夹具的 iframe 模式截图肉眼验。 */
+  #rotate-tip{display:none; position:fixed; inset:0; z-index:200; background:#0b0a09;
+    flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    color:var(--gold); font-family:var(--font-kai); text-align:center;}
+  #rotate-tip .rt-ico{font-size:52px; animation:rtSpin 2.4s ease-in-out infinite;}
+  #rotate-tip .rt-main{font-size:22px; letter-spacing:6px;}
+  #rotate-tip .rt-sub{font-size:13px; color:var(--dim); letter-spacing:1px; font-family:"Microsoft YaHei",sans-serif;}
+  @keyframes rtSpin{0%,35%{transform:rotate(0)}65%,100%{transform:rotate(90deg)}}
+  @media (orientation:portrait) and (pointer:coarse){
+    #app, #overlay{display:none;}
+    #rotate-tip{display:flex;}
   }
 </style>
 </head>
@@ -637,10 +1594,11 @@
 <div id="float-msg"></div>
 <div id="turn-banner"></div>
 <div id="boss-intro"></div>
+<div id="rotate-tip"><div class="rt-ico">▯</div><div class="rt-main">请 横 屏</div><div class="rt-sub">《志怪塔》是横屏游戏，把手机转过来即可继续</div></div>
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.64.2</small><span class="title-actions"><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.71.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>
@@ -651,6 +1609,14 @@
       </div>
       <div id="turn-summary"></div>
       <div class="hand-area">
+        <!-- v0.69.0：抽牌堆 / 弃牌堆。顶面与侧棱的图地址由 pileInit()（js/10_audio.js）
+             用 assetURL() 写进 --pile-back-img / --pile-side-img —— **这里不能写
+             <img src="素材/…">**：打包后路径全变，且 verify_dist.py 的 _css_urls / 图片闸会红。 -->
+        <div class="pile pile-discard" id="pile-discard" title="弃牌堆">
+          <div class="pile-slab"></div><div class="pile-slab"></div><div class="pile-slab"></div>
+          <div class="pile-face"></div>
+          <span class="pile-n" id="pile-discard-n">0</span>
+        </div>
         <div class="rune-display" id="rune-display">
           <img src="素材/rune.png" class="rune-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
           <span class="rune-fallback">◆</span>
@@ -660,6 +1626,11 @@
         <div class="endcol">
           <div id="end-turn-hint" class="off"></div>
           <button class="btn" id="endTurn">结束回合</button>
+        </div>
+        <div class="pile pile-draw" id="pile-draw" title="抽牌堆">
+          <div class="pile-slab"></div><div class="pile-slab"></div><div class="pile-slab"></div>
+          <div class="pile-face"></div>
+          <span class="pile-n" id="pile-draw-n">0</span>
         </div>
       </div>
       <div class="hint">点击/上拖出牌 · 攻击牌按住拖箭头指向敌人 · 长按卡牌放大描述 · 空格=结束回合 · 悬停金色词看说明</div>

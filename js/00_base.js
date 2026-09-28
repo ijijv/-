@@ -218,6 +218,14 @@ function fxCellPos(i, cols, box){
   const c=Math.max(1, cols||8);
   return { x:-(i%c)*box, y:-Math.floor(i/c)*box };
 }
+/* 四个字符串别名 → 选择器。fxAnchorRect（创建时）与 fxResolveAnchor（重锚时）共用这一张表，
+   别各写一份 —— v0.64.0 就是靠改这张表把 'summon' 从「屏幕中心」挪到 #player-panel 的。 */
+function fxAliasSel(anchor){
+  return anchor==='player' ? '#player-panel'
+       : anchor==='field'  ? '#enemy-panel'
+       : anchor==='enemy'  ? '#enemy-panel'
+       : anchor==='summon' ? '#player-panel' : null;
+}
 /* 锚点 → 视口矩形。'enemy'/'field'/'player'/'summon' 四个别名之外也能直接传元素。
    v0.64.0 起 'summon' 也落到 **#player-panel**（原先落「屏幕中心」，短边恒 0 ⇒ 被 96px 下限兜住，
    四个召唤特效会明显偏小）。只有**连元素都量不到**时才退到屏幕中心那一行。 */
@@ -229,9 +237,7 @@ function fxAnchorRect(anchor){
   // v0.64.0：'summon' 落到 #player-panel 而不是「屏幕中心、短边 0」——
   // 召唤位没有自己的元素，而召唤物是**站在玩家这一侧**的（纸人/小鬼/尸王/阴兵）。
   // 落屏幕中心时短边恒 0 ⇒ 盒子被 96px 下限兜住，四个召唤特效会明显小于周围的单位。
-  const sel = anchor==='player' ? '#player-panel'
-            : anchor==='field'  ? '#enemy-panel'
-            : (anchor==='enemy') ? '#enemy-panel' : (anchor==='summon') ? '#player-panel' : null;
+  const sel=fxAliasSel(anchor);
   if(sel){
     const el=document.querySelector(sel);
     if(el && el.getBoundingClientRect){
@@ -240,6 +246,106 @@ function fxAnchorRect(anchor){
     }
   }
   return { left:window.innerWidth*0.5, top:window.innerHeight*0.42, width:0, height:0 };   // 量不到元素才落这里
+}
+/* ===================== v0.69.0：特效重锚 =====================
+   用户报的 bug：三个敌人 / Boss 出场时玩家面板会上下移动，**特效跟不上**。
+   根因是 playFx / floatDamage / defenseFx 都只在**调用那一刻**量一次锚点坐标就把
+   left/top 写死，之后再没人改过。而 #player-panel 的纵向位置恰恰是由敌人面板高度决定的
+   —— `.battle{align-items:flex-end}`（原型.html:92）+ battleHeadroom() 按敌人数写的
+   #enemy-panel padding-top（60_boot.js:248：1 敌 2px / 3 敌 44px / 5 敌 62px）。
+
+   修法：锚点**不再存元素引用，改存可重新解析的描述符**（render() 每次整块重写两个面板的
+   innerHTML，元素引用必然游离），并在 render() 末尾重锚一次。
+
+   为什么由 render() **直接调用**、而不是靠特效自己的 rAF 回调顺手重算：
+   实测 30_engine.js:374（玩家受击）只调 hurtVignette() + floatDamage()，**没有精灵图特效**
+   ⇒ 那个窗口里没有任何 rAF 在跑，靠 rAF 驱动会漏掉纯飘字的场景。而 render() 是"面板要变了"
+   的唯一汇集点，直接调它覆盖面最全，且不需要引入纪元计数器、不需要碰 rAF、不需要新定时器
+   （定时器会让 node 冒烟进程退不出）。代价是每次 render 多一次强制同步布局 ——
+   但没事可做时 fxReanchor **在任何 getBoundingClientRect 之前就返回**，零开销。 */
+let NUM_LIVE = [];                       // 只飘字/光环类（结构比 FX_LIVE 简单，但走同一个重锚批次）
+function fxAnchorSpec(anchor){
+  if(typeof anchor==='string') return { kind:'alias', v:anchor };
+  if(anchor && anchor.getBoundingClientRect){
+    const uid=(anchor.dataset && anchor.dataset.uid) ? anchor.dataset.uid : null;
+    if(uid) return { kind:'uid', v:uid };                      // 敌人：render() 重写 innerHTML 后按 uid 找回
+    if(anchor.id==='player-panel' || anchor.id==='enemy-panel') return { kind:'sel', v:'#'+anchor.id };
+    /* 玩家血条（多数飘字的锚点）也是每次 render 重建的，但它永远在 #player-panel 里且唯一。
+       closest 在 vm_host 的 dummyEl 上可能不存在 ⇒ 必须守卫。 */
+    if(anchor.classList && anchor.classList.contains && anchor.classList.contains('hpbar') &&
+       (typeof anchor.closest!=='function' || anchor.closest('#player-panel'))) return { kind:'sel', v:'#player-panel .hpbar' };
+    return { kind:'el', v:anchor };
+  }
+  return { kind:'none', v:null };
+}
+/* 描述符 → 当前矩形。**解不到一律返回 null（= 冻结）**，绝不回落屏幕中心：
+   450ms 的特效播到一半"啪"地跳到屏幕正中，比停在原地难看得多。
+   fxAnchorRect 的屏幕中心兜底只在**创建时**量不到才用（那是"无处可贴"的合理选择）。 */
+function fxResolveAnchor(spec){
+  if(!spec) return null;
+  let el=null;
+  /* 别名走 fxAliasSel 而**不走 fxAnchorRect**：后者量不到元素时会回落「屏幕中心」，
+     那正是重锚最不该做的事（见上）。这里所有分支的解不到一律 null = 冻结。 */
+  if(spec.kind==='alias'){ const sel=fxAliasSel(spec.v); if(!sel) return null; el=document.querySelector(sel); }
+  else if(spec.kind==='uid') el=document.querySelector('#enemy-panel .enemy[data-uid="'+spec.v+'"]');
+  else if(spec.kind==='sel') el=document.querySelector(spec.v);
+  else if(spec.kind==='el'){ if(spec.v && spec.v.isConnected===false) return null; el=spec.v; }
+  else return null;
+  if(!el || !el.getBoundingClientRect) return null;
+  const r=el.getBoundingClientRect();
+  return (r && r.width>0 && r.height>0) ? r : null;
+}
+/* 算新坐标。返回 null = 不用写（NaN 或与上次相同）。
+   ax/ay 是「锚点矩形内的比例」，bx/by 是「盒子自身的偏移」：
+     playFx     中心 0.5/0.5，bx=box/2+ox、by=box/2+oy（ox/oy 见 FX_SHEETS，是内容框修正）
+     floatDamage 0.5/0.4（历史值，别改），bx=by=0（.fx-dmg 自带 translate(-50%,-50%) 居中）
+     defenseFx  0.5/0.45（历史值），bx=by=0（.fx-halo 同样自带居中）
+   lx===l && ly===t 短路 ⇒ 站着的特效**零 style 写入**。 */
+function fxSpot(st, r){
+  const l=Math.round(r.left + r.width*st.ax - st.bx);
+  const t=Math.round(r.top  + r.height*st.ay - st.by);
+  if(!isFinite(l) || !isFinite(t)) return null;   // vm_host 的 sandbox 没有 innerWidth ⇒ 兜底会算出 NaN
+  if(l===st.lx && t===st.ly) return null;
+  return { l:l, t:t };
+}
+/* 重锚全部活体。**读一遍 → 写一遍，中间不读**：阶段①里所有 getBoundingClientRect 之间
+   零 style 写入 ⇒ 浏览器最多付一次强制同步布局；不分批则 N 个特效 = N 次。 */
+function fxReanchor(){
+  const jobs=[];
+  const k=Object.keys(FX_LIVE);
+  for(let i=0;i<k.length;i++){ const st=FX_LIVE[k[i]]; if(st && !st.dead && st.spec) jobs.push(st); }
+  for(let i=0;i<NUM_LIVE.length;i++){ const st=NUM_LIVE[i]; if(st && st.spec) jobs.push(st); }
+  if(!jobs.length) return;                        // ← 无事可做时在这里就返回，一个 rect 都不量
+  for(let i=0;i<jobs.length;i++){
+    const st=jobs[i], r=fxResolveAnchor(st.spec);
+    st.pend = r ? fxSpot(st, r) : null;           // r=null ⇒ 冻结（保留 lx/ly，不跳屏幕中心）
+  }
+  for(let i=0;i<jobs.length;i++){
+    const st=jobs[i], p=st.pend; st.pend=null;
+    if(!p) continue;
+    st.lx=p.l; st.ly=p.t;
+    st.el.style.left=p.l+'px'; st.el.style.top=p.t+'px';
+  }
+}
+function fxUntrack(st){ const i=NUM_LIVE.indexOf(st); if(i>=0) NUM_LIVE.splice(i,1); }
+/* resize 也重锚一次（视口变了 ⇒ 相对定位的锚点位移）。
+   `typeof window!=='undefined' && window.addEventListener` 是**仓库既有惯例**（见 50_ui.js:586/730），
+   不是多余的防御：_patch/vm_host.js 的沙箱**没有顶层 addEventListener**（只有 document 上有，:76），
+   裸写 window.addEventListener('resize',…) 会让冒烟在**加载期**就 TypeError 崩掉。
+   本文件是经典脚本、只执行一次，所以不需要 50_ui.js 那种 _xxxBound once 标志。 */
+if(typeof window!=='undefined' && window.addEventListener){
+  window.addEventListener('resize', function(){ fxReanchor(); });
+}
+/* 挂进重锚表并**立刻摆一次**（创建时的首次定位，与后续重锚共用 fxSpot 同一套公式）。 */
+function fxTrack(el, anchor, ax, ay, bx, by){
+  const st={ el:el, spec:fxAnchorSpec(anchor), ax:ax, ay:ay, bx:bx||0, by:by||0, lx:null, ly:null, pend:null };
+  if(st.spec.kind!=='none'){
+    const r=fxResolveAnchor(st.spec);
+    const p=r ? fxSpot(st, r) : null;
+    if(p){ st.lx=p.l; st.ly=p.t; el.style.left=p.l+'px'; el.style.top=p.t+'px'; }
+  }
+  NUM_LIVE.push(st);
+  return st;
 }
 function fxStop(key){
   const st=FX_LIVE[key]; if(!st) return;
@@ -271,8 +377,14 @@ function playFx(name, anchor, opts){
      照格子中心贴到锚点上，scale 一放大就整块沉到单位脚底下。补完之后
      **内容框的中心**落在锚点中心 —— 与素材留白多少、scale 多少都无关。 */
   const ox=(S.ox||0)*box, oy=(S.oy||0)*box;
-  el.style.left=Math.round(r.left+r.width/2-box/2-ox)+'px';
-  el.style.top=Math.round(r.top+r.height/2-box/2-oy)+'px';
+  /* v0.69.0：首次定位算成局部量 lft/tp —— 既写进 style，也存进 st.lx/ly。
+     st 在下面才建，所以先算好；lx/ly 留空的话重锚的短路就失效，每个 render 都要白写一次 style。
+     isFinite 守卫：fxAnchorRect 的兜底在 vm_host 的 sandbox 里是 NaN（那边没有 innerWidth），
+     NaN 写进 style.left 会被浏览器丢弃，且 NaN===st.lx 恒假 ⇒ 每个 render 都白写。 */
+  const lft=Math.round(r.left+r.width/2-box/2-ox);
+  const tp =Math.round(r.top+r.height/2-box/2-oy);
+  if(isFinite(lft)) el.style.left=lft+'px';
+  if(isFinite(tp))  el.style.top =tp+'px';
   el.style.backgroundImage='url("'+assetURL('fx/'+name+'.png')+'")';
   el.style.backgroundSize=(S.c*box)+'px auto';
   /* v0.64.0：i0 = 起始帧。素材每张图的两端都有整格的**全透明**帧（实测最长首空 6 帧、尾空 9 帧），
@@ -284,7 +396,12 @@ function playFx(name, anchor, opts){
   el.style.backgroundPosition=p0.x+'px '+p0.y+'px';
   fxLayer().appendChild(el);
   if(opts.still) return el;                   // 钉帧：不进 FX_LIVE、不排 rAF（只给截图夹具用）
-  const st={ el:el, key:key, i:0, S:S, i0:i0, box:box, dead:false,
+  const st={ el:el, key:key, i:0, S:S, i0:i0, box:box, dead:false, pend:null,
+             /* v0.69.0 重锚字段：spec 是可重新解析的锚点描述符（不存元素引用 —— render() 每次
+                整块重写面板 innerHTML，引用必然游离）；ax/ay 是锚点矩形内的比例（精灵图取中心）；
+                bx/by 是盒子自身偏移（半个格子 + ox/oy 内容框修正）；lx/ly 是上次写入值，用于短路。 */
+             spec:fxAnchorSpec(anchor), ax:0.5, ay:0.5, bx:box/2+ox, by:box/2+oy,
+             lx:isFinite(lft)?lft:null, ly:isFinite(tp)?tp:null,
              dur:1000/(24*(opts.rate||1)),    // 源速 24fps
              t0:(window.performance&&performance.now?performance.now():Date.now()), raf:0 };
   FX_LIVE[key]=st;
@@ -324,14 +441,12 @@ function floatDamage(text, kind, anchor, opts){
   if(!numAppend(inner, kind, text)) inner.textContent=text;
   span.appendChild(inner);
   fxLayer().appendChild(span);
-  if(anchor){
-    const r=anchor.getBoundingClientRect();
-    span.style.left=(r.left+r.width/2)+'px';
-    span.style.top=(r.top+r.height*0.4)+'px';
-  } else {
-    span.style.left='50%'; span.style.top='28%';
-  }
-  setTimeout(()=>span.remove(), 950);
+  /* v0.69.0：飘字也进重锚表。ax/ay 取 0.5/0.4（**0.4 是历史值，不是 0.5，别顺手"修正"**）；
+     bx/by 恒 0 —— .fx-dmg 自带 `transform:translate(-50%,-50%)`（原型.html:769），left/top 就是中心。
+     无锚点时走百分比定位（50%/28%）并**不登记**：那种情况下它本就贴着视口，没有可漂的锚。 */
+  const st = anchor ? fxTrack(span, anchor, 0.5, 0.4, 0, 0) : null;
+  if(!anchor){ span.style.left='50%'; span.style.top='28%'; }
+  setTimeout(()=>{ span.remove(); if(st) fxUntrack(st); }, 950);
 }
 function hurtVignette(){
   if(!fx()) return;
@@ -407,13 +522,16 @@ function cinnabarBurst(x,y){
 function defenseFx(){
   const p=document.getElementById('player-panel');
   const r=p?p.getBoundingClientRect():null;
-  const x=r?r.left+r.width/2:window.innerWidth*0.28;
-  const y=r?r.top+r.height*0.45:window.innerHeight*0.3;
   const s=Math.max(130, (r?r.width:180)*1.25);
   const d=document.createElement('div'); d.className='fx-halo';
-  d.style.left=x+'px'; d.style.top=y+'px'; d.style.width=s+'px'; d.style.height=s+'px';
+  d.style.width=s+'px'; d.style.height=s+'px';
+  /* v0.69.0：锚的正是 #player-panel —— **就是那个随敌人数上下移动的面板**，
+     而 .fx-halo 是 `left:0;top:0` + `transform:translate(-50%,-50%)`（原型.html:885），
+     所以 left/top 就是中心点。ax/ay 取 0.5/0.45（历史值）。 */
+  const st = p ? fxTrack(d, p, 0.5, 0.45, 0, 0) : null;
+  if(!p){ d.style.left=(window.innerWidth*0.28)+'px'; d.style.top=(window.innerHeight*0.3)+'px'; }
   fxLayer().appendChild(d);
-  setTimeout(()=>d.remove(), 650);
+  setTimeout(()=>{ d.remove(); if(st) fxUntrack(st); }, 650);
 }
 function spiritFx(){
   const d=document.createElement('div'); d.className='fx-mist';
