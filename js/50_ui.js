@@ -1446,7 +1446,10 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   const wasOpen = !!(ov && !ov.classList.contains('hidden'));
   // v0.68.2：摘之前先记下"原来挂的是哪个场景" —— 下一行的 remove 之后就问不出来了。
   // v0.71.0：+ hero-scene（选英雄屏专属的 700px 放宽限宽）。
-  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene'];
+  // v0.72.0：+ pick-scene（战斗里的**选牌小窗**：去掉纯色底、卡牌 1.25 倍，只桌面档）。
+  //   六处调用（忘忧 / 焚符 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一）**都必须显式传第三实参**
+  //   —— sceneChanged 是拿它比出来的：不传就没有场景类，从火符直接进易物也不会重播进场动画。
+  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene'];
   const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
   // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
   // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
@@ -1454,7 +1457,7 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   // v0.66.0：.scroll-scene 同理（图鉴/排行榜/设置的卷轴落下）—— 漏摘的话，从主菜单看完图鉴
   // 再回战斗，奖励面板也会带着卷轴动画从顶上掉下来。
   if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
-    ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); }
+    ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene'); }
   ov.classList.remove('hidden');
   // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
   // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。
@@ -1521,9 +1524,14 @@ function handCardHTML(c, disabled, i, n){
      完整语义在长按放大弹窗与关键词说明里，牌面只留一眼可辨的记号。 */
   const sealTag = sealed ? `<div class="exhaust-tag">封印 ${c.sealed}</div>` : '';
   const rot=((i-(n-1)/2)*3).toFixed(1);
+  /* v0.72.0：这张牌正被抽牌动画「飞进来」⇒ 终态那张先隐形（透明度由动画层收尾时还原）。
+     判据是**对象身份**（NEW_CARDS 是 WeakSet），不是「手牌最后一张」—— groupHand() 会重排 G.hand，
+     按下标找必然找错。无头下 animDrawQueued 早退、根本不往 NEW_CARDS 里写 ⇒ 这里恒为空串，
+     输出与今天**逐字节相同**（冒烟只查 class="cost" / card/leifu.png / cardPointerDown，本就安全）。 */
+  const newAttr = NEW_CARDS.has(c) ? ' data-new' : '';
   /* sealTag 与 ctype 都在 .cplate **之后**（两者都是相对 .card 绝对定位的）——
      .exhaust-tag 改绝对定位后不再吃 ~16px 行高，这才是「被封印的牌描述看不全」的根因。 */
-  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}" style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div>${sealTag}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
+  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}"${newAttr} style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div>${sealTag}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
 }
 function intentText(e){
   const st=(e.strength||0); // v0.61 C2：力量每点 +1
@@ -1551,7 +1559,9 @@ function intentText(e){
     default: return '…';
   }
 }
-// 纵深错落：idx 0 最低(0)、右→左逐级抬高；liftY 越大越靠后（见 enemyPanelHTML）
+// v0.60 的纵深错落表。v0.72.0 起它**不再决定敌人抬多高**（纵向改由 SLOT_SHAPE 的弧线
+// 主导），但仍以「净空下限」的身份活着：battleHeadroom() 拿它算 --headroom 的下界。
+// ⚠️ 这个数组与 battleHeadroom() 本身一个字都不能改（冒烟逐条钉死）。
 const RISE_LIFT=[0,42,20,60,30];
 // 当前场上「后排上抬」的最大幅度 —— 用作 #enemy-panel 的 padding-top，
 // 保证被抬起的后排敌人不会越过 .battle 上沿去盖住 #topbar（v0.60 修）
@@ -1567,25 +1577,107 @@ function battleHeadroom(){
    ⚠️ 必须带 window.getComputedStyle 守卫（照 mapCamRange 的写法）：冒烟宿主里
       既没有它也没有 innerWidth，漏了守卫会算出 NaN，而 NaN 会一路写进
       内联 transform 与 z-index。 */
+/* v0.72.0：弧线振幅的**横纵两个倍率**。
+   `--rise-unit` 管纵向（敌人往上抬多少），`--slot-dx-k` 管横向（向左拉向玩家多远）。
+   `--rise-unit` 是 v0.70.0 就有的旋钮，那时它乘的是 RISE_LIFT（后排上抬幅度）；
+   v0.72.0 起纵向改由 SLOT_SHAPE 的 dy 主导，它乘的就是 dy —— 语义一个字没变
+   （「敌人往上抬多少」），换的只是被乘的那张表。所以名字不改成 --slot-dy-k：
+   两个名字一起看反而对不上，而它本来就是这个意思。
+   为什么做成 CSS 变量：矮屏档只要写一条同特异度、书写更后的同名变量就能压小，
+   **JS 完全不需要知道当前是哪个档**（所以也不需要 innerWidth，无头宿主里照样安全）。
+   ⚠️ 两个都必须容忍 0：窄屏档（≤520 / ≤360）要把弧线**整个归零**（那两档
+      .battle 是 flex-direction:column ⇒ 玩家在上、敌人在下，「玩家左下」本来就失效）。
+      所以判据是「有限且 ≥0」—— v0.70.0 写的是 `>0`，它会把 0 误判成非法而回落成 1，
+      窄屏当场长出弧线（v0.70.0 时 `--rise-unit` 的合法值域只有 >0，没有 0 这一档，
+      所以那时写 >0 是对的，现在不是了）。
+   ⚠️ isFinite 同样是硬要求：变量写空 ⇒ NaN ⇒ 一路写进 --ex/--ey ⇒
+      浏览器**丢弃整条 transform**（不是退回 0）⇒ 所有敌人塌回原点，静默无报错。
+   无头宿主里没有 getComputedStyle ⇒ 早退 ⇒ 两个倍率恒为 1。 */
 let _riseK=1;
+let _slotDxK=1;
 function refreshRiseK(){
   try{
     const cs=(typeof window!=='undefined' && window.getComputedStyle) ? window.getComputedStyle(document.documentElement) : null;
     if(!cs) return;
     const v=parseFloat(cs.getPropertyValue('--rise-unit'));
-    _riseK=(isFinite(v) && v>0) ? v : 1;
-  }catch(e){ _riseK=1; }
+    _riseK=(isFinite(v) && v>=0) ? v : 1;
+    const dxk=parseFloat(cs.getPropertyValue('--slot-dx-k'));
+    _slotDxK=(isFinite(dxk) && dxk>=0) ? dxk : 1;
+  }catch(e){ _riseK=1; _slotDxK=1; }
+}
+/* v0.72.0：弧线槽位表。下标 = 纵深秩 r，**r=0 是最前排（最浅 / 最低 / 最靠玩家）**。
+   秩由 enemyPanelHTML 里的 `rank = 存活数-1-pos` 算出（pos = filter 之后的位置）：
+   `#enemy-panel` 是 row-reverse ⇒ G.enemies[0] 落在**最右**，配 rank=n-1-pos 正好让
+   「数组首元素 = 最深 = 最高 = 最右」⇒ 斜向从右上（远）降到左下（贴近玩家），
+   就是用户要的「包围玩家 + 集中在右上角」。**不要动 G.enemies 的顺序** ——
+   30_engine.js 的 summon / boss 分裂都依赖数组序，秩只在 enemyPanelHTML 内部算。
+   dx ≤ 0：只向左（向玩家）拉，**不取正值**。为什么不能取正：row-reverse 下最右那只
+     **已经**贴着右缘，再给它正 dx 就会顶出 #enemy-panel 右缘，只能靠加大 padding-right
+     兜，而 padding-right 会直接吃掉可用宽（1280×720 下只有 818px），把 3 敌从一行挤成两行。
+     取负则只会把它从右缘往内收 —— 正好就是用户要的「不贴角」。
+   dx 的形状：**最浅那只恒为 0（不动），越深拉得越多**。
+     ⇒ 整组「压在右上方、朝玩家俯下」：越靠后的越往左下收，最前排那只留在原地
+       站在地平线上 = 「包围玩家」+「集中右上角」。
+     ⚠️ 反过来（浅的拉最多、深的归 0）试过，**实测撞车**：960×540 五敌（2 elite+3 normal）
+        那一行正好塞满面板（786/790），最前排那只的 flex 左边只余 4px，再往左拉 29px
+        就压进 #player-panel（左沿 131 vs 玩家面板右沿 146）。而「浅的归 0」把最前排
+        **钉死在 flex 位上**（它按定义就在面板内）⇒ 与玩家面板相交这条风险**由构造排除**，
+        不靠实拍撞出来。这一条是本表唯一不能随便调头的方向。
+     dy ≥ 0：只向上抬。抬高量由 #enemy-panel 的 padding-top（--headroom）兜住。
+   两个位移都**不参与 flex 布局**（transform 是纯绘制层）⇒ 弧线完全不改变换行判定。
+   ⚠️ dy 的振幅是本批的**预算命门**，它是照 --headroom 的封套定的、不是照参考图定的：
+     62 就是 v0.71.0 已有的净空上限（RISE_LIFT 最大值 60 + 2），所以基档高度零变化。
+     往上调只会让 .battle 变高、把竖滚放回来（见 slotHeadroom 那条注释）。 */
+const SLOT_SHAPE = [
+  {dx:  0, dy: 0},   // ① 最前排：站在地平线上，与玩家同高（**横向钉在 flex 位上，不动**）
+  {dx:-14, dy:14},
+  {dx:-28, dy:28},
+  {dx:-42, dy:42},
+  {dx:-54, dy:54},   // 越深越往左下收 ⇒ 整组朝玩家俯下
+  {dx:-64, dy:62},   // ⑥ 满场（boss 分裂 / 召唤）
+];
+/* 场上存活（含正在播死亡动画）的敌人数 —— 与 enemyPanelHTML 收到的 filter 同一口径。 */
+function slotCount(){
+  let n=0;
+  (G.enemies||[]).forEach(e=>{ if(alive(e)||e.dying) n++; });
+  return n;
+}
+function slotShift(r){
+  const last=SLOT_SHAPE.length-1;
+  const i=Math.max(0, Math.min(last, r|0));   // `r|0` 顺手把 NaN / undefined / 越界一并收进 [0,last]
+  const s=SLOT_SHAPE[i];
+  return { dx:Math.round(s.dx*_slotDxK), dy:Math.round(s.dy*_riseK) };
+}
+/* 弧线自身的最大上抬量 —— 与 battleHeadroom() 同构，由调用点取两者的 max 当 --headroom。
+   ⚠️ 必须**按当前敌人数**取最大，不能扫全表：单敌时 rank 只可能是 0 ⇒ 实际抬升 0，
+      扫全表却会返回 62 ⇒ --headroom=64 ⇒ 单敌也白吃 62px，`.battle` 从 290 涨到 345、
+      整页多 55px。表在 dy 上是单调的，所以「前 n 项取 max」正好等于实际会用到的最大 dy。 */
+function slotHeadroom(){
+  const n=slotCount();
+  if(n<=0) return 0;
+  let mx=0;
+  for(let r=0;r<n;r++){ const y=slotShift(r).dy; if(isFinite(y)) mx=Math.max(mx,y); }
+  return mx;
 }
 function enemyPanelHTML(e, idx){
   const ehp=Math.max(0,e.hp/e.maxHp*100);
   const ehPrev=(ENEMY_HP_PREV[e.uid]===undefined)?ehp:ENEMY_HP_PREV[e.uid];
   ENEMY_HP_PREV[e.uid]=ehp;
   /* v0.61.33：删除「点击锁定」后不再有选中态 —— 目标只由拖拽落点决定（拖拽中的高亮是 .drag-target） */
-  // 纵深错落（振幅见 RISE_LIFT）。v0.70.0：再乘矮屏倍率 _riseK —— 基准档是 1，
-  // 所以这里的输出与 v0.69.0 逐像素相同。
-  const liftY=Math.round((idx>=0?RISE_LIFT[idx%RISE_LIFT.length]:0)*_riseK);
+  // 纵深错落：纵向位移改由弧线槽位表主导（见 SLOT_SHAPE）。
+  // ⚠️ RISE_LIFT 不再决定这只敌人抬多高 —— 它是**非单调**的（0/42/20/60/30），
+  //    当斜向纵深的基线会让中间那只反而比最深的那只高。RISE_LIFT 与 battleHeadroom()
+  //    本身一个字没改，它们以「净空下限」的身份继续被 60_boot.js 调用（--headroom 取 max）。
+  const rank=(idx>=0 ? slotCount()-1-idx : 0);
   const edef=ENEMIES[e.key];
   const eSize=e.boss?'e-boss':e.elite?'e-elite':(edef&&edef.summon)?'e-summon':'e-normal';
+  /* v0.72.0：弧线位移。纵向与横向都由槽位表给（sh.dy / sh.dx），已经乘过矮屏倍率。
+     z-index 仍是 `2000-上抬量`：dy 在秩上是单调的 ⇒ 「越深越高 ⇒ 越深越靠后」，
+     也就是前排永远压住后排（命中的 z-index 决胜依赖这一条）。
+     内联 `--ex/--ey` 而不是内联 transform：见 原型.html 里 `.enemy` 那条注释。 */
+  const sh=slotShift(rank);
+  const ex=sh.dx;
+  const ey=sh.dy;
   let badges='';
   if(e.curse>0) badges+=`<span class="badge curse" data-tip="kw:诅咒" style="cursor:help">☠️诅咒 ×${e.curse}</span>`;
   if(e.charm>0) badges+=`<span class="badge charm" data-tip="kw:魅惑" style="cursor:help">💘魅惑 ×${e.charm}</span>`;
@@ -1596,7 +1688,7 @@ function enemyPanelHTML(e, idx){
   if(e.phase2) badges+=`<span class="badge affix" data-tip="kw:轮回" style="cursor:help">🔄轮回·二阶段</span>`;
   if(e.affixes && e.affixes.length) e.affixes.forEach(a=>{ const af=AFFIXES.find(x=>x.id===a.id); badges+=`<span class="badge affix" data-tip="affix:${a.id}" style="cursor:help">${af?af.name:a.id}${a.tier>1?'·'+a.tier:''}</span>`; });
   if(G.hero==='tianshi' && G.ybTarget===e.uid && G.summons.some(x=>x.type==='yinbing' && x.dur>0)) badges+=`<span class="badge ybtarget" data-tip="kw:阴兵目标" style="cursor:help">🎯阴兵目标</span>`;
-  return `<div class="enemy ${eSize} ${liftY>0?'edepth':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" style="z-index:${2000-liftY}; transform:translateY(-${liftY}px)">
+  return `<div class="enemy ${eSize} ${ey>0?'edepth':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" style="z-index:${2000-ey}; --ex:${ex}px; --ey:${-ey}px">
     ${artImg('enemy/'+e.key+'.png', '', 'eportrait '+eSize)}
     <div class="ename" data-tip="enemy:${e.key}">${KIND_ICON[e.kind]||''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
     <span class="stat">生命 <b>${e.hp}</b>/${e.maxHp}</span>

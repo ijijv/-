@@ -160,9 +160,11 @@ function showCardZoom(i){
      .menu-scene / .map-scene 时长按放大，
      会继承那套「整屏不透明底 + .panel 去掉底色」的样式，卡牌详情变成一张铺满屏幕的裸字。
      今天进战斗必经 showHeroSelect→showOverlay（已会摘），所以现在碰不到；
-     但把不变量补在两个入口上是这一处的既定口径（showOverlay 里那条 v0.61.42 注释同理）。 */
+     但把不变量补在两个入口上是这一处的既定口径（showOverlay 里那条 v0.61.42 注释同理）。
+     v0.72.0：顺带补上这里一直漏掉的 .hero-scene，并加上新的 .pick-scene —— 不摘的话，
+     从易物选牌小窗长按手牌放大，卡牌详情会变成一张"没有底、字叠在战场立绘上"的裸字。 */
   const __ov=document.getElementById('overlay');
-  if(__ov && __ov.classList){ __ov.classList.remove('map-scene'); __ov.classList.remove('menu-scene'); __ov.classList.remove('scroll-scene'); }
+  if(__ov && __ov.classList){ __ov.classList.remove('map-scene'); __ov.classList.remove('menu-scene'); __ov.classList.remove('scroll-scene'); __ov.classList.remove('hero-scene'); __ov.classList.remove('pick-scene'); }
   __ov.classList.remove('hidden');
   const x=document.getElementById('overlayCloseX'); if(x) x.style.display='';
 }
@@ -232,7 +234,9 @@ function renderTopbar(){
 }
 function render(){
   if(!G) return;
-  /* v0.70.0：读一次 --rise-unit（后排敌人上抬幅度的倍率，基准档=1、矮屏档压小）。
+  /* v0.70.0：读一次 --rise-unit（敌人上抬幅度的倍率，基准档=1、矮屏档压小）。
+     v0.72.0：同一个元素、同一个 computedStyle 对象上再多读一个 --slot-dx-k（横向幅度），
+     所以**不产生额外的强制样式重算**；弧线的纵向幅度复用 --rise-unit。
      为什么必须放在这里：每个敌人读一次 getComputedStyle 会付 N 次强制样式重算，
      违反「读一遍→写一遍，中间不读」；render() 开头是唯一合规的位置。 */
   refreshRiseK();
@@ -251,13 +255,21 @@ function render(){
     <div class="pstats"><span class="pstat-hp"><i></i>${G.hp}/${G.maxHp}</span>${(G.block>0||preBlock>0)?`<span class="pstat-block"><i></i>${G.block}</span>`:''}${preBlock>0?`<span class="pstat-preblock" data-tip="kw:预格挡"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0 L10 6.5 H6.8 V12 H3.2 V6.5 H0 Z" fill="#4aa8ff"/></svg>${preBlock}</span>`:''}</div>`;
   renderTopbar();
   const _epEl=document.getElementById('enemy-panel');
-  _epEl.innerHTML=G.enemies.filter(e=>alive(e)||e.dying).map(e=>enemyPanelHTML(e, G.enemies.indexOf(e))).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
+  /* v0.72.0：第二个实参从 `G.enemies.indexOf(e)`（**未过滤**的下标）改成 filter 后的位置。
+     弧线的秩是 `存活数-1-pos`，它要求 pos 密集地铺满 0..存活数-1 —— 一旦数组里躺着阵亡的
+     敌人（finishEndTurn 之后、render 之前就有这个窗口），未过滤下标会跳号，秩当场错位。
+     v0.70.0 用的是 RISE_LIFT[未过滤下标%5]，跳号只影响错落的小数级观感，所以那时无害。 */
+  _epEl.innerHTML=G.enemies.filter(e=>alive(e)||e.dying).map((e,i)=>enemyPanelHTML(e, i)).join('') || '<div style="color:var(--dim)">（敌人已清）</div>';
   /* v0.60：给后排错落留出净空，别顶到顶部栏。
      v0.70.0：从**内联 paddingTop** 改成写 CSS 变量。内联样式 CSS 打不过（除非 !important），
      矮屏档没法把它归零，5 敌时这 62px 会白吃掉矮屏预算的两成。走变量后，
      矮屏档写一条同特异度、书写更后的 `#enemy-panel{padding-top:2px}` 就盖掉了，
-     **JS 完全不需要知道当前是哪个档**。 */
-  _epEl.style.setProperty('--headroom', (2+battleHeadroom())+'px');
+     **JS 完全不需要知道当前是哪个档**。
+     v0.72.0：弧线位移也要净空，取两者的 max。为什么必须取 max 而不是让弧线自己报：
+     这个不变量是「净空 ≥ 实际上抬的最大值」，取 max **由构造保证**它成立
+     （RISE_LIFT 与 SLOT_SHAPE 谁大听谁的），漏一个就会让深秩敌人顶进 #topbar。
+     battleHeadroom() 仍然被调用（不是死代码），它的返回值本身没变。 */
+  _epEl.style.setProperty('--headroom', (2+Math.max(battleHeadroom(), slotHeadroom()))+'px');
   document.getElementById('turn-summary').innerHTML=G.turnSummary || '';
   if(!G.discardSelect && !G.exchange && !G.retainSelect) groupHand();
   document.getElementById('hand').innerHTML=G.hand.map((c,i)=>handCardHTML(c, G.energy<effectiveCost(c), i, G.hand.length)).join('') || '<div style="color:var(--dim)">（无手牌）</div>';
@@ -273,6 +285,13 @@ function render(){
      「三个敌人/Boss 出场，玩家面板挪了，特效留在原地」。
      放在**最后一行**：上面全是写操作，这里才读 rect ⇒ 整个 render 只付一次强制同步布局。
      没事可做时 fxReanchor 在任何 getBoundingClientRect 之前就返回（见 00_base.js）。 */
+  /* v0.72.0：动画开播点。选在 fxReanchor **之前**、render 的收尾处，理由有两条：
+     ① 手牌终位只有到这里才存在（开播要量终点），所以它必须在上面所有写操作之后；
+     ② 它自己不制造第二次强制布局 —— flush 先读几何、再往**固定定位**的 #anim-layer 里插克隆，
+        固定元素不参与主文档流，隐藏终态新卡写的是 opacity（不触发重排）⇒ 紧随的 fxReanchor
+        读到的仍是同一份布局。两边谁先谁后对结果无差别，放这里只是让「读几何」都聚在尾部。
+     pending 为空时 flush 直接早退，没动画的那些 render（绝大多数）零成本。 */
+  Anim.flush();
   if(typeof fxReanchor==='function') fxReanchor();
 }
 

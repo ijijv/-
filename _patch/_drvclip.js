@@ -43,7 +43,14 @@
     var st = document.createElement('style');
     st.textContent = '#overlay{transition:none !important;}'
       + '#overlay.hidden{display:none !important;}'
-      + '#log{transition:none !important;}';
+      + '#log{transition:none !important;}'
+      /* v0.72.0：**`#overlayWrap` 的进场动画也必须掐**。`@keyframes overlayIn` 的起点是
+         `scale(.985)`，而 showOverlay 之后夹具立刻量 —— 无头下合成器时钟不推进（`--virtual-time-budget`
+         只快进计时器），于是动画冻在起点，**整个面板连卡牌一起被缩了 1.5%**：
+         `width:165px` 的卡量出来是 163、`#overlayWrap` 的 1280 量出来是 1261。
+         这不是 CSS 的问题、也不是真实浏览器里的样子，但会让「1.25 倍到底生效没有」这类
+         逐像素断言永远差 2px ⇒ 必须掐掉，量的才是终态。 */
+      + '#overlayWrap{animation:none !important;}';
     (document.head || document.documentElement).appendChild(st);
   })();
 
@@ -205,15 +212,52 @@
        而它内部靠 flex-wrap 折行，`flex-basis:100%` 的子项**空着也占整行**。
        不铺开就只能看到「81」这个总数，没法判断该收哪一行。 */
     /* 敌人面板同理：它是纵向预算里最贵的一块，而它的高度是
-       `--headroom`（JS 按 RISE_LIFT 写）+ 单个敌人内部那一摞撑出来的，
+       `--headroom`（JS 按 RISE_LIFT 与弧线槽位表里更大的那个写）+ 单个敌人内部那一摞撑出来的，
        光看总数分不清是哪一半在吃。 */
     var ep = document.getElementById('enemy-panel');
     if (ep) {
-      log('   #enemy-panel 子项（' + ep.children.length + ' 个，只列第 1 个的内部）：');
+      /* v0.72.0：改成**逐只**上报 —— 弧线构图唯一真会出事的地方是几何，
+         而几何只有浏览器夹具量得到。每只打：尺寸类 / rect / 两个自定义属性 /
+         计算后的 transform（出处见原型.html 的 .enemy 规则），外加两条包含性判据。
+         ⚠️ `--ex/--ey` 走 getPropertyValue 而不是读 style 属性：要的是**计算值**，
+           内联 style 拿不到 var() 解析后的结果，也看不出规则被丢弃。 */
+      var epr = ep.getBoundingClientRect();
+      var epcs = cs(ep), pp = document.getElementById('player-panel');
+      var ppr = pp ? pp.getBoundingClientRect() : null;
+      log('   #enemy-panel 子项（' + ep.children.length + ' 个）'
+          + '  ' + Math.round(epr.left) + '→' + Math.round(epr.right)
+          + '  padding=' + epcs.paddingTop + ' ' + epcs.paddingRight + ' ' + epcs.paddingBottom + ' ' + epcs.paddingLeft
+          + '  --slot-dx-k=' + epcs.getPropertyValue('--slot-dx-k').trim()
+          + ' --rise-unit=' + epcs.getPropertyValue('--rise-unit').trim()
+          + (ppr ? '  #player-panel ' + Math.round(ppr.left) + '→' + Math.round(ppr.right)
+                 + ' 净距 ' + Math.round(epr.left - ppr.right) + 'px' : ''));
+      /* ⚠️ 「高出面板上沿」**不是**失败判据，#enemy-panel 没有背景也没有边框（原型.html 那条
+         规则里没有 background / border）⇒ 敌人越过它的盒边在视觉上什么都不发生。矮屏档
+         正是靠这一点把 padding-top 压到 2px 换高度的。
+         真正的失败是**顶进 #topbar** —— 那是 v0.60 修过的实机缺陷（战报被敌人盖住），
+         也是弧线纵向振幅唯一真会撞的墙。所以这里分开报：⚠=真失败，( )=只是越过了面板盒边。 */
+      var tbar = document.getElementById('topbar');
+      var tbr = tbar ? tbar.getBoundingClientRect() : null;
+      for (var ei = 0; ei < ep.children.length; ei++) {
+        var ee = ep.children[ei], er = ee.getBoundingClientRect(), ecs = cs(ee);
+        var w1 = (tbr && er.top < tbr.bottom - 0.5)
+          ? '  ⚠顶进顶栏 ' + Math.round(tbr.bottom - er.top) + 'px' : '';
+        var w2 = er.right > epr.right + 0.5 ? '  ⚠顶出面板右沿' : '';
+        var w3 = (ppr && er.left < ppr.right - 0.5 && er.right > ppr.left + 0.5 && er.top < ppr.bottom && er.bottom > ppr.top)
+          ? '  ⚠与玩家面板相交' : '';
+        log('     [' + ei + '] ' + String(ee.className || '').replace(/^enemy\s*/, '')
+            + '  ' + Math.round(er.width) + 'x' + Math.round(er.height)
+            + ' @' + Math.round(er.left) + ',' + Math.round(er.top)
+            + '  --ex=' + ecs.getPropertyValue('--ex').trim()
+            + ' --ey=' + ecs.getPropertyValue('--ey').trim()
+            + '  tf=' + (ecs.transform || 'none')
+            + (er.top < epr.top - 0.5 ? '  (高出面板上沿 ' + Math.round(epr.top - er.top) + 'px)' : '')
+            + (er.left < epr.left - 0.5 ? '  (左出面板沿 ' + Math.round(epr.left - er.left) + 'px)' : '')
+            + w1 + w2 + w3);
+      }
       var e0 = ep.children[0];
       if (e0) {
-        log('     .enemy  h=' + Math.round(e0.getBoundingClientRect().height)
-            + '  w=' + Math.round(e0.getBoundingClientRect().width));
+        log('     第 1 只的内部构成：');
         /* ⚠️ 要**直接子元素**（`children`）不是后代（`querySelectorAll('*')`）：
            `.enemy` 那一摞（立绘/名字/生命/血条/格挡/徽章/意图）才是撑高度的东西，
            而 `.badges` 里还嵌着 `.badge`，用后代选择器会被它们挤掉真实子项。 */
@@ -281,7 +325,7 @@
        少一个类都可能让几何与真实弹窗不一致（`.reward-cards .card.selected` 的金边
        就是靠 `selected` 这个类名命中的）。`sel=1` 让第 1 张处于选中态，把选中样式
        也一起量进去。                                                      */
-  function dialogReport(n, sel) {
+  function dialogReport(n, sel, scene) {
     var cards = [];
     for (var i = 0; i < n; i++) {
       var c = CARDS[i % CARDS.length];
@@ -291,13 +335,54 @@
         + (on ? '<div class="card-extra" style="color:var(--green)">✓ 已选</div>' : '') + '</div>');
     }
     showOverlay('<h2>焚 符 · 弃 牌</h2><p style="color:var(--red)">可弃任意张手牌，每弃 1 张触发一次效果（已选 <b>1</b> 张）</p>'
-      + '<div class="reward-cards">' + cards.join('') + '</div>');
+      + '<div class="reward-cards">' + cards.join('') + '</div>', undefined, scene || undefined);
+    measureDialog(n, false);
+  }
+
+  /* `live=1`：走**真实**的 renderDiscardSelect()，而不是上面逐字复刻的那份 HTML。
+     为什么非有它：dialogReport 的卡面标记是**手抄**的 —— 一旦 renderDiscardSelect 改了类名或结构，
+     夹具会继续量一个「已经不存在的界面」并且照样全绿，这正是「夹具与真实代码漂移」的典型形态。
+     live 模式下场景类（pick-scene）与桌面档的 1.25 倍卡宽都通过**真实代码路径**生效，漂移风险归零。
+     ⚠️ 它必须先有一场正常开局的战斗（G.hand / G 的各字段齐备），所以 go() 里把它排在 render() 之后。
+     用法：--q "&dialog=5&live=1"                                            */
+  function liveDialogReport(n) {
+    if (typeof renderDiscardSelect !== 'function') { log('  ! live：没有 renderDiscardSelect，判定不可用'); return; }
+    if (typeof G === 'undefined' || !G || !G.hand) { log('  ! live：G 还没起（要先开局）'); return; }
+    G.hand = fakeHand(n);
+    /* 复刻 renderDiscardSelect 的入口状态：待选数、已选 0 号（对应老模式的 sel=1，把选中金边也量进去）、
+       不挂来源卡（card=null ⇒ 取消时不回手，纯量测用）。 */
+    G.discardSelect = { need: n, picked: [0], card: null };
+    renderDiscardSelect();
+    measureDialog(n, true);
+  }
+
+  /* 两条入口共用的量测。live 只改「HTML 从哪来」，判据完全一样 —— 这样两边的数字可直接对照。 */
+  function measureDialog(n, live) {
     var panel = document.querySelector('#overlay .panel');
     if (!panel) { log('  ! 选牌小窗：没有 #overlay .panel，判定不可用'); return; }
     var pr = panel.getBoundingClientRect();
-    log('  选牌小窗（' + n + ' 张） #overlay .panel  ' + Math.round(pr.width) + 'x' + Math.round(pr.height)
+    log('  选牌小窗（' + n + ' 张' + (live ? '，live 真实渲染' : '') + '） #overlay .panel  '
+        + Math.round(pr.width) + 'x' + Math.round(pr.height)
         + ' @' + Math.round(pr.left) + ',' + Math.round(pr.top)
         + '  内部溢出=' + (panel.scrollHeight - panel.clientHeight));
+    /* v0.72.0 §四：这三个计算样式是「去纯色底」能不能被证明的唯一途径 ——
+       grep 到规则、子串闸绿，都只说明文本在文件里，不说明它活过了 CSS 解析。
+       ⚠️ 纯色底有**两个**来源（.panel 的 --ink2 与 #overlay 的 88% 黑幕），两个都要打。 */
+    var ov = document.getElementById('overlay');
+    log('  #overlay  class="' + (ov ? (ov.className || '(无)') : '?') + '"'
+        + '  backgroundColor=' + (ov ? window.getComputedStyle(ov).backgroundColor : '?'));
+    var pcs = window.getComputedStyle(panel);
+    log('  .panel computed  background-color=' + pcs.backgroundColor
+        + '  border-top-width=' + pcs.borderTopWidth
+        + '  padding=' + pcs.paddingTop + ' ' + pcs.paddingLeft
+        + '  max-height=' + pcs.maxHeight
+        + '  h2 投影=' + (function () {
+            var h = panel.querySelector('h2');
+            return h ? (window.getComputedStyle(h).textShadow || 'none').slice(0, 52) : '?';
+          })());
+    var w = document.getElementById('overlayWrap');
+    if (w) log('  #overlayWrap  width=' + Math.round(w.getBoundingClientRect().width)
+        + '（视口 ' + window.innerWidth + '）  computed max-width=' + window.getComputedStyle(w).maxWidth);
     var rc = document.querySelector('#overlay .reward-cards');
     if (rc) {
       var rr = rc.getBoundingClientRect();
@@ -312,6 +397,12 @@
       order.sort(function (a, b) { return a - b; });
       log('  卡宽 ' + (ks[0] ? Math.round(ks[0].getBoundingClientRect().width) : '?')
           + 'px · 行数 ' + order.length + '（每行 ' + order.map(function (t) { return rows[t]; }).join('/') + '）');
+      if (ks[0]) {
+        var k0 = window.getComputedStyle(ks[0]);
+        log('  第 1 张卡的 computed： width=' + k0.width + '  min-height=' + k0.minHeight
+            + '  flex=' + k0.flexGrow + '/' + k0.flexShrink + '/' + k0.flexBasis
+            + '  （1.25 倍生效时应是 165/250 且不许收缩）');
+      }
     }
     var one = document.querySelector('#overlay .card.selected');
     if (one) {
@@ -335,6 +426,20 @@
       for (var i = 0; i < list.length; i++) {
         var r = list[i];
         if (r.type === 4 && r.cssRules) { walk(r.cssRules, path + (r.conditionText ? '@media(' + r.conditionText + ')' : r.cssText.slice(0, 24)) + ' > '); continue; }
+        /* v0.72.0：@keyframes 是 type===7，原来**不递归** ⇒ 写在关键帧里的位移/缩放
+           根本没有验证路径（step 1 修的 enemyDie / shake 就卡在这）。
+           递归进去并按**名字**匹配（关键帧没有 selectorText，用 sub 去比 selectorText
+           永远找不到），把每个停靠点原样打出来 —— 漏一个停靠点就会跳回原点。 */
+        if (r.type === 7 && r.cssRules) {
+          total++;
+          if (r.name && r.name.indexOf(sub) >= 0) {
+            for (var k = 0; k < r.cssRules.length; k++) {
+              var kf = r.cssRules[k];
+              found.push('    [' + path + '@keyframes ' + r.name + '] ' + (kf.keyText || '?') + ' {' + (kf.style ? kf.style.cssText : '') + '}');
+            }
+          }
+          continue;
+        }
         total++;
         if (r.selectorText && r.selectorText.indexOf(sub) >= 0) {
           found.push('    [' + path + '] ' + r.selectorText + ' {' + (r.style ? r.style.cssText : '').slice(0, 120) + '}');
@@ -366,7 +471,9 @@
       confirmNewGame();
       if (q.get('rules')) { rulesReport(q.get('rules')); return; }
       if (q.get('screen') === 'hero') { heroReport(); return; }
-      if (q.get('dialog')) { dialogReport(pick(q.get('dialog')) || 5, q.get('sel') !== '0'); return; }
+      if (q.get('dialog') && !q.get('live')) {
+        dialogReport(pick(q.get('dialog')) || 5, q.get('sel') !== '0', q.get('scene') || ''); return;
+      }
       pickHero(q.get('hero') || 'tianshi');
       skipOpening();
       /* ⚠️ 必须在这里播种，不能更早：`confirmNewGame()` 自己会 `seedRng(rngSeedNow())`
@@ -396,6 +503,9 @@
          '纸扎人 失去 6 点生命', '—— 第 2 回合开始 ——'].forEach(function (s) { try { window.log(s); } catch (e) {} });
       }
       render();
+      /* v0.72.0：live 选牌小窗排在最后 —— 它用的是真实 renderDiscardSelect()，
+         要有 G.hand 与一场已开局的战斗才成立（上面那几行正是在备这些）。 */
+      if (q.get('dialog')) { liveDialogReport(pick(q.get('dialog')) || 5); }
     } catch (e) {
       /* ⚠️ 只打 message 是不够的 —— 这个夹具的前身就是只打 message，
          于是「startBattle 挂了、整套量测都在量一个空战场」这件事藏了很久
@@ -408,6 +518,10 @@
   }
 
   function emit() {
+    /* `&quiet=1`：照常跑完所有量测、只是**不铺那层全屏日志**。
+       给「实拍看构图」用 —— 日志盒是 #000e 的全屏遮罩，图里只剩剪影看不出弧线。
+       量数字仍走 --dump（--dump 抓的是 DOM 文本，跟这层盒子无关）。 */
+    if (q.get('quiet')) { document.title = 'CLIP'; return; }
     var box = document.createElement('div');
     box.id = '__dbg';
     box.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:#000e;'

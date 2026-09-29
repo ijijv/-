@@ -29,6 +29,8 @@
      B 各块矩形
      C 敌人换行行数 + 每行几个（装不下的第一因）
      D 净空与后排上抬是否被矮屏档收住
+     D2 弧线槽位（--ex/--ey）+ **包含性断言**：每只敌人 ⊆ 敌区、不顶进顶栏、
+        不越出 #app 右缘、不与玩家面板相交。越界一律进 errs（G 段打出来）
      E 红色禁区自查（.hand-area / #hand 不许有 transform/filter/will-change）
      F 竖屏闸是否生效
 */
@@ -264,7 +266,64 @@
     log('   首个 .enemy transform = ' + (en ? getComputedStyle(en).transform : '?'));
     log('   #log position = ' + cs('#log', 'position') + '（矮屏档应为 fixed）');
     log('   --rise-unit = ' + (window.getComputedStyle
-        ? getComputedStyle(document.documentElement).getPropertyValue('--rise-unit').trim() : '?'));
+        ? getComputedStyle(document.documentElement).getPropertyValue('--rise-unit').trim() : '?')
+        + '   --slot-dx-k = ' + (window.getComputedStyle
+        ? getComputedStyle(document.documentElement).getPropertyValue('--slot-dx-k').trim() : '?')
+        + '   --player-inset-x = ' + (window.getComputedStyle
+        ? getComputedStyle(document.documentElement).getPropertyValue('--player-inset-x').trim() : '?'));
+
+    /* ⚠️ v0.72.0 §一 D2：弧线槽位上报 + **包含性断言**。
+       为什么必须由浏览器来判：弧线是 `translate(var(--ex),var(--ey))`（见 .enemy 那条），
+       而 **translate 不参与 flex 布局** ⇒ `enemyRows()`（摘掉 transform 后按 bottom 分桶）
+       永远看不出「敌人被拉出了敌区」。所以弧线最大的风险不是换行行数，是**几何越界**，
+       而那只有在真浏览器里能量。四条判据与蓝图一一对应：
+         ① 每只 .enemy 的 border box ⊆ #enemy-panel 的 border box（不许顶出敌区）
+         ② top ≥ #topbar 的 bottom（不许钻进顶栏 —— 这正是净空偏小的症状，
+            也正是 §一「--headroom 必须 ≥ 实际上抬」那条不变量的机器化表达）
+         ③ right ≤ #app 的 right（#app 有 overflow:hidden，顶出去就是**被直接裁掉**，
+            屏幕上什么都不报，图上一个像素都没有）
+         ④ 不与 #player-panel 的 box 相交（近端被 dx 拉向左下，别把玩家面板盖住）
+       ④ 用「重叠面积 > 1px²」而不是裸的矩形相交判据：相邻矩形共边时
+       `left == right` 这类浮点相等会误报成相交。
+       容差一律 1px —— 全是 Math.round 之后的整数，1px 足够吃掉亚像素噪声。 */
+    var epBox = ep ? ep.getBoundingClientRect() : null;
+    function boxOf(id) { var e = document.getElementById(id); return e ? e.getBoundingClientRect() : null; }
+    var tbBox = boxOf('topbar'), apBox = boxOf('app'), ppBox = boxOf('player-panel');
+    function overlap2(a, b) {
+      var w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      var h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      return (w > 0 && h > 0) ? w * h : 0;
+    }
+    log('D2 弧线槽位（--ex/--ey）与包含性');
+    var enAll = document.querySelectorAll('#enemy-panel .enemy');
+    for (var qi = 0; qi < enAll.length; qi++) {
+      var eq = enAll[qi], sq = getComputedStyle(eq), rq = eq.getBoundingClientRect();
+      log('   [' + qi + '] --ex=' + (sq.getPropertyValue('--ex').trim() || '(空)')
+          + ' --ey=' + (sq.getPropertyValue('--ey').trim() || '(空)')
+          + ' z=' + sq.zIndex
+          + '  ' + Math.round(rq.width) + 'x' + Math.round(rq.height)
+          + ' @' + Math.round(rq.left) + ',' + Math.round(rq.top)
+          + ' right=' + Math.round(rq.right) + ' bottom=' + Math.round(rq.bottom));
+      var tag = '敌人[' + qi + ']';
+      if (epBox && (rq.left < epBox.left - 1 || rq.right > epBox.right + 1
+                 || rq.top < epBox.top - 1 || rq.bottom > epBox.bottom + 1)) {
+        errs.push(tag + ' 越出 #enemy-panel：enemy ' + Math.round(rq.left) + ',' + Math.round(rq.top)
+                  + '–' + Math.round(rq.right) + ',' + Math.round(rq.bottom)
+                  + ' vs panel ' + Math.round(epBox.left) + ',' + Math.round(epBox.top)
+                  + '–' + Math.round(epBox.right) + ',' + Math.round(epBox.bottom));
+      }
+      if (tbBox && rq.top < tbBox.bottom - 1) {
+        errs.push(tag + ' 顶进 #topbar：top=' + Math.round(rq.top)
+                  + ' < topbar.bottom=' + Math.round(tbBox.bottom));
+      }
+      if (apBox && rq.right > apBox.right + 1) {
+        errs.push(tag + ' 越出 #app 右缘被裁：right=' + Math.round(rq.right)
+                  + ' > app.right=' + Math.round(apBox.right));
+      }
+      var ovl = ppBox ? overlap2(rq, ppBox) : 0;
+      if (ovl > 1) { errs.push(tag + ' 与 #player-panel 相交 ' + Math.round(ovl) + 'px²'); }
+    }
+    if (!enAll.length) { log('   （战场上没有敌人 —— 上面 A~D 的数字都不可信）'); }
 
     log('E 红色禁区自查（.hand-area / #hand 不许有 transform/filter/will-change）');
     var bad = [];

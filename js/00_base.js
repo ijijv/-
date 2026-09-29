@@ -881,3 +881,443 @@ function playLockBreak(hostEl, onReveal, opts){
   setTimeout(function(){ if(!started) giveUp(); }, 400);   // 图没来就别卡着，直接出结果
 }
 
+/* ===================== v0.72.0：卡牌飞行动画（抽 / 弃 / 洗 + 易物） =====================
+   为什么长这样（四条都是踩过或算过的，不是审美）：
+
+   1. **用 WAAPI（el.animate）而不是 CSS transition + setTimeout。**
+      Animation 的 onfinish 是「收尾到终态」的**唯一**来源（skip 与自然播完走同一条路），
+      而且**不创建任何定时器** —— 无头冒烟里有 9 处同步断言（8 处 finishEndTurn + 1 处
+      drawCards）会**直接**读结算结果，漏一个 setTimeout 就意味着 node 进程退不出去。
+
+   2. **动画必须等 render() 之后才开播。** drawCards 自己**不调 render()**（它的 11 个
+      调用点里只有 1 处紧随 render），所以「手牌终位」在 drawCards 内部根本量不到。
+      ⇒ 入口只负责 push() 载荷，真正的 play() 统一由 render() 尾部的 Anim.flush() 触发。
+
+   3. **pending 是数组、只追加不覆盖。** G.lastDrawnCards 是整体覆盖的，连续两次
+      drawCards 会把前一次吞掉；所以载荷里存的是 cards 引用，不是 lastDrawnCards。
+
+   4. **飞的是克隆，挂 #anim-layer，绝不挂进 #hand**（理由见 原型.html 里 #anim-layer
+      那段注释）。
+
+   无头判据是 window.innerWidth（`animLive()`），**不是** rect 尺寸、也不是 offsetWidth：
+     · 沙箱的 dummyEl().getBoundingClientRect() 恒返 **10×10（不是 0）** ⇒ rect 判据会把
+       它误判成真实浏览器，于是真去排 rAF（沙箱里 requestAnimationFrame = setTimeout(cb,0)）
+       ⇒ 定时器漏网、node 退不出。方向正好反了。
+     · offsetWidth===0 在浏览器里对任何 display:none 元素也成立 ⇒ **假阳性**：真实浏览器
+       被当成无头、动画整体失效。
+     · innerWidth 是唯一「只在真实浏览器里存在且为正」的信号，也正是本文件 :307/:382 既有的
+       无头兜底依据。 */
+/* 正在「飞进来」的牌，按**对象身份**记，不是手牌下标。
+   ⚠️ 必须按对象找：groupHand() 会在 render() 里重排 G.hand，「最后一张」随时会串位。
+   声明在这一侧（视觉层）而不是 50_ui.js：生成 data-new 的是 handCardHTML，
+   摘掉 opacity 的是 Anim 的收尾，分处两个文件 —— 放这儿谁都不用去依赖另一边。 */
+const NEW_CARDS = new WeakSet();
+function animLive(){
+  try{ return typeof window!=='undefined' && typeof window.innerWidth==='number' && window.innerWidth>0; }
+  catch(e){ return false; }
+}
+function animLayer(){
+  let el=document.getElementById('anim-layer');
+  if(!el){ el=document.createElement('div'); el.id='anim-layer'; document.body.appendChild(el); }
+  return el;
+}
+/* 克隆牌面的壳：外层 .fly-card 管**位移与缩放**，内层 .fly-inner 管**翻转**，两面一正一背。
+   w/h 传**终点**尺寸 —— 起点尺寸由飞行自己的 scale 承担（FLIP）。
+   为什么按终点建：牌面内部全是百分比/绝对定位，只有 132:200 这个比例才不拉歪；
+   按终点尺寸建 ⇒ 克隆与手牌**逐像素同构**。 */
+function flyCardHTML(frontHtml, w, h){
+  return '<div class="fly-card" style="width:'+w+'px;height:'+h+'px">'
+       +   '<div class="fly-inner">'
+       +     '<div class="fly-face fly-front">'+frontHtml+'</div>'
+       +     '<div class="fly-face fly-back"></div>'
+       +   '</div>'
+       + '</div>';
+}
+/* 静态牌面：与 handCardHTML 同构，但**去掉 --rot 与 onpointerdown**
+   （克隆只做视觉，不该响应点击，也不该被手牌的扇形角度带歪）。
+   cardBody 与 RCOLOR 都定义在后面的脚本里 —— 函数声明与全局作用域在**调用时**解析，
+   这里只声明不调用，所以加载顺序无所谓。 */
+function flyFaceHTML(c){
+  if(!c || typeof cardBody!=='function') return '';
+  const rc=(typeof RCOLOR!=='undefined' && RCOLOR) ? (RCOLOR[c.rarity]||'') : '';
+  return '<div class="card has-frame '+rc+'">'+cardBody(c)+'</div>';
+}
+let _animSkipBound=false;
+/* 跳过监听挂**冒泡相**，不挂捕获相 —— 捕获相会抢在卡牌自己的 cardPointerDown 之前
+   把这一下吞掉，用户的拖拽当场就废了。冒泡相下点击照常生效，同时把在飞的动画收尾到终态。
+   常驻一个监听即可（空闲时 skip() 是空操作）：不做 play / removeEventListener 配对，
+   配对在多批动画交叠时会互相摘掉对方的监听。 */
+function animBindSkip(){
+  if(_animSkipBound) return;
+  if(typeof window==='undefined' || !window.addEventListener) return;
+  _animSkipBound=true;
+  window.addEventListener('pointerdown', function(){ Anim.skip(); }, false);
+}
+/* 载荷形状：
+   { key, dur, hide:[{el,card}], onDone, items:[ … ] }
+   每个 item 二选一：
+     · 飞牌：{ html, from:{cx,cy,w,h}, to:{cx,cy,w,h}, flip:'front'|'back', delay }
+     · 光晕：{ pulse:{cx,cy,r}, delay }
+   from/to 的 cx,cy 是**视口坐标的中心点**（不是左上角）—— 中心点对「两端尺寸不同」
+   的飞行才是唯一无歧义的锚。 */
+const Anim = {
+  flights: [],        // 当前在飞的批次（可交叠：抽牌与弃牌能同时在飞）
+  pending: [],        // 待 render() 后开播的载荷；只追加不覆盖
+  busy(){ return this.flights.length>0; },
+  /* 载荷入队。**必须在 render() 之前调用**（见文件头第 2 条）。无头下直接丢弃。 */
+  push(payload){
+    if(!payload || !animLive()) return;
+    this.pending.push(payload);
+  },
+  /* render() 尾部调用：把攒下的载荷逐个开播。 */
+  flush(){
+    if(!animLive() || !this.pending.length) return;
+    const q=this.pending; this.pending=[];
+    for(let i=0;i<q.length;i++){ try{ this.play(q[i]); }catch(e){} }
+  },
+  /* 收尾到终态。点屏幕任意位置触发（监听见 animBindSkip）。
+     注意**不需要先 finish()**：克隆本来就要整个消失，「终态」= 真实 DOM（render 之后的
+     手牌位 + 不透明的牌），所以直接 cancel + 摘克隆就是终态，且立刻生效。 */
+  skip(){
+    const fs=this.flights.slice();
+    for(let i=0;i<fs.length;i++){ try{ fs[i].settle(); }catch(e){} }
+  },
+  /* 同名重播：先把上一遍收尾，不是叠加（沿用 playFx 的 fxStop(key) 惯例）。
+     匿名批次（key 为空）不自动收尾 —— 抽牌与弃牌本来就该能同时在飞。 */
+  stop(key){
+    if(!key) return;
+    const fs=this.flights.slice();
+    for(let i=0;i<fs.length;i++){ if(fs[i].key===key) fs[i].settle(); }
+  },
+  play(p){
+    if(!animLive()) return;
+    if(!fx()) return;                       // 流畅模式：与震屏/抖动/飘字同档，一并关掉
+    /* build()：载荷延迟构造。
+       为什么必须有这一层：动画的终点是「render() **之后**的手牌位」，而 drawCards 自己
+       不调 render()（见文件头第 2 条）⇒ 入队那一刻根本量不到终点。所以入口只 push 一个
+       build 闭包，真正的 DOM 量测全部推到 flush()（= render 尾部）之后再发生 ——
+       整个 render 因此只有**一次**读几何的时机，不会在中间插进第二个强制同步布局。 */
+    if(p && typeof p.build==='function'){
+      let b=null; try{ b=p.build(); }catch(e){ b=null; }
+      if(!b) return;
+      p={ key:p.key, dur:p.dur||b.dur, items:b.items, hide:b.hide, onDone:b.onDone };
+    }
+    const items=(p && p.items) || [];
+    if(!items.length) return;
+    if(p.key) this.stop(p.key);
+    const layer=animLayer();
+    const nodes=[], anims=[];
+    const dur=Math.max(0, (p && p.dur) || 320);
+    for(let i=0;i<items.length;i++){
+      try{ const nd=_animItem(layer, items[i], dur, anims); if(nd) nodes.push(nd); }catch(e){}
+    }
+    if(!anims.length) return;
+    const hide=(p.hide||[]).slice();
+    for(let i=0;i<hide.length;i++){ try{ hide[i].el.style.opacity='0'; }catch(e){} }
+    const self=this;
+    let left=anims.length, settled=false;
+    const settle=function(){
+      if(settled) return; settled=true;
+      /* cancel 而不是 finish：克隆马上要删，没有「停在末帧」的必要；
+         cancel 触发的是 oncancel 不是 onfinish ⇒ 不会绕回 tick、不会递归。 */
+      for(let i=0;i<anims.length;i++){ try{ anims[i].cancel(); }catch(e){} }
+      for(let i=0;i<nodes.length;i++){ try{ if(nodes[i].parentNode) nodes[i].parentNode.removeChild(nodes[i]); }catch(e){} }
+      for(let i=0;i<hide.length;i++){
+        /* keep:true（弃牌用）= **不还原**透明度。理由：弃掉的那张牌此刻已经不在 G.hand 里了，
+           还原只会让它在手牌里「先飞走再弹回来」，一直亮到下一次 render 重写 innerHTML 才消失。
+           它的手牌元素是**陈旧 DOM**（render 会整块覆盖），留着隐形正好。
+           NEW_CARDS 的清理不能跟着一起跳过 —— 两件事本来就没关系。 */
+        if(!hide[i].keep){ try{ hide[i].el.style.opacity=''; }catch(e){} }
+        try{ if(hide[i].card) NEW_CARDS.delete(hide[i].card); }catch(e){}
+      }
+      for(let i=0;i<self.flights.length;i++){
+        if(self.flights[i].settle===settle){ self.flights.splice(i,1); break; }
+      }
+      if(p && p.onDone){ try{ p.onDone(); }catch(e){} }
+    };
+    const tick=function(){ if(--left>0) return; settle(); };
+    for(let i=0;i<anims.length;i++){ anims[i].onfinish=tick; }
+    animBindSkip();
+    this.flights.push({ key:(p && p.key)||'', settle:settle });
+  }
+};
+/* 光晕的两档色：金（洗牌）/ 朱砂（易物亮相）。
+   写死成常量而不是让调用方塞整段 gradient —— 载荷里只留 tone 这个名字，配色改动集中在此处。 */
+const PULSE_GOLD='radial-gradient(circle at center, rgba(224,179,65,0) 34%, rgba(224,179,65,.42) 62%, rgba(224,179,65,0) 80%)';
+const PULSE_CINNABAR='radial-gradient(circle at center, rgba(196,54,38,0) 30%, rgba(214,64,44,.5) 60%, rgba(196,54,38,0) 82%)';
+/* 建一个飞行单元并起播，把 Animation 收进 anims。
+   返回**要挂上层的节点**；返回 null 表示这条 item 不产生新节点（`el` 震动那条直接
+   驱动既有元素本身，settle 时**绝不能**把它从 DOM 里摘掉）。 */
+function _animItem(layer, it, dur, anims){
+  const delay=(it && it.delay) || 0;
+  if(it && it.el){
+    /* 洗牌的「两堆震动」：直接驱动既有的堆元素。
+       ⚠️ `.pile` 是 `.hand-area` 的**子元素**，给它挂 transform 只会让**它自己**成为
+       其 fixed 后代的包含块 —— `#fx-layer` 挂在 body 上，坐标系不受影响（红线管的是
+       `.hand-area` / `#hand` **自身**的规则体，这里既不是规则体、也不在那两个元素上）。
+       fill:'none' ⇒ 播完自动回到无 transform，不留下任何痕迹。 */
+    anims.push(it.el.animate(
+      [ {transform:'scale(1)'},
+        {transform:'scale(1.09)', offset:.32},
+        {transform:'scale(1)'} ],
+      {duration:Math.max(80, dur*0.55), delay:delay, easing:'ease-out', fill:'none'}));
+    return null;
+  }
+  if(it && it.pulse){
+    /* 光晕：同 inkBurst 的径向渐变，但走 WAAPI（不留定时器）。
+       tone 默认 'gold'（洗牌的两堆震动），'cinnabar' = 朱砂（易物亮相那一圈）。 */
+    const d=document.createElement('div');
+    d.className='fx-pulse';
+    const R=Math.max(40, it.pulse.r||120);
+    d.style.left=(it.pulse.cx-R)+'px'; d.style.top=(it.pulse.cy-R)+'px';
+    d.style.width=(R*2)+'px'; d.style.height=(R*2)+'px';
+    d.style.background=(it.pulse.tone==='cinnabar')?PULSE_CINNABAR:PULSE_GOLD;
+    anims.push(d.animate(
+      [ {opacity:0, transform:'scale(.45)'},
+        {opacity:1, transform:'scale(1)', offset:.42},
+        {opacity:0, transform:'scale(1.32)'} ],
+      {duration:dur, delay:delay, easing:'ease-out', fill:'both'}));
+    layer.appendChild(d);
+    return d;
+  }
+  const from=it.from||{}, to=it.to||{};
+  /* ⚠️ 尺寸**不要取整**（只压到两位小数）。窄档 5 张牌时 #hand 装不下，`.card` 作为
+     flex 项会被 flex-shrink 压成**小数宽**（实测 960×540 是 103.5px），而 offsetWidth
+     把使用值四舍五入成整数 ⇒ 克隆按整数建，内部百分比定位的 .cart-wrap / .cplate
+     会整整差 1px（`_patch/_drvfly.js` 第一次跑就是这么抓出来的）。
+     调用方给尺寸时同理：请给 getComputedStyle().width/height，不要给 offsetWidth。 */
+  const tw=Math.max(1, Math.round((to.w||from.w||132)*100)/100);
+  const th=Math.max(1, Math.round((to.h||from.h||200)*100)/100);
+  const wrap=document.createElement('div');
+  wrap.innerHTML=flyCardHTML(it.html||'', tw, th);
+  const node=wrap.firstChild, inner=node.firstChild;
+  const cx0=(from.cx===undefined? to.cx : from.cx), cy0=(from.cy===undefined? to.cy : from.cy);
+  const cx1=(to.cx===undefined? from.cx : to.cx), cy1=(to.cy===undefined? from.cy : to.cy);
+  /* .fly-card 的原点在左上角（left:0/top:0），transform-origin 是 50% 50%
+     ⇒ 未变换时的中心在 (tw/2, th/2)，translate 直接就是「中心要去的左上角坐标」。 */
+  const s0=Math.max(.02, (from.w||tw)/tw);
+  const tx0=cx0-tw/2, ty0=cy0-th/2, tx1=cx1-tw/2, ty1=cy1-th/2;
+  const t0='translate('+tx0+'px,'+ty0+'px) scale('+s0+')';
+  const t1='translate('+tx1+'px,'+ty1+'px) scale(1)';
+  /* it.fade：『打出易物 · 亮相』要的那个**收**势 —— 飞抵中点（放大已经由 s0→1 承担）→
+     停住 → 微涨 → 缩小淡出。不加 fade 时**逐字**保持原来的两帧，抽/弃/洗的观感因此不变。 */
+  const kfs = it.fade
+    ? [ {transform:t0, opacity:1},
+        {transform:t1, opacity:1, offset:.46},
+        {transform:'translate('+tx1+'px,'+ty1+'px) scale(1.06)', opacity:1, offset:.7},
+        {transform:'translate('+tx1+'px,'+ty1+'px) scale(.86)', opacity:0} ]
+    : [ {transform:t0}, {transform:t1} ];
+  anims.push(node.animate(kfs,
+    {duration:dur, delay:delay, easing:'cubic-bezier(.22,.61,.36,1)', fill:'both'}));
+  if(it.flip){
+    /* 翻转走 .fly-inner —— 与位移分属两个元素，两条 WAAPI 互不覆盖。
+       'back'  = 牌面起、翻背落（弃出 / 换出）；其余 = 露牌背起、翻正落（抽入 / 换入）。 */
+    const a=(it.flip==='back') ? 0 : 180, b=(it.flip==='back') ? 180 : 0;
+    anims.push(inner.animate(
+      [ {transform:'rotateY('+a+'deg)'}, {transform:'rotateY('+b+'deg)'} ],
+      {duration:dur, delay:delay, easing:'ease-in-out', fill:'both'}));
+  }
+  layer.appendChild(node);
+  return node;
+}
+
+/* ===================== 接入点的载荷构造器 =====================
+   一律「入口 push 一个 build 闭包」：入口那一刻 DOM 还是旧的（render 还没跑），
+   真正量终点要等 render 之后（见 Anim.play 里 build 的注释）。
+   ⚠️ 两个例外，都是「源位只在**这一拍**量得到」的场合，故直接 play 而不是 push：
+     · 弃牌：源是**即将消失**的手位（finishEndTurn 之后整段没有 render），
+       详见 animDiscardQueued；
+     · 易物亮相：源是**刚被打出**的那张牌的手位（doPlayCard 先 splice 再调 eff），
+       详见 animExchangeCast。
+   五个时长集中在这儿，改节奏只改这一处。 */
+const ANIM_DUR = { draw: 340, discard: 300, shuffle: 520, exchange: 300, cast: 520 };
+
+/* 取一个元素「不带旋转」的盒子。
+   · 中心：用 getBoundingClientRect 的中心。**矩形绕任意点旋转后，它的 AABB 中心恰好
+     等于旋转后的形心**（矩形关于自身中心是中心对称的，旋转保这个对称性，而中心对称凸集的
+     AABB 必然以对称中心为中心）⇒ 扇形手牌那种 `transform-origin:bottom center` 的旋转卡，
+     bbox 中心**就是**它的视觉中心，可以直接当锚点，不用去反解 matrix。
+   · 尺寸：必须走 getComputedStyle 的**使用值**，不能用 offsetWidth —— 窄档里手牌被
+     flex-shrink 压成小数宽（960×540 实测 103.5px），offsetWidth 会四舍五入成整数，
+     克隆按整数建会让牌面内部的百分比定位整整差 1px（详见 _animItem 里的注释）。
+     `display:none` 时 computed width 是 "auto" ⇒ NaN ⇒ 回落成 bbox 尺寸。 */
+function animRect(el){
+  if(!el || typeof el.getBoundingClientRect!=='function') return null;
+  let r=null;
+  try{ r=el.getBoundingClientRect(); }catch(e){ return null; }
+  if(!r) return null;
+  let w=NaN, h=NaN;
+  try{
+    const c=window.getComputedStyle(el);
+    w=parseFloat(c.width); h=parseFloat(c.height);
+  }catch(e){}
+  return { cx:r.left+r.width/2, cy:r.top+r.height/2,
+           w:(isFinite(w)&&w>0)? w : r.width,
+           h:(isFinite(h)&&h>0)? h : r.height };
+}
+/* 这**几张牌**此刻落在手牌里的哪些元素上。
+   判据是「成员资格」而不是 data-new：data-new 只说明「是本次新抽的」，而 G.hand 里可能
+   同时躺着上一次抽进来、动画还没播完的牌。DOM 顺序 = G.hand 顺序
+   （render 里 `hand.innerHTML = G.hand.map(handCardHTML)`），所以按下标对齐。
+   ⚠️ 手牌为空时那个位置是一个占位 div（「（无手牌）」）⇒ 数量对不上就整体放弃，
+   宁可不动画也不要把克隆飞到占位符上。
+   ⚠️ **调用时机决定含义**，两处用法正好相反：
+     · 抽牌：在 build() 里调（= render 之后）⇒ 拿到的是**新落位**的手牌元素；
+     · 弃牌：在入队那一刻调（= render 之前）⇒ 拿到的是**即将消失**的旧手牌元素。 */
+function animHandEls(cards){
+  const hand=document.getElementById('hand');
+  if(!hand || !cards || !cards.length) return [];
+  if(typeof G==='undefined' || !G || !G.hand) return [];
+  if(hand.children.length !== G.hand.length) return [];
+  const want=new Set(cards), out=[];
+  for(let i=0;i<G.hand.length;i++){
+    if(!want.has(G.hand[i])) continue;
+    const el=hand.children[i];
+    if(el) out.push({ el:el, card:G.hand[i] });
+  }
+  return out;
+}
+/* 抽牌：卡背在抽牌堆**翻正**，飞向各自的手位，依次错开 45ms 起手。
+   调用点：drawCards 里 `G.lastDrawnCards=objs` 之后（**必须在那里** —— objs 就是本次抽到的牌，
+   粒度天然正确；等到了 render 就没法把「本次抽的」和「本来就有的」分开了）。 */
+function animDrawQueued(cards){
+  if(!animLive() || !fx()) return;          // 无头下**连 NEW_CARDS 都不写** ⇒ handCardHTML 输出逐字节不变
+  if(!cards || !cards.length) return;
+  for(let i=0;i<cards.length;i++) NEW_CARDS.add(cards[i]);
+  Anim.push({ dur:ANIM_DUR.draw, build:function(){
+    const els=animHandEls(cards);
+    if(!els.length) return null;
+    const from=animRect(document.querySelector('#pile-draw .pile-face'));
+    const items=[], hide=[];
+    for(let i=0;i<els.length;i++){
+      const to=animRect(els[i].el);
+      if(!to) continue;
+      hide.push(els[i]);
+      items.push({ html:flyFaceHTML(els[i].card), flip:'front',
+                   from: from || { cx:to.cx, cy:to.cy, w:to.w, h:to.h }, to:to,
+                   delay: i*45 });
+    }
+    return { items:items, hide:hide, dur:ANIM_DUR.draw };
+  }});
+}
+/* 洗牌：两堆各震一下 + 一圈金晕，张数徽章在同一拍归并。
+   调用点：drawCards 里 `log('弃牌堆洗回抽牌堆')` **之后**（日志顺序零变化）。
+   它在 for 循环里、drawCards(12) 会触发多次 ⇒ 用 key 去重：同名重播是**收尾重来**，不是叠加。 */
+function animShuffleQueued(){
+  if(!animLive() || !fx()) return;
+  Anim.push({ key:'shuffle', dur:ANIM_DUR.shuffle, build:function(){
+    const items=[];
+    ['pile-draw','pile-discard'].forEach(function(id,i){
+      const el=document.getElementById(id);
+      const r=animRect(el);
+      if(!r) return;
+      items.push({ el:el, delay:i*40 });
+      items.push({ pulse:{ cx:r.cx, cy:r.cy, r:Math.max(r.w,r.h)*0.95 }, delay:i*40 });
+    });
+    if(!items.length) return null;
+    return { items:items, hide:[], dur:ANIM_DUR.shuffle };
+  }});
+}
+/* 弃牌：从各自的手位**翻背**飞向弃牌堆，依次错开 45ms。
+   调用点：finishEndTurn 里 `refreshPileCounts()` 之后（与徽章 +1 同一拍）。
+
+   ⚠️ 它与 animDrawQueued 的唯一结构差别是**什么时候量、由谁量**：
+     · 抽牌：源在**牌堆**（永远在 DOM 里）⇒ 入队时只记牌，终点等 render 之后在 build() 里量；
+     · 弃牌：源在**手位**，而 finishEndTurn 接下来是 triggerSummons → enemyAct，**全程没有
+       render()**（#hand 要到下一次 startTurn 才重排）⇒ 源矩形只能在**此刻**同步量下来；
+       终点在**牌堆**，随时量得到 ⇒ 两个端点都齐了，**根本不需要等 render**，
+       于是这里直接 play()，不走 pending。
+   顺带把「同一拍」这件事做对：徽章在 refreshPileCounts() 就 +1 了。若改成 push 等下一次
+   render 才播，画面上会变成「徽章先 +1、敌人打完一轮之后牌才飞走」，而且那时量到的手位
+   已经是被重排过的新版面 —— 飞机会从一个那些牌**从来不曾待过**的位置起飞。
+
+   这里多付一次强制同步布局（量手位 + 量弃牌堆面）。它落在 refreshPileCounts 之后、
+   enemyAct 的 playFx 之前，是这一段里唯一的读点 ⇒ 仍然「读一遍 → 写一遍」。 */
+function animDiscardQueued(cards){
+  if(!animLive() || !fx()) return;
+  if(!cards || !cards.length) return;
+  const els=animHandEls(cards);                 // ← 此刻 = 弃牌前的手牌 DOM
+  if(!els.length) return;
+  const items=[], hide=[];
+  const to=animRect(document.querySelector('#pile-discard .pile-face'));
+  for(let i=0;i<els.length;i++){
+    const from=animRect(els[i].el);
+    if(!from || !to) continue;
+    /* hide 带 keep：弃掉的牌现在就从手里「消失」，**且收尾不还原** —— 它的手牌元素是陈旧 DOM
+       （下一次 render 会整块覆盖），还原只会让它先飞走再弹回来。理由详见 settle 里那段注释。 */
+    hide.push({ el:els[i].el, card:els[i].card, keep:true });
+    items.push({ html:flyFaceHTML(els[i].card), flip:'back', from:from, to:to, delay:i*45 });
+  }
+  if(!items.length) return;
+  Anim.play({ dur:ANIM_DUR.discard, items:items, hide:hide });
+}
+/* 手牌里**下标 i** 的那个元素。
+   与 animHandEls 的分工：那个按**对象身份**在 G.hand 里找（要求 #hand 与 G.hand 同步），
+   这个按下标直接取 —— 因为「刚打出的那一张」恰恰处在**不同步**的一拍：
+   doPlayCard 先 `G.hand.splice(i,1)` 才调 eff（30_engine.js:1049 → :1073），
+   而 render() 远在那之后 ⇒ #hand 还是打出之前的旧 DOM，下标 i 正是那张牌本身。
+   越界 / 那个位置是「（无手牌）」占位符时返回 null，调用方自行回落。 */
+function animHandElAt(i){
+  const hand=document.getElementById('hand');
+  /* 三道守卫都必要：无头沙箱里 getElementById 会返回一个**桩元素**（没有 children、
+     也没有 classList），少任何一道都会在冒烟里当场抛异常 —— 而这条路径（pickExchangeNew）
+     正是冒烟会走的。 */
+  if(!hand || !hand.children || !(i>=0)) return null;
+  const el=hand.children[i];
+  if(!el || !el.classList || !el.classList.contains('card')) return null;
+  return el;
+}
+/* ===================== 易物（两段） =====================
+   用户拍板「两个都做」：
+     ① 打出易物时牌体在**战场中央**亮相：飞过去（放大由飞行本身承担）→ 朱砂光晕 → 收；
+     ② 成交瞬间「一出一进」交错：换出的牌翻背飞向弃牌堆、换入的牌翻正飞回手位。
+   入口分别在 20_data.js 的 eff（①）与 30_engine.js 的 pickExchangeNew（②）。 */
+
+/* ① 亮相。**直接 play 而不是 push**，理由与弃牌同源：源是「刚被打出的那张牌的手位」，
+   而 doPlayCard 早在调 eff 之前就把它 splice 出手牌了（#hand 里只留下陈旧 DOM）——
+   这个源位**过了这一拍就再也量不到**，所以不能等 render。
+   终点取 .battle 的中心（战场中央），尺寸 ×1.35 ⇒ 放大由 from→to 的尺寸差直接承担。
+   为什么这个克隆必须看得见：#overlay(z-index 10) 会被 startExchangeSelect → showOverlay
+   紧接着盖上来，本层取 z-index 12 正是为了压过它（见原型.html 里 #anim-layer 的注释）。 */
+function animExchangeCast(c,i){
+  if(!animLive() || !fx()) return;
+  if(!c) return;
+  const from=animRect(animHandElAt(i) || document.getElementById('hand'));
+  const bat=animRect(document.querySelector('.battle'));
+  if(!from || !bat) return;
+  const to={ cx:bat.cx, cy:bat.cy, w:from.w*1.35, h:from.h*1.35 };
+  Anim.play({ dur:ANIM_DUR.cast, items:[
+    { html:flyFaceHTML(c), from:from, to:to, fade:true, delay:0 },
+    { pulse:{ cx:bat.cx, cy:bat.cy, r:Math.max(from.w,from.h)*0.95, tone:'cinnabar' }, delay:90 }
+  ]});
+}
+/* ② 成交交错。入队等 render（终点=换入那张牌**落位**之后的手位，只能 render 之后量）。
+   · oldSlot：换出那张牌**成交前**的手位（调用方在 splice 之前量好传进来）；
+   · cNew：换入的牌（30_engine.js 里那个副本对象，与 G.hand 里躺的是同一个引用）。
+   两条飞行的 delay 差 90ms 才是「交错」——同拍出发就只是「换了一下」。
+   ⚠️ 换入那张牌必须**先隐形**：本函数在 render **之前**被调，所以在这里就往 NEW_CARDS
+     里登记，render 时 handCardHTML 才会给它 data-new，build()（= render 尾部）才按身份
+     找得到它的落位。找不到（比如 times>0 那条分支根本不 render）就把登记撤掉，
+     免得留一个永远不被消费的标记。 */
+function animExchangeQueued(old,cNew,oldSlot){
+  if(!animLive() || !fx()) return;
+  if(!old || !cNew || !oldSlot) return;
+  NEW_CARDS.add(cNew);
+  Anim.push({ dur:ANIM_DUR.exchange, build:function(){
+    const dest=animHandEls([cNew]);
+    const items=[], hide=[];
+    const pile=animRect(document.querySelector('#pile-discard .pile-face'));
+    /* 换出的是**消耗掉**的杂物牌时不飞 —— 它没有进弃牌堆（30_engine.js 里那句
+       `if(old.type!=='junk')`），画一条飞向弃牌堆的轨迹是撒谎。 */
+    if(pile && old.type!=='junk')
+      items.push({ html:flyFaceHTML(old), flip:'back', from:oldSlot, to:pile, delay:0 });
+    const to=dest.length ? animRect(dest[0].el) : oldSlot;
+    if(!to) return null;
+    items.push({ html:flyFaceHTML(cNew), flip:'front',
+                 from:(pile || oldSlot), to:to, delay:90 });
+    if(dest.length) hide.push({ el:dest[0].el, card:cNew });
+    else NEW_CARDS.delete(cNew);                // 没有落位可用 ⇒ 撤登记（见文件头注释）
+    return { items:items, hide:hide, dur:ANIM_DUR.exchange };
+  }});
+}
+

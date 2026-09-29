@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.71.0</title>
+<title>志怪塔 · 原型 v0.72.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -121,7 +121,12 @@
      再被 #app{overflow:hidden} 裁掉一截。要省高度只能缩立绘本身（见矮屏档的
      clamp 那套），不能靠压缩容器。 */
   .battle{display:flex; gap:14px; align-items:flex-end; margin-bottom:2px; flex:0 0 auto;}
-  #player-panel{flex:0 0 200px; background:transparent; border:none; border-radius:0; padding:0; text-align:center; display:flex; flex-direction:column; align-items:center; position:relative; z-index:2100;}
+  /* v0.72.0：`margin-left:var(--player-inset-x,0)` 把玩家从**左边缘**推进来一点
+     （「不要太贴近左下方」）。它同时会吃掉 `#enemy-panel` 的可用宽 ⇒ 每一档的值
+     都是照着「不改变敌人换行」定的，见 :root 那条注释。
+     ⚠️ 下内缩**不能**用 `margin-bottom`：`.battle` 是 align-items:flex-end，那会把玩家
+        整个**抬起来**，与需求正好相反。真要往下压得动 `.battle{margin-bottom}`。 */
+  #player-panel{flex:0 0 200px; margin-left:var(--player-inset-x,0); background:transparent; border:none; border-radius:0; padding:0; text-align:center; display:flex; flex-direction:column; align-items:center; position:relative; z-index:2100;}
   .hero-art-box{width:100%; height:186px; margin-bottom:4px; border-radius:0; overflow:visible; background:transparent; display:flex; align-items:flex-end; justify-content:center; position:relative;}
   .hero-art-box::after{content:''; position:absolute; bottom:-2px; left:8%; right:8%; height:3px; background:radial-gradient(ellipse at center, rgba(224,179,65,.28), transparent 80%); pointer-events:none; border-radius:50%;}
   .hero-art-box .hero-art{width:auto; height:100%; max-width:100%; object-fit:contain; object-position:bottom center; display:block; filter:drop-shadow(0 8px 16px rgba(0,0,0,.55)); transition:transform .15s ease, filter .15s ease;}
@@ -144,11 +149,30 @@
      5 个敌人时这 62px 会白吃掉矮屏预算的两成。
      现在 JS 只写 `--headroom`，矮屏档写一条同特异度、书写更后的
      `#enemy-panel{padding-top:2px}` 就能盖掉，**JS 完全不需要知道当前是哪个档**。
-     `--rise-unit` 同理：它是后排敌人上抬幅度（RISE_LIFT）的**倍率**，
+     `--rise-unit` 同理：它是敌人上抬幅度的**倍率**，
      基准档 =1（与今天逐像素相同），矮屏档压小。
+     v0.72.0：它乘的那张表从 RISE_LIFT 换成了弧线槽位表 SLOT_SHAPE 的 dy ——
+     语义（「敌人往上抬多少」）一个字没变，所以名字也没改。
      ⚠️ RISE_LIFT 数组与 battleHeadroom() 本身一个字都不能动 ——
         冒烟逐条钉死了 0/42/60/20 与 max(RISE_LIFT[i%len])，倍率只能加在调用点。 */
-  :root{--rise-unit:1;}
+  /* v0.72.0：敌人弧线构图的**横向倍率**。基准档 =1。
+     `--slot-dx-k` 管横向（向左拉向玩家的幅度）；**纵向不新造变量**，复用上面的
+     `--rise-unit` —— 弧线的 dy 就是「敌人往上抬多少」，同一个意思挂两个名字，
+     读的人只会对不上。所以这一批只多出**一个**新旋钮。
+     与 `--rise-unit` 同一套路：矮屏档只要写一条同特异度、书写更后的同名变量就能压小，
+     **JS 完全不需要知道当前是哪个档**（所以也不需要 innerWidth，无头宿主里照样安全）。
+     ⚠️ 两个都必须容忍 0：窄屏档（≤520 / ≤360）要把弧线**整个归零**（那两档
+        .battle 是 flex-direction:column ⇒ 玩家在上、敌人在下，「玩家左下」本来就失效）。
+        读的时候判据必须是「有限且 ≥0」，写成 >0 会把 0 误判成非法而回落成 1。 */
+  :root{--rise-unit:1; --slot-dx-k:1; --player-inset-x:24px;}
+  /* v0.72.0：`--player-inset-x` 是**玩家面板的左内缩**（用户要求「玩家在左下方但
+     不要太贴近左下方」）。挂成 `#player-panel{margin-left}`（见下面那条规则）。
+     为什么也做成变量、也按档给：margin 占的是 `.battle` 的可用宽 ⇒ 直接吃
+     `#enemy-panel` 的宽（1280×720 下 812 → 788）⇒ 有可能把一行敌人挤成两行。
+     实测最紧的一处是 T-short（960×540 五敌一行 786/790，只剩 4px 余量），
+     所以那一档必须是 **0**。
+     ⚠️ 自定义属性是**继承**的：矮屏档若不显式写 0，会从这条基档继承 24px。
+        所以「不该有内缩」的每一档都要显式写 0，不能省略。 */
   /* ⚠️ isolation:isolate 不是装饰，是**层叠闸**。
      每个 .enemy 带**内联** `z-index:2000-上抬量`（js/50_ui.js 的 refreshRiseK 那一段，
      用来让后排压前排）。1500+ 级别的内联 z-index 在**同一个层叠上下文**里会完胜
@@ -157,8 +181,24 @@
       不是背景色问题 —— #log 的背景是实心 var(--ink2)）。
      isolate 把内部那个 2000 关在自己家里，只在**敌人之间**排序，对外整体落到 0 级。
      ⚠️ 不许改成 position:relative+z-index —— 那会改 .enemy::after 热区的定位解析链。 */
-  #enemy-panel{isolation:isolate; display:flex; flex-direction:row-reverse; flex-wrap:wrap; justify-content:flex-start; align-items:flex-end; gap:24px 30px; flex:1 1 auto; min-width:0; padding:var(--headroom,2px) 2px 0;}
-  .enemy{position:relative; background:transparent; border:none; border-radius:0; padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; text-align:center; flex:0 0 auto; min-width:0; transition:filter .12s ease; -webkit-tap-highlight-color:transparent;}
+  /* v0.72.0：右边那 2px → 8px，是给弧线最深那只留的「不贴角」内缩（用户要求
+     「敌人在右上方但不要太贴近右上方」）。row-reverse + justify-content:flex-start
+     下这一条会把整组往左推 6px。代价是可用宽 -6px（1280×720 下 818→812），
+     远小于 3 只 e-normal 的 612 ⇒ 换行判定不变（这一条是步 4 点名的「最可能出错」）。 */
+  #enemy-panel{isolation:isolate; display:flex; flex-direction:row-reverse; flex-wrap:wrap; justify-content:flex-start; align-items:flex-end; gap:24px 30px; flex:1 1 auto; min-width:0; padding:var(--headroom,2px) 8px 0 2px;}
+  /* v0.72.0：二维位移（弧线）由**这一段 CSS** 拥有，JS 只写两个自定义属性 `--ex/--ey`。
+     为什么不让 JS 直接写内联 `transform`（v0.61–v0.71 就是那么写的）：
+       内联属性打不过任何非 !important 的样式表声明 ⇒ 关键帧一开，内联位移当场被盖掉。
+       下面 @keyframes shake / enemyDie 里也有 transform，所以敌人一死就会
+       「跳回未抬升的原位再缩小」。改成 CSS 拥有 + 关键帧里组合 translate(...) 之后，
+       位移与动画**可以叠加**，这个跳变顺手就没了。
+     为什么 JS 写自定义属性就够：内联属性优先级高于样式表，所以
+       量「敌人换行」那个离线夹具里那句 `style.transform='none'` **依然能把它整个归零**
+       ⇒ 量敌人换行的那套夹具（enemyRows）一行都不用改。
+     ⚠️ 兜底值 0px 不是装饰：自定义属性没被赋值时 var() 会取兜底；
+        而一旦它被赋成 NaN 之类的非法值，浏览器会**整条丢弃** transform
+        （不是退回 0）⇒ 所有敌人塌回原点。所以 JS 那边有 isFinite 闸。 */
+  .enemy{position:relative; transform:translate(var(--ex,0px),var(--ey,0px)); background:transparent; border:none; border-radius:0; padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; text-align:center; flex:0 0 auto; min-width:0; transition:filter .12s ease; -webkit-tap-highlight-color:transparent;}
   /* v0.61.20(P7)：触屏下用伪元素把点击热区撑到 ≥120px 宽、上下各多 18px。
      伪元素不参与 DOM，elementFromPoint 仍返回宿主 .enemy，所以 enemyAtPoint() 一行不用改。
      只在 (pointer:coarse) 或窄屏生效 —— 桌面用鼠标，热区变大反而会让相邻敌人互相抢点击。 */
@@ -594,6 +634,39 @@
   .panel h2{font-family:var(--font-kai); font-size:24px; color:var(--gold); letter-spacing:3px; margin-bottom:14px;}
   .panel p{color:var(--dim); line-height:1.8; margin-bottom:14px;}
   .reward-cards{display:flex; gap:10px; justify-content:center; margin:14px 0; flex-wrap:wrap;}
+  /* v0.72.0：桌面档「选牌小窗」改版 —— 去掉小窗的纯色底、把可选的牌直接画在场景上、卡牌放到 1.25 倍。
+     纯色底有**两个**来源，必须一起治：.panel 的 --ink2（不透明）与 #overlay 的 88% 黑幕；
+     只去一个，另一个照样把战场挡死。
+     ⚠️ .panel 与 #overlayContent 是**同一个元素**，且二十多处别的界面共用它（选英雄 / 图鉴 / 周榜 /
+     设置 / 奖励三选一 / 篝火 / 锻造 / 鬼市 / 卡牌放大 …）⇒ 那些界面一律保留纯色底。所以「无底」
+     只能做成**新的第 5 个场景类**，绝不直接改 .panel；那几个共用界面的样式零变化。
+     ⚠️ 限宽 620 也必须解开：桌面 .panel 内容宽只有 568，5×165 加 4×10 的间距共 865 会塌成两行
+     —— max-width 重新写成 none 加上 width 100% 才是 1.25 倍能成立的关键。
+     ⚠️ 范围＝**只桌面档**。本表的三个还原档是 ≤520 宽 / ≤360 宽 / T-short（max-height 560），
+     取它们的**补集**当门（min-width 521 且 min-height 561），把「只桌面档」写成一条判据：
+     矮屏与窄屏里本节**一条都不匹配** ⇒ 那些档的 .panel 原样生效，实心面板零像素变化。
+     这比照抄三份「还原」更稳 —— 还原要把 padding、max-height 之类的值再抄一遍，哪一档漏抄或
+     抄成旧值就是静默失效；而补集门不吃书写顺序（@media 不加特异度，同属性只靠顺序分胜负）。
+     ⚠️ 1.25 倍只能挂**场景选择器**：全局 .card 的 132×200 是手牌 / 锻造 / 图鉴 / 奖励三选一共用的，
+     动它等于全站卡牌变形。132→165 与 200→250 的比例仍是 0.66，百分比定位的子元素零拉伸。
+     v1 不缩放字号：卡名与描述是绝对 px，放大外框只让文字占比变小，不拉歪版面。
+     ⚠️ 不要用 backdrop-filter：它会成为 fixed 后代的包含块（与本文件既有的红线同类陷阱），
+     而且 #overlay 还带 opacity 与 visibility 的过渡。标题与说明文字用三层投影压暗底衬保证可读；
+     实拍若仍糊，退路是给 h2 / p 加**局部**底板（inline-block 加深色底），而不是整块纯色底。
+     ⚠️ 面板高度上限给到 94dvh（不是 .panel 的 88dvh）：这一档 .panel 没有任何外框与底色，
+     多吃的纵向空间不会顶到任何东西，而 88dvh 在 1280×720 装十张牌时会逼出 18px 内部滚动
+     （实测：十张牌折两行 7/3，内容高 652，88dvh 只有 633.6）。94dvh 与本文件矮屏档的取值一致。 */
+  @media (min-width:521px) and (min-height:561px){
+    #overlay.pick-scene{background:rgba(8,6,5,.22);}
+    #overlay.pick-scene #overlayWrap{max-width:none; width:100%;}
+    #overlay.pick-scene .panel{background:none; border:0; box-shadow:none; padding:0 10px; max-height:94dvh; overflow-y:auto;}
+    #overlay.pick-scene .panel h2,
+    #overlay.pick-scene .panel p{text-shadow:0 2px 6px #000, 0 0 14px #000, 0 0 3px #000;}
+    /* flex 基准写成 auto 且不许收缩：.card 默认是 flex:0 1 auto，容器不够宽时会被压瘦而
+       高度仍是内容撑的 ⇒ 宽高比破掉，has-frame 的百分比子元素全部拉歪。不收缩则走 wrap
+       换行（窗口窄到放不下一行时折两行），比例永远保持。 */
+    #overlay.pick-scene .reward-cards .card{flex:0 0 auto; width:165px; min-height:250px;}
+  }
   .kwlist{text-align:left; font-size:13px; line-height:1.9;}
   .kwlist b{color:var(--gold);}
   .hint{flex:0 0 auto; font-size:12px; color:var(--dim); text-align:center; margin-top:2px;}
@@ -1008,12 +1081,41 @@
   .fx-dmg.heal{color:var(--green);}
   @keyframes fxDmg{0%{opacity:0; transform:translate(-50%,-50%) scale(.5)}14%{opacity:1; transform:translate(-50%,-75%) scale(1.1)}100%{opacity:0; transform:translate(-50%,-180%) scale(1)}}
   .enemy.hit{animation:shake .22s ease-out;}
-  @keyframes shake{0%,100%{transform:translateX(0)}30%{transform:translateX(-5px)}60%{transform:translateX(5px)}}
+  /* v0.72.0：这两个关键帧里的位移**必须带上 translate(var(--ex),var(--ey))** ——
+     关键帧的 transform 会整个替掉元素自己的 transform（不是叠加）。
+     漏掉某一停靠点，那个停靠点就当场跳回未抬升的原点（停靠点越多越明显）。
+     用 calc 把抖动折进 x 分量，比再叠一个 translateX() 短，且每个停靠点形状一致。 */
+  @keyframes shake{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}30%{transform:translate(calc(var(--ex,0px) - 5px),var(--ey,0px))}60%{transform:translate(calc(var(--ex,0px) + 5px),var(--ey,0px))}}
   #hurt-vignette{position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at center, transparent 45%, rgba(178,59,46,.5) 100%); opacity:0; z-index:4;}
   #hurt-vignette.flash{animation:vignette .5s ease-out;}
   @keyframes vignette{0%{opacity:1}100%{opacity:0}}
   .enemy.dying{animation:enemyDie .45s ease-out forwards; pointer-events:none;}
-  @keyframes enemyDie{0%{opacity:1; transform:scale(1)}100%{opacity:0; transform:scale(.55)}}
+  @keyframes enemyDie{0%{opacity:1; transform:translate(var(--ex,0px),var(--ey,0px)) scale(1)}100%{opacity:0; transform:translate(var(--ex,0px),var(--ey,0px)) scale(.55)}}
+  /* —— v0.72.0：卡牌动画层（抽 / 弃 / 洗 + 易物） ——
+     为什么不复用 #fx-layer(5)：#overlay 是 z-index:10，而「易物打出时牌体在战场中央亮相」
+     必须在小窗开着时看得见 ⇒ 必须高于 10。取 12 仍低于 #float-msg(20) 与 #tooltip(9999)，
+     不抢飘字。#fx-layer 一行不改 —— fxSeek 的钉帧语义与 FX_LIVE 去重都要原样保留。
+     飞的一律是**克隆**，只挂这里、**绝不挂进 #hand**：既不碰 .hand-area 与 #hand 的
+     transform / filter / will-change / perspective 红线（它们一旦带上这些属性就成了
+     position:fixed 后代的包含块，会摧毁 #fx-layer 的视口坐标系），也不与 .card 已被
+     rotate(var(--rot)) 与 hover 占满的 transform 通道打架。
+     ⚠️ perspective 只加在克隆自己身上，绝不能落到 .hand-area 或 #hand。 */
+  #anim-layer{position:fixed; inset:0; pointer-events:none; z-index:12; overflow:hidden;}
+  .fly-card{position:fixed; left:0; top:0; perspective:800px; pointer-events:none;
+            transform-origin:50% 50%; will-change:transform;}
+  .fly-inner{position:absolute; inset:0; transform-style:preserve-3d;}
+  .fly-face{position:absolute; inset:0; backface-visibility:hidden;}
+  /* 卡背预先翻到背面 ⇒ 容器转到 180deg 时露出的正是它；「翻正」就是容器 180 → 0 */
+  .fly-back{transform:rotateY(180deg); background-color:#2a2119;
+            background-image:var(--pile-back-img,none);
+            background-repeat:no-repeat; background-size:100% 100%; border-radius:3px;}
+  /* 克隆体内的牌面是「静态牌面」：手牌的扇形角度与 hover 过渡一律不参与。
+     ⚠️ 尺寸走 100%（.fly-card 的内联宽高 = **终点**尺寸）。抽牌要从 44×66 的牌堆角
+     飞到 132×200 的手位，尺寸差由飞行本身的 scale 承担，所以这里不能留 .card 的定值。 */
+  .fly-card .card{width:100%; height:100%; margin:0; transform:none; transition:none; pointer-events:none;}
+  /* 洗牌的「一圈光晕」：与 inkBurst 同一套纯 CSS radial-gradient 手法，
+     只是改由 WAAPI 驱动 —— inkBurst 结尾那个 setTimeout 会留定时器，无头下让 node 退不出。 */
+  .fx-pulse{position:absolute; pointer-events:none; border-radius:50%;}
   /* 全屏震屏已移除：受击反馈改用 hurtVignette 红晕 + 伤害飘字，避免连击时重影/重叠 */
   .card.shake{animation:cardShake .28s ease;}
   @keyframes cardShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
@@ -1341,6 +1443,9 @@
 
   /* —— T-mid：矮窗。温和档，只动四件事 —— */
   @media (max-height:700px){
+    /* v0.72.0：弧线两个倍率。纵向 .7（矮窗的纵向预算紧一档），横向 .6。
+       960×540 命中的是下面更矮的 T-short（.45/.4），这一条服务 561~700。 */
+    :root{--rise-unit:.7; --slot-dx-k:.6; --player-inset-x:14px;}
     h1.title{font-size:22px; letter-spacing:3px; margin-bottom:2px;}
     h1.title small{display:none;}
     #app{padding:8px 10px 12px;}
@@ -1377,7 +1482,19 @@
 
   /* —— T-short：手机横屏。激进档 —— */
   @media (max-height:560px){
-    :root{--rise-unit:.45;}
+    /* v0.72.0：弧线的两个倍率。这一档 **--rise-unit 从 .45 改成 .05**，是有实测依据的
+       放小、不是随手压：这档 `#enemy-panel` 另有 `padding-top:2px` 覆盖（下面那条），
+       而 `#enemy-panel` 的顶边只比 `#topbar` 底边低 2px ⇒ 最高的那只最多只能抬
+       `padding-top + 2 = 4px`，再多就顶进顶栏（v0.60 修过的实机缺陷）。
+       实测（960×540，本档最紧的一个）：最高的那只不抬时 top=57，顶栏底边 53。
+       dy 表满场是 62 ⇒ 倍率上限 4/62 ≈ .0645，取 .05 留 1px 余量。
+       ⚠️ v0.70.0 的 .45 之所以没事，是因为它乘的 RISE_LIFT 把**最大的抬升给了最矮的那只**
+          （[0]=0 / [1]=19 / [2]=9，而 [0] 恰好最高 224px）—— 弧线把最大抬升给了最深的那只，
+          而最深的那只正是最高的一只（rank 越大越高），两者正好对撞。这一条是本次实测抓到的。
+       横向不占高度预算，仍留 .4 —— 这档的纵深靠横向位移读。 */
+    /* v0.72.0：`--player-inset-x:0` —— 这一档**必须**显式归零（不能省）：
+       960×540 五敌一行只剩 4px 余量，任何内缩都会把它挤成两行、抬高 .battle。 */
+    :root{--rise-unit:.05; --slot-dx-k:.4; --player-inset-x:0px;}
     #app{padding:1px 6px 1px;}
     /* ⚠️ `min-height` 不是装饰：`.title-actions` 是 `position:absolute; top:50%`
        + `translateY(-50%)`，参照物是**这个 h1 的盒**。h1 只有 16px 高而按钮 ~22px，
@@ -1571,6 +1688,18 @@
     .tb-toggle::after{content:""; position:absolute; inset:-6px -4px;}
   }
 
+  /* —— 窄屏闸：弧线归零 ——
+     v0.72.0：≤520 / ≤360 宽这两档的 `.battle` 是 flex-direction:column（玩家在上、
+     敌人在下），「玩家左下、敌人右上」的构图本来就不成立 ⇒ 弧线整个归零，回扁平排布。
+     ⚠️ 必须写在上面 T-mid / T-short **之后**：@media 不加特异度，同属性靠**书写顺序**定胜负。
+        一个 500×700 的视口同时命中「≤520 宽」与「≤700 高」，归零块若写在前面就会被
+        T-mid 的 .7/.6 盖掉 —— 窄屏当场长出弧线。两条轴上宽度这一轴必须赢，
+        所以它排在最后（与 :1530 那条 pointer:coarse 分轴同一个道理）。
+     ⚠️--rise-unit 在这两档是 **0**：它的读取判据因此从 v0.70.0 的 `>0` 放宽成 `>=0`
+        （见 js/50_ui.js 的 refreshRiseK），否则 0 会被误判成非法而回落成 1。 */
+  @media (max-width:520px){ :root{--rise-unit:0; --slot-dx-k:0; --player-inset-x:0px;} }
+  @media (max-width:360px){ :root{--rise-unit:0; --slot-dx-k:0; --player-inset-x:0px;} }
+
   /* —— 竖屏闸 ——
      ⚠️ 必须带 (pointer:coarse)。裸写 orientation:portrait 会把 900x1200 的桌面窗口
         （devtools 停靠、竖屏副屏）当场锁死 —— 那是这条方案最大的代价，必须挡掉。
@@ -1598,7 +1727,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.71.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.72.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

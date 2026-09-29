@@ -636,6 +636,55 @@ def main():
           "showOverlay 开头有 `classList.remove('hero-scene')`（同 map/menu/scroll-scene 那三条，"
           '少了它 = 开完选英雄再开任何面板都会被放宽限宽）')
 
+    # ---- v0.72.0 §四：`pick-scene`（桌面档选牌小窗：去纯色底 + 卡牌 1.25 倍）----
+    # 为什么一下子钉八条：这一节的形态是「新场景类 + 一道 @media 门 + 六处显式调用」，
+    # 每一处漏掉都是**静默失效** —— CSS 少一条只是小窗还是纯色底；JS 少摘一次是类粘在 #overlay 上，
+    # 之后每个面板都变无底；门写错是手机横屏也吃到无底样式（用户明确否掉的那一档）。
+    # 顺序：先证明门在、且规则全在门里 → 再证明副作用（全局卡宽）没被动 → 最后证明 JS 成对 + 调用点数。
+    _pick_cond = _re.search(r'@media\s*\(min-width:\s*521px\)\s*and\s*\(min-height:\s*561px\)\s*\{', _style_clean)
+    check(bool(_pick_cond),
+          '存在 `@media (min-width:521px) and (min-height:561px)` 这道桌面门 —— 它是 ≤520 宽 / ≤360 宽 / '
+          'T-short（max-height 560）三个还原档的**补集**：矮屏与窄屏里本节一条都不匹配，'
+          '那些档的 .panel 原样生效、实心面板零像素变化')
+    _pick_block = ''
+    if _pick_cond:
+        _pi, _pd = _pick_cond.end() - 1, 0
+        for _pk in range(_pi, len(_style_clean)):
+            if _style_clean[_pk] == '{':
+                _pd += 1
+            elif _style_clean[_pk] == '}':
+                _pd -= 1
+                if _pd == 0:
+                    _pick_block = _style_clean[_pi + 1:_pk]
+                    break
+    check('pick-scene' in _pick_block and 'width:165px' in _pick_block,
+          '桌面门里同时有 `#overlay.pick-scene` 与 1.25 倍卡宽 165px（少一个 = 去底与放大只剩一半）')
+    check(bool(_re.search(r'#overlay\.pick-scene\s+#overlayWrap\s*\{[^}]*max-width\s*:\s*none', _pick_block)),
+          '`#overlay.pick-scene #overlayWrap` 解开了限宽（少了它 = 桌面 .panel 内容宽只有 568，'
+          '5×165 加 4×10 间距共 865 会折成两行 —— 1.25 倍名义上生效、观感反而更差）')
+    check(bool(_re.search(r'#overlay\.pick-scene\s+\.panel\s*\{[^}]*background\s*:\s*none', _pick_block)),
+          '桌面门里 `#overlay.pick-scene .panel` 去掉了纯色底（--ink2 不透明，不去它小窗仍是实心块）')
+    # ⚠️ 反过来也要钉：pick-scene 的规则**一条都不许漏到门外**。漏出去就等于绕开了桌面门，
+    #    手机横屏会跟着吃到「无底 + 165px」—— 正是用户明确否掉的那一档，而且不报错。
+    #    做法是拿门内块做减法，而不是数出现次数：场景类在 JS 的 SCENES/remove 里也会出现。
+    _outside = _style_clean.replace(_pick_block, ' ') if _pick_block else _style_clean
+    check('pick-scene' not in _outside,
+          'CSS 里没有漏在桌面门外的 pick-scene 规则（漏一条 = 矮屏档也去底，用户否掉的形态）')
+    # ⚠️ 全局卡宽是**红线**：`.card` 的 132×200 是手牌 / 锻造 / 图鉴 / 奖励三选一共用的，
+    #    改它等于全站卡牌变形。1.25 倍只能挂在场景选择器上（见本节 CSS 注释）。
+    check(bool(_re.search(r'\.card\s*\{\s*width\s*:\s*132px', _style_clean)),
+          '全局 `.card` 仍是 132px 宽（它一改，手牌/锻造/图鉴/奖励三选一全部跟着变形）')
+    check('pick-scene' in _scenes,
+          '`pick-scene` 在 showOverlay 的 SCENES 名单里: %s' % _scenes)
+    check(bool(_re.search(r"classList\.remove\('pick-scene'\)", js_src)),
+          "showOverlay 开头有 `classList.remove('pick-scene')`（少了它 = 类粘在 #overlay 上，"
+          '之后每个面板都继承无底样式）')
+    _pick_calls = _re.findall(r"undefined\s*,\s*'pick-scene'\s*\)", js_src)
+    check(len(_pick_calls) == 6,
+          '六处选牌小窗（忘忧 / 焚符 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一）都**显式**传了'
+          '第三实参 pick-scene（实测 %d 处）—— 漏传 = 既没有场景类，从别的弹窗进来也不再重播进场'
+          % len(_pick_calls))
+
     # ---- v0.69.0 §D5：KEYWORDS 的零引用词条不能变多 ----
     # 背景：卡面上的 `【X】` 是**唯一**能把玩家引到词条解释的入口（wrapKw 只认方括号，
     # 见 js/20_data.js 的 `text.replace(/【([^】]+)】/g,…)`），UI 上另有零散的 `data-tip="kw:X"`。

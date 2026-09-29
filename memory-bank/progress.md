@@ -10,6 +10,86 @@
 
 ## Update History
 
+### [Sep 29, 2026, 1:42 PM] ✨ Feature: v0.72.0 步 6 完成：卡牌动画地基（零接入）
+<!-- ID: p_2026-09-29_mum91vmg -->
+
+§一 步 3/4/5 里程碑已封（打包 141 ok / 0 fail，冒烟 1340/0）。
+
+步 6 内容：
+- js/00_base.js 末尾新增动画地基，**纯新增 198 行、0 删行**（git diff --numstat 实证）⇒ fx 代码路径逐字节未动 ⇒ _drvfx 帧号不可能变（实测唯一差异是 #enemy-panel 宽度，属步 4/5 的既定几何，非本步）。
+- NEW_CARDS(WeakSet) / animLive() / animLayer() / flyCardHTML() / flyFaceHTML() / animBindSkip() / Anim{flights,pending,busy,push,flush,skip,stop,play} / _animItem()。
+- 原型.html 新增 #anim-layer(z-index 12) + .fly-card/.fly-inner/.fly-face/.fly-back/.fx-pulse 规则。
+- 无头判据 = window.innerWidth（沙箱没有该属性 ⇒ animLive() 恒假）。
+
+新增两只夹具：
+- _patch/probe_anim.js（node，13 ok/0 fail）：证明无头下 push/flush/skip 全空转、**新增定时器数 = 0**、不建 #anim-layer、不绑 pointerdown。
+- _patch/_drvfly.js（浏览器，8 视口 × 42 ok / 0 fail）：A 克隆与手牌逐像素同构 / B 翻转结构 + 手牌容器红线 / C #anim-layer(12) > #overlay(10) > #fx-layer(5) / D 真飞一次 + skip 到终态 / E pending 是数组 / F .fx-pulse 规则活性。
+
+**本步挖出的坑（对步 7 直接有效）**：窄档 5 张牌时 #hand 装不下，.card 作为 flex 项被 flex-shrink 压成**小数宽**（960×540 实测 103.5px）；offsetWidth 会四舍五入成整数 ⇒ 克隆按整数建会让内部百分比定位的 .cart-wrap/.cplate 差整整 1px（夹具第一版就在 960×540 报 4 条 FAIL、844×390 报 2 条）。定论：**动画的尺寸一律取 getComputedStyle().width/height，不要 offsetWidth**；_animItem 也已改成不取整（只压两位小数）。附带确认：矩形绕任意点旋转后，其 AABB 中心 **等于** 旋转后的形心 ⇒ getBoundingClientRect 的中心可以直接当锚点用。
+
+**Affected files:**
+- `js/00_base.js`
+- `原型.html`
+- `_patch/probe_anim.js`
+- `_patch/_drvfly.js`
+
+**Tags:** `v0.72.0`, `动画`, `步6`
+
+---
+
+
+### [Sep 29, 2026, 1:14 PM] ✨ Feature: v0.72.0 步 3–5：敌人弧线构图（dy 表 + rank 序）与玩家左内缩，全部逐档验证
+<!-- ID: p_2026-09-29_mum82pci -->
+
+步 3（dy 弧线）：SLOT_SHAPE 的 dy 定为 0/14/28/42/54/62（62 是 v0.71.0 已有的净空封套 ⇒ 高度零变化）；秩 rank = 存活数-1-pos 由 60_boot.js:254 传 filter 后的 pos 算出。T-short 的 --rise-unit 从 .45 改 .05（实测：T-short 的 padding-top 只有 2px，最高的那只最多只能抬 4px；老 .45 会让最深那只顶进 #topbar 9px）。--headroom = 2+max(battleHeadroom, slotHeadroom)，slotHeadroom 按当前敌人数取 max（单敌不再白吃 62px）。
+
+步 4（dx 弧线）：SLOT_SHAPE 的 dx 定为 0/-14/-28/-42/-54/-64（rank 越小越小）。**方向是最初反过来的**：先按「浅的拉最多（朝玩家探）」写，实测 960×540 五敌（2 elite+3 normal，一行 786/790 只剩 4px 余量）最前排那只被拉 29px 后压进 #player-panel（左沿 131 vs 玩家面板右沿 146）。改成「最浅恒 0、越深拉越多」⇒ 与玩家面板相交这条风险**由构造排除**（最前排钉在 flex 位上，按定义就在面板内）。#enemy-panel 的 padding-right 2→8px 当「不贴角」。
+
+步 5（玩家左内缩）：--player-inset-x = 基档 24px / T-mid 14px / T-short 0 / ≤520·≤360 0，挂 #player-panel{margin-left:var()|0}。T-short 必须显式 0（自定义属性继承，省了就继承 24px，会把 960×540 的五敌一行挤成两行）。实测面板左沿：1920/1280 +24、1024×640 +14、960×540 与 640×360 不变。
+
+验证：冒烟 1340/0；CSS 注释 203/203 配平、brace 2/0 与 HEAD 同、四种禁串 none；10 视口 BUDGET 与 HEAD **逐字节相同**；8 视口 × n=1~6 + 单 boss 共 28 组的换行行数与 HEAD 全一致；⚠（顶进顶栏 / 顶出右沿 / 与玩家面板相交）在 24+42 组里 0 次。夹具新增 &quiet=1（不铺全屏日志盒，给实拍看构图用）。
+
+已知非回归：n=2 的 _drvland 行底 top 在两棵树里都是 7:1 抖（438/459，intent 文本换行竞态），与本次改动无关。
+
+**Affected files:**
+- `js/50_ui.js`
+- `js/60_boot.js`
+- `原型.html`
+- `_patch/_drvclip.js`
+- `_patch/_drvland.js`
+
+**Tags:** `v0.72.0`, `敌人布局`, `弧线`, `CSS`, `验证`
+
+---
+
+
+- [2026-09-28 17:23:09] [HP] - Decision Made: CSS 闸必须证「合法性」而非「文本存在」——新增注释结构闸 + 选择器前奏中文闸
+### [Sep 29, 2026, 1:22 AM] 🐛 Fix: v0.71.0 版面收口：整页锁死 + 战报栏全档抽屉 + 敌人尺寸 vh 连续公式 + 修两个「CSS 写了但没生效」的静默失效
+<!-- ID: p_2026-09-28_mulin20o -->
+
+提交 a9d0663（162 文件；一并扫掉 v0.65.0–v0.71.0 未提交积压，HEAD 原停在 v0.64.2）。
+
+版面（用户实机点名）：整页锁死（html/body height:100% + overflow:hidden，定高弹性列提到全局）＋逐屏滚动分配（只有图鉴/地图/锻造/战报/弹窗可内部滚）＋战报栏全档统一为右侧抽屉（基档常驻左栏被证伪：3 敌时每个桌面分辨率都竖滚）＋矮屏档买余量。
+
+真 bug：① #enemy-panel 缺层叠上下文，.enemy 内联 z-index:2000 盖住 #log 与手牌（用户报的「战报透明、卡牌盖不住敌人」）⇒ isolation:isolate。② 敌人立绘高度是定值 ⇒ vh 650~860 顶穿整页 ⇒ 一条 vh 连续公式（锚点 880，1920×1080/1440×900 像素恒等）。③ 矮屏档按钮特异度塌陷（button.btn 0,2,1 打败 .btn 0,1,0）⇒ 数条规则是死代码。④ 选英雄屏放不下（640×360 溢 62px、1280×720 也溢 20px）⇒ hero-scene 场景类 + #overlayWrap 放宽 700px。
+
+两个「写了但没生效」的静默失效（本批最值钱）：① .card.selected 是全项目空规则 ⇒ 选牌小窗选中零反馈；补样式时连踩两坑——说明注释里写出注释起止符 ⇒ 注释提前截断把规则本身吞掉；改好后发现 .card.has-frame{border:0} 让 border-color 成死属性，真正生效的是 box-shadow 扩散环。② .exhaust-tag 整条规则被 v0.69.0 给该修复写的说明注释吃掉（CSS 注释不嵌套）⇒「被封印的牌描述看不全」悄悄回来了，数月无人发现。已用 rules= 模式读 getComputedStyle 证明修好，不是只证明文本在。另：矮屏档 .reward-cards .card 收到 104px，选牌小窗 5 张一排放得下（内部溢出 45/74px → 0）。
+
+闸：verify_dist 133 → 141 ok / 0 fail。新增 8 条，治本两条＝注释结构性配平（照浏览器语义）＋「选择器前奏不许有中文」（证明合法性；文本/子串匹配在此坑上全是绿的）。夹具 _drvclip.js 新增 dialog=N / screen=hero / rules= 三模式。冒烟 1340 pass / 0 fail；8 视口 × 3 编制 × 2 形态 × 2 手牌数 = 96 组，仅 640×360+10 张手牌为 1px。
+
+**Affected files:**
+- `原型.html`
+- `js/50_ui.js`
+- `js/60_boot.js`
+- `_patch/verify_dist.py`
+- `_patch/_drvclip.js`
+- `更新日志.md`
+
+**Tags:** `v0.71.0`, `整页锁死`, `战报抽屉`, `CSS静默失败`, `验证闸`
+
+---
+
+
 ### [Sep 8, 2026, 9:54 PM] ✨ Feature: 引擎机制改造（Task #11）全部完成，三批补丁 NODE_OK
 <!-- ID: p_2026-09-08_mtsqdy7i -->
 

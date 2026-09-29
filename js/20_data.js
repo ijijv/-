@@ -351,7 +351,10 @@ const CARDS = [
       :G.hero==='wuseng'?`选择 1 张手牌与弃牌堆交换。若换出的是防御牌，获得 4 点格挡`
       :G.hero==='yincha'?`选择 1 张手牌与弃牌堆交换。若换出的是技能牌，恢复 5 点生命`
       :`选择 1 张手牌与弃牌堆交换。若换出的是攻击牌，额外抽 1 张牌`,
-    eff:(u,c)=>{ startExchangeSelect(1, c); }},
+    /* v0.72.0：第 4 个实参 i 是「这张牌打出前在手牌里的下标」（doPlayCard 里 :1073 传的）。
+       易物亮相要的源位就是它 —— 那一拍 #hand 还是打出之前的旧 DOM，而 G.hand 里已经
+       splice 掉了这张牌，所以只能按下标取（animHandElAt）。其余卡片的 eff 不吃这个参数。 */
+    eff:(u,c,_x,i)=>{ animExchangeCast(c,i); startExchangeSelect(1, c); }},
   {id:'xueqi', name:'血契', type:'skill', rarity:'blue', cost:1, costU:{wuseng:0, yincha:0, ganshiren:0},   // v0.61.37 赶尸人列升级 0 费
     t:(u)=>G.hero==='wuseng'?`将目前的格挡按 60% 转化为血量${u?'（0 符文）':''}`
       :G.hero==='yincha'?`扣除目前所有【血怒】，恢复【血怒】层数 ×2 的生命${u?'（0 符文）':''}`

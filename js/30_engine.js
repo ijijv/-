@@ -405,7 +405,11 @@ function showWangyouChoice(){
   const pool=G.hand.slice();
   G.wangyouPool=pool;
   const cards=pool.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="drinkWangyou(${i})">${cardBody(c)}</div>`).join('');
-  showOverlay(`<h2>忘 忧 汤</h2><p>孟婆的汤还萦绕在喉头——选择 1 张手牌「饮下」（弃置，进弃牌堆而非封印），或拒绝（受 <b style="color:var(--red)">8 点真实伤害</b>）。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="refuseWangyou()">拒绝 · 受 8 点真实伤害</button>`);
+  /* v0.72.0：本文件里共**六处**选牌小窗（忘忧 / 焚符 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一），
+     一律显式传第三实参 'pick-scene' —— 桌面档据此去掉小窗的纯色底、把卡牌放到 1.25 倍。
+     为什么必须**显式**传：showOverlay 的 sceneChanged = !!scene && scene !== wasScene 是 .ov-enter
+     进场动画的门闩，第三实参同时也是场景类本身 —— 漏传 = 既没有场景类、从别的弹窗进来也不再重播进场。 */
+  showOverlay(`<h2>忘 忧 汤</h2><p>孟婆的汤还萦绕在喉头——选择 1 张手牌「饮下」（弃置，进弃牌堆而非封印），或拒绝（受 <b style="color:var(--red)">8 点真实伤害</b>）。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="refuseWangyou()">拒绝 · 受 8 点真实伤害</button>`, undefined, 'pick-scene');
 }
 function drinkWangyou(i){
   const pool=G.wangyouPool||G.hand;
@@ -443,7 +447,7 @@ function renderDiscardSelect(){
   }).join('');
   showOverlay(`<h2>焚 符 · 弃 牌</h2><p style="color:var(--red)">可弃任意张手牌，每弃 1 张触发一次效果（已选 <b>${s.picked.length}</b> 张）</p><div class="reward-cards">${cards}</div>
     <button class="btn" onclick="confirmDiscardSelect()">${s.picked.length>0?`弃掉 ${s.picked.length} 张`:'请选择要弃的牌'}</button>
-    <button class="btn ghost" onclick="cancelDiscardSelect()">放弃（焚符回退）</button>`);
+    <button class="btn ghost" onclick="cancelDiscardSelect()">放弃（焚符回退）</button>`, undefined, 'pick-scene');
 }
 function toggleDiscardPick(i){
   const s=G.discardSelect; if(!s) return;
@@ -490,7 +494,7 @@ function renderHuofuSelect(){
   const s=G.huofuSelect; if(!s) return;
   const cards=G.hand.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickHuofuDiscard(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>火 符 · 弃 牌</h2><p style="color:var(--red)">挑选 <b>1</b> 张手牌弃掉；若弃掉的是【鬼怪牌】，获得 ${s.up?2:1} 点【尸气】</p><div class="reward-cards">${cards}</div>
-    <button class="btn ghost" onclick="cancelHuofuSelect()">取消（不弃牌 · 退符文 · 火符回手）</button>`);
+    <button class="btn ghost" onclick="cancelHuofuSelect()">取消（不弃牌 · 退符文 · 火符回手）</button>`, undefined, 'pick-scene');
 }
 function cancelHuofuSelect(){
   const s=G.huofuSelect; if(!s) return;
@@ -532,11 +536,16 @@ function renderExchange(){
   const ex=G.exchange; if(!ex) return;
   if(ex.phase==='pickHand'){
     const cards=G.hand.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickExchangeHand(${i})">${cardBody(c)}</div>`).join('');
-    showOverlay(`<h2>易物 · 选一张手牌</h2><p>选择一张要交换出去的手牌（还剩 <b>${ex.times}</b> 次交换）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃继续交易</button>`);
+    showOverlay(`<h2>易物 · 选一张手牌</h2><p>选择一张要交换出去的手牌（还剩 <b>${ex.times}</b> 次交换）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃继续交易</button>`, undefined, 'pick-scene');
   } else if(ex.phase==='pickNew'){
     const cards=ex.pool.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickExchangeNew(${i})">${cardBody(c)}</div>`).join('');
-    showOverlay(`<h2>易物 · 牌堆随机三张</h2><p>选一张换入你的手牌</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃交换</button>`);
+    showOverlay(`<h2>易物 · 牌堆随机三张</h2><p>选一张换入你的手牌</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃交换</button>`, undefined, 'pick-scene');
   }
+  /* v0.72.0：易物成交动画的开播点。pickExchangeNew 里 `ex.times>0` 那条分支只调
+     renderExchange()（**不调 render()**），成交载荷就没人在 render 尾部 flush 了 ⇒ 卡在 pending。
+     这里补一次：pending 为空时 flush 直接早退，所以本次唯一调用点（times 恒为 1）走的是
+     末尾那条 render() 分支，这行是「万一以后有多次交换」的保险，不是当前路径的一部分。 */
+  Anim.flush();
 }
 function pickExchangeHand(i){
   const ex=G.exchange; if(!ex) return;
@@ -555,6 +564,11 @@ function removeCardFromPiles(c){
 function pickExchangeNew(i){
   const ex=G.exchange; if(!ex) return;
   const c=ex.pool[i]; if(!c) return;
+  /* v0.72.0：换出那张牌**成交前的手位**只能在这一拍量 —— 从这里到函数末尾全程没有 render()
+     （两条分支分别是 renderExchange 与 render），#hand 还是「打出易物之前」的旧 DOM，
+     它的下标就是此刻 G.hand 的下标（旧的 exchange 界面从未重排过手牌）。
+     必须量在 splice **之前**：splice 一执行，G.hand 与 #hand 就对不上号了。 */
+  const _oldSlot=animRect(animHandElAt(ex.handIndex));
   const old=G.hand.splice(ex.handIndex,1)[0];
   if(old.type!=='junk') G.discard.push(old);
   removeCardFromPiles(c);
@@ -567,6 +581,10 @@ function pickExchangeNew(i){
   const _di=G.deck.indexOf(c); if(_di>=0) G.deck[_di]=cNew;
   G.hand.push(cNew);
   ex.done=(ex.done||0)+1; // 已完成一次交换：此后取消不再把易物回退
+  /* v0.72.0：成交的「一出一进」动画入队。放在这里而不是末尾那条分支之后 ——
+     入队本身必须早于 render（build 里要按身份找换入牌的**落位**，而身份标记得在
+     render 写 handCardHTML 之前登记，见 animExchangeQueued 的注释）。 */
+  animExchangeQueued(old, cNew, _oldSlot);
   // 易物(#27)：若换出的是特定类型，按英雄给奖
   if(G.hero==='ganshiren' && isGhostCard(old)){ gainShiqi(2); log('易物：换出鬼怪牌，获得 2 点【尸气】'); }   // v0.61.37 A：1 → 2
   else if(G.hero==='wuseng' && old.type==='defense'){ gainBlock(4); log('易物：换出防御牌，获得 4 点格挡'); }
@@ -582,7 +600,7 @@ function renderRetainSelect(){
   const cards=G.hand.map((c,i)=>{ const sel=s.picked.includes(i); return `<div class="card has-frame ${RCOLOR[c.rarity]} ${sel?'selected':''}" onclick="toggleRetainPick(${i})">${cardBody(c)}${sel?'<div class="card-extra" style="color:var(--green)">✓ 已选</div>':''}</div>`; }).join('');
   showOverlay(`<h2>守一 · 保留手牌</h2><p>选择最多 <b>${s.need}</b> 张牌保留到下一回合（已选 <b>${s.picked.length}</b> 张），其余弃掉。</p><div class="reward-cards">${cards}</div>
     <button class="btn" onclick="confirmRetainSelect()">确认保留</button>
-    <button class="btn ghost" onclick="skipRetainSelect()">不保留 · 全部弃掉</button>`);
+    <button class="btn ghost" onclick="skipRetainSelect()">不保留 · 全部弃掉</button>`, undefined, 'pick-scene');
 }
 function toggleRetainPick(i){
   const s=G.retainSelect; if(!s) return;
@@ -622,10 +640,16 @@ function drawCards(n){
   const drawn=[]; const objs=[];
   for(let i=0;i<n;i++){
     if(G.hand.length>=10){ log('手牌已满'); break; }
-    if(!G.drawPile.length){ if(!G.discard.length) break; G.drawPile=shuffle(G.discard); G.discard=[]; log('弃牌堆洗回抽牌堆'); }
+    if(!G.drawPile.length){ if(!G.discard.length) break; G.drawPile=shuffle(G.discard); G.discard=[]; log('弃牌堆洗回抽牌堆'); animShuffleQueued(); }
     const c=G.drawPile.pop(); G.hand.push(c); drawn.push(c.name); objs.push(c);
   }
   G.lastDrawnCards=objs;
+  /* v0.72.0：抽牌动画的载荷在这里入队 —— objs 就是**本次**抽到的牌，粒度天然正确。
+     必须在这个位置：等到了 render 就没法把「本次抽的」和「本来就躺手里的」分开了。
+     只入队不出队：动没动画的决定权在 render 尾部的 Anim.flush()（那里手牌终位才量得到），
+     而 drawCards 的 11 个调用点里只有一处紧随 render。状态变更（G.hand / G.lastDrawnCards /
+     sfx）全部保持同步 —— 冒烟那几处是同步断言的。 */
+  animDrawQueued(objs);
   if(drawn.length){ sfx('card_draw'); log(`摸 ${drawn.length} 张：${drawn.join('、')}`); }
 }
 
@@ -879,12 +903,20 @@ function finishEndTurn(){
   // 守一：保留被标记的手牌
   // 守一保留 + 尸王（赶尸人）：未打出的【尸王】留手，不弃（打出/死亡后才入循环）
   const kept=G.hand.filter(c=>c.retain || (G.hero==='ganshiren' && c.id==='shi_wang'));
+  /* v0.72.0：弃牌动画要的是「这一拍新进弃牌堆的那几张」。
+     用**事后 slice** 而不是把这行拆开 —— 这行的语义被完整钉住（冒烟 8 处 finishEndTurn
+     的同步断言都压在它下游），拆成两行虽等价，但任何 diff 都会把它标红；slice 零侵入。 */
+  const _d0=G.discard.length;
   G.discard=G.discard.concat(G.hand.filter(c=>!c.retain && !(G.hero==='ganshiren' && c.id==='shi_wang')));
   /* v0.69.0：弃牌堆徽章在这里刷一次。本函数接下来是 triggerSummons → enemyAct，
      **全程没有 render()**（要等下一次 startTurn 才渲染），徽章会整整滞后一段敌人行动；
      而「这回合弃了多少张」正是玩家此刻最想看的数。
      只刷徽章、**不调 render()** —— render 会连手牌一起重排，把弃牌动作的视觉反馈抹掉。 */
   refreshPileCounts();
+  /* v0.72.0：弃牌动画。放在 refreshPileCounts() **之后** ⇒「牌飞进弃牌堆」与「徽章 +1」同一拍。
+     它自己会同步量手位（此刻 #hand 还是弃牌前的 DOM —— 再往后就没有量得到的机会了），
+     所以是 Anim.play 而不是入队等 render，理由见 00_base.js 里 animDiscardQueued 的注释。 */
+  animDiscardQueued(G.discard.slice(_d0));
   kept.forEach(c=>c.retain=false);
   G.hand=kept;
   aliveEnemies().forEach(e=>{ if(e.curse>0) e.curse=Math.max(0,e.curse-2); }); // v0.60：诅咒每回合末掉 2 层
@@ -1056,7 +1088,7 @@ function doPlayCard(i){
   if(G.hero==='wuseng' && G.zhouhunSteal && c.type==='attack'){ G.stealWatch=true; G.stealAccum=0; }
   duhunBatchBegin(); // v0.61.33：渡魂归己按「这一张牌造成的真实总伤害」结算（群伤/多段只取整一次）
   cardPlayWindow=true;
-  const effResult = c.eff(c.up, c, xuenuBonus);
+  const effResult = c.eff(c.up, c, xuenuBonus, i);
   cardPlayWindow=false;
   duhunBatchEnd();
   if(G.stealWatch){

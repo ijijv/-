@@ -15,5 +15,7 @@
 - [Next step 3]
 
 ## Current Session Notes
+
+- [17:23:09] [HP] Decision Made: CSS 闸必须证「合法性」而非「文本存在」——新增注释结构闸 + 选择器前奏中文闸
 - [Note 1]
 - [Note 2]
