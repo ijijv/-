@@ -17,6 +17,11 @@
      再 `pickExchangeHand` → `pickExchangeNew` → `animExchangeQueued` → render 尾部 flush）：
      亮相批次开播、克隆落在 z=12 的层上、小窗带 `pick-scene` 且黑幕 .22 / 面板无底 / 卡宽 165、
      成交交错两张（翻背 + 翻正）都在、收尾干净且隐身的牌复明。
+  F. 产物**自包含**（发给别人试玩的那一个文件能不能双击就跑）：ASSET_MAP 在、sfx/ 与 music/ 键全套
+     内联且值都是 data:audio/、`sampleURL`/`assetURL` 无视 file:// 那道闸直接命中内联表、
+     `Store` 在 file:// 下不抛。⚠️ 本段只证**机制**（键在、值是 data:、取址不拐弯）；
+     「file:// 下 fetch(data:audio) 真的取到字节并解出 AudioBuffer」是异步的，本文件同步跑完就
+     return，证不了 ⇒ 那半边在 `_patch/probe_sfx.py` + `_drvsfx.js`（一次性取证，已实测通过）。
   ⚠️ E 段两处**必须掐/必须放宽**的地方（都是探针自身的坑，不是产物的毛病）：
      · 量卡宽前得把 `overlayIn` 掐掉（冻结在 scale(.985)，165 会读成 163 —— 假阳性）；
      · 「隐身的牌」只能断言 ≥1（换出攻击牌 + 天师会给一次额外抽牌，那一张也隐身 ⇒ 张数随机）。
@@ -193,9 +198,87 @@
       || cs(document.getElementById('overlay'), 'opacity') === '0',
       '成交后小窗已收（hideOverlay 生效）');
 
+    /* F. 产物必须**自包含**（2026-09-29 加）。
+       为什么值得一条常驻闸：`dist/志怪塔.html` 就是**发给别人试玩的那一个文件** ——
+       对方双击打开（file://），没有 python、没有 素材/、没有 js/。而 `js/10_audio.js`
+       里有一道 `SFX_FETCH_OK = … && SFX_PROTO!=='file:'` 的闸（注释：「file:// 下 fetch
+       会被浏览器拦，别白试」），看起来像是「双击产物就没音效」。**其实不是**：
+       `sampleURL()` 是**先查 ASSET_MAP 再回落到相对路径**，而 `loadSfxSamples()` 的早退
+       条件是 `!ASSET_MAP && !SFX_FETCH_OK` —— 产物有 ASSET_MAP ⇒ 早退不成立 ⇒ 走
+       `fetch(data:…)`，而 data: URI 在 file:// 下 fetch 是通的（已实测，见
+       `_patch/probe_sfx.py`：真取到 14448 字节并解出 0.853s/48kHz 的 AudioBuffer）。
+       所以本段要钉的正是「ASSET_MAP 真的在、音效真的全套内联」这件事 ——
+       它一旦退化（比如打包漏收 sfx/、或 data URI 前缀变了），朋友那边就是**静音**，
+       而这在开发树上完全看不出来（开发树走 `素材/` 相对路径，一直是好的）。 */
+    var amap = null;
+    try { amap = eval('ASSET_MAP'); } catch (e) { }
+    t(!!amap, 'F 产物里 ASSET_MAP 已注入（自包含的前提）', amap ? Object.keys(amap).length + ' 个键' : String(amap));
+    if (amap) {
+      var akeys = Object.keys(amap);
+      var sfr = akeys.filter(function (k) { return k.indexOf('sfx/') === 0; });
+      var mur = akeys.filter(function (k) { return k.indexOf('music/') === 0; });
+      t(sfr.length > 0, 'F 音效采样已内联进 ASSET_MAP（双击产物不会是哑的）', sfr.length + ' 个 sfx/ 键');
+      t(mur.length > 0, 'F BGM 也已内联（music/ 键在）', mur.length + ' 个 music/ 键');
+      /* 键在还不够 —— 值必须是 data:audio/…，否则 file:// 下拿不到 */
+      var notdata = sfr.concat(mur).filter(function (k) { return String(amap[k]).indexOf('data:audio/') !== 0; });
+      t(notdata.length === 0, 'F 音效/BGM 的值全是 data:audio/ 内联 URI',
+        notdata.length ? ('不是的：' + notdata.slice(0, 3).join(',')) : (sfr.length + mur.length) + ' 条查过');
+      /* sampleURL 是音效取址的唯一出口，assetURL 是 BGM/图片的出口：两者都必须
+         无视 file:// 那道闸直接命中内联表（这正是「不需要 试玩.py」的机制） */
+      if (sfr.length) {
+        var u1 = null, u2 = null;
+        try { u1 = sampleURL(sfr[0]); u2 = assetURL(sfr[0]); } catch (e) { }
+        t(u1 === amap[sfr[0]], 'F sampleURL 直接返回内联 data URI（不被 file:// 那道闸挡住）',
+          String(u1).slice(0, 40) + '…');
+        t(u2 === amap[sfr[0]], 'F assetURL 同理（BGM 走的就是它）', String(u2).slice(0, 40) + '…');
+      }
+      /* 产物 <style> 里有 4 条**看起来会 404** 的活声明：.map-roller.top/.bot 的
+         url(素材/map/scroll_*.png)、#map-sheet 的 url(素材/bg/bg_map.jpg)+url(素材/map/scroll_paper.jpg)。
+         它们是**开发期兜底**（原型.html 与 素材/ 同级）—— 打包.py 不重写 CSS 里的 url()，
+         所以这几条在朋友那边就是 4 个静默 404。兜住它们的是运行时 applyMapTextures()：
+         走 assetURL() 把**内联属性** background-image 覆盖成 data URI（内联属性赢过样式表）。
+         ⚠️ 这条必须实跑：光看「CSS 里有没有」没用，得看覆盖到底有没有发生。
+         （verify_dist.py 的 [5] 只证「字面量在产物 <script> 段里找得到」，证不了覆盖生效。） */
+      var mapNote = '(showMap 取不到)';
+      try {
+        /* 走**生产入口** showMap()（它内部 :558 调 applyMapTextures）—— 而不是直接调
+           applyMapTextures()：三个节点只有在地图场景渲染出来之后才存在，先直接调只会
+           量到「节点不在」，那是探针顺序问题、不是产物的毛病。 */
+        showMap();
+        var probes = [['.map-roller.top', 'map/scroll_top.png'],
+                      ['.map-roller.bot', 'map/scroll_bottom.png'],
+                      ['#map-sheet', 'bg/bg_map.jpg']];
+        var still = [];
+        for (var pi = 0; pi < probes.length; pi++) {
+          var pel = document.querySelector(probes[pi][0]);
+          if (!pel) { still.push(probes[pi][0] + '(节点不在)'); continue; }
+          var pb = cs(pel, 'backgroundImage');
+          if (pb.indexOf('data:') < 0 || pb.indexOf('素材/') >= 0) still.push(probes[pi][0] + '=' + pb.slice(0, 30));
+        }
+        mapNote = still.length ? ('没覆盖成内联：' + still.join(' / ')) : '三条地图纹理都覆盖成 data URI 了';
+        t(still.length === 0, 'F 地图卷轴/画心的 CSS 兜底被 assetURL 覆盖成内联（否则产物里有 4 个静默 404）', mapNote);
+      } catch (e) {
+        t(false, 'F showMap() 抛了', String(e && e.message));
+      }
+
+      /* file:// 下 localStorage 在部分浏览器会抛 SecurityError。Store 是**全部**读写的
+         唯一入口且自带 try/catch（js/00_base.js）⇒ 只会退化成「不存盘」，不会崩。
+         这里只断言「不抛」并把结果报出来 —— 判死值会随浏览器实现漂，不是产物的事。 */
+      var storeNote = '(Store 取不到)';
+      try {
+        Store.set('__distprobe__', 'ok');
+        storeNote = 'Store.set 不抛；读回 ' + JSON.stringify(Store.get('__distprobe__'))
+          + '（file:// 下若为 null，是浏览器按源隔离存储，只影响存盘，不影响试玩）';
+        Store.del('__distprobe__');
+        t(true, 'F file:// 下 Store 读写不抛异常（再没有存档也不会崩）', storeNote);
+      } catch (e) {
+        t(false, 'F file:// 下 Store 抛了 —— try/catch 没兜住', String(e && e.message));
+      }
+    }
+
     L.push('');
     L.push('bad=' + bad);
-    L.push(bad ? ('✗ ' + bad + ' 条不合格') : 'A~D 全部通过 ✓');
+    L.push(bad ? ('✗ ' + bad + ' 条不合格') : 'A~F 全部通过 ✓');
     return L;
   }
 })();
