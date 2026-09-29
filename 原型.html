@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.72.0</title>
+<title>志怪塔 · 原型 v0.73.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -667,6 +667,15 @@
        换行（窗口窄到放不下一行时折两行），比例永远保持。 */
     #overlay.pick-scene .reward-cards .card{flex:0 0 auto; width:165px; min-height:250px;}
   }
+  /* v0.73.0 事件房背景：把 #overlay 那层常驻黑幕放松，让 bg_evt_* 那张场景图真的看得见
+     （不放松的话任何深色夜景图铺上去只剩 12% 可见度，等于白铺）。
+     开关是 setBg 挂的 body.evt-bg —— 与 body.at-menu 同一范式，取值集中在这里。
+     ⚠️ **不动 .panel 的底色**：事件面板里有大段说明文字与卡牌列表，那层纯色底是它们
+     可读性的依托（与选牌小窗不同，那批的文字有投影兜底）。放松黑幕只影响**面板四周**，
+     所以任何一档的正文可读性都没变 —— 也因此本条写在基档，不做桌面档限定。
+     特异度 (1,1,1) 高于基档 #overlay 的 (1,0,0)；与 #overlay.pick-scene 的 (1,1,0) 也不同型
+     （事件房与选牌小窗不会同时出现），两条互不干扰。 */
+  body.evt-bg #overlay{background:rgba(10,8,6,.55);}
   .kwlist{text-align:left; font-size:13px; line-height:1.9;}
   .kwlist b{color:var(--gold);}
   .hint{flex:0 0 auto; font-size:12px; color:var(--dim); text-align:center; margin-top:2px;}
@@ -1727,7 +1736,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.72.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.73.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

@@ -39,6 +39,13 @@ def dump_ids():
           ".concat(Object.keys(MAP_BG).map(k=>MAP_BG[k])).map(bgRel),"
           # v0.61.41：把 bgRel 的两条规则各钉一个样本，规则被改坏时这里立刻红
           "bgRule:['menu','map.jpg','map.jpeg'].map(bgRel),"
+          # v0.73.0：八个未知/事件房的专用背景（素材/bg/bg_evt_*.jpg）。
+          # 路径**在游戏作用域里算**（与上面 bg 同一范式），python 侧不镜像 ——
+          # 表写的是 'evt_well.jpg' 这种**不带 bg_ 前缀**的短名，硬拼必漂。
+          # 不加这一条，这八张会被 [2] 误报成「从未被游戏请求 / 可考虑删掉」，
+          # 照着删掉事件房就没背景了（同 v0.61.41 卷轴三件踩过的坑）。
+          "evtBg:UNKNOWN_EVENTS.map(k=>EVT_BG[k]).map(bgRel),"
+          "evtNames:UNKNOWN_EVENTS.slice(),"
           # v0.61.41：地图素材清单从游戏作用域取（6 种节点 + 未解锁），
           # 改名/漏填会让 [1] 立刻红，而不是等玩到地图页才发现图标 404。
           # v0.61.42：路径回到代码自绘 ⇒ MAP_ROAD_ICON 已退役，两条道路 PNG **仍在磁盘上没删**
@@ -130,6 +137,16 @@ def main():
           'bgRel 两条规则：带扩展名只补 bg_ 前缀 / 不带补 bg_<name>.png（%s）'
           % ','.join(ids.get('bgRule') or []))
     want += ids['bg']
+    # v0.73.0：八个事件房背景。断言「八条齐、互不重复、且每个事件都有键」——
+    # 表里漏一个键就少一条路径（want 少一条 ⇒ [2] 把那张图误报成 unused），
+    # 这条正面断言让「漏键」在 [1] 就红，而不是等玩到那个事件发现没背景。
+    _evt_keys = ids.get('evtNames') or []
+    _evt = ids.get('evtBg') or []
+    check(len(_evt_keys) == 8 and len(_evt) == 8 and len(set(_evt)) == 8
+          and all(isinstance(x, str) and x.startswith('bg/bg_evt_') for x in _evt),
+          '八个事件房背景清单 8 条、互不重复、都在 bg/bg_evt_ 下（%s）' % ','.join(_evt))
+    check(len(set(_evt_keys)) == 8, '八个事件 id 互不重复（%s）' % ','.join(_evt_keys))
+    want += _evt
     # v0.61.41：地图图标（6 种节点 + 未解锁）—— 清单来自游戏作用域，改名/漏填会被抓
     # v0.61.42：9 → 7（两条道路贴图随「路径回到代码自绘」退役，见 dump_ids）
     check(len(ids['mapIcons']) == 7 and len(set(ids['mapIcons'])) == 7,

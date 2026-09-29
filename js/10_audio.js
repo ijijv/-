@@ -400,6 +400,12 @@ function setBg(name){
      ⚠️ 别把这条挪进 showStartScreen：那样「图鉴/排行榜/设置」摘掉 .menu-scene 之后
         战斗 HUD 又会透出来（它们只摘场景类，不重进主菜单）。挂在 setBg 上才与面板解耦。 */
   if(document.body && document.body.classList) document.body.classList.toggle('at-menu', name==='menu');
+  /* v0.73.0：事件房背景（bg_evt_*.jpg）要**真的看得见**，光换图不够 ——
+     #overlay 常驻一层 88% 黑幕，任何深色场景图铺上去都只剩 12% 可见度，等于白铺。
+     这里只挂一个 body 类当开关（与上一行 .at-menu 同一范式，setBg 仍是「背后该铺什么」的
+     唯一 owner），黑幕的具体取值写在 原型.html 的 CSS 里。
+     判据只看名字前缀：本游戏所有 setBg 调用里只有事件房用 evt_ 开头。 */
+  if(document.body && document.body.classList) document.body.classList.toggle('evt-bg', /^evt_/.test(String(name||'')));
   var el=document.getElementById('bg'); if(!el) return;
   var path=assetURL(bgRel(name));
   el.onload=function(){ document.body.classList.add('has-bg'); };

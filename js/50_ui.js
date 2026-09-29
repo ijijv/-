@@ -755,14 +755,31 @@ function chooseNode(c){
   }
 }
 
+/* v0.73.0：八个未知/事件房 ↔ 八张专用背景（素材/bg/bg_evt_*.jpg，2026-09-29 交付）。
+   这两张表**提到模块作用域**（原来是 showUnknown 里的局部 const），不是为了别的：
+   产物自检要在**游戏作用域里求值**出这八条路径（verify_dist.py 的 dump_ids → evtBg），
+   而 python 侧一个字都不镜像 —— 镜像必漂（见该文件 v0.61.41 那段旧账：
+   镜像把 bg_map.jpg 算成了 bg/map.jpg）。表在局部就求值不到，只能回去硬拼字符串。 */
+const UNKNOWN_EVENTS = ['well','blackmarket','temple','ambush','forge','empty','potion','remove'];
+/* 值带扩展名 ⇒ bgRel 只补 bg_ 前缀、不补 .png（v0.61.41 的两条规则之一）。
+   这八张是 .jpg，写成 'evt_well' 会被拼成 bg_evt_well.png 而全 404。 */
+const EVT_BG = { well:'evt_well.jpg', blackmarket:'evt_blackmarket.jpg',
+                 temple:'evt_temple.jpg', ambush:'evt_ambush.jpg',
+                 forge:'evt_forge.jpg', empty:'evt_empty.jpg',
+                 potion:'evt_potion.jpg', remove:'evt_remove.jpg' };
 /* v0.61.41：**不再让玩家三选一** —— 踩到未知节点直接随机抽一个事件并立刻进入
    （用户要求：「未知关卡不要由玩家选择的环节，玩家直接进入随机环节」）。
    抽到什么用 floatMsg 报一声：原先靠三张卡面预告，现在没有预告了，总得让玩家知道发生了什么。 */
 function showUnknown(){
-  const pool=['well','blackmarket','temple','ambush','forge','empty','potion','remove'];
+  const pool=UNKNOWN_EVENTS;
   const labels={well:'古井许愿', blackmarket:'鬼市黑商', temple:'无头古庙', ambush:'拦路恶鬼', forge:'废弃道观', empty:'荒坟', potion:'灵泉', remove:'净坛'};
   const ev=pool[Math.floor(rng()*pool.length)];
   SCENE='unknown'; saveRun();
+  /* v0.73.0：换事件房专用背景。**恢复不用单独写** —— 事件的每一个出口都会经过
+     goNext()（→ showMap → setBg(mapBgName())）或 startBattle()（→ setBg('act'+N)），
+     这两条本来就会把背景换回去；中途退到主菜单则由 showStartScreen 的 setBg('menu') 接管。
+     ⚠️ 兜底给 'map.jpg'：万一表里漏了某个事件的键，宁可铺地图背景，也别让背景卡在上一个场景。 */
+  setBg(EVT_BG[ev] || 'map.jpg');
   setBGM('shop'); // v0.61.31：事件节点是非战斗场景，与商店/营地共用同一条轨
   floatMsg('未知之地 · ' + (labels[ev]||''));
   doUnknown(ev);

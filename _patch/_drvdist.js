@@ -22,6 +22,13 @@
      `Store` 在 file:// 下不抛。⚠️ 本段只证**机制**（键在、值是 data:、取址不拐弯）；
      「file:// 下 fetch(data:audio) 真的取到字节并解出 AudioBuffer」是异步的，本文件同步跑完就
      return，证不了 ⇒ 那半边在 `_patch/probe_sfx.py` + `_drvsfx.js`（一次性取证，已实测通过）。
+  G. v0.73.0 事件房背景：八个未知事件 id 齐备、每个都有背景键、八张 bg_evt_*.jpg 都内联进
+     ASSET_MAP 且值是 data:image/、`setBg(事件背景)` 真的把 #bg 指过去且挂上 body.evt-bg、
+     黑幕被放松到 .55、**装/摘开关真的改变底色且摘掉后逐字节回到基线**（可逆才证明是这条
+     规则在生效）、evt-bg **不改变** .panel 的底色（正文可读性没被牵连）。
+     ⚠️ 最后两条刻意做成**相对**比较，不写死 .88 / 不透明：本探针跑完 E 段之后
+     #overlay 还留着场景类，`#overlay.menu-scene` 的实心色与 `#overlay.pick-scene .panel`
+     的 background:none 都会赢过基档 ⇒ 写死就是假红（第一版这么写的，产物上红了 2 条）。
   ⚠️ E 段两处**必须掐/必须放宽**的地方（都是探针自身的坑，不是产物的毛病）：
      · 量卡宽前得把 `overlayIn` 掐掉（冻结在 scale(.985)，165 会读成 163 —— 假阳性）；
      · 「隐身的牌」只能断言 ≥1（换出攻击牌 + 天师会给一次额外抽牌，那一张也隐身 ⇒ 张数随机）。
@@ -274,11 +281,84 @@
       } catch (e) {
         t(false, 'F file:// 下 Store 抛了 —— try/catch 没兜住', String(e && e.message));
       }
+
+      /* ── G v0.73.0：事件房背景（八个未知事件 ↔ 八张 bg_evt_*.jpg） ──────────────
+         为什么必须在这一层（跑一遍）而不是文本闸：这八条路径是**算出来的**
+         （EVT_BG 里存的是 'evt_well.jpg' 这种短名，bgRel 再补 bg_ 前缀）⇒ 产物里
+         搜不到 'bg_evt_well.jpg' 这个整串，文本闸对「拼出来的路径」会系统性撒谎
+         （与 F 段同一条理由）。只能真的调一次 setBg，看 #bg 量到什么、黑幕变成什么。 */
+      try {
+        var evNames = eval('UNKNOWN_EVENTS'), evMap = eval('EVT_BG');
+        t(evNames && evNames.length === 8, 'G 八个事件 id 齐备', '共 ' + ((evNames || []).length) + ' 个');
+        var missingKey = (evNames || []).filter(function (k) { return !evMap || !evMap[k]; });
+        t(missingKey.length === 0,
+          'G 每个事件都有背景键（缺一个就静默回落成 map.jpg，玩到才发现没背景）',
+          missingKey.length ? ('缺：' + missingKey.join(',')) : '八个都配了图');
+
+        var noAsset = [], notData = [];
+        (evNames || []).forEach(function (k) {
+          var rel = bgRel(evMap[k]);
+          if (!amap || !amap[rel]) { noAsset.push(rel); return; }
+          if (String(amap[rel]).indexOf('data:image/') !== 0) notData.push(rel + '=' + String(amap[rel]).slice(0, 18));
+        });
+        t(noAsset.length === 0, 'G 八张事件图都打进了 ASSET_MAP（否则事件房静默无背景）',
+          noAsset.length ? ('没打进：' + noAsset.join(',')) : '八条都在');
+        t(notData.length === 0, 'G 八条都是 data:image/ 内联（不是相对路径，file:// 下也通）',
+          notData.length ? notData.join(' / ') : '全是 data URI');
+
+        /* 走生产入口：setBg 顺带挂 body.evt-bg，CSS 再据此放松 #overlay 的黑幕。 */
+        setBg(evMap['well']);
+        var bgEl = document.getElementById('bg');
+        var wantSrc = assetURL(bgRel(evMap['well']));
+        t(!!bgEl && bgEl.src === wantSrc,
+          'G setBg(事件背景) 把 #bg 指向了内联的那张图',
+          bgEl ? ('尾部 ' + String(bgEl.src).slice(-24)) : '#bg 不在');
+        t(document.body.classList.contains('evt-bg'), 'G 事件背景挂上了 body.evt-bg 开关');
+
+        var ovEl = document.getElementById('overlay');
+        /* ⚠️ 反证必须做**相对**的，不能把回落目标写死成 0.88。
+           本探针前面几段（易物 / 选牌小窗）会把 #overlay 留在某个场景类下，而
+           `#overlay.menu-scene{background:#0b0a09}`（:588）的特异度 (1,1,0) 高于基档
+           #overlay 的 (1,0,0) ⇒ 摘掉 evt-bg 之后落到的是那个**场景**色，不是 .88。
+           第一版把 0.88 写死、又断言 .panel「不透明」，于是在产物上假红了两条
+           （源码树那份矩阵探针 probe_evtmtx.py 是从干净状态进事件房，量到的确实就是 .88）。
+           改成「先量基线 → 装开关必须变 → 摘开关必须逐字节回到基线」，
+           既与场景类无关，又仍然排除了「碰巧命中别的规则」这个唯一要排除的解释。 */
+        document.body.classList.remove('evt-bg');
+        var base = ovEl ? cs(ovEl, 'backgroundColor') : '(#overlay 不在)';
+        document.body.classList.add('evt-bg');
+        var on = ovEl ? cs(ovEl, 'backgroundColor') : '(#overlay 不在)';
+        t(on === 'rgba(10, 8, 6, 0.55)',
+          'G body.evt-bg 把 #overlay 黑幕放松到 0.55（不放松的话深色场景图只剩 12% 可见度）', on);
+        t(on !== base, 'G 装/摘 evt-bg 真的改变了 #overlay 的底色', base + ' → ' + on);
+        document.body.classList.remove('evt-bg');
+        var back = ovEl ? cs(ovEl, 'backgroundColor') : '(#overlay 不在)';
+        document.body.classList.add('evt-bg');
+        t(back === base,
+          'G 摘掉开关逐字节回到基线（证明是这条规则在生效，不是碰巧命中别的规则）',
+          base + ' → ' + on + ' → ' + back);
+        /* 事件面板的纯色底**必须没被动过**：面板里有大段说明文字，可读性靠它。
+           ⚠️ 同样不能断言「不透明」—— 前面几段会把 #overlay 留在 pick-scene 下，
+           而 `#overlay.pick-scene .panel{background:none}` 正是不透明的反面 ⇒ 也是假红。
+           这里真正要证的是「evt-bg 这条规则不碰 .panel」，所以量**装与不装开关时是否相同**；
+           具体值随场景类而变，只当信息打出来给眼睛看。 */
+        var pnl = document.querySelector('#overlay .panel');
+        var pOn = pnl ? cs(pnl, 'backgroundColor') : '(panel 不在)';
+        document.body.classList.remove('evt-bg');
+        var pOff = pnl ? cs(pnl, 'backgroundColor') : '(panel 不在)';
+        document.body.classList.add('evt-bg');
+        t(pOn === pOff,
+          'G evt-bg 开关不改变事件面板 .panel 的底色（放松黑幕没有牵连正文可读性）',
+          '装 ' + pOn + ' / 摘 ' + pOff);
+        setBg(mapBgName());   // 还原场景，别把 at-menu / evt-bg 状态留给后续
+      } catch (e) {
+        t(false, 'G 事件房背景探针抛了', String(e && e.message));
+      }
     }
 
     L.push('');
     L.push('bad=' + bad);
-    L.push(bad ? ('✗ ' + bad + ' 条不合格') : 'A~F 全部通过 ✓');
+    L.push(bad ? ('✗ ' + bad + ' 条不合格') : 'A~G 全部通过 ✓');
     return L;
   }
 })();
