@@ -339,6 +339,10 @@ function renderEndTurnHint(){
 }
 
 function showHeroSelect(){
+  /* v0.74.0：选英雄专用整屏背景。setBg 会按 PRE_RUN_BG 表**保留** body.at-menu
+     ⇒ `#app` 仍不渲染：此刻 run 还没开始（G 刚 newState、一次都没 render 过），
+     让 #app 显形就是空骨架透在 .55 的黑幕下，正是 v0.68.2 修掉的那个 bug。 */
+  setBg('hero_select.jpg');
   const cards=HEROES.map(h=>`<div class="relic" onclick="pickHero('${h.id}')"><div class="cname" data-tip="hero:${h.id}">${h.name}</div><div class="cdesc">${h.desc}</div><div class="cdesc" style="color:var(--gold);margin-top:6px">被动 · ${h.passive}</div><div class="ctype">选择英雄</div></div>`).join('');
   showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="reward-cards">${cards}</div>`, false, 'hero-scene');
 }
@@ -452,7 +456,7 @@ function showStartScreen(){
     <div class="menu-stage">
       <div class="menu-titlebar menu-tier" style="--i:0">
         <h2 class="menu-title">${artImg('ui/menu/topic.png','<span class="menu-fb">志怪塔</span>','menu-art')}
-          <small>· v0.69.0</small></h2>
+          <small>· v0.74.0</small></h2>
       </div>
 
       <div class="menu-col-stele menu-tier is-main" style="--i:1">

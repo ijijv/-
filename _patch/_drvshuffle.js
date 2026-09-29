@@ -96,7 +96,9 @@
       log('         kf   = ' + c.kf);
       log('         opts = ' + c.opts);
     });
-    log('  飞行克隆        = ' + cFly.length + '   ← 抽牌动画，和洗牌同一拍');
+    /* v0.74.0：洗牌与抽牌已**串行**（洗牌独占 340ms，见 ANIM_SHUFFLE_HOLD）。
+       这里把「克隆最早的一条 delay」量出来，与 340 对拍 —— 同拍时它会是 0。 */
+    log('  飞行克隆        = ' + cFly.length + '   ← 抽牌动画；洗牌已串行占位');
     cFly.forEach(function (c, i) {
       log('     [' + i + '] cls=' + c.cls + ' opts=' + c.opts);
     });
@@ -123,8 +125,24 @@
     } else {
       log('  ⚠️ 量不到堆盒子');
     }
-    log('  对照：同一拍飞出的抽牌克隆 ' + cFly.length + ' 条，每条是整张牌大小'
-      + (bFly.length ? '（' + bFly.length + ' 条）' : ''));
+    /* 串行对拍：所有克隆 / 光晕的 delay 里最小的那个，就是「第二拍」的起点。
+       v0.74.0 期望 ≥340（洗牌独占），同拍时代它恒为 0 —— 这条比读常量更可信，
+       因为它量的是**浏览器真收到的 opts**。 */
+    var minLate = Infinity, minFirst = Infinity;
+    cFly.concat(cPile, cOther).forEach(function (c) {
+      var m = /"delay":(\d+(?:\.\d+)?)/.exec(String(c.opts) || '');
+      var d = m ? parseFloat(m[1]) : 0;
+      /* 「洗牌侧」= 打在堆元素上的 + 光晕；「抽牌侧」= 飞行克隆。
+         ⚠️ 判据用 onPile(c) 而不是某个 c.pile 字段 —— 记录对象里从来没存过那个字段，
+         写成 c.pile 会恒假，于是堆把式被算进「抽牌侧」，minLate 变成 0、这条对拍永远假绿。 */
+      if (onPile(c) || c.cls.indexOf('fx-pulse') >= 0) { minFirst = Math.min(minFirst, d); }
+      else { minLate = Math.min(minLate, d); }
+    });
+    log('  抽牌克隆最早的 delay = ' + (isFinite(minLate) ? minLate : '(无克隆)') + 'ms'
+      + '   ← v0.74.0 期望 340（= 洗牌独占的那一拍；改回同拍会变 0）');
+    log('  洗牌侧最早 delay      = ' + (isFinite(minFirst) ? minFirst : '(无)') + 'ms  ← 期望 0');
+    log('  对照：抽牌克隆 ' + cFly.length + ' 条，每条是整张牌大小'
+      + (bFly.length ? '（对照组 ' + bFly.length + ' 条）' : ''));
 
     log('');
     log('G errs = ' + (errs.length ? errs.join(' | ') : 'none'));

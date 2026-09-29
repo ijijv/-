@@ -988,6 +988,9 @@ function getHeroSpecificCardPool(originalPool, tier = 'normal') {
   return enhancedPool;
 }
 function showReward(){
+  /* v0.74.0：战斗胜利三选一的整屏背景。出口 pickReward/skipReward → afterReward()
+     → goNext() → showMap() → setBg(mapBgName())，本来就会换回去，不用单独恢复。 */
+  setBg('victory_reward.jpg');
   // 生成三张奖励卡牌（不在此处更新补偿值）
   const picks=[];
   while(picks.length<3){
@@ -1065,6 +1068,10 @@ function showCampfire(){
   renderCampfire();
 }
 function renderCampfire(){
+  /* v0.74.0：整屏营地背景。**必须写在 render 里而不是 showCampfire 里** ——
+     续档那条路径（js/40_flow.js 的 d.scene==='camp' 分支）直呼 renderCampfire()，
+     不经过 showCampfire() ⇒ 写在入口函数里的话，从主菜单续档落进营地会铺着上一张背景。 */
+  setBg('campfire.jpg');
   if(G.deck.length<=1 && !G.campRemoved){ G.campRemoved=true; }
   const removeBtn = G.campRemoved
     ? `<p style="color:var(--green)">✓ 已删牌</p>`
@@ -1136,6 +1143,8 @@ function showShop(){
   renderShop();
 }
 function renderShop(){
+  /* v0.74.0：整屏鬼市背景。理由同上 —— 续档的 d.scene==='shop' 分支直呼 renderShop()。 */
+  setBg('shop.jpg');
   const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" onclick="buyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
   const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const ok=G.gold>=price; return `<div class="relic r-blue ${ok?'':'disabled'}" onclick="buyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${price} 金币</div></div>`; }).join('');
   showOverlay(`<h2>鬼 市</h2>${runStatusHTML()}<p>你带着 <b style="color:var(--gold)">${G.gold}</b> 金币。<br>买卡价格随购买递增，跨商店延续；灵汁每买一瓶更贵。</p>

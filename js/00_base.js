@@ -969,11 +969,18 @@ const Anim = {
     if(!payload || !animLive()) return;
     this.pending.push(payload);
   },
-  /* render() 尾部调用：把攒下的载荷逐个开播。 */
+  /* render() 尾部调用：把攒下的载荷逐个**串行**开播。
+     v0.74.0：从「全部同拍」改成「按队列顺序错开」。每个载荷可以声明 hold = 它要独占的
+     时长，后续载荷整体延后这么多（base 是**累计**的，所以任意多段都能排成一条时间线）。
+     为什么必须串行：洗牌那 2 条动画只有单边 2.5px（堆只有 55×76px），与 6 条整卡大小的
+     抽牌克隆同拍时被完全吃掉 —— 拆开才看得见。见 ANIM_SHUFFLE_HOLD 那段。
+     ⚠️ base 只加在**真正开播了**的载荷上：play() 在「没有 items」等情况下会早退，
+     那时没有任何东西要看，不该白等 hold（否则洗牌没内容也照样卡 340ms）。 */
   flush(){
     if(!animLive() || !this.pending.length) return;
     const q=this.pending; this.pending=[];
-    for(let i=0;i<q.length;i++){ try{ this.play(q[i]); }catch(e){} }
+    let base=0;
+    for(let i=0;i<q.length;i++){ try{ base += this.play(q[i], base) || 0; }catch(e){} }
   },
   /* 收尾到终态。点屏幕任意位置触发（监听见 animBindSkip）。
      注意**不需要先 finish()**：克隆本来就要整个消失，「终态」= 真实 DOM（render 之后的
@@ -989,9 +996,11 @@ const Anim = {
     const fs=this.flights.slice();
     for(let i=0;i<fs.length;i++){ if(fs[i].key===key) fs[i].settle(); }
   },
-  play(p){
-    if(!animLive()) return;
-    if(!fx()) return;                       // 流畅模式：与震屏/抖动/飘字同档，一并关掉
+  /* base：本条载荷整体延后多少毫秒（由 flush 的串行游标给出）。
+     返回值：本条载荷要独占的时长（p.hold），供 flush 累计。早退一律返回 0。 */
+  play(p, base){
+    if(!animLive()) return 0;
+    if(!fx()) return 0;                     // 流畅模式：与震屏/抖动/飘字同档，一并关掉
     /* build()：载荷延迟构造。
        为什么必须有这一层：动画的终点是「render() **之后**的手牌位」，而 drawCards 自己
        不调 render()（见文件头第 2 条）⇒ 入队那一刻根本量不到终点。所以入口只 push 一个
@@ -999,19 +1008,30 @@ const Anim = {
        整个 render 因此只有**一次**读几何的时机，不会在中间插进第二个强制同步布局。 */
     if(p && typeof p.build==='function'){
       let b=null; try{ b=p.build(); }catch(e){ b=null; }
-      if(!b) return;
-      p={ key:p.key, dur:p.dur||b.dur, items:b.items, hide:b.hide, onDone:b.onDone };
+      if(!b) return 0;
+      /* hold 要**跟着载荷走**（它由入口声明，build 只管 items/hide）—— 上面这个新建对象
+         顺手把 hold 漏掉的话，洗牌那一拍就静默消失、退回同拍，而且没有任何闸会响。 */
+      p={ key:p.key, dur:p.dur||b.dur, items:b.items, hide:b.hide, onDone:b.onDone,
+          hold:p.hold };
     }
     const items=(p && p.items) || [];
-    if(!items.length) return;
+    if(!items.length) return 0;
     if(p.key) this.stop(p.key);
     const layer=animLayer();
     const nodes=[], anims=[];
     const dur=Math.max(0, (p && p.dur) || 320);
+    const off=Math.max(0, base || 0);
     for(let i=0;i<items.length;i++){
-      try{ const nd=_animItem(layer, items[i], dur, anims); if(nd) nodes.push(nd); }catch(e){}
+      /* 串行游标：本条载荷的每个 item 整体延后 off。
+         ⚠️ 必须**浅拷贝**再改 delay，不能就地改 —— items 是调用方（build 闭包）刚造出来的，
+         但同一份载荷在 skip 之后若被重播，就地改会让 delay 被累加两次。
+         ⚠️ `it.el` / `it.pulse` 两种 item 都读 it.delay（见 _animItem），所以这里统一加，
+         不要按类型分支。 */
+      const src=items[i];
+      const it=(off && src) ? _animShift(src, off) : src;
+      try{ const nd=_animItem(layer, it, dur, anims); if(nd) nodes.push(nd); }catch(e){}
     }
-    if(!anims.length) return;
+    if(!anims.length) return 0;
     const hide=(p.hide||[]).slice();
     for(let i=0;i<hide.length;i++){ try{ hide[i].el.style.opacity='0'; }catch(e){} }
     const self=this;
@@ -1039,8 +1059,16 @@ const Anim = {
     for(let i=0;i<anims.length;i++){ anims[i].onfinish=tick; }
     animBindSkip();
     this.flights.push({ key:(p && p.key)||'', settle:settle });
+    return (p && p.hold) || 0;
   }
 };
+/* 浅拷贝一个动画 item 并把它的 delay 整体后移 off。只为串行游标服务，不改调用方的对象。 */
+function _animShift(it, off){
+  const c={};
+  for(const k in it){ if(Object.prototype.hasOwnProperty.call(it,k)) c[k]=it[k]; }
+  c.delay=((it && it.delay) || 0) + off;
+  return c;
+}
 /* 光晕的两档色：金（洗牌）/ 朱砂（易物亮相）。
    写死成常量而不是让调用方塞整段 gradient —— 载荷里只留 tone 这个名字，配色改动集中在此处。 */
 const PULSE_GOLD='radial-gradient(circle at center, rgba(224,179,65,0) 34%, rgba(224,179,65,.42) 62%, rgba(224,179,65,0) 80%)';
@@ -1131,6 +1159,16 @@ function _animItem(layer, it, dur, anims){
        详见 animExchangeCast。
    五个时长集中在这儿，改节奏只改这一处。 */
 const ANIM_DUR = { draw: 340, discard: 300, shuffle: 520, exchange: 300, cast: 520 };
+/* v0.74.0：洗牌**独占**的一拍。实测（2026-09-29）洗牌那 2 条动画一直看得见地"没发生"，
+   根因是它和抽牌克隆**同拍**：牌堆真实盒子 55×76px，scale 1.09 ⇒ 单边只长 2.5px，
+   而同一刻有 6 条**整张牌大小**的克隆从同一个堆上飞出去，2.5px 被完全吃掉。
+   ⇒ 拆成两拍：洗牌先占满 ANIM_DUR.shuffleHold，抽牌克隆延后这么多再起飞。
+   ⚠️ 单独一个常量、**不复用 ANIM_DUR.shuffle**：那个 520 还兼着「震动时长 = dur×0.55
+   = 286ms」和「金晕时长」两个职责（见 _animItem）。若把载荷的 dur 改成 340，
+   震动会掉到 187ms —— 更短更弱，方向正好反了。所以 dur 保持 520（震动 286ms、金晕 520ms），
+   只在载荷上另挂一个 hold=340 当「下一拍从什么时候开始」；金晕的尾巴(340→520)
+   正好与克隆起飞重叠，观感是「光晕还没散、牌已经在飞」，不是硬切。 */
+const ANIM_SHUFFLE_HOLD = 340;
 
 /* 取一个元素「不带旋转」的盒子。
    · 中心：用 getBoundingClientRect 的中心。**矩形绕任意点旋转后，它的 AABB 中心恰好
@@ -1202,10 +1240,15 @@ function animDrawQueued(cards){
 }
 /* 洗牌：两堆各震一下 + 一圈金晕，张数徽章在同一拍归并。
    调用点：drawCards 里 `log('弃牌堆洗回抽牌堆')` **之后**（日志顺序零变化）。
-   它在 for 循环里、drawCards(12) 会触发多次 ⇒ 用 key 去重：同名重播是**收尾重来**，不是叠加。 */
+   它在 for 循环里、drawCards(12) 会触发多次 ⇒ 用 key 去重：同名重播是**收尾重来**，不是叠加。
+
+   v0.74.0：这个载荷声明 `hold`（见 Anim.flush），让**同一次抽牌**的飞牌克隆整体延后
+   ANIM_SHUFFLE_HOLD 再起飞。原先两者同拍，而洗牌只有单边 2.5px（堆 55×76px），
+   被 6 条整卡大小的克隆盖得一点都看不见。dur 保持 520 不动（震动 286ms + 金晕 520ms）；
+   hold 只决定「下一拍何时开始」，金晕尾巴与克隆起飞重叠是有意为之。 */
 function animShuffleQueued(){
   if(!animLive() || !fx()) return;
-  Anim.push({ key:'shuffle', dur:ANIM_DUR.shuffle, build:function(){
+  Anim.push({ key:'shuffle', dur:ANIM_DUR.shuffle, hold:ANIM_SHUFFLE_HOLD, build:function(){
     const items=[];
     ['pile-draw','pile-discard'].forEach(function(id,i){
       const el=document.getElementById(id);

@@ -131,6 +131,10 @@ function loseGame(){
   sfx('lose');
   track('death');
   G.score=calcScore();
+  /* v0.74.0：失败专用整屏背景。三个出口各有归属 —— revive() 显式把战斗背景铺回去
+     （**它原先根本不调 setBg，这一句是本次必须补的**，否则复活后背后仍是那张败局图）；
+     giveUp() 保留这张图（「本局结束」本来就还是败局，观感一致）；showStartScreen() 走 setBg('menu')。 */
+  setBg('defeat.jpg');
   const where = G.endless ? `镇妖塔 · 第 ${G.endlessFloor} 层` : `第 ${G.act} 幕 · 第 ${G.mapRow+1} 层`;
   const reviveBtn = G.revivedFree
     ? `<button class="btn" onclick="reviveAd()">看广告 · 复活回满血继续</button>`
@@ -155,7 +159,10 @@ function revive(){
   G.battleOver=false;
   G.hp=G.maxHp; G.weak=0; G.gouhun=0; G.thorns=0; G.block=0; G.burn=0;
   G.discard=G.discard.concat(G.hand); G.hand=[];
-  hideOverlay(); sfx('heal');
+  /* v0.74.0：复活回的是**同一场战斗** ⇒ 必须把战斗背景铺回去（失败屏刚把它换成了 bg_defeat）。
+     漏掉这一句的表现是「血回满了、顶栏回来了，可背后还是那张败局图」，而且没有任何闸会响。
+     表达式与 startBattle 里那一行逐字相同（无尽档是 act3）—— 别写成两个不同的判法。 */
+  hideOverlay(); setBg(G.endless?'act3':'act'+G.act); sfx('heal');
   log('你复活了，重整旗鼓再战');
   startTurn();
 }
@@ -173,6 +180,9 @@ function showVictory(){
   track('runWin');
   G.score=calcScore()+5000; submitScore(G.score);
   SAVE.endlessUnlocked=true; persistSave(); // 三幕通关解锁镇妖塔无尽模式
+  /* v0.74.0：通关专用整屏背景。恢复不用单独写 —— 两个出口 startEndless() 与 startGame()
+     都经 showHeroSelect()→setBg('hero_select.jpg')，中途回主菜单则由 setBg('menu') 接管。 */
+  setBg('victory.jpg');
   showOverlay(`<h2>通 关 ！</h2><p>你一路打上了塔顶，镇服了百鬼。<br>剩余生命 ${G.hp} / ${G.maxHp}。</p>
     <p style="color:var(--gold)">本局得分 <b>${G.score}</b>（含通关加成 +5000）　（第 ${G.act} 幕 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
     <p style="font-size:13px;color:var(--dim)">镇妖塔已开启——无尽攀爬，层数越高妖魔越凶，冲击周榜。</p>

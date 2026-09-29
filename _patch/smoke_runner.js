@@ -6282,12 +6282,48 @@
     /* 起因：实拍 `_drvmenu3.js --q "&pull=300&anim=1&at=250"` 时，卷轴面板四周透出战斗 HUD
        （结束回合 / 灵气珠 / 出牌提示）。`#app` 一直挂在 DOM 里 z-index:1 压着 #bg，
        只是 v0.65.0 之后被主菜单那层不透明底挡住了 —— 图鉴一走半透明底就露馅。 */
-    __ok('v0.68.2 setBg 是 body.at-menu 的**唯一**开关，判据是 name===\'menu\''
+    __ok('v0.68.2 setBg 是 body.at-menu 的**唯一**开关，判据查 PRE_RUN_BG 表'
       + '（挂在 showStartScreen 上不行：图鉴只摘 .menu-scene，不会重进主菜单）',
       (function () {
         var s = __code(__realSetBg);   // ⚠️ 必须用 __realSetBg：全局 setBg 在本文件顶部被顶成了空桩
-        return /classList\.toggle\(\s*'at-menu'\s*,\s*name\s*===\s*'menu'\s*\)/.test(s);
+        return /classList\.toggle\(\s*'at-menu'\s*,\s*!!PRE_RUN_BG\[\s*_bgName\s*\]\s*\)/.test(s);
       })());
+    /* ---------- v0.74.0：六张整屏场景背景（商店/篝火/胜利/失败/选英雄/胜利奖励） ---------- */
+    /* 为什么 at-menu 的判据要从 name==='menu' 扩到「战局之外」：选英雄屏开始铺整屏背景，
+       而 setBg 一旦按老判据就会摘掉 at-menu ⇒ `#app` 立刻显形。那一刻 run 还没开始
+       （G 刚 newState、一次 render 都没跑过）⇒ 空骨架透在放松后的黑幕下，
+       正是 v0.68.2 花力气修掉的那个 bug。下面这四条是**新增**的，不是把上一条改松：
+       上一条仍要求开关在 setBg 里、且是表驱动。 */
+    __ok('v0.74.0 at-menu 判据含主菜单与选英雄（这两屏在战局之外）',
+      typeof PRE_RUN_BG === 'object' && PRE_RUN_BG.menu === 1 && PRE_RUN_BG['hero_select.jpg'] === 1);
+    __ok('v0.74.0 但**不含**五张战局内的整屏背景（胜负/商店/篝火/奖励背后本来就该是战场）',
+      typeof PRE_RUN_BG === 'object'
+      && ['shop.jpg', 'campfire.jpg', 'victory.jpg', 'defeat.jpg', 'victory_reward.jpg']
+           .every(function (k) { return !PRE_RUN_BG[k]; }));
+    __ok('v0.74.0 SCENE_BG 六张齐全、且不含地图/幕/主菜单'
+      + '（那几张背后是真正的战局 HUD，黑幕放松了反而让战场透上来）',
+      typeof SCENE_BG === 'object'
+      && ['shop.jpg', 'campfire.jpg', 'victory.jpg', 'defeat.jpg', 'hero_select.jpg', 'victory_reward.jpg']
+           .every(function (k) { return SCENE_BG[k] === 1; })
+      && !SCENE_BG['map.jpg'] && !SCENE_BG['act1'] && !SCENE_BG.menu);
+    __ok('v0.74.0 setBg 的 evt-bg 判据 = evt_ 前缀 或 SCENE_BG 表内（事件房与六张整屏场景同一处理）',
+      (function () {
+        var s = __code(__realSetBg);
+        return /classList\.toggle\(\s*'evt-bg'\s*,\s*\/\^evt_\/\.test\(\s*_bgName\s*\)\s*\|\|\s*!!SCENE_BG\[\s*_bgName\s*\]\s*\)/.test(s);
+      })());
+    __ok('v0.74.0 六张背景真的接上了各自的屏（逐函数查 setBg 实参，写错了名字这条会红）',
+      (function () {
+        var want = [[renderCampfire, 'campfire.jpg'], [renderShop, 'shop.jpg'],
+                    [showVictory, 'victory.jpg'], [loseGame, 'defeat.jpg'],
+                    [showHeroSelect, 'hero_select.jpg'], [showReward, 'victory_reward.jpg']];
+        return want.every(function (w) { return __code(w[0]).indexOf("setBg('" + w[1] + "')") >= 0; });
+      })());
+    __ok('v0.74.0 商店/篝火写在 render* 里而不是 show* 里'
+      + '（续档那条路径直呼 renderShop/renderCampfire，写在入口函数里续档会铺着上一张背景）',
+      __code(showShop).indexOf('setBg(') < 0 && __code(showCampfire).indexOf('setBg(') < 0);
+    __ok('v0.74.0 revive() 把战斗背景铺回去（失败屏换成 bg_defeat 之后必须还原，'
+      + '否则那张败局图会一路留到复活后的战斗里，而且没有任何闸会响）',
+      __code(revive).indexOf("setBg(G.endless?'act3':'act'+G.act)") >= 0);
     __ok('v0.68.2 setBg 里 at-menu 的读写排在 `if(!el) return` **之前**'
       + '（排在后面 ⇒ DOM 桩/异常路径下永远不开关）',
       (function () {

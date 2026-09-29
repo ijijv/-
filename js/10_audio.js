@@ -393,19 +393,49 @@ function potionIcon(p){
    用户给的地图背景是 .jpg，不想为了一个后缀去转码重压（转成 PNG 只会更大）。
    路径拼法单独抽成 bgRel 是为了能被冒烟直接对拍（setBg 本体要真 DOM，沙箱里量不到）。 */
 function bgRel(name){ return (/\.[A-Za-z0-9]+$/.test(name)) ? ('bg/bg_'+name) : ('bg/bg_'+name+'.png'); }
+/* v0.74.0：**整屏专用背景**一览 —— 背景是这六张之一时，背后一定是一个「盖着面板的
+  独立场景」（商店/篝火/胜利/失败/选英雄/胜利奖励），与事件房同理 ⇒ #overlay 的黑幕要放松。
+  键取 setBg 的**入参原样**（带扩展名）：bgRel 对带扩展名的只补 bg_ 前缀。
+   ⚠️ 这张表与 js/50_ui.js 的 EVT_BG 是**两个方向的同一件事**，别合并：
+      EVT_BG 是「事件 id → 文件名」（由事件驱动），这张是「文件名 → 是不是整屏场景」
+      （由背景驱动）；存的是**判据**不是映射，方向反了就没法当判据用。
+   ⚠️ 只列**整屏**背景。地图/幕背景（map.jpg、act1..3）与 'menu' 不进来 ——
+      它们背后是真正的战局 HUD，`.88` 那层黑幕压的是面板自身，放松了反而让战场透上来。 */
+const SCENE_BG = { 'shop.jpg':1, 'campfire.jpg':1, 'victory.jpg':1, 'defeat.jpg':1,
+                   'hero_select.jpg':1, 'victory_reward.jpg':1 };
+/* v0.74.0：**此刻还没进战局**的背景一览 —— at-menu 的正判据。
+   语义仍是 v0.68.2 那句「屏幕背后不是战局」⇒ `#app` 整块不渲染，只是从"只有主菜单"
+   扩到"主菜单 + 选英雄"。
+   ⚠️ 选英雄必须进来：v0.74.0 给它接了 bg_hero_select.jpg，而 setBg 一被调用就会按
+      老判据（name==='menu'）把 at-menu 摘掉 ⇒ `#app` 立刻显形。那一刻 run 还**没开始**
+      （G 刚 newState，从没 render 过），#app 里是空骨架/上一次的残影，
+      在 .55 的黑幕下正好透出来 —— 这就是 v0.68.2 花力气修掉的那个 bug，别放它回来。
+   ⚠️ 反过来**不能**把六张整屏背景一股脑放进来：胜负/商店/篝火/奖励都在战局**之内**，
+      背后本来就该是战场（与事件房同一处理）。 */
+const PRE_RUN_BG = { 'menu':1, 'hero_select.jpg':1 };
 function setBg(name){
   /* v0.68.2：`body.at-menu` 的**唯一**开关（CSS: `body.at-menu #app{display:none}`）。
-     语义 = "屏幕背后是主菜单，不是战局"。setBg 本来就是"背后该铺什么"的 owner：
-     只有 setBg('menu') 是在主菜单，其余每一张背景都意味着战局已经接管 ⇒ 清掉。
+     语义 = "屏幕背后不是战局"。setBg 本来就是「背后该铺什么」的 owner：只有主菜单与
+     选英雄这两张是在战局之外，其余每一张背景都意味着战局已经接管 ⇒ 清掉。
+     v0.74.0：判据由 `name==='menu'` 改成查 PRE_RUN_BG 表（上一条注释讲了为什么选英雄要进来）。
      ⚠️ 别把这条挪进 showStartScreen：那样「图鉴/排行榜/设置」摘掉 .menu-scene 之后
         战斗 HUD 又会透出来（它们只摘场景类，不重进主菜单）。挂在 setBg 上才与面板解耦。 */
-  if(document.body && document.body.classList) document.body.classList.toggle('at-menu', name==='menu');
+  var _bgName=String(name||'');
+  if(document.body && document.body.classList)
+    document.body.classList.toggle('at-menu', !!PRE_RUN_BG[_bgName]);
   /* v0.73.0：事件房背景（bg_evt_*.jpg）要**真的看得见**，光换图不够 ——
      #overlay 常驻一层 88% 黑幕，任何深色场景图铺上去都只剩 12% 可见度，等于白铺。
      这里只挂一个 body 类当开关（与上一行 .at-menu 同一范式，setBg 仍是「背后该铺什么」的
      唯一 owner），黑幕的具体取值写在 原型.html 的 CSS 里。
-     判据只看名字前缀：本游戏所有 setBg 调用里只有事件房用 evt_ 开头。 */
-  if(document.body && document.body.classList) document.body.classList.toggle('evt-bg', /^evt_/.test(String(name||'')));
+     v0.73.0 的判据是「名字以 evt_ 开头」，因为那时只有事件房有专用整屏图；
+     v0.74.0 把商店/篝火/胜利/失败/选英雄/胜利奖励六张也接上了 ⇒ 判据扩成「evt_ 前缀 或
+     在 SCENE_BG 表内」。**六张图全是 1920×1080，与事件房同一形态，道理完全一样**。
+     ⚠️ 类名仍叫 evt-bg —— 它现在的语义比名字宽一档，**改名是故意没做的**：
+        这个标识被四处无头夹具（含 8×8 事件房矩阵的 416 条断言）与更新日志逐字钉着，
+        为一个纯装饰性的名字去动已验收的产物与历史记录，风险大过收益。
+        **看代码时别被名字骗：挂在鬼市/通关屏上的 evt-bg 是正常的，不是串场。** */
+  if(document.body && document.body.classList)
+    document.body.classList.toggle('evt-bg', /^evt_/.test(_bgName) || !!SCENE_BG[_bgName]);
   var el=document.getElementById('bg'); if(!el) return;
   var path=assetURL(bgRel(name));
   el.onload=function(){ document.body.classList.add('has-bg'); };

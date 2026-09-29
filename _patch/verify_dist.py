@@ -46,6 +46,12 @@ def dump_ids():
           # 照着删掉事件房就没背景了（同 v0.61.41 卷轴三件踩过的坑）。
           "evtBg:UNKNOWN_EVENTS.map(k=>EVT_BG[k]).map(bgRel),"
           "evtNames:UNKNOWN_EVENTS.slice(),"
+          # v0.74.0：六张整屏场景背景（商店/篝火/胜利/失败/选英雄/胜利奖励），
+          # 语料就是 10_audio.js 的 SCENE_BG 表 —— 直接取**键**，python 侧不镜像、不重抄。
+          # 不加这一条，这六张会被 [2] 误报成「从未被游戏请求 / 可考虑删掉」，
+          # 照着删掉这几屏就没背景了（与 v0.73.0 事件房那八张同一处境）。
+          "sceneBg:Object.keys(SCENE_BG).map(bgRel),"
+          "sceneKeys:Object.keys(SCENE_BG),"
           # v0.61.41：地图素材清单从游戏作用域取（6 种节点 + 未解锁），
           # 改名/漏填会让 [1] 立刻红，而不是等玩到地图页才发现图标 404。
           # v0.61.42：路径回到代码自绘 ⇒ MAP_ROAD_ICON 已退役，两条道路 PNG **仍在磁盘上没删**
@@ -147,6 +153,19 @@ def main():
           '八个事件房背景清单 8 条、互不重复、都在 bg/bg_evt_ 下（%s）' % ','.join(_evt))
     check(len(set(_evt_keys)) == 8, '八个事件 id 互不重复（%s）' % ','.join(_evt_keys))
     want += _evt
+    # v0.74.0：六张整屏场景背景（商店/篝火/胜利/失败/选英雄/胜利奖励）。与上面那八张同构，
+    # 清单同样从**游戏作用域的 SCENE_BG 表**取（python 侧不镜像）。断「六条齐、互不重复、
+    # 都是 bg/bg_*.jpg」—— 表里漏一个键就少一条路径，want 少一条 ⇒ [2] 会把那张图
+    # 误报成「从未被游戏请求 / 可考虑删掉」，照着删掉这几屏就没背景了。
+    # ⚠️ 必须是 .jpg：这六张交付的就是 jpg（八张事件房也是），若哪天换成 png，
+    #    bgRel 对**带扩展名**的只补 bg_ 前缀 ⇒ 路径跟着变，这里要一起改，不是漏报。
+    _sc_keys = ids.get('sceneKeys') or []
+    _sc = ids.get('sceneBg') or []
+    check(len(_sc_keys) == 6 and len(_sc) == 6 and len(set(_sc)) == 6
+          and all(isinstance(x, str) and x.startswith('bg/bg_') and x.endswith('.jpg')
+                  for x in _sc),
+          '六张整屏场景背景清单 6 条、互不重复、都是 bg/bg_*.jpg（%s）' % ','.join(_sc))
+    want += _sc
     # v0.61.41：地图图标（6 种节点 + 未解锁）—— 清单来自游戏作用域，改名/漏填会被抓
     # v0.61.42：9 → 7（两条道路贴图随「路径回到代码自绘」退役，见 dump_ids）
     check(len(ids['mapIcons']) == 7 and len(set(ids['mapIcons'])) == 7,
@@ -183,6 +202,30 @@ def main():
     _shard_src = sorted(set(re.findall(r"menuShardsHTML\(\s*'([^']+)'", _boot)))
     check(_shard_src and set(_shard_src) <= set(_ui_menu),
           '石碑碎片复用主菜单 UI 图（%s ⊆ %s）' % (','.join(_shard_src), ','.join(_ui_menu)))
+    # v0.74.0：**三处版本号必须同步**。
+    # 起因：主菜单标题那一处（60_boot.js 里的 `<small>· v…</small>`）从 v0.69.0 起就
+    # **再没跟着升过**，一路停在 v0.69.0 直到本批才发现 —— 整整落后五个版本。
+    # 既有那条冒烟断言只查**格式**（`menu-title` 之后 200 字符内出现 `v0.`），不查**取值**，
+    # 所以它看着是绿的、什么也没守住。「三处版本号同步」是项目惯例却没有一条闸看着它 ⇒ 补上。
+    # ⚠️ 取值必须从**源码树**取，不能从 dist 取：主菜单那处在 60_boot.js 的模板串里，
+    #   产物里已被混淆（中文串进 base64 表，见 _patch/_diststr.py 那笔旧账）
+    #   ⇒ 在 dist 上 grep 那个串是 grep 不到的，拿 dist 当判据会**假红**。
+    #   产物侧的版本号另外单独查（只查 title 那条能存活下来的），用来抓「改了源码忘了重打包」。
+    _vers = [
+        ('原型.html <title>', re.search(r'<title>[^<]*?v(\d+\.\d+\.\d+)</title>', src)),
+        ('原型.html 顶栏 h1', re.search(r'玩法原型 v(\d+\.\d+\.\d+)', src)),
+        ('60_boot.js 主菜单', re.search(r'<small>· v(\d+\.\d+\.\d+)</small>', _boot)),
+    ]
+    _miss = [k for k, m in _vers if not m]
+    check(not _miss, '三处版本号都还在（缺：%s）' % ','.join(_miss))
+    _vals = sorted(set(m.group(1) for _, m in _vers if m))
+    check(len(_vals) == 1,
+          '三处版本号同步（%s）'
+          % ','.join('%s=v%s' % (k, m.group(1)) for k, m in _vers if m))
+    _dv = re.search(r'<title>[^<]*?v(\d+\.\d+\.\d+)</title>', html)
+    check(bool(_dv) and len(_vals) == 1 and _dv.group(1) == _vals[0],
+          '产物版本号与源码一致（产物 v%s / 源码 v%s）—— 不一致说明改了源码没重新打包'
+          % (_dv.group(1) if _dv else '缺失', _vals[0] if len(_vals) == 1 else '?'))
     # v0.68.0：真美术牌框。**不加这条，[2] 会把 ui/card/front.png 报成「从未被游戏请求 /
     # 可考虑删掉」** —— 照那句删了，卡面就整块散架：`cardFrameFail` 会连 `.has-frame`
     # 一起摘掉、静默退回纯 CSS 版面，不报错、不抛异常、冒烟也读不到 CSS。与 v0.66.0 的
