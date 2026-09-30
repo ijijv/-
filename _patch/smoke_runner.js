@@ -1049,6 +1049,141 @@
     __ok('v0.58 万剑归宗(武僧) 斩杀 1 名 → 手牌多 1 张 0 费万剑', zc.length === 1,
       'hand=' + G.hand.map(function (x) { return x.id + '@' + cardCost(x); }).join(','));
 
+    /* ===== v0.75.0：万剑归宗的 0 费副本是**真一次性**（用户 2026-09-30 报的漏洞牌）=====
+       用户原话：「一次性的，既不可以丢入弃牌堆也不可以延续到接下来的关卡」。
+       旧行为有两条泄漏 + 一条洗白：①打出后进弃牌堆 → 抽牌堆抽空重洗又被抽到 = 无限续；
+       ②没打出的回合末照样进弃牌堆（同样会被重洗抽回）；③中途存档续档把副本洗成 3 费普通牌。
+       cp **取自上面真实授予路径**产出的那张 —— 不手搓，否则证明不了授予点打了标记。 */
+    var cp = zc[0];
+    __ok('v0.75.0 0 费副本带 oneShot 且**不是** exhaust（exhaust 的语义是「战后回归牌库」，会撒谎）',
+      !!cp && cp.oneShot === true && !cp.exhaust && isOneUse(cp) === false,
+      'oneShot=' + (cp && cp.oneShot) + ' exhaust=' + (cp && cp.exhaust) + ' isOneUse=' + isOneUse(cp));
+
+    // ① 打出后：不进弃牌堆、不进消耗堆、不在手牌（就地消失）
+    g = __base('wuseng'); __fill();
+    g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    g.hand = [cp]; g.discard = []; g.exhausted = [];
+    doPlayCard(0);
+    __ok('v0.75.0 0 费副本打出后不进弃牌堆/消耗堆（旧行为 = 重洗后被抽到，无限续）',
+      G.discard.indexOf(cp) < 0 && (G.exhausted || []).indexOf(cp) < 0 && G.hand.indexOf(cp) < 0,
+      'discard=' + G.discard.length + ' exhausted=' + (G.exhausted || []).length + ' hand=' + G.hand.length);
+
+    // ② 没打出去：回合末直接消失，同样不落进弃牌堆
+    g = __base('wuseng'); __fill();
+    g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    g.hand = [cp];
+    finishEndTurn();
+    __ok('v0.75.0 0 费副本未打出时回合末直接消失（不进弃牌堆、不留手）',
+      G.discard.indexOf(cp) < 0 && G.hand.indexOf(cp) < 0,
+      'discard=' + G.discard.length + ' hand=' + G.hand.length);
+
+    // ③ 反误伤：普通万剑归宗（无 oneShot）照旧进弃牌堆 —— 防 `!c.oneShot` 写反成 `c.oneShot`
+    g = __base('wuseng'); __fill();
+    g.enemies[0].hp = 300; g.enemies[0].maxHp = 300;
+    var wn = __card('wanjian'); g.hand = [wn]; g.discard = [];
+    doPlayCard(0);
+    __ok('v0.75.0 反误伤：普通万剑归宗照旧进弃牌堆', G.discard.indexOf(wn) >= 0, 'discard=' + G.discard.length);
+
+    // ④ 存档往返：副本续档后仍是「0 费 + 一次性」（旧行为：洗成 3 费普通万剑归宗 = 白送一张金牌）
+    var _rt = cardRestore(cardSnap(cp));
+    __ok('v0.75.0 0 费副本往返存档后仍是 0 费 + oneShot',
+      _rt && _rt.id === 'wanjian' && cardCost(_rt) === 0 && _rt.oneShot === true && _rt.costU == null,
+      'cost=' + (_rt && cardCost(_rt)) + ' oneShot=' + (_rt && _rt.oneShot));
+    __ok('v0.75.0 反误伤：普通万剑归宗的快照**不含** oneShot 键（不给每张牌都加字段）',
+      !('oneShot' in cardSnap(__card('wanjian'))) && !('oneShot' in cardSnap(up('leifu'))),
+      'keys=' + Object.keys(cardSnap(__card('wanjian'))).join(','));
+
+    /* ===== v0.75.0：防御牌的格挡预览 previewBlock（玩家头顶蓝色浮字的数据源）=====
+       期望值**不照抄 CARD_BLOCK** —— 那样等于自己证明自己。这里对每张牌真跑一遍 eff()，
+       读 gainBlock 实际落进 G.block 的数当基准，再与 previewBlock 比。
+       ⚠️ 隐身符-天师列有「抽到诅咒牌再 +3/4」，是 previewBlock 唯一算不出的项 ⇒
+          抽牌堆换成全非诅咒牌（zhiren 在 CAN_CURSE_IDS 里，必须避开），让两边可比。 */
+    (function(){
+      var bad=[], n=0;
+      __HEROES.forEach(function(hero){
+        CARDS.filter(function(c){ return c.type==='defense'; }).forEach(function(c){
+          [false,true].forEach(function(up){
+            g=__base(hero); __fill(); g.drawPile=['leifu','leifu','leifu'].map(__card);
+            var cc=Object.assign({}, c, {up:!!up});
+            g.block=0; CURSE_THIS_TURN=0; g.尸气=0;
+            var pv=previewBlock(cc);      // ⚠️ 必须**先**读预览再跑 eff —— 金光罩-赶尸人列会花掉尸气，
+            cc.eff(!!up, cc);             //    跑完再读就会看到已被消费后的状态（差点误判成镜像表抄错）
+            var real=G.block||0; n++;
+            if(real!==pv) bad.push(hero+'/'+c.id+(up?'+':'')+' eff='+real+' pv='+pv);
+          });
+        });
+      });
+      __ok('v0.75.0 格挡预览与 eff 实际入账逐项一致（4 英雄 × 9 防御牌 × 升/未升 = ' + n + ' 项）',
+        bad.length===0, bad.slice(0,8).join(' | '));
+    })();
+
+    // 天师金刚符：每层诅咒 +1/+2、上限 +6 —— CURSE_THIS_TURN 在拖拽时已知，必须算进去
+    g=__base('tianshi');
+    (function(){
+      var got=[0,1,9].map(function(k){ CURSE_THIS_TURN=k; return previewBlock(Object.assign({}, __card('jingang'), {up:false})); });
+      CURSE_THIS_TURN=0;
+      __ok('v0.75.0 天师金刚符 诅咒 0/1/9 层 → 5/6/11（min(6,…) 上限生效）', got.join(',')==='5,6,11', 'got='+got.join(','));
+    })();
+
+    // 赶尸人金光罩：尸气≥2 时 eff 会花 2 点尸气再给 +7/5 —— 预览漏这项就会少报一截
+    (function(){
+      var got=[0,3].map(function(sq){
+        g=__base('ganshiren'); g.尸气=sq;
+        var cc=Object.assign({}, __card('jinguang'), {up:false});
+        var pv=previewBlock(cc);   // 同理：先读预览（拖拽时点），再跑 eff（会花掉 2 点尸气）
+        g.block=0; cc.eff(false, cc);
+        return (G.block||0)+'='+pv;
+      });
+      __ok('v0.75.0 赶尸人金光罩 尸气 0/3 → eff 与预览都是 9/14（未升级时「尸气≥2 再 +5」）',
+        got.join(' ')==='9=9 14=14', 'got='+got.join(' '));
+    })();
+
+    // 反震恒 0；佛渡只有升级后、且只有武僧/天师两列给格挡
+    (function(){
+      var fz=__HEROES.map(function(h){ g=__base(h); return previewBlock(__card('fanzhen')); });
+      __ok('v0.75.0 反震四列格挡预览恒 0（四列的 eff 里根本没有 gainBlock）',
+        fz.join(',')==='0,0,0,0', 'got='+fz.join(','));
+      var fd=__HEROES.map(function(h){
+        g=__base(h);
+        return previewBlock(Object.assign({}, __card('fodu'), {up:false}))+'/'+previewBlock(Object.assign({}, __card('fodu'), {up:true}));
+      });
+      __ok('v0.75.0 佛渡 未升级四列全 0；升级后只有武僧/天师给 5（赶尸人给尸气、阴差回血）',
+        fd.join(' ')==='0/0 0/5 0/0 0/5', 'got='+fd.join(' '));
+    })();
+
+    // 范围收口：只认防御牌 —— 舍身(武僧 4)/万剑归宗(武僧 10) 的格挡**故意不进**预览
+    g=__base('wuseng');
+    __ok('v0.75.0 格挡预览只认防御牌：舍身/万剑归宗虽有格挡但不显示（用户只点名"防御牌"）',
+      previewBlock(__card('sheshen'))===0 && previewBlock(__card('wanjian'))===0,
+      'sheshen='+previewBlock(__card('sheshen'))+' wanjian='+previewBlock(__card('wanjian')));
+    __ok('v0.75.0 隐身符列在 DYNAMIC_BLOCK 里（抽牌后才决定的 +3/4 拖拽时算不出，只报保底值）',
+      DYNAMIC_BLOCK.indexOf('yinshen')>=0);
+
+    /* ===== v0.75.0：指向性复查 —— 天师【舍身】加箭头 =====
+       用户口径：「指示性」= **拖拽时指向敌人的那条箭头**（needsTarget / TARGETED_CARDS 那条链），
+       不是卡面文字徽章。判据函数就是 needsTarget，这里三条把它钉住。 */
+    var __ss = __card('sheshen');
+    var __nt = {};
+    __HEROES.forEach(function (h) { __base(h); __nt[h] = needsTarget(__ss); });
+    __ok('v0.75.0 舍身只有天师列出箭头（赶尸人=尸气 / 武僧=格挡 / 阴差=纯抽牌，对敌人零作用）',
+      __nt.tianshi === true && __nt.ganshiren === false && __nt.wuseng === false && __nt.yincha === false,
+      JSON.stringify(__nt));
+    /* 「箭头指着一只、诅咒落到另一只」是荒谬的 ⇒ eff 必须读拖拽落点（G.target）。
+       这是把「随机 → 玩家指定」钉死的唯一办法：诅咒落在第 2 只、第 1 只仍是 0。 */
+    __base('tianshi');
+    __fill();
+    G.target = 1;
+    __ss.eff(false, __ss);
+    __ok('v0.75.0 天师舍身的诅咒落在**拖拽指定的那一只**（原先 randomAlive 会砸到任意一只）',
+      (G.enemies[1].curse || 0) === 1 && (G.enemies[0].curse || 0) === 0,
+      'e0=' + (G.enemies[0].curse || 0) + ' e1=' + (G.enemies[1].curse || 0));
+    /* 把「攻击侧本来就完整」这条复查结论变成回归闸：将来新加攻击牌漏进名单会当场红。 */
+    var __atkMissing = CARDS.filter(function (c) {
+      return c.type === 'attack' && AOE_CARDS.indexOf(c.id) < 0;
+    }).filter(function (c) { __base('ganshiren'); return !needsTarget(c); }).map(function (c) { return c.id; });
+    __ok('v0.75.0 攻击侧完整：除 AoE 外每张攻击牌都带箭头（复查结论的回归闸）',
+      __atkMissing.length === 0, '缺=' + __atkMissing.join(','));
+
     // #7 铁布衫：B 0 费不可升级；A/C 1→0；D 1 不可升级
     var tb = __card('tiebushan');
     g = __base('wuseng');

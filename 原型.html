@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.74.0</title>
+<title>志怪塔 · 原型 v0.75.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -667,6 +667,51 @@
        换行（窗口窄到放不下一行时折两行），比例永远保持。 */
     #overlay.pick-scene .reward-cards .card{flex:0 0 auto; width:165px; min-height:250px;}
   }
+  /* v0.75.0 锻造页（forge-scene）：面板加宽 + 每两列一组「当前 ▸ 升级后」的并排对照。
+     用户口径：「六列就是 每两列展示一种卡牌 左边是初始状态右边是升级状态中间有个箭头来
+     指示升级」，并补充「桌面端保持六列，窄屏的时候保持四列，需要将锻造的界面做宽来」，
+     本批又追加「844×390 也做成 6 列，要求美观」⇒ 「窄屏」那一档的断点压到 700px 以下，
+     矩阵里**只剩 640×360** 落到四列。
+     ⚠️ **加宽 #overlayWrap 是六列成立的前提**：它基档是 max-width:620px，三组要 866px，
+        锁在 620 里必然折行 —— 与 pick-scene 同一条理由（那条见上方 media 块）。
+     ⚠️ **保留 .panel 的纯色底**（与 pick-scene 刻意相反）：锻造页里整屏都是卡牌与说明文字，
+        那层底是正文可读性的依托。**不要**顺手抄 pick-scene 的 background:none。
+     ⚠️ 用 grid 而**不是** flex-wrap：`repeat(3, max-content)` 才给得出「三组一行」这个
+        承诺；flex-wrap 只保证「放不下才换行」，给不出列数。
+     ⚠️ 这里只动容器与排列，**不动任何卡宽** —— 全局 .card{width:132px} 与
+        .reward-cards .card{min-height:200px} 是手牌/图鉴/奖励三选一共用的，有产物闸钉着。 */
+  #overlay.forge-scene #overlayWrap{max-width:none; width:100%;}
+  #overlay.forge-scene .panel{padding:22px 14px;}
+  #overlay.forge-scene .reward-cards{display:grid; grid-template-columns:repeat(3, max-content);
+    justify-content:center; align-items:start; gap:12px 10px;}
+  .forge-pair{display:flex; align-items:center; gap:9px;}
+  .forge-arrow{display:flex; align-items:center; justify-content:center; flex:0 0 auto; opacity:.85;}
+  .forge-arrow svg{display:block;}
+  /* ⚠️ 描边必须由 CSS 给：SVG 的**表现属性**（stroke="…"）不接受 var()，
+     写在标签上会被当非法值丢掉，实拍是一支暗红箭头而不是金的。 */
+  .forge-arrow path{fill:none; stroke:var(--gold); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;}
+  /* 升级后那张的描述：直接复用本仓「红色字 = 升级后的效果」的既有语汇（.upgrade-preview）。
+     ⚠️ `.card .cdesc`(0,2,0) 的 color **压得过** `.upgrade-preview`(0,1,0) ⇒ 下面这条
+        高特异度规则是**必需**的，不是可选修饰：不写的话右卡是黑字，两栏看起来一模一样。
+     ⚠️ 同时中和掉 .upgrade-preview 的盒模型（margin-top / border-top）—— 那两个是给
+        「卡内一行红字」写的，落在 .cdesc 上会多出一条虚线分隔；padding 不用管，
+        `.card .cdesc` 的 padding 简写本来就压过它的 padding-top。 */
+  #overlay.forge-scene .reward-cards .cdesc.upgrade-preview{color:#8c2b21; font-weight:bold; margin:0; border:0;}
+  /* 窄屏两档：只换列数，其余照旧。**必须写在基档之后** —— @media 不加特异度，靠书写顺序取胜。
+     实测余量：640×360 两组一行 462px（可用 ≈612）✓；844×390 三组一行 698px（可用 ≈816）✓。
+     ≤560px 是矩阵外的一档，防溢出用（那一档全局卡宽已自降到 98px）。 */
+  @media (max-width:700px){
+    #overlay.forge-scene .reward-cards{grid-template-columns:repeat(2, max-content);}
+  }
+  @media (max-width:560px){
+    #overlay.forge-scene .reward-cards{grid-template-columns:repeat(1, max-content);}
+  }
+  /* 矮屏（矩阵里 960×540 / 844×390 / 640×360 三档）：把纵向内边距收回去，多让出一行卡的高度。
+     ⚠️ 必须**用同一条选择器**写在这里 —— 基档那条 (1,2,0) 压得过矮屏档的 `.panel`(0,1,0)，
+        不加这条的话 844×390 会在 22px 的内边距上白丢 20px 内容高。同特异度、写在后面 ⇒ 这条赢。 */
+  @media (max-height:560px){
+    #overlay.forge-scene .panel{padding:12px 10px;}
+  }
   /* v0.73.0 事件房背景 / v0.74.0 另加六张整屏场景背景（商店/篝火/胜利/失败/选英雄/胜利奖励）：
      把 #overlay 那层常驻黑幕放松，让底下那张场景图真的看得见（不放松的话任何深色夜景图
      铺上去只剩 12% 可见度，等于白铺）—— 八个事件房与这六张全是 1920×1080，完全同一形态。
@@ -1289,6 +1334,16 @@
   #drag-dmg.weak{color:#8fc6ff;}
   #drag-dmg.dyn{opacity:.9;}
   #drag-dmg.off{display:none;}
+  /* v0.75.0：拖拽防御牌时的**格挡预演** —— 浮在**玩家头部**的蓝色字（用户口径）。
+     与 #drag-dmg 是并列的一对，不是改造：同样零定时器（只有 .off 切换）、同样
+     translate(-50%,-100%) 的锚点约定、同样的 .dyn 弱化标记。锚点换成玩家立绘（不是敌人）。
+     字形走 num 素材的 **block 档**（与伤害飘字的格挡档同一套，颜色烤在图里），
+     所以符号也必须是 block 档色，否则加号与数字两个蓝。 */
+  #drag-block{position:fixed; z-index:34; pointer-events:none; font-family:var(--font-kai); font-size:30px; font-weight:bold; letter-spacing:1px;
+    color:#0398fa; text-shadow:0 0 12px rgba(0,0,0,.95), 0 2px 5px rgba(0,0,0,.9); transform:translate(-50%,-100%); transition:opacity .1s ease;}
+  #drag-block .fx-sign{color:#0398fa;}
+  #drag-block.dyn{opacity:.9;}
+  #drag-block.off{display:none;}
   /* —— 成就 · 卡背 / 头像框外观（局外收集奖励） —— */
   body[data-cardback="cb_jinsha"]{--cb:linear-gradient(90deg,#d4af37,#8c6d1f,#d4af37);}
   body[data-cardback="cb_moqi"]{--cb:linear-gradient(90deg,#1a1a1a,#000,#1a1a1a);}
@@ -1737,7 +1792,7 @@
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.74.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.75.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

@@ -122,7 +122,7 @@ const CARDS = [
       dealDamageTo(t,u?28:20); }},
   {id:'wanjian', name:'万剑归宗', type:'attack', rarity:'gold', cost:3, hpCost:(u)=>G.hero==='yincha'?5:0,
     t:(u)=>G.hero==='ganshiren'?`对全体敌人造成 ${u?14:10} 伤害。每击败 1 名敌人，获得 3 点【尸气】并抽 1 张牌（抽到的牌本回合费用 -${u?2:1}）`
-      :G.hero==='wuseng'?`对全体敌人造成 ${u?14:9} 伤害，并获得 ${u?12:10} 点格挡。每用此牌斩杀 1 名敌人，将 1 张 0 费的万剑归宗加入手牌`
+      :G.hero==='wuseng'?`对全体敌人造成 ${u?14:9} 伤害，并获得 ${u?12:10} 点格挡。每用此牌斩杀 1 名敌人，将 1 张 0 费的万剑归宗加入手牌（一次性：打出或回合结束时消失，不进入弃牌堆，也不会留到下一场战斗）`
       :G.hero==='yincha'?`对全体敌人造成 ${u?15:10} 伤害。失去 5 点生命。每击败 1 名敌人，恢复 ${u?15:10} 点生命并获得 1 点符文`
       :`对全体敌人造成 ${u?18:14} 伤害。对所有敌人施加 ${u?2:1} 层【诅咒】。每击败 1 名敌人，恢复 1 点符文`,
     eff:(u,c)=>{ const before=G.turnStats.kills.length; const targets=aliveEnemies().slice();
@@ -142,7 +142,11 @@ const CARDS = [
           log(`万剑归宗：击败 ${killed} 名敌人，获 ${killed*3} 尸气并抽 ${killed} 张（本回合 -${__cut} 费）`); }
         else if(G.hero==='yincha'){ const hk=killed*(u?15:10); heal(hk); G.energy+=killed; log(`万剑归宗：击败 ${killed} 名敌人，恢复 ${hk} 点生命并获得 ${killed} 点符文`); }
         else if(G.hero==='tianshi'){ G.energy+=killed; log(`万剑归宗：击败 ${killed} 名敌人，恢复 ${killed} 点符文`); }
-        else if(G.hero==='wuseng' && c){ for(let i=0;i<killed;i++) G.hand.push(Object.assign({}, c, {cost:0, costU:null})); log(`万剑归宗：斩杀 ${killed} 名敌人，获得 ${killed} 张 0 费万剑归宗`); }
+        /* v0.75.0：0 费副本是**真一次性** —— oneShot 与 exhaust 是两套语义，别合并：
+           exhaust = 本关限用一次、战斗结束后回归牌库（KEYWORDS 词条与 doPlayCard 的日志都这么写）；
+           oneShot = 用掉即消失，既不进弃牌堆也不留到下一关。挂 exhaust 会让那句说明当场撒谎。
+           副本进不了 G.deck ⇒ 加 oneShot 不影响 deck 内的 indexOf 语义。 */
+        else if(G.hero==='wuseng' && c){ for(let i=0;i<killed;i++) G.hand.push(Object.assign({}, c, {cost:0, costU:null, oneShot:true})); log(`万剑归宗：斩杀 ${killed} 名敌人，获得 ${killed} 张 0 费万剑归宗`); }
       } }},
   {id:'tiebushan', name:'铁布衫', type:'attack', rarity:'blue', cost:{wuseng:0, default:1}, costU:{wuseng:0, tianshi:1, default:0}, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`造成等于当前格挡的伤害。每有 2 点【尸气】，额外 +${u?2:1}${u?'（0 费）':''}`
@@ -335,11 +339,17 @@ const CARDS = [
     t:(u)=>G.hero==='ganshiren'?`失去 4 点生命。抽 ${u?2:1} 张牌。获得 ${u?2:1} 点【尸气】`
       :G.hero==='wuseng'?`失去 4 点生命。获得 4 点格挡，抽 ${u?2:1} 张牌`   // v0.61.36 武僧列：3/5 → 4 固定
       :G.hero==='yincha'?`失去 4 点生命。抽 ${u?3:2} 张牌`
-      :`失去 4 点生命，抽 ${u?2:1} 张牌。施加 ${u?2:1} 层【诅咒】`,
+      :`失去 4 点生命，抽 ${u?2:1} 张牌。对目标施加 ${u?2:1} 层【诅咒】`,
     eff:(u)=>{ loseHp(4); const n=G.hero==='yincha'?(u?3:2):(u?2:1); drawCards(n);
       if(G.hero==='ganshiren'){ gainShiqi(u?2:1); log(`舍身：获得 ${u?2:1} 点【尸气】`); }
       else if(G.hero==='wuseng'){ gainBlock(4); }   // v0.61.36 武僧列：3/5 → 4 固定
-      else if(G.hero==='tianshi'){ const re=randomAlive(); if(re){ applyCurse(re,u?2:1); log(`舍身：对 ${re.name} 施加 ${u?2:1} 层【诅咒】`); } } }},
+      /* v0.75.0：天师列由 randomAlive() 改成**拖拽落点那只** —— 加箭头（needsTarget）之后
+         「箭头指着一只、诅咒落到另一只」是荒谬的，这是加箭头的**逻辑必然**而不是可选项。
+         ⚠️ 对天师是**纯加强**（原来可能砸到不该砸的那只）。curEnemy() 在 G.target 非法/已死时
+            回落 al[0]，再兜一层 randomAlive() 保证「有活敌就一定有目标」。
+         ⚠️ G.target 由 onDragUp 在 playCard **之前**写入；「以命相搏」确认框不碰 G.target，
+            所以 eff 里读得到拖拽锁定的那一只。 */
+      else if(G.hero==='tianshi'){ const re=curEnemy()||randomAlive(); if(re){ applyCurse(re,u?2:1); log(`舍身：对 ${re.name} 施加 ${u?2:1} 层【诅咒】`); } } }},
   {id:'shouyi', name:'守一', type:'skill', rarity:'purple', cost:0,
     t:(u)=>G.hero==='ganshiren'?`保留 ${u?2:1} 张手牌。每保留 1 张【鬼怪牌】，获得 1 点【尸气】`
       :G.hero==='wuseng'?`保留 ${u?2:1} 张手牌。每保留 1 张防御牌，获得 ${u?4:3} 点格挡`

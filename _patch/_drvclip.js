@@ -412,6 +412,91 @@
     } else { log('  ! .card.selected 没命中任何元素（选中态没有样式落点）'); }
   }
 
+  /* `forge=1`（配 `&deck=N`）：锻造页（v0.75.0 的 forge-scene）验收。
+     走**真实代码路径** `showForgePicker('camp')`，不手抄 HTML —— 类名/结构一旦漂移，
+     夹具会继续量一个「已经不存在的界面」还照样全绿（与 live=1 那条同一个理由）。
+     六条判据，每条都对着一种真会发生的错法：
+       1. `#overlay` 真的挂上了 forge-scene（错法：漏传第三实参 ⇒ 整页还是 620px 窄版）。
+       2. `.reward-cards` 的 display 是 grid，且 gridTemplateColumns 的**轨道数**是 3/2/1
+          （错法：规则被 CSS 解析器静默丢弃 ⇒ 退回 .reward-cards 基档的 flex，
+           这一栏直接读成 `none`）。**轨道数就是「六列/四列」这句承诺唯一的证据。**
+       3. 一组 `.forge-pair` 的宽 ≈ 282（132 档）/ 226（104 档）、内含 2 张卡、中间有 svg 箭头
+          （错法：两张卡被挤扁 ⇒ 宽高比破掉，has-frame 的百分比子元素全歪）。
+       4. `#overlayWrap` 的宽 ≈ 视口宽（错法：基档 max-width:620 没被放开 ⇒ 三组 866px 折行，
+          六列不成立）。
+       5. `.panel` 的 background-color **不是**透明的 —— 本批明确保留纯色底（与 pick-scene
+          刻意相反），顺手抄了 pick-scene 的 background:none 会在这里被抓住。
+       6. 右卡描述的 computed color **与左卡不同**（错法：只写了 `.upgrade-preview` 类而没写
+          那条高特异度规则 ⇒ `.card .cdesc`(0,2,0) 压过 `.upgrade-preview`(0,1,0)，
+          两栏一个色，「红色 = 升级后的效果」这条语汇当场失效，而 grep 与子串闸全绿）。
+     ⚠️ 出图走 iframe 模式；--direct 只序列化外层文档。            */
+  function forgeReport(deckN) {
+    if (typeof showForgePicker !== 'function') { log('  ! forge：没有 showForgePicker，判定不可用'); return; }
+    if (typeof G === 'undefined' || !G || !G.deck) { log('  ! forge：G 还没起（要先开局）'); return; }
+    /* 牌组不够就补到 deckN 张（抄自己已有的牌，id / up / costU 都合法）。
+       `deck=0`（或不传）用原生牌组。卡数越多越容易把「六列」压成折行，是最该压的边界。 */
+    if (deckN > 0 && G.deck.length) {
+      var base = G.deck.slice(), k = 0;
+      while (G.deck.length < deckN) { G.deck.push(Object.assign({}, base[k % base.length])); k++; }
+    }
+    showForgePicker('camp');
+    var ov = document.getElementById('overlay');
+    log('  锻造页 #overlay class="' + (ov ? (ov.className || '(无)') : '?') + '"  牌组 ' + G.deck.length + ' 张');
+    var panel = document.querySelector('#overlay .panel');
+    if (!panel) { log('  ! 没有 #overlay .panel，判定不可用'); return; }
+    var pcs = window.getComputedStyle(panel), pr = panel.getBoundingClientRect();
+    log('  .panel  ' + Math.round(pr.width) + 'x' + Math.round(pr.height)
+        + '  padding=' + pcs.paddingTop + ' ' + pcs.paddingLeft
+        + '  background-color=' + pcs.backgroundColor
+        + '  内部溢出=' + (panel.scrollHeight - panel.clientHeight));
+    var w = document.getElementById('overlayWrap');
+    if (w) log('  #overlayWrap width=' + Math.round(w.getBoundingClientRect().width)
+        + '（视口 ' + window.innerWidth + '）  computed max-width=' + window.getComputedStyle(w).maxWidth);
+    var rc = document.querySelector('#overlay .reward-cards');
+    if (!rc) { log('  ! 没有 #overlay .reward-cards，判定不可用'); return; }
+    var rcs = window.getComputedStyle(rc);
+    var tracks = (rcs.gridTemplateColumns || '').trim();
+    /* ⚠️ display 不是 grid 时 computed gridTemplateColumns 是 `none`（一个词）⇒ 轨道数会
+       误报成 1。所以**先把 display 一起打出来**，判据由 probe 那边两条一起看。 */
+    log('  .reward-cards display=' + rcs.display + '  gridTemplateColumns=' + tracks
+        + '  ⇒ 轨道数 ' + (rcs.display === 'grid' && tracks && tracks !== 'none' ? tracks.split(/\s+/).length : 0));
+    var pairs = rc.querySelectorAll('.forge-pair');
+    log('  .forge-pair 共 ' + pairs.length + ' 组（可升级的牌才成组）');
+    var singles = rc.querySelectorAll(':scope > .card');
+    log('  单张卡（已升级 / 不可升级，刻意不配对）' + singles.length + ' 张');
+    if (pairs.length) {
+      var p0 = pairs[0], qr = p0.getBoundingClientRect();
+      var faces = p0.querySelectorAll(':scope > .card');
+      log('  第 1 组  ' + Math.round(qr.width) + 'x' + Math.round(qr.height)
+          + '  内含卡 ' + faces.length + ' 张'
+          + (faces[0] ? '  左卡宽 ' + Math.round(faces[0].getBoundingClientRect().width) : ''));
+      var ar = p0.querySelector('.forge-arrow');
+      if (ar) {
+        var arr = ar.getBoundingClientRect();
+        log('  .forge-arrow ' + Math.round(arr.width) + 'x' + Math.round(arr.height)
+            + '  内联 svg=' + (ar.querySelector('svg') ? '有' : '无'));
+      } else { log('  ! 第 1 组里没有 .forge-arrow'); }
+      if (faces.length === 2) {
+        var ld = faces[0].querySelector('.cdesc'), rd = faces[1].querySelector('.cdesc');
+        log('  左描述类="' + (ld ? ld.className : '?') + '" 色=' + (ld ? window.getComputedStyle(ld).color : '?'));
+        log('  右描述类="' + (rd ? rd.className : '?') + '" 色=' + (rd ? window.getComputedStyle(rd).color : '?')
+            + '  字重=' + (rd ? window.getComputedStyle(rd).fontWeight : '?')
+            + '  margin-top=' + (rd ? window.getComputedStyle(rd).marginTop : '?')
+            + '  border-top=' + (rd ? window.getComputedStyle(rd).borderTopWidth : '?'));
+        log('  右卡名里带 ↑ = ' + (faces[1].querySelector('.cname') && faces[1].querySelector('.cname').textContent.indexOf('↑') >= 0 ? 'Y' : 'N'));
+      } else { log('  ! 第 1 组不是恰好 2 张卡（拿到 ' + faces.length + '）'); }
+      /* 排布：按 .forge-pair 的 top 归并出每行几组 —— 「六列」= 每行 3 组。 */
+      var rows = {}, order = [];
+      for (var j = 0; j < pairs.length; j++) {
+        var t = Math.round(pairs[j].getBoundingClientRect().top);
+        if (rows[t] === undefined) { rows[t] = 0; order.push(t); }
+        rows[t]++;
+      }
+      order.sort(function (a, b) { return a - b; });
+      log('  组-行数 ' + order.length + '（每行 ' + order.map(function (t) { return rows[t]; }).join('/') + '）');
+    } else { log('  ! 一组都没有（牌组里一张可升级的牌都没有？）'); }
+  }
+
   /* `rules=<子串>`：**证明某条规则真的活过了 CSS 解析**。
      为什么非有它不可（v0.71.0 的血泪）：CSS 是**静默失败**的 —— 规则文本在文件里、
      grep 得到、verify_dist 的**子串**匹配也绿，但浏览器可能整条丢弃它
@@ -506,6 +591,8 @@
       /* v0.72.0：live 选牌小窗排在最后 —— 它用的是真实 renderDiscardSelect()，
          要有 G.hand 与一场已开局的战斗才成立（上面那几行正是在备这些）。 */
       if (q.get('dialog')) { liveDialogReport(pick(q.get('dialog')) || 5); }
+      /* v0.75.0：forge 排在最后同理 —— showForgePicker 要有 G.deck。 */
+      if (q.get('forge')) { forgeReport(pick(q.get('deck')) || 0); }
     } catch (e) {
       /* ⚠️ 只打 message 是不够的 —— 这个夹具的前身就是只打 message，
          于是「startBattle 挂了、整套量测都在量一个空战场」这件事藏了很久
@@ -549,6 +636,9 @@
     /* 选牌小窗同理：它渲染进 `#overlay`（fixed，不在 `#app *` 里），越界表与高度预算表
        对它一个字都说不上。判据只有 `.panel` 自己的「内部溢出」，已在 dialogReport 里打全。 */
     if (q.get('dialog')) { emit(); return; }
+    /* v0.75.0：锻造页也渲染进 #overlay（fixed，不在 `#app *` 里）⇒ 越界表/高度预算表
+       对它一个字都说不上。判据全在 forgeReport 里。 */
+    if (q.get('forge')) { emit(); return; }
     var modes = q.get('m') ? [q.get('m')] : ['', 'log-open'];
     var names = { '': '战报关  ', 'log-open': '右侧抽屉' };
     modes.forEach(function (m) {

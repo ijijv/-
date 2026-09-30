@@ -860,7 +860,7 @@ function unknownForge(){
   if(!G.deck.length){ unknownEmpty(); return; }
   const _fo=G.deck.map((c,i)=>({c,i})).sort((a,b)=>{ const ra=(a.c.up||!canUpgrade(a.c))?1:0, rb=(b.c.up||!canUpgrade(b.c))?1:0; return ra-rb||a.i-b.i; });
   const cards=_fo.map(({c,i})=>forgeCardHTML(c,i)).join('');
-  showOverlay(`<h2>道 观</h2><p>一间废弃道观，香炉尚温。<br>你可以免费锻造升级一张牌。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`);
+  showOverlay(`<h2>道 观</h2><p>一间废弃道观，香炉尚温。<br>你可以免费锻造升级一张牌。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`, undefined, 'forge-scene');
 }
 function unknownEmpty(){
   showOverlay(`<h2>空 坟</h2><p>一座荒坟，墓碑字迹已模糊。<br>什么也没有发生。</p><button class="btn" onclick="hideOverlay(); goNext();">继续前进</button>`);
@@ -1114,7 +1114,7 @@ function showForgePicker(from){
   const back = G.forgeFrom==='camp'
     ? `<button class="btn ghost" onclick="G.forgeFrom=null; renderCampfire();">返回</button>`
     : `<button class="btn ghost" onclick="G.forgeFrom=null; hideOverlay(); goNext();">继续前进</button>`;
-  showOverlay(`<h2>锻造 · 点击一张牌升级</h2><p>红色字是升级后的效果（整局有效）。${hint}</p><div class="reward-cards">${cards}</div>${back}`);
+  showOverlay(`<h2>锻造 · 点击一张牌升级</h2><p>左边是当前效果，右边是升级后的效果（整局有效）。${hint}</p><div class="reward-cards">${cards}</div>${back}`, undefined, 'forge-scene');
 }
 /* 该牌是否存在可升级的变化（升级前后文案一致、且无费用减免 => 不可升级） */
 function canUpgrade(c){
@@ -1475,7 +1475,10 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   // v0.72.0：+ pick-scene（战斗里的**选牌小窗**：去掉纯色底、卡牌 1.25 倍，只桌面档）。
   //   六处调用（忘忧 / 焚符 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一）**都必须显式传第三实参**
   //   —— sceneChanged 是拿它比出来的：不传就没有场景类，从火符直接进易物也不会重播进场动画。
-  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene'];
+  // v0.75.0：+ forge-scene（锻造页：面板加宽到满屏 + 六列对照。**保留纯色底** —— 与 pick-scene
+  //   刻意相反：锻造页里是整屏卡牌与说明文字，那层底是可读性的依托）。
+  //   两处调用（道观 unknownForge / 篝火·营地 showForgePicker）**都必须显式传第三实参**。
+  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene'];
   const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
   // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
   // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
@@ -1483,7 +1486,8 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   // v0.66.0：.scroll-scene 同理（图鉴/排行榜/设置的卷轴落下）—— 漏摘的话，从主菜单看完图鉴
   // 再回战斗，奖励面板也会带着卷轴动画从顶上掉下来。
   if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
-    ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene'); }
+    ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene');
+    ov.classList.remove('forge-scene'); }
   ov.classList.remove('hidden');
   // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
   // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。
@@ -1521,17 +1525,43 @@ function cardBody(c){
   return `${cardFrame()}${cardArt(c)}${exhaustMark(c)}<div class="cost">${cardCost(c)}</div><div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
 }
 function forgeCardHTML(c,i){
+  /* v0.75.0：锻造卡面从「一张卡 + 卡内一行红字预览」改成**一组两列对照** ——
+     左「当前」▸ 箭头 ▸ 右「升级后」。用户口径：「每两列展示一种卡牌，左边是初始状态
+     右边是升级状态，中间有个箭头来指示升级」。
+     ⚠️ 本函数必须**继续自包含**：冒烟 `String(forgeCardHTML).indexOf('cardText')` 查的是
+        **函数源码**（smoke_runner.js:6744-6746），把卡面拼装抽成模块级 helper 会让
+        cardText 从本函数源码里消失 ⇒ 当场变红。所以两张卡的模板字面量直接内联在下面
+        （cardBody / handCardHTML 也一直是各自自包含的）。下面的 face() 是**函数内**的
+        临时箭头函数，它仍在本函数的源码文本里，闸认。
+     ⚠️ `upgrade-preview` 必须落在**升级后那张**的 `.cdesc` 上（不是整张卡上）：
+        * 冒烟用子串钉「燃血术无预览 / 雷符有预览」（smoke_runner.js:878/881）；
+        * 原型.html 里 .upgrade-preview 的既有语汇就是**卡内红字**（红色 = 升级后的效果），
+          挂到 .cdesc 上正好复用那条语汇；挂到 .card 上会把它的边框/外边距也一起吃掉。
+        * ⚠️ 但 `.card .cdesc`（0,2,0）的 color **压得过** `.upgrade-preview`（0,1,0），
+          所以红色必须由 `#overlay.forge-scene .reward-cards .cdesc.upgrade-preview` 那条
+          高特异度规则给（见 原型.html 锻造段），不是自动生效的。 */
   const lock = !c.up && !canUpgrade(c);   // 升级无变化的牌：置灰、不可锻造
-  const body = (c.up || lock)
-    ? `<div class="cdesc">${wrapKw(cardText(c,c.up))}</div>`
-    : `<div class="cdesc">${wrapKw(cardText(c,false))}<div class="upgrade-preview">升级 → ${wrapKw(cardText(c,true))}</div></div>`;
-  return `<div class="card has-frame ${RCOLOR[c.rarity]}${lock?' locked':''}" onclick="forgeCard(${i})">
-    ${cardFrame()}${cardArt(c)}${exhaustMark(c)}
-    <div class="cost">${cardCost(c)}</div>
-    <div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${lock?'<span class="noup">不可升级</span>':''}</div>
-    ${body}
-    </div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>
+  /* 一张卡面。cls / badge / descCls 三个都是给「左」「右」两张卡分身的差异入口。 */
+  const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" onclick="forgeCard(${i})">
+    ${cardFrame()}${cardArt(cc)}${exhaustMark(cc)}
+    <div class="cost">${cardCost(cc)}</div>
+    <div class="cplate"><div class="cname">${cc.name}${cc.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${badge}</div>
+    <div class="cdesc${descCls}">${wrapKw(cardText(cc,cc.up))}</div>
+    </div><div class="ctype">${TNAME[cc.type]} · ${RNAME[cc.rarity]}</div>
   </div>`;
+  /* 已升级 / 不可升级：本来就**没有「升级后」可看**（前者已经是终态、后者升了也不变），
+     维持单张卡的原样，不配箭头也不配右卡。 */
+  if(c.up || lock) return face(c, lock?' locked':'', lock?'<span class="noup">不可升级</span>':'', '');
+  /* 内联 SVG 箭头：不引外部资源、不赌字体有没有「▸」字形（与 .pstat-preblock 的内联
+     SVG 同一手法）。aria-hidden —— 它是纯装饰，读屏念「箭头」没意义。
+     ⚠️ 描边/填充色写在 CSS 里（原型.html 的 .forge-arrow path），**不写在这里的属性上**：
+        SVG 的表现属性（presentation attribute）**不吃 var()** —— 写 stroke="var(--gold)"
+        会被当成非法值丢掉，实拍出来是一支暗红色的箭头（不是金）。 */
+  const arrow = `<div class="forge-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12h13M11 6l6 6-6 6"/></svg></div>`;
+  /* ⚠️ onclick **只留在两张卡上，不放到 .forge-pair 容器上**：放容器上会与内层卡的 onclick
+     一起冒泡 ⇒ forgeCard(i) 被调两次，第二次读到 c.up 已真，弹「这张牌已升级过」。 */
+  const up = Object.assign({}, c, {up:true});
+  return `<div class="forge-pair">${face(c,'','','')}${arrow}${face(up,'','',' upgrade-preview')}</div>`;
 }
 function groupHand(){
   // 相同牌相邻摆放（按首次出现的顺序稳定分组）
@@ -1752,6 +1782,20 @@ const TARGETED_CARDS = ['leifu','huofu','jianfu','zhanyaojian','tianlei','tiebus
 function needsTarget(c){
   // 咒印：目标随角色变 —— 赶尸人=拿尸气、武僧=给自己挂吸血，都不指向敌人；天师/阴差才定向施咒
   if(c.id==='zhouyin') return G.hero!=='ganshiren' && G.hero!=='wuseng';
+  /* v0.75.0：舍身 —— 天师列是「失去 4 血 + 抽牌 + 对目标施加 N 层【诅咒】」，
+     有对敌人施加效果却不带箭头。赶尸人（尸气）/ 武僧（格挡）/ 阴差（纯抽牌）三列
+     对敌人**零作用** ⇒ 只有天师列出箭头。同 zhouyin 的「按角色条件定向」先例。 */
+  if(c.id==='sheshen') return G.hero==='tianshi';
+  /* v0.75.0 复查结论（用户点名要复查「应该加上指示性的卡牌」）——
+     全仓把 curEnemy() / randomAlive() 逐点映射过一遍后的判定，**故意不加箭头**的四张：
+       · 附灵术：天师列「每触发 1 个召唤物，对随机敌人施咒」×N。文案明写「随机」，
+         且 N 取决于当场触发的召唤数、打出时算不出来；改成指定 = N 层全砸一只，是远大于舍身的加强。
+         （用户 2026-09-30 明确确认：说明写「随机」的就不要指向性。）
+       · 纸人 / 五通神：召唤物的**回合末**随机施咒 —— 不是出牌时点，无从指向。
+       · 洗髓经：持续被动，每回合随机施咒 —— 同上。
+       · 焚符：每弃 1 张的**副效应**随机施咒，且它是多步选牌弹窗 —— 副效应不是主目标。
+     攻击侧本来就完整：除 wanjian / baigui 外每张 type==='attack' 都在名单里，
+     那两张是 AoE、由 AOE_CARDS 明确豁免（冒烟有钉子）。**名单本身不动。** */
   return TARGETED_CARDS.includes(c.id);
 }
 let DRAG = null;

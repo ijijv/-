@@ -745,6 +745,87 @@ def main():
           '第三实参 pick-scene（实测 %d 处）—— 漏传 = 既没有场景类，从别的弹窗进来也不再重播进场'
           % len(_pick_calls))
 
+    # ---- v0.75.0 §四：`forge-scene`（锻造页：满屏宽 + 每两列一组「当前 ▸ 升级后」）----
+    # 形态与 pick-scene 同构（新场景类 + 显式调用 + 满屏宽 + 一道 @media 门），但有一处
+    # **刻意相反**：锻造页**保留 .panel 的纯色底**（那一页整屏是卡牌与说明文字）。所以除了
+    # 那几条「漏一处就静默失效」的钉子，这里再加一条**反向闸** —— 谁顺手把 pick-scene 的
+    # background:none 抄过来，当场红。
+    def _media_blocks(cond_pat):
+        """把某个 @media 条件的**所有**块体抠出来 —— 同一条件在本文件里出现多次
+        （max-height:560px 就有基档与矮屏档两块），所以不能只取第一个。"""
+        blocks = []
+        for m in _re.finditer(cond_pat + r'\s*\{', _style_clean):
+            i, depth = m.end() - 1, 0
+            for k in range(i, len(_style_clean)):
+                if _style_clean[k] == '{':
+                    depth += 1
+                elif _style_clean[k] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        blocks.append(_style_clean[i + 1:k])
+                        break
+        return blocks
+
+    check('forge-scene' in _scenes,
+          '`forge-scene` 在 showOverlay 的 SCENES 名单里: %s' % _scenes)
+    # ⚠️ 数**两处**而不是「在不在」：showOverlay（js/50_ui.js）与 showCardZoom（js/60_boot.js）
+    #    各要摘一次。js_src 是七个文件的拼接，所以这里用计数来区分。
+    _forge_rm = js_src.count("classList.remove('forge-scene')")
+    check(_forge_rm == 2,
+          'showOverlay 与 showCardZoom **两处**都摘了 forge-scene（实测 %d 处）—— 少了 '
+          'showCardZoom 那次，从锻造页长按放大，详情会变成满屏宽、描述吃锻造那条红色' % _forge_rm)
+    _forge_calls = _re.findall(r"undefined\s*,\s*'forge-scene'\s*\)", js_src)
+    check(len(_forge_calls) == 2,
+          '两处锻造（道观 unknownForge / 篝火·营地 showForgePicker）都**显式**传了第三实参 '
+          'forge-scene（实测 %d 处）—— 漏传 = 整页仍是 620px 窄版，六列必然折行' % len(_forge_calls))
+    check(bool(_re.search(r'#overlay\.forge-scene\s+#overlayWrap\s*\{[^}]*max-width\s*:\s*none', _style_clean)),
+          '`#overlay.forge-scene #overlayWrap` 解开了限宽（基档是 max-width:620px，'
+          '三组 932px 锁在里面必然折行 —— 六列不成立）')
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*\{[^}]*display\s*:\s*grid', _style_clean)),
+          '`#overlay.forge-scene .reward-cards` 改成了 grid（flex-wrap 只保证「放不下才换行」，'
+          '给不出「三组一行」这个列数承诺）')
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*\{[^}]*repeat\(3,\s*max-content\)', _style_clean)),
+          '基档是三组一行 `repeat(3, max-content)`（= 用户要的六列）')
+    # ⚠️ 这两条要的是「规则在**门里**」而不是「文件里有」：@media 不加特异度、靠书写顺序取胜，
+    #    一条裸写在门外的 repeat(2,…) 会把**所有**档一起降成四列，而且不报错。
+    check(any('forge-scene' in b and 'repeat(2, max-content)' in b
+              for b in _media_blocks(r'@media\s*\(max-width:\s*700px\)')),
+          '`max-width:700px` 门里有 forge-scene 的 `repeat(2, max-content)`（= 四列那档，'
+          '矩阵里只剩 640×360；844×390 按用户追加的要求必须留在六列）')
+    check(any('forge-scene' in b and 'repeat(1, max-content)' in b
+              for b in _media_blocks(r'@media\s*\(max-width:\s*560px\)')),
+          '`max-width:560px` 门里有 forge-scene 的 `repeat(1, max-content)`（一组一行，防溢出）')
+    check(any('forge-scene' in b and 'padding:12px 10px' in b
+              for b in _media_blocks(r'@media\s*\(max-height:\s*560px\)')),
+          '`max-height:560px` 门里有 forge-scene 的 `.panel{padding:12px 10px}` —— 基档那条 '
+          '(1,2,0) 压得过矮屏档的 .panel(0,1,0)，没有这条，844×390 会在 22px 内边距上白丢 20px 内容高')
+    # ⚠️ 顺序闸：@media 不加特异度 ⇒ 书写顺序就是全部。降列的两条必须排在基档之后。
+    _i3 = _style_clean.find('repeat(3, max-content)')
+    _i2 = _style_clean.find('repeat(2, max-content)')
+    _i1 = _style_clean.find('repeat(1, max-content)')
+    check(-1 < _i3 < _i2 < _i1,
+          '三档列数的书写顺序是 3 → 2 → 1（实际位置 %d / %d / %d）—— @media 不加特异度，'
+          '顺序一反，窄屏那档就盖不住基档' % (_i3, _i2, _i1))
+    # ---- 反向闸：锻造页**不许**去纯色底（与 pick-scene 刻意相反）----
+    check(not _re.search(r'#overlay\.forge-scene\s+\.panel\s*\{[^}]*background\s*:\s*none', _style_clean),
+          '`#overlay.forge-scene .panel` **没有**去纯色底（本批明确保留 —— 锻造页整屏是卡牌与'
+          '说明文字，那层底是可读性的依托；照抄 pick-scene 的 background:none 会让正文糊在背景图上）')
+    # ---- 「红色 = 升级后的效果」这条语汇的两半 ----
+    # ① 既有那条卡内红字规则必须原样在（showCardZoom 也在用它，动它 = 长按详情跟着变）。
+    check(bool(_re.search(r'\.upgrade-preview\s*\{[^}]*color\s*:\s*#8c2b21', _style_clean)),
+          '全局 `.upgrade-preview{color:#8c2b21}` 原样在（长按放大弹窗 js/60_boot.js 也在用它）')
+    # ② 锻造作用域里必须有那条**高特异度**规则。⚠️ 这不是修饰：`.card .cdesc`(0,2,0) 压得过
+    #    `.upgrade-preview`(0,1,0)，不给它就没有红色，而 grep 与子串闸全绿 —— 典型的静默失效。
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s+\.cdesc\.upgrade-preview\s*\{[^}]*color', _style_clean)),
+          '锻造作用域里有 `#overlay.forge-scene .reward-cards .cdesc.upgrade-preview` 的取色规则 '
+          '（没有它 = 左右两栏一个色，「红色 = 升级后的效果」当场失效且不报错）')
+    # ---- 两组对照的结构 ----
+    check('forge-pair' in js_src and 'forge-arrow' in js_src,
+          'forgeCardHTML 里有两组对照的容器 .forge-pair 与箭头 .forge-arrow')
+    check(bool(_re.search(r'\.forge-arrow\s+path\s*\{[^}]*stroke\s*:\s*var\(--gold\)', _style_clean)),
+          '箭头的描边由 **CSS** 给（`stroke:var(--gold)`）—— SVG 的表现属性不接受 var()，'
+          '写在 `<path stroke="var(--gold)">` 上会被当非法值丢掉，实拍是一支暗红箭头')
+
     # ---- v0.69.0 §D5：KEYWORDS 的零引用词条不能变多 ----
     # 背景：卡面上的 `【X】` 是**唯一**能把玩家引到词条解释的入口（wrapKw 只认方括号，
     # 见 js/20_data.js 的 `text.replace(/【([^】]+)】/g,…)`），UI 上另有零散的 `data-tip="kw:X"`。

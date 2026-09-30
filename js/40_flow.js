@@ -194,8 +194,18 @@ function showVictory(){
 const RUN_KEY='zhiguaitower_run_v1';
 /* —— 断点续玩：全场景实时存档（战斗/篝火/商店/地图） —— */
 let SCENE='menu';
-function cardSnap(c){ return {id:c.id, up:!!c.up, sealed:c.sealed||0}; }
-function cardRestore(d){ const c=cardById(d.id); c.up=!!d.up; c.sealed=d.sealed||0; return c; }
+/* v0.75.0：oneShot（万剑归宗的 0 费一次性副本）必须**往返存档**。
+   不给每张牌都加字段 —— 快照形状被别的闸盯着，且会白白抬高所有存档的体积。
+   只给副本带上：没这一条，战斗中途存档再续档会把副本洗成一张 3 费的普通万剑归宗
+   （cardRestore 用 cardById 重建，cost:0 与一次性一起丢）。 */
+function cardSnap(c){
+  const d={id:c.id, up:!!c.up, sealed:c.sealed||0};
+  if(c.oneShot) d.oneShot=1;
+  return d;
+}
+function cardRestore(d){ const c=cardById(d.id); c.up=!!d.up; c.sealed=d.sealed||0;
+  if(d.oneShot) Object.assign(c, {cost:0, costU:null, oneShot:true});   // 0 费是副本的定义之一，一起复原
+  return c; }
 function potionSnap(p){ return p.id; }
 function potionRestore(id){ const p=POTIONS.find(x=>x.id===id); return p?{...p}:null; }
 function serializeEnemy(e){

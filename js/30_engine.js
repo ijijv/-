@@ -278,6 +278,56 @@ function previewDamage(c, targetEnemy){
     || (G.hero==='yincha' && YINCHA_NO_CURSE_TAG.indexOf(c.id)>=0)) ? 0 : (e.curse||0);
   return { raw, d, curse:curseTag, weak:G.weak>0 && !ignoreWeak, taomu, tongqian, zhusha, turnBuf, dynamic: dynamic || wbDmg || ycDmg || tsDmg, perTurn };
 }
+/* ===================== v0.75.0：防御牌的格挡预览 =====================
+   用户要「打出防御牌获得的格挡，在卡牌往上拖拽的时候提前显示出来」⇒ 玩家头顶的蓝色浮字。
+   口径与 CARD_DMG 同一个：**镜像 eff 里 gainBlock() 实际会收到的那个数**（逐列"当前状态"同式抄写），
+   不吃副作用、不实际加格挡。四列顺序沿用 A赶尸人 / B武僧 / C阴差 / D天师。
+   ⚠️ 只覆盖 type==='defense'（用户原话就是"防御牌"）。非防御牌一律 0 ——
+      武僧【舍身】4 格挡、【万剑归宗】10/12 格挡都**故意不进**这张表（它们不是防御牌），
+      将来要放开就改 previewBlock 的第一行判断，别在这张表里偷偷加行。
+   ⚠️ 与 CARD_DMG 一样，这里的数字**必须与 js/20_data.js 的 eff 逐字对齐** ——
+      冒烟里那组期望值是照着 eff 的 gainBlock 实参算的，抄错列就会当场红。 */
+const CARD_BLOCK = {
+  // 金刚符：A 4/7（另给尸气，不加格挡）；B 6/9；C 6/9（另失血）；D 5/7 + 每层诅咒 1/2（上限 +6）
+  jingang: u=>{ if(G.hero==='ganshiren') return u?7:4;
+    if(G.hero==='wuseng') return u?9:6;
+    if(G.hero==='yincha') return u?9:6;
+    return (u?7:5)+Math.min(6,(u?2:1)*(CURSE_THIS_TURN||0)); },
+  // 隐身符：A 3/6；B 4/6；C 3/7（弃牌数由本回合失血决定，与格挡无关）；D 3/5
+  yinshen: u=>G.hero==='ganshiren'?(u?6:3):(G.hero==='wuseng'?(u?6:4):(G.hero==='yincha'?(u?7:3):(u?5:3))),
+  // 金光罩：A 9/14（尸气≥2 再 +7/5）；B 14/19；C 11/17（另失血）；D 12/17 + 每层诅咒 1/2
+  jinguang: u=>{ if(G.hero==='ganshiren') return (u?14:9)+(hasShiqi(2)?(u?7:5):0);
+    if(G.hero==='wuseng') return u?19:14;
+    if(G.hero==='yincha') return u?17:11;
+    return (u?17:12)+(CURSE_THIS_TURN||0)*(u?2:1); },
+  // 金钟罩：A 16/10；C 18/12；B 与 D 同为 17/12（eff 的尾支共用）
+  jinzhong: u=>G.hero==='ganshiren'?(u?16:10):(G.hero==='yincha'?(u?18:12):(u?17:12)),
+  // 荆棘符：A 6/3；B 7/4；C 6/4；D 6/3（反弹/回血是副效应，不进格挡预览）
+  jingji: u=>G.hero==='ganshiren'?(u?6:3):(G.hero==='wuseng'?(u?7:4):(G.hero==='yincha'?(u?6:4):(u?6:3))),
+  // 佛渡（消耗）：**只有升级后才给格挡**，且 A 给尸气、C 回血 ⇒ 那两列的升级支也不给格挡
+  fodu: u=>{ if(!u) return 0;
+    if(G.hero==='ganshiren') return 0;
+    if(G.hero==='yincha') return 0;
+    return 5; },   // B 与 D 升级后都是 5（eff 的 fb 同式）
+  // 铜皮铁骨：A 12/8；B 15/10；C 13/9；D 14/9
+  tongpi: u=>G.hero==='ganshiren'?(u?12:8):(G.hero==='wuseng'?(u?15:10):(G.hero==='yincha'?(u?13:9):(u?14:9))),
+  // 反震：四列的 eff **都没有 gainBlock**（只挂 thorns / hitCurse / hitRage）⇒ 恒 0，永远不显示
+  fanzhen: ()=>0,
+  // 卸甲生元：A 7/4；B 8/5；C 8/5（另失 2 血）；D 12/8
+  xiejiashengyuan: u=>G.hero==='ganshiren'?(u?7:4):(G.hero==='wuseng'?(u?8:5):(G.hero==='yincha'?(u?8:5):(u?12:8)))
+};
+/* 拖拽时**算不出来**的格挡加成（要打完才知道），只在这几个 id 上标 dynamic：
+   隐身符-天师列的「抽到诅咒牌再 +3/4」——抽牌发生在 eff 里，拖拽时无从得知。
+   ⇒ 显示保底值 + .dyn 弱化标记，而不是假装能算准。 */
+const DYNAMIC_BLOCK = ['yinshen'];
+function previewBlock(c){
+  if(!c || c.type!=='defense') return 0;   // 只认防御牌（舍身/万剑归宗不在此列，见 CARD_BLOCK 的头注）
+  const fn = CARD_BLOCK[c.id];
+  if(!fn) return 0;
+  let b;
+  try{ b = fn(!!c.up); }catch(e){ return 0; }
+  return (typeof b==='number' && isFinite(b) && b>0) ? b : 0;
+}
 function dealDamageToPlayer(n, attacker, floatDelay, opt){
   // 移形换影(#38)：闪避成功按英雄获得不同奖励
   if(G.dodge>0){
@@ -907,7 +957,10 @@ function finishEndTurn(){
      用**事后 slice** 而不是把这行拆开 —— 这行的语义被完整钉住（冒烟 8 处 finishEndTurn
      的同步断言都压在它下游），拆成两行虽等价，但任何 diff 都会把它标红；slice 零侵入。 */
   const _d0=G.discard.length;
-  G.discard=G.discard.concat(G.hand.filter(c=>!c.retain && !(G.hero==='ganshiren' && c.id==='shi_wang')));
+  /* v0.75.0：`&& !c.oneShot` —— 万剑归宗的 0 费副本**没打出去也不进弃牌堆**，
+     留在手里而 kept 不含它 ⇒ 末尾 G.hand=kept 直接把它丢掉，这才是「一次性」的落点。
+     只加条件、**不拆这一行**（理由见上一条注释）。 */
+  G.discard=G.discard.concat(G.hand.filter(c=>!c.retain && !(G.hero==='ganshiren' && c.id==='shi_wang') && !c.oneShot));
   /* v0.69.0：弃牌堆徽章在这里刷一次。本函数接下来是 triggerSummons → enemyAct，
      **全程没有 render()**（要等下一次 startTurn 才渲染），徽章会整整滞后一段敌人行动；
      而「这回合弃了多少张」正是玩家此刻最想看的数。
@@ -1073,6 +1126,10 @@ function doPlayCard(i){
   G.attackBuff=(c.type==='attack' && hasRelic('zhushabi'))?2:0;
   if(c.type!=='junk'){
     if(exNow){ (G.exhausted=G.exhausted||[]).push(c); log(`【${c.name}】已消耗（本关不再出现，战斗结束后回归牌库）`); }
+    /* v0.75.0：oneShot（万剑归宗斩杀产出的 0 费副本）**就地消失** —— 既不进弃牌堆
+       （进去就会被重洗再抽到，等于无限续），也不进 G.exhausted（那个列表战后会「回归牌库」并打日志）。
+       回滚分支不用动：下方 lastIndexOf 有 `>=0` 守卫，副本不在弃牌堆里 ⇒ 天然 no-op。 */
+    else if(c.oneShot){ /* 一次性牌：用掉即消失 */ }
     else if(c.id==='shi_wang' && G.hero==='ganshiren'){ /* 尸王：召唤物存活期间不进弃牌堆（成功后记 G.shiWangCard） */ }
     else G.discard.push(c);
   }

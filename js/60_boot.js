@@ -73,6 +73,7 @@ function onDragMove(ev){
     } else {
       setDragTarget(null);
       hideDragPreview();
+      hideDragBlock();   // v0.75.0：指向牌走的是箭头分支，头顶的格挡预演必须收掉
       aimAt(d.ox, d.oy, ev.clientX, ev.clientY, false);
     }
   } else {
@@ -81,6 +82,11 @@ function onDragMove(ev){
     /* v0.61.33：打全体 / 不指向的牌虽然不出箭头，但拖过敌人头顶时也照样报预伤（跟随所指目标） */
     const idx2=enemyAtPoint(ev.clientX, ev.clientY);
     if(idx2>=0) showDragPreview(idx2); else hideDragPreview();
+    /* v0.75.0：防御牌往上拖够 40px ⇒ 玩家头顶浮出格挡预演。
+       ⚠️ 这个 40px 必须与 onDragUp 里 `else if(d.sy-ev.clientY>=40){ play=true; }` 是**同一个阈值**：
+          让「出现预演」与「松手会真的打出」严格同刻，否则会看到预演却打不出去。 */
+    const bc=G.hand[d.i];
+    if(d.moved && d.sy-ev.clientY>=40 && previewBlock(bc)>0) showDragBlock(d.i); else hideDragBlock();
   }
 }
 function onDragUp(ev){
@@ -108,6 +114,7 @@ function onDragUp(ev){
   ARROW_TIP=null;
   setDragTarget(null);
   hideDragPreview();
+  hideDragBlock();   // v0.75.0：松手即隐（与 hideDragPreview 并排）
   if(play) playCard(d.i);
 }
 /* v0.61.20(P3)：拖拽受击预览 —— 目标头顶浮出这张牌的预计伤害。
@@ -142,6 +149,34 @@ function showDragPreview(idx){
   el.style.top=r.top+'px';
   el.classList.remove('off');
 }
+/* v0.75.0：拖拽防御牌时的**格挡预演** —— 浮在**玩家头部**的蓝色字（用户口径）。
+   与 #drag-dmg 是一对并列件：同样零定时器（.off 切换）、同样 translate(-50%,-100%) 的锚点约定。
+   数值口径只有 previewBlock() 一套（js/30_engine.js）；算出 0 就不显示（与 previewDamage 的 raw<=0 返 null 同构）。
+   ⚠️ 不用 floatDamage（js/00_base.js）—— 它内部有 setTimeout，是「播一下就消失」的飘字；
+      预演要的是「跟着指针持续存在、松手即隐」。 */
+function hideDragBlock(){
+  const el=document.getElementById('drag-block');
+  if(el) el.classList.add('off');
+}
+function showDragBlock(i){
+  if(!G || !DRAG) return hideDragBlock();
+  const c=G.hand[i];
+  if(!c) return hideDragBlock();
+  const n=previewBlock(c);
+  if(!(n>0)) return hideDragBlock();                 // 反震 / 未升级的佛渡恒 0 ⇒ 什么都不显示
+  const anchor=document.querySelector('#player-panel .hero-art-box');
+  if(!anchor) return hideDragBlock();
+  let el=document.getElementById('drag-block');
+  if(!el){ el=document.createElement('div'); el.id='drag-block'; document.body.appendChild(el); }
+  /* 字形走 block 档（颜色烤在 PNG 里，与伤害飘字的格挡档同一套）；素材没装/探测中则回落文字 */
+  const glyph=numHTML('block', '+'+n);
+  if(glyph) el.innerHTML=glyph; else el.textContent='+'+n+' 格挡';
+  el.className = DYNAMIC_BLOCK.indexOf(c.id)>=0 ? 'dyn' : '';   // 天师隐神符：抽牌加成算不出 ⇒ 保底值 + 弱化标记
+  const r=anchor.getBoundingClientRect();
+  el.style.left=(r.left+r.width/2)+'px';
+  el.style.top=r.top+'px';
+  el.classList.remove('off');
+}
 /* 长按卡牌放大查看描述（小屏字小的解决）
    ⚠️ v0.69.0：这里**故意继续读 c.t()（全文）而不是 cardText()/c.ts（牌面短版）** ——
       这是「双层文案」的落点。牌面只有 3 行、34 张牌的机制说明被压成短版，
@@ -162,9 +197,12 @@ function showCardZoom(i){
      今天进战斗必经 showHeroSelect→showOverlay（已会摘），所以现在碰不到；
      但把不变量补在两个入口上是这一处的既定口径（showOverlay 里那条 v0.61.42 注释同理）。
      v0.72.0：顺带补上这里一直漏掉的 .hero-scene，并加上新的 .pick-scene —— 不摘的话，
-     从易物选牌小窗长按手牌放大，卡牌详情会变成一张"没有底、字叠在战场立绘上"的裸字。 */
+     从易物选牌小窗长按手牌放大，卡牌详情会变成一张"没有底、字叠在战场立绘上"的裸字。
+     v0.75.0：再补上 .forge-scene —— 不摘的话，从锻造页长按牌放大，详情会变成满屏宽、
+     描述吃锻造那条红色（.cdesc.upgrade-preview），等于把「红色 = 升级后的效果」这条
+     语汇用错地方。 */
   const __ov=document.getElementById('overlay');
-  if(__ov && __ov.classList){ __ov.classList.remove('map-scene'); __ov.classList.remove('menu-scene'); __ov.classList.remove('scroll-scene'); __ov.classList.remove('hero-scene'); __ov.classList.remove('pick-scene'); }
+  if(__ov && __ov.classList){ __ov.classList.remove('map-scene'); __ov.classList.remove('menu-scene'); __ov.classList.remove('scroll-scene'); __ov.classList.remove('hero-scene'); __ov.classList.remove('pick-scene'); __ov.classList.remove('forge-scene'); }
   __ov.classList.remove('hidden');
   const x=document.getElementById('overlayCloseX'); if(x) x.style.display='';
 }
@@ -456,7 +494,7 @@ function showStartScreen(){
     <div class="menu-stage">
       <div class="menu-titlebar menu-tier" style="--i:0">
         <h2 class="menu-title">${artImg('ui/menu/topic.png','<span class="menu-fb">志怪塔</span>','menu-art')}
-          <small>· v0.74.0</small></h2>
+          <small>· v0.75.0</small></h2>
       </div>
 
       <div class="menu-col-stele menu-tier is-main" style="--i:1">
