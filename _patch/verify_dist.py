@@ -139,8 +139,9 @@ def main():
     _audio = io.open(os.path.join(ROOT, 'js', '10_audio.js'), 'r', encoding='utf-8').read()
     # v0.61.41：背景路径**全部由游戏作用域的 bgRel 算好**（见 dump_ids），python 侧不做镜像 ——
     # 本批第一版就是镜像漂了：python 认「带扩展名走原名」⇒ bg/map.jpg，而磁盘上是 素材/bg/bg_map.jpg
-    check(ids.get('bgRule') == ['bg/bg_menu.png', 'bg/bg_map.jpg', 'bg/bg_map.jpeg'],
-          'bgRel 两条规则：带扩展名只补 bg_ 前缀 / 不带补 bg_<name>.png（%s）'
+    # v0.76.0：主菜单那格改指 bg/menu/menu_3.png（与已删的 bg_menu.png 逐字节相同、同图挪位）
+    check(ids.get('bgRule') == ['bg/menu/menu_3.png', 'bg/bg_map.jpg', 'bg/bg_map.jpeg'],
+          'bgRel 三条规则：menu 特判 / 带扩展名只补 bg_ 前缀 / 不带补 bg_<name>.png（%s）'
           % ','.join(ids.get('bgRule') or []))
     want += ids['bg']
     # v0.73.0：八个事件房背景。断言「八条齐、互不重复、且每个事件都有键」——
@@ -226,6 +227,21 @@ def main():
     check(bool(_dv) and len(_vals) == 1 and _dv.group(1) == _vals[0],
           '产物版本号与源码一致（产物 v%s / 源码 v%s）—— 不一致说明改了源码没重新打包'
           % (_dv.group(1) if _dv else '缺失', _vals[0] if len(_vals) == 1 else '?'))
+    # v0.76.0：README.txt 的「版本里程碑」**每次发版重写一份** —— 规矩立了就得有闸看着它，
+    # 否则它会像主菜单那处版本号一样悄悄落后（v0.69.0 一路停到 v0.74.0 才被发现）。
+    # 判据取**最高版本号**而不是「有没有出现当前版本」：README 的里程碑表里全是历史版本，
+    # 只有最新那一行必须等于当前版本 —— 写成「存在」会跟着历史条目一起绿，等于没闸。
+    _rd = os.path.join(ROOT, 'README.txt')
+    check(os.path.exists(_rd), 'README.txt 在（版本里程碑表住在这里）')
+    if os.path.exists(_rd):
+        _rt = io.open(_rd, encoding='utf-8').read()
+        _rmax = max((tuple(int(x) for x in t)
+                     for t in re.findall(r'v(\d+)\.(\d+)\.(\d+)', _rt)), default=None)
+        _tmax = tuple(int(x) for x in _vals[0].split('.')) if len(_vals) == 1 else None
+        check(_rmax is not None and _rmax == _tmax,
+              'README.txt 里程碑的最高版本号 == 原型.html <title>（README v%s / 源码 v%s）'
+              % ('.'.join(str(x) for x in _rmax) if _rmax else '缺失',
+                 _vals[0] if len(_vals) == 1 else '?'))
     # v0.68.0：真美术牌框。**不加这条，[2] 会把 ui/card/front.png 报成「从未被游戏请求 /
     # 可考虑删掉」** —— 照那句删了，卡面就整块散架：`cardFrameFail` 会连 `.has-frame`
     # 一起摘掉、静默退回纯 CSS 版面，不报错、不抛异常、冒烟也读不到 CSS。与 v0.66.0 的
@@ -778,13 +794,19 @@ def main():
     check(len(_forge_calls) == 2,
           '两处锻造（道观 unknownForge / 篝火·营地 showForgePicker）都**显式**传了第三实参 '
           'forge-scene（实测 %d 处）—— 漏传 = 整页仍是 620px 窄版，六列必然折行' % len(_forge_calls))
-    check(bool(_re.search(r'#overlay\.forge-scene\s+#overlayWrap\s*\{[^}]*max-width\s*:\s*none', _style_clean)),
+    # ⚠️ v0.76.0：下面三条在 v0.75.0 写的是**单数选择器**的正则（`#overlay.forge-scene #overlayWrap{…}`）。
+    #    本批把 forge 的三条规则与 pile-scene **并成了分组选择器**（共用同一份 grid，不复制第二份），
+    #    原正则匹配不到 ⇒ 三条一起假红。判据本身一个字没变（「forge 那条规则还在，且内容对」），
+    #    只是允许它后面还跟着同组的别的选择器 —— `(?:,[^{}]*)?` 吃掉选择器列表的尾巴。
+    #    为什么这三条值得留：上面新增的分组闸只钉「两个场景名在同一组里」，钉不到**内容**
+    #    （max-width:none / display:grid / repeat(3)）—— 分组闸全绿而内容被改坏，照样折行。
+    check(bool(_re.search(r'#overlay\.forge-scene\s+#overlayWrap\s*(?:,[^{}]*)?\{[^}]*max-width\s*:\s*none', _style_clean)),
           '`#overlay.forge-scene #overlayWrap` 解开了限宽（基档是 max-width:620px，'
           '三组 932px 锁在里面必然折行 —— 六列不成立）')
-    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*\{[^}]*display\s*:\s*grid', _style_clean)),
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*(?:,[^{}]*)?\{[^}]*display\s*:\s*grid', _style_clean)),
           '`#overlay.forge-scene .reward-cards` 改成了 grid（flex-wrap 只保证「放不下才换行」，'
           '给不出「三组一行」这个列数承诺）')
-    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*\{[^}]*repeat\(3,\s*max-content\)', _style_clean)),
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*(?:,[^{}]*)?\{[^}]*repeat\(3,\s*max-content\)', _style_clean)),
           '基档是三组一行 `repeat(3, max-content)`（= 用户要的六列）')
     # ⚠️ 这两条要的是「规则在**门里**」而不是「文件里有」：@media 不加特异度、靠书写顺序取胜，
     #    一条裸写在门外的 repeat(2,…) 会把**所有**档一起降成四列，而且不报错。
@@ -806,6 +828,76 @@ def main():
     check(-1 < _i3 < _i2 < _i1,
           '三档列数的书写顺序是 3 → 2 → 1（实际位置 %d / %d / %d）—— @media 不加特异度，'
           '顺序一反，窄屏那档就盖不住基档' % (_i3, _i2, _i1))
+    # ---- v0.76.0 §二：`pile-scene`（点抽牌堆/弃牌堆看牌堆内容）----
+    # 形态与 forge-scene 同构，但**刻意共用同一份容器规则**（分组选择器，不是复制第二条）：
+    # 复制出来的两份必然漂，所以下面那三条闸要的是「**同一条规则里**同时出现两个场景名」。
+    check('pile-scene' in _scenes,
+          '`pile-scene` 在 showOverlay 的 SCENES 名单里: %s' % _scenes)
+    _pile_rm = js_src.count("classList.remove('pile-scene')")
+    check(_pile_rm == 2,
+          'showOverlay 与 showCardZoom **两处**都摘了 pile-scene（实测 %d 处）—— 少了 '
+          'showCardZoom 那次，从牌堆面板长按放大，详情会变成满屏宽的一列' % _pile_rm)
+    # ⚠️ 这里数的是 `true, 'pile-scene'`（第二实参 closable=true），与 forge/pick 的
+    #    `undefined, '…'` 不同形：牌堆页必须**可关**（它盖住战场，关不掉就是死屏）。
+    _pile_calls = _re.findall(r"true\s*,\s*'pile-scene'\s*\)", js_src)
+    check(len(_pile_calls) == 1,
+          'showPile 显式传了第三实参 pile-scene 且 closable=true（实测 %d 处）—— 漏传场景类 = '
+          '从抽牌堆切到弃牌堆不重播进场；closable 传 false = 面板关不掉' % len(_pile_calls))
+    check(bool(_re.search(r'#overlay\.forge-scene\s+#overlayWrap\s*,\s*#overlay\.pile-scene\s+#overlayWrap'
+                          r'\s*\{[^}]*max-width\s*:\s*none', _style_clean)),
+          'forge-scene 与 pile-scene **共用同一条** #overlayWrap 解限宽规则（分组选择器）—— '
+          '写成两条各自一份就是「复制出来的必然漂」')
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.panel\s*,\s*#overlay\.pile-scene\s+\.panel'
+                          r'\s*\{[^}]*padding\s*:\s*22px\s+14px', _style_clean)),
+          'forge-scene 与 pile-scene **共用同一条** .panel 内边距规则')
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*,\s*#overlay\.pile-scene\s+\.reward-cards'
+                          r'\s*\{[^}]*repeat\(3,\s*max-content\)', _style_clean)),
+          'forge-scene 与 pile-scene **共用同一条** grid 规则（`repeat(3, max-content)`）—— '
+          '牌堆页也要六列，不能只抄容器不抄排列')
+    check(any('pile-scene' in b and 'repeat(2, max-content)' in b
+              for b in _media_blocks(r'@media\s*\(max-width:\s*700px\)')),
+          '`max-width:700px` 门里有 pile-scene 的 `repeat(2, max-content)`（两场景同档降列）')
+    check(any('pile-scene' in b and 'padding:12px 10px' in b
+              for b in _media_blocks(r'@media\s*\(max-height:\s*560px\)')),
+          '`max-height:560px` 门里有 pile-scene 的 `.panel{padding:12px 10px}`（矮屏档同档收边距）')
+    # ---- 反向闸：牌堆页**不显示升级情况**（用户逐字：「只是不要显示升级情况而已」）----
+    check(not _re.search(r'#overlay\.pile-scene[^{]*upgrade-preview', _style_clean),
+          '`#overlay.pile-scene` 作用域里**没有** upgrade-preview 规则（牌堆页是单张卡，'
+          '没有「当前 ▸ 升级后」对照 —— 抄了 forge 那条红色规则就是把语汇用错地方）')
+    # ---- 盒模型红线：`.pile` 只许加 cursor，不许碰盒模型 ----
+    # ⚠️ 这一项**没有别的兜底**：冒烟里的 pile 断言全是 G.drawPile 状态，_drvclip / probe_* 零 pile 引用，
+    #    盒模型漂移只有 _drvpile.js 看得见。所以把源码侧的红线也钉一条。
+    _pile_rules = _re.findall(r'\.pile\s*\{([^}]*)\}', _style_clean)
+    check(any('cursor:pointer' in b for b in _pile_rules),
+          '`.pile` 加了 cursor:pointer（点它看牌堆内容 —— 少了只是没有手型光标，功能还在，'
+          '但入口就没人找得到）')
+    check(not any(('z-index' in b) or ('padding' in b) for b in _pile_rules),
+          '`.pile` 的规则里**没有** z-index / padding（盒模型红线：加 z-index 会反过来盖住手牌；'
+          '两个堆的 rect / 与手牌不重叠 / 底对齐都被夹具逐条钉着）')
+    # ---- 抽牌堆展示副本那一层 .slice()（源码侧与冒烟那条互为表里）----
+    check('shuffle(src.slice())' in js_src,
+          'showPile 用 `shuffle(src.slice())` 乱序展示（少了 .slice() 就是「点开看一眼，'
+          '抽牌堆顺序就变了」—— shuffle 是就地打乱）')
+    # ---- 全局卡宽/卡高是**共享**的：任何场景限定都不许反过来把它改成全局 ----
+    # ⚠️ §五 的红线原文：「全局 `.card{width:132px;height:200px}` 与 `.reward-cards .card{min-height:200px}`
+    #    一个字都不动 —— 手牌/图鉴/奖励三选一全吃」。矮屏档想给锻造页省纵向空间时，
+    #    最顺手（也最错）的做法就是直接改这两条。冒烟在 VM 里读不到 CSS，只有这里能钉。
+    _card_g = _re.search(r'(?<![-\w.])\.card\s*\{([^}]*)\}', _style_clean)
+    check(_card_g is not None and 'width:132px' in _card_g.group(1)
+          and 'height:200px' in _card_g.group(1),
+          '全局 `.card{width:132px;height:200px}` 逐字未动: %s'
+          % (_card_g.group(1)[:70] if _card_g else '(没找到这条规则)'))
+    _card_rc = _re.search(r'\.reward-cards\s+\.card\s*\{([^}]*)\}', _style_clean)
+    check(_card_rc is not None and 'min-height:200px' in _card_rc.group(1),
+          '`.reward-cards .card{…min-height:200px}` 逐字未动: %s'
+          % (_card_rc.group(1)[:70] if _card_rc else '(没找到这条规则)'))
+    # v0.76.0 §五：844×390 上十张牌折四行，卡高**不能压**（`.card.has-frame` 的子元素全是
+    # 百分比定位，压扁就是把边框美术整张拉歪）⇒ 只能从卡以外的留白里让。让出的量已是实测值，
+    # 钉住它，免得以后顺手改回去时「第二行又被切掉一半」而没有任何闸会响。
+    check(any('forge-scene' in b and 'gap:6px 10px' in b
+              for b in _media_blocks(r'@media\s*\(max-height:\s*560px\)')),
+          '矮屏档里 forge/pile 的网格行间距收到了 `gap:6px 10px`（v0.76.0 的 844×390 美观账：'
+          '四处留白一共让出 44px，第二行才完整可见）')
     # ---- 反向闸：锻造页**不许**去纯色底（与 pick-scene 刻意相反）----
     check(not _re.search(r'#overlay\.forge-scene\s+\.panel\s*\{[^}]*background\s*:\s*none', _style_clean),
           '`#overlay.forge-scene .panel` **没有**去纯色底（本批明确保留 —— 锻造页整屏是卡牌与'
@@ -825,6 +917,83 @@ def main():
     check(bool(_re.search(r'\.forge-arrow\s+path\s*\{[^}]*stroke\s*:\s*var\(--gold\)', _style_clean)),
           '箭头的描边由 **CSS** 给（`stroke:var(--gold)`）—— SVG 的表现属性不接受 var()，'
           '写在 `<path stroke="var(--gold)">` 上会被当非法值丢掉，实拍是一支暗红箭头')
+
+    # ---- v0.76.0 §四：结算墨色过场（`#scene-veil` + `result-scene`）----
+    # ⚠️ 这一项**冒烟证不了**：无头沙箱里 animLive() 恒假 ⇒ settleTransition 整段不执行、
+    #    openFn() 同步调（那正是必须保住的行为）。于是「轻档不铺墨 / 重档铺墨 / 揭幕接得上 /
+    #    败局是暗红墨」这四条在冒烟里**根本没有代码路径**。真伪由 probe_veil.py 的
+    #    8 视口 × 4 例 × 8 列 = 256 项断言在真浏览器上判（MutationObserver 记类变化，
+    #    与节拍快慢无关）。这里钉的是产物/源码侧的结构 —— 少一条都是静默失效。
+    check('id="scene-veil"' in html and 'veil-ink' in html,
+          '#scene-veil 与它的 .veil-ink 子节点都在 原型.html 里（少了子节点 = 墨幕是块透明板）')
+    check(bool(_re.search(r'#scene-veil\s*\{[^}]*position\s*:\s*fixed', _style_clean))
+          and bool(_re.search(r'#scene-veil\s*\{[^}]*z-index\s*:\s*70', _style_clean)),
+          '`#scene-veil` 是 fixed 且 z-index:70 —— 必须**高于 #overlay 的 10**（也比 #boss-intro '
+          '的 70 同层且更靠后书写），否则「揭幕」那一拍墨在面板底下褪，等于没揭')
+    check(bool(_re.search(r'#scene-veil\.show\s*\{[^}]*display\s*:\s*block', _style_clean)),
+          '`#scene-veil.show` 有规则（没有它 = 墨幕永远 display:none，整段过场不可见，'
+          '而所有子串闸照绿）')
+    check(bool(_re.search(r'#scene-veil\.win\s+\.veil-ink\s*\{[^}]*background', _style_clean))
+          and bool(_re.search(r'#scene-veil\.lose\s+\.veil-ink\s*\{[^}]*background', _style_clean)),
+          '胜/负两套墨色都在（用户逐字：「胜：金墨自下升  负：暗红墨自上压」）—— '
+          '少了 .lose 那一条，败局也铺金墨，方向正好反过来')
+    check(bool(_re.search(r'#scene-veil\.parting\s+\.veil-ink\s*\{[^}]*inkPart', _style_clean))
+          and bool(_re.search(r'@keyframes\s+inkPart\s*\{', _style_clean)),
+          '揭幕那一拍（`.parting` + `@keyframes inkPart`）在 —— 漏了就是墨盖住战场不走 = '
+          '整屏黑，游戏玩不了。这是本项**唯一的重度事故形态**')
+    check(bool(_re.search(r'@keyframes\s+veilBleedIn\s*\{[^}]*scale\(1\.5\)', _style_clean)),
+          '`veilBleedIn` 是 `scale(1.5) → 1`（**刻意不照抄** inkSpread 的 `.55 → 1`）—— '
+          'inkSpread 是自中心向外铺（Boss 入场专用），而「墨汁自四边洇入」要的是不透明边向内合拢；'
+          '抄错方向会变成「墨从中间涨出来」，观感正好相反且不报错')
+    check(bool(_re.search(r'#overlay\.result-scene\.ov-enter\s+#overlayWrap\s*\{[^}]*resultRise', _style_clean))
+          and bool(_re.search(r'@keyframes\s+resultRise\s*\{', _style_clean)),
+          '「结算面板自下升起」挂在 `#overlay.result-scene.ov-enter #overlayWrap` 上 —— '
+          '特异度 (2,3,0) 压得过既有 overlayIn 的 (2,1,0)，与 scrollDrop 同一手法')
+    check('result-scene' in _scenes,
+          '`result-scene` 在 showOverlay 的 SCENES 名单里: %s' % _scenes)
+    _res_rm = js_src.count("classList.remove('result-scene')")
+    check(_res_rm == 2,
+          'showOverlay 与 showCardZoom **两处**都摘了 result-scene（实测 %d 处）—— 少了 '
+          'showCardZoom 那次，从结算页长按放大，详情会一直挂着「自下升起」的那套入场' % _res_rm)
+    # ---- 收尾拍：`#app.closing` 的四条，**必须是 opacity-only** ----
+    # ⚠️ 红线（_drvpile.js 的检查 D）：任何 `.hand-area` / `#hand` 规则只要 cssText 里出现
+    #    transform / filter / will-change / perspective 就会被判红。收尾拍写在 `#app.closing #hand`
+    #    上同样命中 —— `.closing` 在 _drvpile.js 那轮里根本没被挂过，可它扫的是**CSS 规则文本**。
+    #    所以这四条只许动 opacity + transition-delay（错峰靠 delay 造出「依次收拢」的读感）。
+    _close_rules = _re.findall(r'#app\.closing\s+[^{]*\{([^}]*)\}', _style_clean)
+    check(len(_close_rules) >= 4,
+          '`#app.closing` 的收尾拍有四条（敌人消散 / 手牌 / 牌堆 / 操作栏，实测 %d 条）'
+          % len(_close_rules))
+    check(bool(_close_rules) and not any(
+        _re.search(r'transform|filter|will-change|perspective', b) for b in _close_rules),
+          '收尾拍**只动 opacity**（红线：`#hand` 上出现 transform/filter 会让 _drvpile.js 的'
+          '红色禁区检查 D 变红 —— 它扫的是规则文本，不看 .closing 有没有被挂上）')
+    # ---- 两处黑名单 + JS 早返回：三层都要有（CSS 是给「JS 没跑到」兜底）----
+    check(any('#scene-veil' in b for b in _media_blocks(r'@media\s*\(prefers-reduced-motion:\s*reduce\)')),
+          '`prefers-reduced-motion` 块里有 `#scene-veil{display:none}`')
+    # 下面两条比的是**去空格后**的选择器（`.low-spec #scene-veil` 与 `.low-spec#scene-veil` 等价）。
+    _sf = _style_clean.replace(' ', '')
+    check('.low-spec#scene-veil' in _sf,
+          '低配块里有 `.low-spec #scene-veil{display:none}`（模型照 `.low-spec .enemy.hit`）')
+    # ⚠️ **特异度陷阱**：`.low-spec #overlay.result-scene.ov-enter #overlayWrap` 是 (2,3,1)，
+    #    减弱动态那条在 @media 里是 (2,3,0) 靠**书写顺序**赢。两块各要一条**带 result-scene 的**
+    #    高特异度规则 —— 只写通用的 `#overlay.ov-enter #overlayWrap{animation:none}` 是
+    #    (2,1,0)/(2,2,0)，**两处都压不过** (2,3,0) 的 resultRise：开了减弱动态结算面板照样弹。
+    check('.low-spec#overlay.result-scene.ov-enter#overlayWrap' in _sf,
+          '低配块里有 `#overlay.result-scene.ov-enter #overlayWrap{animation:none}` 的**专用**规则')
+    check(any('#overlay.result-scene.ov-enter#overlayWrap' in b.replace(' ', '')
+              for b in _media_blocks(r'@media\s*\(prefers-reduced-motion:\s*reduce\)')),
+          '减弱动态块里有同形的专用规则（@media 不加特异度，靠**书写顺序**压过基档那条）')
+    # ---- 一次性标记：四条出口各要清一次，漏一处就是「第二次结算静默不铺墨」----
+    _sp = js_src.count('G._settlePlayed=false;')
+    check(_sp == 2,
+          '`G._settlePlayed=false` 出现在 **startBattle 与 revive 两处**（实测 %d 处）—— '
+          'revive 那次漏了，表现是「看了败局墨幕、复活、再打赢 Boss，胜利结算静默地不铺墨」，'
+          '而没有任何闸会响（用户看不出少了什么）' % _sp)
+    check("settleTransition(tier, 'win'" in js_src and "settleTransition('heavy', 'lose'" in js_src
+          and "settleTransition('heavy', 'win'" in js_src,
+          '三条出口都接了 settleTransition：showBattleResult（按 tier 分级）/ loseGame（lose 墨）/ '
+          'showVictory（win 墨）—— giveUp 刻意不接（它不是结算，是结算面板上的次级出口）')
 
     # ---- v0.69.0 §D5：KEYWORDS 的零引用词条不能变多 ----
     # 背景：卡面上的 `【X】` 是**唯一**能把玩家引到词条解释的入口（wrapKw 只认方括号，

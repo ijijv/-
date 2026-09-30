@@ -1449,6 +1449,30 @@ function viewDeck(){
   showOverlay(html, true);
 }
 
+/* v0.76.0：点抽牌堆 / 弃牌堆看牌堆内容。
+   形态照用户口径：「显示界面参考锻造界面，只是不要显示升级情况」——
+   ⇒ 复用锻造页的**容器与排列**（加宽的 #overlayWrap + 同一个 grid，CSS 里与 forge-scene
+      共用分组选择器），卡是**单张**（不是锻造那个 .forge-pair 左右对照），
+      因此没有 .upgrade-preview、没有箭头、没有红色升级描述。
+   ⚠️ 两个堆的**信息口径刻意不同**（这是本项的设计决定，不是随手写的）：
+      抽牌堆**乱序**展示 —— 否则等于把「下一张是什么」白送给玩家；
+      弃牌堆**保序、堆顶在前** —— 它本来就是公开信息（刚打出的牌就在第一格）。
+   ⚠️ `shuffle(src.slice())` 里那个 `.slice()` 是硬要求：shuffle 就地打乱。
+      少了它就是「点开看一眼，抽牌堆顺序就变了」—— 与易物候选池那个坑同源。
+   ⚠️ 卡片**不带 onclick**：这一层不需要点击，带上反而会与长按放大（showCardZoom）抢事件。 */
+function showPile(kind){
+  if(!G){ floatMsg('开局后可查看牌堆'); return; }
+  const isDraw=(kind==='draw');
+  const src=isDraw?G.drawPile:G.discard;
+  if(!src.length){ floatMsg(isDraw?'抽牌堆是空的':'弃牌堆是空的'); return; }
+  const list=isDraw?shuffle(src.slice()):src.slice().reverse();
+  const cards=list.map(c=>`<div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div>`).join('');
+  const head=isDraw
+    ? `<h2>抽牌堆 · ${src.length} 张</h2><p>顺序已打乱（不泄露下一张）。</p>`
+    : `<h2>弃牌堆 · ${src.length} 张</h2><p>堆顶在前 —— 最近打出的牌在第一格。</p>`;
+  showOverlay(`${head}<div class="reward-cards">${cards}</div>`, true, 'pile-scene');
+}
+
 /* ===================== 覆盖层 ===================== */
 /* v0.61.32：面板开合音单独成函数 —— 冒烟里 showOverlay/hideOverlay 会被整体换成空函数
    （与 startBGM 同一个处境），写在这两个函数体里就永远验不到。拆出来才验得到，
@@ -1478,7 +1502,14 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   // v0.75.0：+ forge-scene（锻造页：面板加宽到满屏 + 六列对照。**保留纯色底** —— 与 pick-scene
   //   刻意相反：锻造页里是整屏卡牌与说明文字，那层底是可读性的依托）。
   //   两处调用（道观 unknownForge / 篝火·营地 showForgePicker）**都必须显式传第三实参**。
-  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene'];
+  // v0.76.0：+ pile-scene（点抽牌堆/弃牌堆看牌堆内容）。**与 forge-scene 共用同一份 grid 与加宽规则**
+  //   —— CSS 里那三条已经改成分组选择器，不复制第二份（复制出来的必然漂）。
+  //   两处调用（`showPile('draw')` / `showPile('discard')`）**都必须显式传第三实参**：
+  //   否则从「抽牌堆」切到「弃牌堆」时 sceneChanged 判不出来，进场动画不重播。
+  // v0.76.0：+ result-scene（胜负结算面板「自下升起」的那一套 keyframe）。
+  //   三条结算路径（showBattleResult / loseGame / showVictory）**都必须显式传第三实参**；
+  //   漏传不会报错，只会让面板退回通用的 overlayIn（10px 下滑），而这一条没有任何闸看得见。
+  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','result-scene'];
   const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
   // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
   // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
@@ -1487,7 +1518,7 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   // 再回战斗，奖励面板也会带着卷轴动画从顶上掉下来。
   if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
     ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene');
-    ov.classList.remove('forge-scene'); }
+    ov.classList.remove('forge-scene'); ov.classList.remove('pile-scene'); ov.classList.remove('result-scene'); }
   ov.classList.remove('hidden');
   // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
   // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。

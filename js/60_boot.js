@@ -200,9 +200,13 @@ function showCardZoom(i){
      从易物选牌小窗长按手牌放大，卡牌详情会变成一张"没有底、字叠在战场立绘上"的裸字。
      v0.75.0：再补上 .forge-scene —— 不摘的话，从锻造页长按牌放大，详情会变成满屏宽、
      描述吃锻造那条红色（.cdesc.upgrade-preview），等于把「红色 = 升级后的效果」这条
-     语汇用错地方。 */
+     语汇用错地方。
+     v0.76.0：再补上 .pile-scene（牌堆列表面板）—— 它和 forge-scene 共用同一条加宽 + grid
+     规则，不摘的话从牌堆面板长按牌放大，详情会变成满屏宽的一列。
+     同批补上 .result-scene —— 结算页的 `#overlay.result-scene.ov-enter #overlayWrap` 挂着
+     `resultRise`（自下升起）。不摘的话，从结算页长按牌放大，详情会带着那套入场位移。 */
   const __ov=document.getElementById('overlay');
-  if(__ov && __ov.classList){ __ov.classList.remove('map-scene'); __ov.classList.remove('menu-scene'); __ov.classList.remove('scroll-scene'); __ov.classList.remove('hero-scene'); __ov.classList.remove('pick-scene'); __ov.classList.remove('forge-scene'); }
+  if(__ov && __ov.classList){ __ov.classList.remove('map-scene'); __ov.classList.remove('menu-scene'); __ov.classList.remove('scroll-scene'); __ov.classList.remove('hero-scene'); __ov.classList.remove('pick-scene'); __ov.classList.remove('forge-scene'); __ov.classList.remove('pile-scene'); __ov.classList.remove('result-scene'); }
   __ov.classList.remove('hidden');
   const x=document.getElementById('overlayCloseX'); if(x) x.style.display='';
 }
@@ -330,6 +334,10 @@ function render(){
         读到的仍是同一份布局。两边谁先谁后对结果无差别，放这里只是让「读几何」都聚在尾部。
      pending 为空时 flush 直接早退，没动画的那些 render（绝大多数）零成本。 */
   Anim.flush();
+  /* v0.76.0：台词队列的**第二拍**。分化出来的两只必安在 `splice` 那一刻还没上屏，
+     `pumpSay` 会把它们的台词放回队首，等这里再试一次 —— 不用轮询、不用定时器。
+     队列空时只是一句判断（绝大多数 render 零成本）。 */
+  if(typeof pumpSay==='function') pumpSay();
   if(typeof fxReanchor==='function') fxReanchor();
 }
 
@@ -494,7 +502,7 @@ function showStartScreen(){
     <div class="menu-stage">
       <div class="menu-titlebar menu-tier" style="--i:0">
         <h2 class="menu-title">${artImg('ui/menu/topic.png','<span class="menu-fb">志怪塔</span>','menu-art')}
-          <small>· v0.75.0</small></h2>
+          <small>· v0.76.0</small></h2>
       </div>
 
       <div class="menu-col-stele menu-tier is-main" style="--i:1">
@@ -650,6 +658,13 @@ function quitToMenu(){ saveRun(); showStartScreen(); }
 document.getElementById('endTurn').addEventListener('click', endTurn);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
 document.getElementById('viewDeck').addEventListener('click', viewDeck);
+/* v0.76.0：点两个牌堆看内容。
+   ⚠️ 用 addEventListener 而不是 HTML 内联 onclick：内联的全局函数名要靠 打包.py 的
+      「内联 onclick 全局名保护」才不被混淆改名，addEventListener 走闭包直引、零依赖。
+   ⚠️ 不会干扰出牌拖拽：pointermove/pointerup/pointercancel 是绑在 document 上的，
+      onDragUp 在 !DRAG 时早返回 —— 给 .pile 加 click 不改变这条路径。 */
+document.getElementById('pile-draw').addEventListener('click', ()=>showPile('draw'));
+document.getElementById('pile-discard').addEventListener('click', ()=>showPile('discard'));
 /* 战报栏开关 —— 关 ⇄ 右侧抽屉。
    v0.70.0 试玩期这里是三态循环（关 → 抽屉 → 底部条），用来拿真机比手感；
    v0.71.0 用户定稿为抽屉，底部条那套 CSS 已删（见原型.html 矮屏档）。

@@ -357,10 +357,10 @@ const CARDS = [
       :`保留 ${u?2:1} 张手牌。保留的每张【诅咒牌】，下回合该牌费用 -1（仅一回合）`,
     eff:(u)=>{ G.retain+=(u?2:1); G.shouyiUp=!!u; floatMsg(`回合结束时可保留 ${G.retain} 张手牌`); }},
   {id:'yiwu', name:'易物', type:'skill', rarity:'blue', cost:0,
-    t:(u)=>G.hero==='ganshiren'?`选择 1 张手牌与弃牌堆交换。若换出的是【鬼怪牌】，获得 2 点【尸气】`
-      :G.hero==='wuseng'?`选择 1 张手牌与弃牌堆交换。若换出的是防御牌，获得 4 点格挡`
-      :G.hero==='yincha'?`选择 1 张手牌与弃牌堆交换。若换出的是技能牌，恢复 5 点生命`
-      :`选择 1 张手牌与弃牌堆交换。若换出的是攻击牌，额外抽 1 张牌`,
+    t:(u)=>G.hero==='ganshiren'?`选择 1 张手牌与抽牌堆交换。若换出的是【鬼怪牌】，获得 2 点【尸气】`
+      :G.hero==='wuseng'?`选择 1 张手牌与抽牌堆交换。若换出的是防御牌，获得 4 点格挡`
+      :G.hero==='yincha'?`选择 1 张手牌与抽牌堆交换。若换出的是技能牌，恢复 5 点生命`
+      :`选择 1 张手牌与抽牌堆交换。若换出的是攻击牌，额外抽 1 张牌`,
     /* v0.72.0：第 4 个实参 i 是「这张牌打出前在手牌里的下标」（doPlayCard 里 :1073 传的）。
        易物亮相要的源位就是它 —— 那一拍 #hand 还是打出之前的旧 DOM，而 G.hand 里已经
        splice 掉了这张牌，所以只能按下标取（animHandElAt）。其余卡片的 eff 不吃这个参数。 */
@@ -791,12 +791,12 @@ const SHORT_TEXT = {
           ? `弃任意张：每弃 1 张回 ${u ? 4 : 3}`
           : `弃任意张：每弃 1 张对随机敌【诅咒】1 并格挡 ${u ? 3 : 2}`,
   yiwu:(u)=>G.hero === 'ganshiren'
-      ? `选 1 张手牌与弃牌堆交换，换出【鬼怪牌】则得【尸气】2`
+      ? `选 1 张手牌与抽牌堆交换，换出【鬼怪牌】则得【尸气】2`
       : G.hero === 'wuseng'
-        ? `选 1 张手牌与弃牌堆交换，换出防御牌则格挡 4`
+        ? `选 1 张手牌与抽牌堆交换，换出防御牌则格挡 4`
         : G.hero === 'yincha'
-          ? `选 1 张手牌与弃牌堆交换，换出技能牌则回 5`
-          : `选 1 张手牌与弃牌堆交换，换出攻击牌则多抽 1`,
+          ? `选 1 张手牌与抽牌堆交换，换出技能牌则回 5`
+          : `选 1 张手牌与抽牌堆交换，换出攻击牌则多抽 1`,
   shouyi:(u)=>G.hero === 'ganshiren'
       ? `保留 ${u ? 2 : 1} 张手牌。每保留 1 张【鬼怪牌】得【尸气】1`
       : G.hero === 'wuseng'
@@ -1338,6 +1338,14 @@ function effectiveCost(c){
 }
 
 /* ===================== 敌人数据（Boss / 精英 / 小怪） ===================== */
+/* v0.76.0：精英与 Boss 各带四档台词（sayIn 出场 / sayHit 受击 / sayLow 濒死 / sayOut 被击败）。
+   ⚠️ **普通敌人一个字段都不加** —— 场上有 3~5 只普通怪时满屏气泡反而吵，而且它们
+      一轮就死，台词来不及读。冒烟里有一条专门钉「普通敌人四档全缺」。
+   ⚠️ 四档都**只在精英/Boss 上出现**，缺省即不发言 ⇒ 零体积代价。
+   ⚠️ 剧本在 `敌人台词剧本.md`，**两处要同批改**：改词只改一边 = 剧本与实物静默漂移
+      （「四档齐全」那条闸只查字段在不在，不查内容）。
+   ⚠️ 台词与数值**零耦合**：不进 `serializeEnemy`（显式白名单，默认就不会进）、
+      不进 `cardSnap`、不影响 `makeEnemy` 的数值计算 ⇒ 可单独回滚。 */
 const ENEMIES = {
   youhun:{name:'游魂', hp:24, kind:'ghost', intents:[{type:'attack',v:6},{type:'charge',v:4}]},
   zhizharen:{name:'纸扎人', hp:28, kind:'ghost', intents:[{type:'attack',v:8},{type:'block',v:6}]},
@@ -1346,33 +1354,97 @@ const ENEMIES = {
   shanxiao:{name:'山魈', hp:30, kind:'yao', aggressive:true, intents:[{type:'attack',v:6},{type:'multi',n:3,v:3}]},
   shuigui:{name:'水鬼', hp:28, kind:'ghost', aggressive:true, intents:[{type:'attack',v:6},{type:'discard'}]},
   mengpo:{name:'孟婆鬼', hp:32, kind:'ghost', aggressive:true, intents:[{type:'attack',v:7},{type:'discard'}]},
-  baiwuchang:{name:'白无常', hp:50, kind:'ghost', elite:true, aggressive:true, intents:[{type:'attack',v:12},{type:'gouhun'},{type:'attack',v:12}]},
-  heiwuchang:{name:'黑无常', hp:52, kind:'ghost', elite:true, aggressive:true, intents:[{type:'attack',v:12},{type:'strength',v:2}]},
-  huapigui:{name:'画皮鬼', hp:46, kind:'ghost', elite:true, aggressive:true, intents:[{type:'attackBlock',v:8,block:6},{type:'attack',v:12}]},
-  yecha:{name:'夜叉', hp:55, kind:'ghost', elite:true, aggressive:true, intents:[{type:'charge',v:8},{type:'attack',v:14}]},
-  jiangwang:{name:'僵王', hp:120, kind:'jiangshi', boss:true, intents:[{type:'multi',n:2,v:6},{type:'summon',n:2},{type:'multi',n:2,v:7},{type:'strength',v:3}]},
-  xiebian:{name:'谢必安', hp:180, kind:'ghost', boss:true, aggressive:true, split:true, intents:[{type:'multi',n:2,v:8},{type:'gouhun'},{type:'multi',n:2,v:9}]},
-  bian:{name:'必安', hp:90, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:4},{type:'gouhun'},{type:'multi',n:2,v:4}]},
-  yewang:{name:'夜王', hp:220, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:9},{type:'strength',v:3,weak:true}]},
-  hanba:{name:'旱魃', hp:110, kind:'jiangshi', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:6},{type:'burn',v:1},{type:'multi',n:2,v:8},{type:'strength',v:2}]},
-  xueshi:{name:'血尸', hp:110, kind:'jiangshi', boss:true, aggressive:true, lifesteal:0.8, intents:[{type:'multi',n:2,v:7},{type:'charge',v:8},{type:'multi',n:2,v:10},{type:'strength',v:2}]},
-  panguanwang:{name:'判官王', hp:170, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:6},{type:'jiming'},{type:'multi',n:2,v:7},{type:'qingsuan'}]},
-  mengpowang:{name:'孟婆', hp:155, kind:'ghost', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:7},{type:'wangyou'},{type:'multi',n:2,v:8},{type:'strength',v:2,sealHeal:true}]},
-  xiuluowang:{name:'修罗王', hp:210, kind:'yao', boss:true, aggressive:true, intents:[{type:'multi',n:2,v:8},{type:'yehuo'},{type:'multi',n:2,v:9},{type:'strength',v:2}]},
-  yanluotianzi:{name:'阎罗天子', hp:230, kind:'ghost', boss:true, aggressive:true, phase:true, bossAffix:true, intents:[{type:'multi',n:2,v:8},{type:'summon',n:1,unit:'yinchai'},{type:'multi',n:2,v:9},{type:'strength',v:2}], intents2:[{type:'multi',n:2,v:10},{type:'multi',n:2,v:11},{type:'multi',n:2,v:11},{type:'strength',v:3}]},
+  baiwuchang:{name:'白无常', hp:50, kind:'ghost', elite:true, aggressive:true,
+    sayIn:'一见生财——名字，我记下了。', sayHit:'索子…竟扯不动。',
+    sayLow:'你这命，硬得很。', sayOut:'记下了…便勾得去…',
+    intents:[{type:'attack',v:12},{type:'gouhun'},{type:'attack',v:12}]},
+  heiwuchang:{name:'黑无常', hp:52, kind:'ghost', elite:true, aggressive:true,
+    sayIn:'天下太平？我不信。', sayHit:'唔——好重的煞气。',
+    sayLow:'太平…怕要到头了。', sayOut:'太平…倒也好。',
+    intents:[{type:'attack',v:12},{type:'strength',v:2}]},
+  huapigui:{name:'画皮鬼', hp:46, kind:'ghost', elite:true, aggressive:true,
+    sayIn:'这张脸，你可喜欢？', sayHit:'别打脸！别打脸…',
+    sayLow:'皮…要掉了…', sayOut:'别揭…别揭我…',
+    intents:[{type:'attackBlock',v:8,block:6},{type:'attack',v:12}]},
+  yecha:{name:'夜叉', hp:55, kind:'ghost', elite:true, aggressive:true,
+    sayIn:'血食，来。', sayHit:'咯——有点嚼头。',
+    sayLow:'饿……更饿了……', sayOut:'饿……',
+    intents:[{type:'charge',v:8},{type:'attack',v:14}]},
+  jiangwang:{name:'僵王', hp:120, kind:'jiangshi', boss:true,
+    sayIn:'吾以尸身，镇此乱葬岗。', sayHit:'尸身…不痛。',
+    sayLow:'小僵尸…何在。', sayOut:'葬…吾…',
+    intents:[{type:'multi',n:2,v:6},{type:'summon',n:2},{type:'multi',n:2,v:7},{type:'strength',v:3}]},
+  xiebian:{name:'谢必安', hp:180, kind:'ghost', boss:true, aggressive:true, split:true,
+    sayIn:'在下谢必安，特来请君同行。', sayHit:'这一下…有几分意思。',
+    sayLow:'那么——便分个明白。', sayOut:'同行…不远了…',
+    intents:[{type:'multi',n:2,v:8},{type:'gouhun'},{type:'multi',n:2,v:9}]},
+  /* ⚠️ 必安**不在开局阵容里** —— 它是谢必安 `split` 分化出来的。它的 sayIn 由分化分支发，
+     不由 `startBattle` 发（那只循环遍历的是开局阵容）。分出的两只**只有先手那只**念，
+     与「同场多敌只念一条」同一条口径。 */
+  bian:{name:'必安', hp:90, kind:'ghost', boss:true, aggressive:true,
+    sayIn:'我二人，同去同归。', sayHit:'分身…也知痛。',
+    sayLow:'兄长…我先走一步。', sayOut:'兄长…等我…',
+    intents:[{type:'multi',n:2,v:4},{type:'gouhun'},{type:'multi',n:2,v:4}]},
+  yewang:{name:'夜王', hp:220, kind:'ghost', boss:true, aggressive:true,
+    sayIn:'长夜由我执掌。', sayHit:'夜…也会疼么。',
+    sayLow:'天黑…怎么还不黑。', sayOut:'天…要亮了么…',
+    intents:[{type:'multi',n:2,v:9},{type:'strength',v:3,weak:true}]},
+  hanba:{name:'旱魃', hp:110, kind:'jiangshi', boss:true, aggressive:true,
+    sayIn:'赤地千里，皆我所至。', sayHit:'焦土…也烫手。',
+    sayLow:'我的火…要灭了。', sayOut:'雨…要来了么…',
+    intents:[{type:'multi',n:2,v:6},{type:'burn',v:1},{type:'multi',n:2,v:8},{type:'strength',v:2}]},
+  xueshi:{name:'血尸', hp:110, kind:'jiangshi', boss:true, aggressive:true, lifesteal:0.8,
+    sayIn:'你的血，很香。', sayHit:'血…溅出来了。',
+    sayLow:'不够…还不够…', sayOut:'不…够…',
+    intents:[{type:'multi',n:2,v:7},{type:'charge',v:8},{type:'multi',n:2,v:10},{type:'strength',v:2}]},
+  panguanwang:{name:'判官王', hp:170, kind:'ghost', boss:true, aggressive:true,
+    sayIn:'生死簿上，你已记名。', sayHit:'簿子…被风掀了。',
+    sayLow:'朱笔…还握得住。', sayOut:'朱笔…断了…',
+    intents:[{type:'multi',n:2,v:6},{type:'jiming'},{type:'multi',n:2,v:7},{type:'qingsuan'}]},
+  mengpowang:{name:'孟婆', hp:155, kind:'ghost', boss:true, aggressive:true,
+    sayIn:'喝一碗，前尘俱忘。', sayHit:'这碗…你不肯喝。',
+    sayLow:'汤…凉了。', sayOut:'……你也忘了？',
+    intents:[{type:'multi',n:2,v:7},{type:'wangyou'},{type:'multi',n:2,v:8},{type:'strength',v:2,sealHeal:true}]},
+  xiuluowang:{name:'修罗王', hp:210, kind:'yao', boss:true, aggressive:true,
+    sayIn:'业火焚身，方为修罗。', sayHit:'业火…认得你。',
+    sayLow:'火…往心里去了。', sayOut:'火，熄了…',
+    intents:[{type:'multi',n:2,v:8},{type:'yehuo'},{type:'multi',n:2,v:9},{type:'strength',v:2}]},
+  yanluotianzi:{name:'阎罗天子', hp:230, kind:'ghost', boss:true, aggressive:true, phase:true, bossAffix:true,
+    sayIn:'阎罗殿前，跪。', sayHit:'殿前…无此先例。',
+    sayLow:'这一笔，须重写。', sayOut:'……这一笔，算你赢。',
+    intents:[{type:'multi',n:2,v:8},{type:'summon',n:1,unit:'yinchai'},{type:'multi',n:2,v:9},{type:'strength',v:2}], intents2:[{type:'multi',n:2,v:10},{type:'multi',n:2,v:11},{type:'multi',n:2,v:11},{type:'strength',v:3}]},
   yinchai:{name:'阴差', hp:14, kind:'ghost', summon:true, intents:[{type:'attack',v:8}]},
   xiaojianshi:{name:'小僵尸', hp:6, kind:'jiangshi', summon:true, intents:[{type:'attack',v:6}]},
   niutou:{name:'牛头', hp:42, kind:'ghost', intents:[{type:'attack',v:10},{type:'block',v:10}]},
   mamian:{name:'马面', hp:38, kind:'ghost', intents:[{type:'multi',n:2,v:7},{type:'attack',v:10}]},
   wangchuan:{name:'忘川鬼', hp:36, kind:'ghost', aggressive:true, intents:[{type:'attack',v:9},{type:'gouhun'}]},
   panguan:{name:'判官', hp:46, kind:'ghost', aggressive:true, intents:[{type:'attack',v:11},{type:'weak'}]},
-  juhunshi:{name:'拘魂使', hp:62, kind:'ghost', elite:true, aggressive:true, intents:[{type:'attack',v:14},{type:'gouhun'},{type:'attack',v:14}]},
-  niumamian:{name:'牛头马面', hp:70, kind:'ghost', elite:true, aggressive:true, intents:[{type:'attack',v:12},{type:'strength',v:3},{type:'multi',n:2,v:9}]},
+  juhunshi:{name:'拘魂使', hp:62, kind:'ghost', elite:true, aggressive:true,
+    sayIn:'拘你三魂，随我走一趟。', sayHit:'枷锁…被弹开了。',
+    sayLow:'三魂…只拘得一魂。', sayOut:'差事…没办成…',
+    intents:[{type:'attack',v:14},{type:'gouhun'},{type:'attack',v:14}]},
+  niumamian:{name:'牛头马面', hp:70, kind:'ghost', elite:true, aggressive:true,
+    sayIn:'牛头马面，锁你归案！', sayHit:'锁链在颤。',
+    sayLow:'二身…去了一身。', sayOut:'锁链…竟断在你手里…',
+    intents:[{type:'attack',v:12},{type:'strength',v:3},{type:'multi',n:2,v:9}]},
   xiuluo:{name:'修罗', hp:48, kind:'yao', aggressive:true, intents:[{type:'attack',v:13},{type:'strength',v:2}]},
   luosha:{name:'罗刹', hp:52, kind:'yao', intents:[{type:'attack',v:12},{type:'attack',v:12},{type:'heal',v:8}]},
   mingwei:{name:'幽冥守卫', hp:50, kind:'ghost', intents:[{type:'block',v:8},{type:'attack',v:11}]},
   yanluo:{name:'阎罗', hp:58, kind:'ghost', aggressive:true, intents:[{type:'attack',v:15},{type:'gouhun'},{type:'attack',v:13}]},
-  xiuluojiang:{name:'修罗将', hp:80, kind:'yao', elite:true, aggressive:true, intents:[{type:'attack',v:16},{type:'multi',n:3,v:8}]},
+  xiuluojiang:{name:'修罗将', hp:80, kind:'yao', elite:true, aggressive:true,
+    sayIn:'修罗道上，无人生还。', sayHit:'好！再来！',
+    sayLow:'这才…像场厮杀。', sayOut:'杀得…痛快…',
+    intents:[{type:'attack',v:16},{type:'multi',n:3,v:8}]},
+};
+/* v0.76.0：**中段台词**另开一张小表 —— 只有两只 Boss 有，且触发条件各不相同
+   （谢必安只在分化那一刻、阎罗天子只在血条首次打空那一刻）。
+   ⚠️ 单独成表而不是塞进四档，是因为四档的触发点都是**每只敌都会经历**的通用事件，
+      而这两条各绑一个 Boss 的**独有机制分支**。混在一起会让 `sayPick` 那套
+      「一次一档」的记名逻辑说不清（分化不是「第四档」，它可能发生在 any 时刻）。
+   ⚠️ 不新引状态机：`when` 由代码在**既有那两个分支**上各调一次。 */
+const ENEMY_SAY_MID = {
+  xiebian:     { when:'split',  text:'一分为二——同去，同归。' },
+  yanluotianzi:{ when:'phase2', text:'判你——永不超生。' }
 };
 let UID=0;
 const AFFIXES = [
@@ -1413,7 +1485,13 @@ function makeEnemy(def, key){
   const scaleAtk = it => { const c={...it}; if(c.v && (c.type==='attack'||c.type==='multi'||c.type==='attackBlock')) c.v=Math.round(c.v*atkMul*endMul); return c; };
   const intents = def.intents.map(scaleAtk);
   const intents2 = def.intents2 ? def.intents2.map(scaleAtk) : null;
-  const e = {key:key, name:def.name, hp, maxHp:hp, block:0, pingbi:0, intents, intentIndex:0, intent:{type:'dormant'}, pendingDamage:0, curse:0, charm:0, charmPct:0.5, charmUsed:false, sealedEver:false, seal:false, strength:0, kind:def.kind, elite:!!def.elite, boss:!!def.boss, aggressive:!!def.aggressive, lifesteal:def.lifesteal||0, phase:!!def.phase, phase2:false, intents2, ledgerActive:false, ledgerDmg:0, ledgerAffix:null, split:!!def.split, splitDone:false, sealedCost:0, uid:UID++};
+  const e = {key:key, name:def.name, hp, maxHp:hp, block:0, pingbi:0, intents, intentIndex:0, intent:{type:'dormant'}, pendingDamage:0, curse:0, charm:0, charmPct:0.5, charmUsed:false, sealedEver:false, seal:false, strength:0, kind:def.kind, elite:!!def.elite, boss:!!def.boss, aggressive:!!def.aggressive, lifesteal:def.lifesteal||0, phase:!!def.phase, phase2:false, intents2, ledgerActive:false, ledgerDmg:0, ledgerAffix:null, split:!!def.split, splitDone:false, sealedCost:0, uid:UID++,
+    /* v0.76.0：四档台词透传。**这一行是显式构造，漏了就是「字段写了、气泡永远不出现」
+       的静默失效** —— 上面 `ENEMIES` 里那四档全都白写，而冒烟的四档齐全闸照样绿
+       （它查的是 `ENEMIES`，不是 `makeEnemy` 的产物）⇒ 另有一条断言专门查
+       `makeEnemy(...).sayIn === ENEMIES.baiwuchang.sayIn`。
+       ⚠️ 只透传，不参与上面任何数值计算（零耦合，可单独回滚）。 */
+    sayIn:def.sayIn, sayHit:def.sayHit, sayLow:def.sayLow, sayOut:def.sayOut};
   e.affixes = rollAffixes(def);
   if(def.bossAffix && !e.affixes.length){ const a=AFFIXES[Math.floor(rng()*AFFIXES.length)]; e.affixes=[{id:a.id, tier:1}]; }
   /* v0.61.32：词缀「附上」那一刻的听感（素材清单 1.3 第 24 条：再生/屏壁/刚体/灵化 生效那一刻）。

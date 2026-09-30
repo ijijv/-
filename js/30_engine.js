@@ -103,7 +103,13 @@ function dealDamageTo(e,n,ignoreBlock,floatDelay,point){
     HITFX.enemies.add(e);
     if(e.boss) inkBurst(el);
     else if(e.elite) screenMicroShake();
-    log(`对 ${e.name} 造成 ${d} 点伤害`); };
+    log(`对 ${e.name} 造成 ${d} 点伤害`);
+    /* v0.76.0：受击台词挂在这里 ⇒ 免费继承 floatDelay 的**多段错峰**（多段伤害的第 2、3 段
+       浮字本来就隔开出现，台词跟着错峰，不会挤在一起）。
+       ⚠️ 打空的这一击**不念受击词**：上面 `afterEnemyDamaged(e)` 那一行先跑，
+       `onEnemyDeathCheck` 已经把「被击败」那条排进队了，这里再排一条就成了
+       「死后还在挨打」的错序 —— 判据用 `e.hp>0`（扣血的当刻就已经是 0）。 */
+    if(e.hp>0) enemySay(e,'hit'); };
   if(floatDelay) setTimeout(viz, floatDelay); else viz();
   return actual;
 }
@@ -383,6 +389,9 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
 }
 function afterEnemyDamaged(e){
   if(e.hp<=0){ onEnemyDeathCheck(e); return; }
+  /* v0.76.0：濒死档。刻意放在**死亡判定之后** —— 同归于尽的那一击只念「被击败」，
+     不该先把「濒死」念一遍（那一击根本没停在濒死上）。 */
+  if(e.hp<=e.maxHp*0.3) enemySay(e,'low');
   if(e.split && !e.splitDone && e.hp < e.maxHp/2){ splitBoss(e); }
 }
 function splitBoss(e){
@@ -397,12 +406,20 @@ function splitBoss(e){
   sfx('boss_split');   // v0.61.32：从蹭 relic 改成 Boss 分化专属音
   floatMsg('谢必安 · 分化！');
   log('谢必安血线过半，分化为两个「必安」！');
+  /* v0.76.0：中段台词（谢必安说，但**锚在先手那只必安**身上 —— 见 enemySayMid 的注释），
+     外加先手必安的出场词。⚠️ **只有先手那只念出场词**：两只都发就是连播两条一模一样的句子。
+     这两条都要等下一次 render 才量得到锚点，`pumpSay` 会把它们放回队首等着。 */
+  enemySayMid(e, b1);
+  enemySay(b1,'in');
 }
 function onEnemyDeathCheck(e){
   if(e.phase && !e.phase2){ enterPhase2(e); }
   else {
     G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; if(G.totalKills>=100) unlockAchievement('baizhan'); unlockBestiary(e.key);
     e.dying=true; sfx('death');
+    /* v0.76.0：被击败档，与 `dying=true` **同刻**发 ⇒ 气泡与 450ms 的消散同窗。
+       此刻 DOM 还没重排，`enemyEl(e)` 量得到（阵亡敌人靠 `||e.dying` 留到收尾 render）。 */
+    enemySay(e,'out');
     setTimeout(()=>{ e.dying=false; render(); }, 450);
   }
 }
@@ -417,6 +434,8 @@ function enterPhase2(e){
   floatMsg('轮回 · 第二阶段');
   bossPhaseIntro(e.name||'阎罗天子'); // v0.61.20(P4)：裂印 + 红目的二阶段转场（非阻塞，见该函数注释）
   log('阎罗天子堕入轮回，阴气更盛——进入第二阶段！');
+  /* v0.76.0：二阶段中段台词。锚在**自己**身上（它没被换掉，只是换了血条）。 */
+  enemySayMid(e);
 }
 function directDamage(n, msg){
   if(n<=0) return false;
@@ -480,10 +499,28 @@ function refuseWangyou(){
   if(dead) return;
   hideOverlay(); render();
 }
+/* v0.76.0：手牌写入里**唯一一处逐字重复的惯用法**收成一个口子 —— 「弃牌堆里摘掉 → 手牌里加回」。
+   焚符×2（:486 手牌不足回退 / :532 放弃）、火符（:552 取消）、易物×2（:574 无手牌兜底 /
+   :582 放弃）共 5 处，改之前是同一行代码抄了五遍。
+   返回 true = 这张牌确实是从弃牌堆里取回来的（个别调用点用它决定要不要记日志）。
+   ⚠️ **只收这一种**，别的「加进手牌」一处都不许并进来，它们语义各不相同：
+      · drawCards（:694）     —— 伴随飞牌动画，来源是抽牌堆
+      · 尸王（:734）          —— 来源是抽牌堆（filter 摘掉后入手的），不是弃牌堆
+      · 易物换入（:632）      —— 来源是候选池，还要在 G.deck 里顶替原对象
+      · doPlayCard 失败回退（:1162 `splice(i,0,c)`）—— 是**原位插入**而不是 push，
+        并进来会把这张牌挪到手牌末尾，手牌顺序类断言当场红。
+   ⚠️ 兜底分支（不在弃牌堆也照样 push）是刻意留的：这个函数的本意就是「牌回手」，
+      调用点全都发生在「这张牌已被 doPlayCard 推进弃牌堆」之后，`i<0` 实际不可达。 */
+function handReturnFromDiscard(c){
+  if(!c) return false;
+  const i=G.discard.lastIndexOf(c);
+  if(i<0){ G.hand.push(c); return false; }
+  G.discard.splice(i,1); G.hand.push(c); return true;
+}
 function startDiscardSelect(n, srcCard){
   if(G.hand.length < n){
     // 手牌不足，无法弃足 —— 回退焚符（牌回手，不给符文）
-    if(srcCard){ const di=G.discard.lastIndexOf(srcCard); if(di>=0) G.discard.splice(di,1); G.hand.push(srcCard); log('手牌不足，【焚符】已回退'); }
+    if(srcCard){ handReturnFromDiscard(srcCard); log('手牌不足，【焚符】已回退'); }
     render(); return;
   }
   G.discardSelect={ need:n, picked:[], card:srcCard||null };
@@ -529,7 +566,7 @@ function confirmDiscardSelect(){
 }
 function cancelDiscardSelect(){
   const s=G.discardSelect; if(!s) return;
-  if(s.card){ const di=G.discard.lastIndexOf(s.card); if(di>=0) G.discard.splice(di,1); G.hand.push(s.card); log('放弃【焚符】，未弃牌、未获得符文'); }
+  if(s.card){ handReturnFromDiscard(s.card); log('放弃【焚符】，未弃牌、未获得符文'); }
   G.discardSelect=null;
   hideOverlay(); render();
 }
@@ -549,7 +586,7 @@ function renderHuofuSelect(){
 function cancelHuofuSelect(){
   const s=G.huofuSelect; if(!s) return;
   // v0.61 B7：伤害尚未结算，取消＝完全回退（与焚符「放弃」同一惯例）
-  if(s.card){ const di=G.discard.lastIndexOf(s.card); if(di>=0){ G.discard.splice(di,1); G.hand.push(s.card); log('放弃【火符】，牌已回手'); } }
+  if(s.card && handReturnFromDiscard(s.card)){ log('放弃【火符】，牌已回手'); }
   if(s.cost>0){ G.energy+=s.cost; log(`火符取消：退回 ${s.cost} 点符文`); }
   G.huofuSelect=null; hideOverlay(); render();
 }
@@ -571,7 +608,7 @@ function pickHuofuDiscard(i){
 }
 function startExchangeSelect(times, srcCard){
   if(!G.hand.length){ // v0.61 B13：异常兜底（正常已被 playCard 前置守卫拦住）——易物回手，别白打
-    if(srcCard){ const di=G.discard.lastIndexOf(srcCard); if(di>=0){ G.discard.splice(di,1); G.hand.push(srcCard); log('没有可交换的手牌，【易物】已回手'); } }
+    if(srcCard && handReturnFromDiscard(srcCard)){ log('没有可交换的手牌，【易物】已回手'); }
     floatMsg('没有手牌可交换'); render(); return; }
   G.exchange={ times, phase:'pickHand', handIndex:null, pool:null, card:srcCard||null, done:0 };
   renderExchange();
@@ -579,7 +616,7 @@ function startExchangeSelect(times, srcCard){
 function cancelExchangeSelect(){
   const ex=G.exchange; if(!ex) return;
   // 打出后未成交即放弃：把易物牌从弃牌堆取回手牌（与焚符"放弃"一致），不吞牌
-  if(ex.card && ex.done===0){ const di=G.discard.lastIndexOf(ex.card); if(di>=0){ G.discard.splice(di,1); G.hand.push(ex.card); log('放弃【易物】，牌已回手'); } }
+  if(ex.card && ex.done===0 && handReturnFromDiscard(ex.card)){ log('放弃【易物】，牌已回手'); }
   G.exchange=null; hideOverlay(); render();
 }
 function renderExchange(){
@@ -589,7 +626,7 @@ function renderExchange(){
     showOverlay(`<h2>易物 · 选一张手牌</h2><p>选择一张要交换出去的手牌（还剩 <b>${ex.times}</b> 次交换）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃继续交易</button>`, undefined, 'pick-scene');
   } else if(ex.phase==='pickNew'){
     const cards=ex.pool.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickExchangeNew(${i})">${cardBody(c)}</div>`).join('');
-    showOverlay(`<h2>易物 · 牌堆随机三张</h2><p>选一张换入你的手牌</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃交换</button>`, undefined, 'pick-scene');
+    showOverlay(`<h2>易物 · 抽牌堆随机三张</h2><p>选一张换入你的手牌</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="cancelExchangeSelect()">放弃交换</button>`, undefined, 'pick-scene');
   }
   /* v0.72.0：易物成交动画的开播点。pickExchangeNew 里 `ex.times>0` 那条分支只调
      renderExchange()（**不调 render()**），成交载荷就没人在 render 尾部 flush 了 ⇒ 卡在 pending。
@@ -600,8 +637,22 @@ function renderExchange(){
 function pickExchangeHand(i){
   const ex=G.exchange; if(!ex) return;
   ex.handIndex=i;
-  const all=G.drawPile.concat(G.discard);
-  ex.pool=shuffle(all).slice(0,3);
+  /* v0.76.0：候选池**只从抽牌堆取**（原先是 drawPile+discard 并起来）—— 卡面文案「与抽牌堆交换」
+     自 v0.47 起一直是这么写的，实现却一直在翻弃牌堆，本次把实现收到文案这一侧。
+     不足 3 张时把弃牌堆洗回抽牌堆，用的是 drawCards（:711）那套**既有范式**，连洗牌动画一起复用。
+     洗回放在**这一步**（选完手牌）而不是 startExchangeSelect：真要用牌堆时才洗，
+     取消交换就不会白白洗乱一次（cancelExchangeSelect 因此不需要任何撤销逻辑）。
+     ⚠️ `slice()` 是**硬要求**：shuffle 是**就地**打乱并返回同一个数组。池只是**乱序展示**用的，
+        真牌序一个字节都不能动 —— 少了这层就是「点开易物看一眼，抽牌堆顺序就变了」。
+        （原式 `shuffle(all)` 安全是因为 concat 已经产生了新数组，改写成从 G.drawPile 直接取时容易漏。） */
+  if(G.drawPile.length<3 && G.discard.length){
+    /* ⚠️ 必须是 concat，**不能**照抄 drawCards（:711）那句 `G.drawPile=shuffle(G.discard)` ——
+       drawCards 的守卫是 `!G.drawPile.length`（堆已空，直接顶替才等价），这里的守卫是 `<3`，
+       抽牌堆里可能还躺着 1~2 张，直接顶替会把它们**丢掉**。 */
+    G.drawPile=G.drawPile.concat(shuffle(G.discard)); G.discard=[];
+    log('抽牌堆不足，弃牌堆洗回'); animShuffleQueued();
+  }
+  ex.pool=shuffle(G.drawPile.slice()).slice(0,3);
   ex.phase='pickNew';
   renderExchange();
 }
@@ -717,6 +768,7 @@ function startBattle(keys){
   G.enemies.forEach((e,i)=>{ if(e.intents.length>1) e.intentIndex = i % e.intents.length; });
   G.target=0;
   G.battleOver=false; // v0.61 B4：每场开打重置终局旗标
+  G._settlePlayed=false; // v0.76.0：结算墨色过场的一次性标记，随战斗一起重置（见 settleTransition）
   G.ybTarget=-1; // 阴兵索敌标记：本场战斗从头锁（-1=无目标，落到带诅咒随机）
   PLAYER_HP_PREV=null; ENEMY_HP_PREV={};
   G.block=0; G.weak=0; G.gouhun=0; G.thorns=0; G.pendingEnergy=0; G.pendingDiscard=0; G.summons=[];
@@ -740,6 +792,13 @@ function startBattle(keys){
        ⇒ 玩家在**屏幕正中**看到一个 96px 的小特效，而不是贴在自己身上。
        G.enemies 到这里已经就绪，render 幂等无害；这也顺带成为两个牌堆计数徽章的首次填充点。 */
     if(typeof render==='function') render();
+    /* v0.76.0：出场台词在 **render 之后**发 —— 气泡锚在 `.enemy` 的 rect 上，
+       DOM 没建出来就量不到。全发一遍不会多出气泡：`sayPick` 对普通敌人返 null
+       （连 `_said` 都还没建）。
+       ⚠️ Boss 战这条路径在 `bossIntro` 的回调里 ⇒ 气泡出现在**印章退场之后**，次序是对的。
+       ⚠️ `bindSaySkip()` 幂等，放这儿只为「用到才挂」，不给启动期添副作用。 */
+    G.enemies.forEach(e=>enemySay(e,'in'));
+    bindSaySkip();
     if(!tutorialSeen()) startGuidedTutorial(); startTurn();
   };
   if(G.enemies.some(e=>e.boss)) bossIntro(beginBattle);

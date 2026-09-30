@@ -497,6 +497,97 @@
     } else { log('  ! 一组都没有（牌组里一张可升级的牌都没有？）'); }
   }
 
+  /* `pile=draw|discard`（v0.76.0 的 pile-scene）：点牌堆看内容的面板验收。
+     与 forgeReport 同一个理由走**真实代码路径** `showPile(kind)`，不手抄 HTML ——
+     类名/结构一旦漂移，夹具会继续量一个「已经不存在的界面」还照样全绿。
+     判据（每条对着一种真会发生的错法）：
+       1. `#overlay` 真的挂上 pile-scene（错法：漏传第三实参 ⇒ 整页还是 620px 窄版）。
+       2. `.reward-cards` 的 display 是 grid，且轨道数是 3 / ≤700 变 2 / ≤560 变 1
+          （错法：CSS 分组规则被解析器静默丢弃 ⇒ 退回 .reward-cards 基档的 flex，
+           这一栏读成 `none`、轨道数误报 0）。**轨道数就是这套排列唯一的证据。**
+       3. `#overlayWrap` 的宽 ≈ 视口宽（错法：基档 max-width:620 没被放开）。
+       4. `.panel` 的 background-color **不是**透明的 —— 与 forge-scene 同一条约定。
+       5. 面板里**一个** `.forge-pair` / `.upgrade-preview` / `.forge-arrow` 都没有
+          （错法：把 forge-scene 那三条容器规则复制第二份时，把对照件一起带过来）；
+          也**没有** `.card[onclick]`（会与长按放大抢事件）。
+       6. 卡数与牌堆数一致；且抽牌堆那一次**不泄露顺序**（见下）。
+     ⚠️ 出图走 iframe 模式；--direct 只序列化外层文档。            */
+  function pileReport(kind) {
+    if (typeof showPile !== 'function') { log('  ! pile：没有 showPile，判定不可用'); return; }
+    if (typeof G === 'undefined' || !G) { log('  ! pile：G 还没起（要先开局）'); return; }
+    var isDraw = (kind !== 'discard');
+    var src = isDraw ? G.drawPile : G.discard;
+    /* 牌堆空就播一点种（抄自己牌组里的牌，id / up / costU 都合法）——
+       否则夹具量的是一个**弹了浮字就收工**的空面板，比不量还坏。 */
+    if (!src.length) {
+      var pool = (G.deck && G.deck.length) ? G.deck : (G.hand || []);
+      if (!pool || !pool.length) { log('  ! pile：牌组与手牌都空，无从播种'); return; }
+      if (isDraw) {
+        for (var k = 0; k < 7; k++) { G.drawPile.push(Object.assign({}, pool[k % pool.length])); }
+      } else {
+        for (var m = 0; m < 5; m++) {
+          /* 从抽牌堆搬 —— 弃牌堆本来就该是「打出过的牌」，从牌组另抄一份会让
+             `#overlay` 里的卡与两个堆的读数对不上。 */
+          if (G.drawPile.length) { G.discard.push(G.drawPile.shift()); }
+          else { G.discard.push(Object.assign({}, pool[m % pool.length])); }
+        }
+      }
+      src = isDraw ? G.drawPile : G.discard;
+    }
+    /* 顺序判据：showPile 不许动真牌序。**快照必须在调用之前取**。
+       ⚠️ 不能只看调用后的那个数组引用：shuffle 就地打乱时 `src` 引用不变、内容变了
+       （能抓到），但写成 `G.drawPile = shuffle(G.drawPile)` 时引用换了 —— 那种写法的
+       错法只有重新读 `G.drawPile` 才看得见。所以**前**取 `src`、**后**重新取 `G`。
+       对不上就是 `.slice()` 漏了。 */
+    var ids = function (a) { return a.map(function (c) { return (c && c.id) || '?'; }).join(','); };
+    var before = ids(src);
+    showPile(kind);
+    var ov = document.getElementById('overlay');
+    log('  牌堆页 kind=' + (isDraw ? 'draw' : 'discard') + '  #overlay class="'
+        + (ov ? (ov.className || '(无)') : '?') + '"  该堆 ' + src.length + ' 张');
+    var panel = document.querySelector('#overlay .panel');
+    if (!panel) { log('  ! 没有 #overlay .panel，判定不可用'); return; }
+    var pcs = window.getComputedStyle(panel), pr = panel.getBoundingClientRect();
+    log('  .panel  ' + Math.round(pr.width) + 'x' + Math.round(pr.height)
+        + '  padding=' + pcs.paddingTop + ' ' + pcs.paddingLeft
+        + '  background-color=' + pcs.backgroundColor
+        + '  overflow-y=' + pcs.overflowY
+        + '  内部溢出=' + (panel.scrollHeight - panel.clientHeight));
+    var w = document.getElementById('overlayWrap');
+    if (w) log('  #overlayWrap width=' + Math.round(w.getBoundingClientRect().width)
+        + '（视口 ' + window.innerWidth + '）  computed max-width=' + window.getComputedStyle(w).maxWidth);
+    var rc = document.querySelector('#overlay .reward-cards');
+    if (!rc) { log('  ! 没有 #overlay .reward-cards，判定不可用'); return; }
+    var rcs = window.getComputedStyle(rc);
+    var tracks = (rcs.gridTemplateColumns || '').trim();
+    /* ⚠️ 与 forgeReport 同一条坑：display 不是 grid 时 computed gridTemplateColumns
+       是 `none`（一个词）⇒ 轨道数会误报成 1。所以 display 一起打，由 probe 两条一起看。 */
+    log('  .reward-cards display=' + rcs.display + '  gridTemplateColumns=' + tracks
+        + '  ⇒ 轨道数 ' + (rcs.display === 'grid' && tracks && tracks !== 'none' ? tracks.split(/\s+/).length : 0));
+    var cards = rc.querySelectorAll(':scope > .card');
+    log('  卡 ' + cards.length + ' 张（该堆 ' + src.length + ' 张）'
+        + (cards[0] ? '  首卡 ' + Math.round(cards[0].getBoundingClientRect().width)
+                      + 'x' + Math.round(cards[0].getBoundingClientRect().height) : ''));
+    /* 5 条禁用件：锻造页专属的对照结构与升级预览一律不许出现。 */
+    log('  forge 残留  .forge-pair=' + rc.querySelectorAll('.forge-pair').length
+        + '  .upgrade-preview=' + rc.querySelectorAll('.upgrade-preview').length
+        + '  .forge-arrow=' + rc.querySelectorAll('.forge-arrow').length
+        + '  .card[onclick]=' + rc.querySelectorAll('.card[onclick]').length);
+    /* 抽牌堆那一次的**顺序**判据（快照在函数开头取，见上）：showPile 不许动真牌序。 */
+    var after = ids(isDraw ? G.drawPile : G.discard);
+    log('  真牌序 ' + (isDraw ? 'drawPile' : 'discard') + ' 前=' + before);
+    log('  真牌序 ' + (isDraw ? 'drawPile' : 'discard') + ' 后=' + after
+        + '  ⇒ ' + (before === after ? '未被动过' : '!! 被改写了'));
+    /* ⚠️ 这里**不许**照 liveDialogReport（:656）那样收尾 `closeOverlay()`。
+       本夹具的两种用法是「--dump 读数字」与「实拍看图」，而 `--dump-dom` 抓的是
+       `#__dbg` 里那段**已经拼好的字符串**（emit 之后不再变），关不关面板都不影响读数；
+       截图却是**预算耗尽那一刻**的画面 —— 面板一关，图里就只剩战场，
+       于是「数字全对、图上什么都没有」。v0.76.0 的牌堆面板实测正是栽在这一行上：
+       `#overlay class="ov-enter pile-scene"` / 轨道数 3 / 真牌序未被动过 全部为真，
+       而每一张截图都是战斗页。forgeReport 没有这一行，所以锻造页的图一直是好的。
+       run() 末尾对 pile 是 `emit(); return;`，后面没有任何量测依赖「面板已关」⇒ 删掉安全。 */
+  }
+
   /* `rules=<子串>`：**证明某条规则真的活过了 CSS 解析**。
      为什么非有它不可（v0.71.0 的血泪）：CSS 是**静默失败**的 —— 规则文本在文件里、
      grep 得到、verify_dist 的**子串**匹配也绿，但浏览器可能整条丢弃它
@@ -593,6 +684,9 @@
       if (q.get('dialog')) { liveDialogReport(pick(q.get('dialog')) || 5); }
       /* v0.75.0：forge 排在最后同理 —— showForgePicker 要有 G.deck。 */
       if (q.get('forge')) { forgeReport(pick(q.get('deck')) || 0); }
+      /* v0.76.0：pile（点抽牌堆/弃牌堆看内容）也要先有一场开局 ⇒ 一起排在最后。
+         ⚠️ 它排在 forge 之后：两者都往 #overlay 里写，同一次跑里只该开一个。 */
+      if (q.get('pile')) { pileReport(q.get('pile') === 'discard' ? 'discard' : 'draw'); }
     } catch (e) {
       /* ⚠️ 只打 message 是不够的 —— 这个夹具的前身就是只打 message，
          于是「startBattle 挂了、整套量测都在量一个空战场」这件事藏了很久
@@ -639,6 +733,8 @@
     /* v0.75.0：锻造页也渲染进 #overlay（fixed，不在 `#app *` 里）⇒ 越界表/高度预算表
        对它一个字都说不上。判据全在 forgeReport 里。 */
     if (q.get('forge')) { emit(); return; }
+    /* v0.76.0：牌堆页同理（同一个 #overlay）。 */
+    if (q.get('pile')) { emit(); return; }
     var modes = q.get('m') ? [q.get('m')] : ['', 'log-open'];
     var names = { '': '战报关  ', 'log-open': '右侧抽屉' };
     modes.forEach(function (m) {

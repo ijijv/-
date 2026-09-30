@@ -113,7 +113,7 @@
 
 | 文件名 | 用途 |
 |---|---|
-| `bg_menu.png` | 主菜单背景 |
+| `bg/menu/menu_3.png` | 主菜单背景（兼作 `setBg('menu')` 的兜底底图） |
 | `bg_act1.png` | 第一幕 · 乱葬岗 |
 | `bg_act2.png` | 第二幕 · 黄泉路 |
 | `bg_act3.png` | 第三幕 · 幽冥塔 |

@@ -34,7 +34,7 @@
 
 | 说的 | 实际界面 | 函数 · 位置 | 现在有背景吗 |
 |---|---|---|---|
-| 主界面 | 主菜单 | `showStartScreen()` `js/60_boot.js:390` | ✅ `bg_menu.png` |
+| 主界面 | 主菜单 | `showStartScreen()` `js/60_boot.js:390` | ✅ `bg/menu/menu_3.png` |
 | 选英雄界面 | 选 择 英 雄 | `showHeroSelect()` `js/60_boot.js:294` | ❌ 无 |
 | 选卡界面 | 战斗胜利·三选一 | `showReward()` `js/50_ui.js:869` | ❌ 无 |
 | 胜利界面 | **两个不同界面**（见下） | `showBattleResult()` `js/40_flow.js:45`／`showVictory()` `js/40_flow.js:171` | ❌ 均无 |
@@ -52,7 +52,7 @@
 
 | 场景 | 调用点 | 背景文件 | 尺寸 | 体积 |
 |---|---|---|---|---|
-| 主菜单 | `js/60_boot.js:391` `setBg('menu')` | `bg_menu.png` | **1920×1080** ✅ | 390 KB |
+| 主菜单 | `js/60_boot.js:391` `setBg('menu')` | `bg/menu/menu_3.png` | **1920×1080** ✅ | 390 KB |
 | 战斗（三幕各一张） | `js/30_engine.js:638` `setBg('act'+G.act)` | `bg_act1/2/3.png` | **1920×1080** ✅ | 320 / 357 / 348 KB |
 | 战斗（读档恢复） | `js/40_flow.js:282` 同上 | 同上 | — | — |
 | 地图 | `js/50_ui.js:413` `setBg(mapBgName())` | `bg_map.jpg` | **1295×3238 竖幅** ⚠️ | 312 KB |
@@ -183,7 +183,7 @@ v0.62.0 曾试图靠「**调淡**」补救，两层叠出来的合成不透明�
 
 | # | 界面 | 函数 · 位置 | 背景 |
 |---|---|---|---|
-| A1 | 主菜单 | `showStartScreen()` `js/60_boot.js:390` | ✅ `bg_menu.png` |
+| A1 | 主菜单 | `showStartScreen()` `js/60_boot.js:390` | ✅ `bg/menu/menu_3.png` |
 | A2 | 战斗 | `startBattle()` `js/30_engine.js:635` + `render()` `js/60_boot.js:222` | ✅ `bg_act1/2/3.png` |
 | A3 | 地图 / 爬塔选路 | `showMap()` `js/50_ui.js:411` | ✅ `bg_map.jpg` + 卷轴 3 张 |
 | A4 | 篝 火 | `showCampfire()` `js/50_ui.js:940` | ❌ |

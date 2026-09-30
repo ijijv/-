@@ -526,7 +526,7 @@
         g.hand.indexOf(yw) >= 0 && g.discard.indexOf(yw) < 0,
         'hand=' + g.hand.map(function (x) { return x.id; }).join(',') + ' discard=' + g.discard.map(function (x) { return x.id; }).join(','));
     });
-    // 取消发生在“牌堆随机三张”阶段（已选待换手牌但未成交）：同样回退
+    // 取消发生在“抽牌堆随机三张”阶段（已选待换手牌但未成交）：同样回退
     var g3 = __base('ganshiren');
     var yw3 = __card('yiwu'); var other3 = __card('leifu');
     g3.hand = [other3]; g3.discard = [yw3];
@@ -536,8 +536,10 @@
       g3.hand.indexOf(yw3) >= 0 && g3.discard.indexOf(yw3) < 0 && g3.drawPile.length === 3,
       'hand=' + g3.hand.map(function (x) { return x.id; }).join(',') + ' draw=' + g3.drawPile.length);
     // 真成交：易物留在弃牌堆（已消耗），换入的新牌进手
-    // 注：换入池 = drawPile+discard 洗牌取 3，可能含刚打出的易物本身 → 选首个非易物项，
-    //     保证“易物已消耗不回手”这一语义被确定性测到（避免随机池抽到易物造成的假阴性）
+    // 注（v0.76.0）：换入池改**只从抽牌堆取**（不足 3 张才把弃牌堆洗回），
+    //     刚打出的易物在 discard 里、抽牌堆有 3 张 ⇒ 不触发洗回 ⇒ 池 = 那 3 张，里面**不会**有易物本身。
+    //     下面那句 while 是历史写法，如今第一次比较就不成立、立即命中 kk=0 —— 保留它是为了
+    //     万一将来池里又混进易物也别静默假绿（真混进来会继续往后找，找不到才红）。
     var g4 = __base('ganshiren');
     var yw4 = __card('yiwu'); var other4 = __card('leifu');
     g4.hand = [other4]; g4.discard = [yw4];
@@ -552,7 +554,260 @@
       'hand=' + g4.hand.map(function (x) { return x.id; }).join(',') + ' discard=' + g4.discard.map(function (x) { return x.id; }).join(','));
   })();
 
-  // ===== 噬魂术卡面预览修复：与 eff 逐列一致（不再按“非天师=诅咒×6/8”错算） =====
+  // ===== v0.76.0：易物候选池改「只从抽牌堆取」+ 不足时洗回弃牌堆 =====
+  (function () {
+    var ids = function (a) { return a.map(function (x) { return x.id; }); };
+
+    // ① 抽牌堆够 3 张 ⇒ 池里每一张都必须来自抽牌堆（弃牌堆一张都不许混进来）
+    var g1 = __base('ganshiren');
+    var yw1 = __card('yiwu'); var dr1 = __card('leifu');
+    g1.hand = [dr1];
+    g1.drawPile = [__card('zhiren'), __card('jingang'), __card('leifu'), __card('huofu')];
+    g1.discard = [yw1, __card('shouyi')];
+    yw1.eff(false, yw1); pickExchangeHand(0);
+    var ex1 = G.exchange;
+    __ok('v0.76.0 易物 抽牌堆够 3 张时，池里每一张都来自抽牌堆（弃牌堆不参与）',
+      ex1.pool.length === 3 && ex1.pool.every(function (c) { return g1.drawPile.indexOf(c) >= 0; }),
+      'pool=' + ids(ex1.pool).join(',') + ' draw=' + ids(g1.drawPile).join(','));
+
+    // ② 抽牌堆只有 1 张、弃牌堆有 2 张 ⇒ 洗回后两堆合一（**concatenate**，那 1 张不能被顶掉）
+    var g2 = __base('ganshiren');
+    var yw2 = __card('yiwu'); var dr2 = __card('leifu');
+    var keep2 = __card('zhongkui'); var d1 = __card('jingang');
+    g2.hand = [dr2];
+    g2.drawPile = [keep2];
+    g2.discard = [yw2, d1];
+    yw2.eff(false, yw2); pickExchangeHand(0);
+    var ex2 = G.exchange;
+    __ok('v0.76.0 易物 抽牌堆不足 3 张 ⇒ 弃牌堆洗回、两堆合一（原抽牌堆里那 1 张没被顶掉）',
+      g2.discard.length === 0 && g2.drawPile.length === 3 &&
+      g2.drawPile.indexOf(keep2) >= 0 && g2.drawPile.indexOf(d1) >= 0,
+      'draw=' + ids(g2.drawPile).join(',') + ' discard=' + ids(g2.discard).join(','));
+    __ok('v0.76.0 易物 洗回后池凑满 3 张（不足就洗的语义落到了池上）',
+      ex2.pool.length === 3, 'pool=' + ids(ex2.pool).join(','));
+
+    // ③ 「看一眼不改序」：池是**乱序展示**用的副本，真牌序必须一个字节都不动。
+    //    这是 `shuffle(G.drawPile.slice())` 里那个 .slice() 的**唯一**回归闸 ——
+    //    漏了它，玩家点开易物看一眼，抽牌堆顺序就被打乱了。
+    var g3 = __base('ganshiren');
+    var yw3 = __card('yiwu'); var dr3 = __card('leifu');
+    g3.hand = [dr3];
+    g3.drawPile = [__card('zhiren'), __card('jingang'), __card('leifu'), __card('huofu'), __card('shouyi')];
+    g3.discard = [yw3];
+    var before = ids(g3.drawPile);
+    yw3.eff(false, yw3); pickExchangeHand(0);
+    var after = ids(g3.drawPile);
+    __ok('v0.76.0 易物 选完手牌后抽牌堆**顺序逐位未变**（池只是副本，乱序展示不动真牌序）',
+      before.join(',') === after.join(','), 'before=' + before.join(',') + ' after=' + after.join(','));
+
+    // ④ 取消不做撤销，但也**不能多洗一次**：两堆读数与「洗回之后、成交之前」完全一致
+    var g4 = __base('ganshiren');
+    var yw4 = __card('yiwu'); var dr4 = __card('leifu');
+    g4.hand = [dr4];
+    g4.drawPile = [__card('zhongkui')];
+    g4.discard = [yw4, __card('jingang'), __card('huofu')];
+    yw4.eff(false, yw4); pickExchangeHand(0);
+    var midDraw = ids(g4.drawPile), midDisc = ids(g4.discard);
+    cancelExchangeSelect();
+    __ok('v0.76.0 易物 取消交换不再动牌堆（不撤销、也不重复洗一次）',
+      ids(g4.drawPile).join(',') === midDraw.join(',') &&
+      ids(g4.discard).join(',') === midDisc.join(',') &&
+      g4.hand.indexOf(yw4) >= 0,
+      'draw=' + ids(g4.drawPile).join(',') + ' discard=' + ids(g4.discard).join(','));
+  })();
+
+  // ===== v0.76.0：点牌堆看内容（showPile）—— 三个纯状态断言，零 DOM、零定时器 =====
+  (function () {
+    var ids = function (a) { return a.map(function (x) { return x.id; }); };
+
+    // ① 抽牌堆乱序展示，但**真牌序一个字节都不能动**
+    var gp = __base('ganshiren');
+    gp.drawPile = [__card('zhiren'), __card('jingang'), __card('leifu'), __card('huofu')];
+    gp.discard = [__card('shouyi')];
+    var before = ids(gp.drawPile);
+    showPile('draw');
+    __ok('v0.76.0 showPile(\'draw\') 不动抽牌堆真牌序（乱序的只是展示副本）',
+      ids(gp.drawPile).join(',') === before.join(','),
+      'before=' + before.join(',') + ' after=' + ids(gp.drawPile).join(','));
+
+    // ② 弃牌堆同理（它按真实顺序**倒着**展示，堆顶在前）
+    var gq = __base('ganshiren');
+    gq.drawPile = [__card('zhiren')];
+    gq.discard = [__card('jingang'), __card('leifu'), __card('huofu')];
+    var dbefore = ids(gq.discard);
+    showPile('discard');
+    __ok('v0.76.0 showPile(\'discard\') 不动弃牌堆真牌序（reverse 的只是展示副本）',
+      ids(gq.discard).join(',') === dbefore.join(','),
+      'before=' + dbefore.join(',') + ' after=' + ids(gq.discard).join(','));
+
+    // ③ 空堆：不抛异常、且**一次 showOverlay 都不调**（否则空牌堆会弹一个空壳盖住战场）
+    //    ⚠️ 这里**不能**读 `#overlay` 的 classList 来判断开没开：本文件第 15/16 行已把
+    //    showOverlay 顶成空桩，而 vm_host 的 dummyEl().classList.contains() 是**恒返 false**
+    //    的假桩（只有 v0.65.0 那一段临时装了真 classList）。用**替身**抓调用才是真行为断言。
+    var __realSO = showOverlay;
+    var calls = [];
+    showOverlay = function (html, closable, scene) { calls.push({ h: html, c: closable, s: scene }); };
+    var gr = __base('ganshiren');
+    gr.drawPile = []; gr.discard = [];
+    var err = null;
+    try { showPile('draw'); showPile('discard'); } catch (ex) { err = ex; }
+    __ok('v0.76.0 showPile 空牌堆不抛异常、也不打开面板',
+      !err && calls.length === 0,
+      err ? String(err) : ('showOverlay 调用 ' + calls.length + ' 次'));
+
+    // ④ 非空：恰好开一次，且第三实参是 pile-scene、closable=true（钉「两处调用都传了第三实参」）
+    gr.drawPile = [__card('zhiren'), __card('jingang')];
+    showPile('draw');
+    __ok('v0.76.0 showPile(\'draw\') 开一次并带 pile-scene / closable',
+      calls.length === 1 && calls[0].s === 'pile-scene' && calls[0].c === true &&
+      calls[0].h.indexOf('抽牌堆') >= 0,
+      '调用 ' + calls.length + ' 次 scene=' + (calls[0] && calls[0].s));
+
+    // ⑤ 弃牌堆**保序、堆顶在前**（这是与抽牌堆「乱序」刻意相反的那一半口径）
+    calls.length = 0;
+    var gs = __base('ganshiren');
+    gs.drawPile = [__card('zhiren')];
+    gs.discard = [__card('leifu'), __card('huofu'), __card('shouyi')];   // 末位 = 堆顶
+    showPile('discard');
+    var h = calls[0] ? calls[0].h : '';
+    __ok('v0.76.0 showPile(\'discard\') 堆顶在前（末位那张【守一】排在首位【雷符】之前）',
+      calls.length === 1 && calls[0].s === 'pile-scene' &&
+      h.indexOf('守一') >= 0 && h.indexOf('雷符') >= 0 &&
+      h.indexOf('守一') < h.indexOf('雷符'),
+      '调用 ' + calls.length + ' 次；守一@' + h.indexOf('守一') + ' 雷符@' + h.indexOf('雷符'));
+    showOverlay = __realSO;
+  })();
+
+  // ===== v0.76.0：handReturnFromDiscard 收口（焚符×2 / 火符 / 易物×2 五处共用的那一条） =====
+  (function () {
+    // 主路径：在弃牌堆里 ⇒ 摘掉 + 回手，返回 true
+    var gh = __base('ganshiren');
+    var ch = __card('leifu');
+    gh.hand = []; gh.discard = [ch];
+    var got = handReturnFromDiscard(ch);
+    __ok('v0.76.0 handReturnFromDiscard 从弃牌堆取回 → 摘掉 + 进手 + 返 true',
+      got === true && gh.discard.indexOf(ch) < 0 && gh.hand.indexOf(ch) >= 0,
+      'got=' + got + ' hand=' + gh.hand.length + ' discard=' + gh.discard.length);
+    // 幂等/兜底：不在弃牌堆里 ⇒ 不抛异常、弃牌堆不变、牌仍回手，返回 false
+    // （这是本函数**唯一**一条新逻辑，钉住 lastIndexOf 返 -1 的那一支）
+    var ch2 = __card('jingang');
+    gh.hand = []; gh.discard = [];
+    var got2 = null, err2 = null;
+    try { got2 = handReturnFromDiscard(ch2); } catch (ex) { err2 = ex; }
+    __ok('v0.76.0 handReturnFromDiscard 牌不在弃牌堆时不抛异常、弃牌堆不变、牌仍回手',
+      err2 === null && got2 === false && gh.discard.length === 0 && gh.hand.indexOf(ch2) >= 0,
+      'err=' + (err2 && err2.message) + ' got=' + got2 + ' hand=' + gh.hand.length + ' discard=' + gh.discard.length);
+    // 空入参：不抛异常、什么都不做
+    gh.hand = []; gh.discard = [];
+    var got3 = null, err3 = null;
+    try { got3 = handReturnFromDiscard(null); } catch (ex) { err3 = ex; }
+    __ok('v0.76.0 handReturnFromDiscard 空入参安全',
+      err3 === null && got3 === false && gh.hand.length === 0 && gh.discard.length === 0,
+      'err=' + (err3 && err3.message) + ' got=' + got3);
+  })();
+  // ===== v0.76.0 §三：敌人四档台词 —— **数据面**（纯状态，零 DOM、零定时器）=====
+  // 触发面（sayPick / enemySay / pumpSay）在下面另起一块；这里只钉「数据写对了」。
+  (function () {
+    var TIERS = ['sayIn', 'sayHit', 'sayLow', 'sayOut'];
+    // ① 精英 + Boss **每一只**四档齐全，且**普通敌人一只都不许有**。
+    //    ⚠️ 一条同时钉「写全了」与「没写多」：拆成两条的话，「写多了」那半边
+    //       没有人会去测 —— 而「给普通怪也加了台词」正是最容易顺手犯的错
+    //       （场上 3~5 只普通怪，满屏气泡）。
+    var bigBad = [], smallBad = [], nElite = 0, nBoss = 0;
+    Object.keys(ENEMIES).forEach(function (k) {
+      var d = ENEMIES[k];
+      var have = TIERS.filter(function (f) { return !!d[f]; }).length;
+      if (d.elite || d.boss) {
+        if (d.elite) nElite++; else nBoss++;
+        if (have !== 4) bigBad.push(k + '=' + have + '/4');
+      } else if (have) { smallBad.push(k + '=' + have); }
+    });
+    __ok('v0.76.0 台词 7 精英 + 10 Boss 每一只四档齐全，普通敌人一只都没有（17 只全中）',
+      nElite === 7 && nBoss === 10 && bigBad.length === 0 && smallBad.length === 0,
+      '精英=' + nElite + ' Boss=' + nBoss + ' 缺档=[' + bigBad.join(',') + '] 多写=[' + smallBad.join(',') + ']');
+    // ② 中段台词表：恰好两只，且 `when` 各绑一个**独有机制分支**（分化 / 二阶段）。
+    var mids = Object.keys(ENEMY_SAY_MID);
+    __ok('v0.76.0 台词 ENEMY_SAY_MID 恰好 2 条（谢必安 split / 阎罗天子 phase2）且都指向真敌人',
+      mids.length === 2 && !!ENEMY_SAY_MID.xiebian && ENEMY_SAY_MID.xiebian.when === 'split'
+      && !!ENEMY_SAY_MID.yanluotianzi && ENEMY_SAY_MID.yanluotianzi.when === 'phase2'
+      && mids.every(function (k) { return !!ENEMIES[k] && !!ENEMY_SAY_MID[k].text; }),
+      'keys=' + mids.join(',') + ' when=' + mids.map(function (k) { return ENEMY_SAY_MID[k].when; }).join('/'));
+    // ③ **makeEnemy 的透传** —— 这是唯一会静默失效的一步：
+    //    数据写全了、闸①全绿，可 `makeEnemy` 是**逐字段显式构造**，漏一行就是
+    //    「字段写了、气泡永远不出现」，而闸①查的是 ENEMIES、看不见这一层。
+    var me = makeEnemy(ENEMIES.baiwuchang, 'baiwuchang');
+    var passAll = TIERS.every(function (f) { return me[f] === ENEMIES.baiwuchang[f]; });
+    __ok('v0.76.0 台词 makeEnemy 四档**逐字段透传**（漏一行 = 气泡永不出现的静默失效）',
+      passAll && me.sayIn === '一见生财——名字，我记下了。',
+      'sayIn=' + JSON.stringify(me.sayIn) + ' 四档一致=' + passAll);
+    // ④ 普通敌人过 makeEnemy 后四档仍是 undefined（不凭空长出字段）
+    var mp = makeEnemy(ENEMIES.youhun, 'youhun');
+    __ok('v0.76.0 台词 普通敌人过 makeEnemy 后四档仍是 undefined（不凭空长出字段）',
+      TIERS.every(function (f) { return mp[f] === undefined; }),
+      TIERS.map(function (f) { return f + '=' + mp[f]; }).join(' '));
+    // ⑤ 零耦合：存档快照里**一个 say 键都不许有**。
+    //    `serializeEnemy` 是显式白名单 ⇒ 默认就不会进；这条钉的是「别顺手把它加进去」。
+    var snap = serializeEnemy(makeEnemy(ENEMIES.yanluotianzi, 'yanluotianzi'));
+    var leaked = Object.keys(snap).filter(function (k) { return k.indexOf('say') >= 0; });
+    __ok('v0.76.0 台词 serializeEnemy 快照里没有任何 say 键（台词与数值零耦合、可单独回滚）',
+      leaked.length === 0, 'leaked=[' + leaked.join(',') + '] keys=' + Object.keys(snap).length);
+    // ⑥ 触发面（v0.76.0 §三 第二步）：`sayPick` 的**一次性**语义。
+    //    它必须是纯函数 —— 无头下 `pumpSay` 一句都不执行，这条断言照样要能跑，
+    //    所以只碰 `e._said`，不碰 DOM、不建定时器。
+    var be = makeEnemy(ENEMIES.baiwuchang, 'baiwuchang');
+    var l1 = sayPick(be, 'in'), l2 = sayPick(be, 'in');
+    __ok('v0.76.0 台词 sayPick 首次返句子、第二次返 null（一场战斗内每档只念一次）',
+      l1 === ENEMIES.baiwuchang.sayIn && l2 === null,
+      'l1=' + JSON.stringify(l1) + ' l2=' + JSON.stringify(l2));
+    // ⑦ 该档没写过 ⇒ 返 null，且**不许留下 `_said`**。
+    //    ⚠️ 这就是「普通敌人凭空长出 _said」那个错法：判空顺序反了就会出现，
+    //       而它没有任何别的判据看得见（`_said` 不进存档、不影响数值）。
+    var pe = makeEnemy(ENEMIES.youhun, 'youhun');
+    var pn = sayPick(pe, 'in');
+    __ok('v0.76.0 台词 sayPick 对普通敌人返 null 且不建 _said（判空顺序反了的回归闸）',
+      pn === null && pe._said === undefined,
+      'line=' + JSON.stringify(pn) + ' _said=' + JSON.stringify(pe._said));
+    // ⑧ 中段两条走**另一条路**：`sayMidPick` 查的是 `ENEMY_SAY_MID`，按 key 取、不记名
+    //    （分支自己有幂等旗标），每次问都答同一个句子。
+    var m1 = sayMidPick('xiebian'), m2 = sayMidPick('xiebian'), m3 = sayMidPick('baiwuchang');
+    __ok('v0.76.0 台词 sayMidPick 按 key 取中段句、可重复问；未登记者返 null',
+      m1 === ENEMY_SAY_MID.xiebian.text && m2 === m1 && m3 === null,
+      'm1=' + JSON.stringify(m1) + ' m3=' + JSON.stringify(m3));
+    // ⑨ **无头下 pumpSay 不出定时器**（本批最容易挂住 node 的地方）。
+    //    直接调一次真实的触发路径：`enemySay` 排进队 → pumpSay 走无头早返回 ⇒ 队列被清空。
+    //    断言「队列被清空」而不是「没抛异常」—— 早返回那条分支的唯一可观测后果就是它。
+    enemySay(be, 'out');
+    __ok('v0.76.0 台词 无头下 pumpSay 清队不出定时器（冒烟照常打印并退出）',
+      SAY_QUEUE.length === 0 && SAY_BUSY === false,
+      'queue=' + SAY_QUEUE.length + ' busy=' + SAY_BUSY);
+  })();
+  // ===== v0.76.0 §四：结算墨色过场 —— **无头下必须同刻开面板** =====
+  // 这是本项最大的风险面：四条结算路径的既有断言**全是**「showOverlay 之后立刻读 DOM」。
+  // 过场一旦把这句异步化（哪怕只挂一个 setTimeout(fn,0)），它们会集体变红，
+  // 而「红了」这个现象本身不指向原因 ⇒ 把这条判据单独写死在这里。
+  (function () {
+    var realSO = showOverlay, seen = null;
+    try {
+      showOverlay = function (h, c, s) { seen = { h: String(h || ''), c: c, s: s }; };
+      var g = __base('tianshi');
+      g.enemies = [makeEnemy(ENEMIES.youhun, 'youhun')];
+      g.battleGold = 4; g.goldDoubled = false; g.battleResult = { g: 4, hpLost: 0, h: 8, isBoss: false, finalBoss: false };
+      g.rewardTier = 'normal';
+      showBattleResult(g.battleResult);
+      __ok('v0.76.0 结算 settleTransition 无头下**同刻**开面板（不许把开面板异步化）',
+        !!seen && seen.h.indexOf('战 斗 结 算') >= 0 && seen.s === 'result-scene',
+        seen ? ('scene=' + seen.s + ' len=' + seen.h.length) : 'showOverlay 没被调到');
+      // 轻档（普通战斗）也要走同一条早返回 —— 它自己那 0.52s 的挡板拍在无头下同样不该发生。
+      // 判据用「第二次调用仍是同刻」，因为 _settlePlayed 在第一次就被置真了：
+      // 这一条顺带钉住了**一次性标记的早返回分支**（doubleGold 会走的那条）。
+      seen = null;
+      g.rewardTier = 'elite';
+      showBattleResult(g.battleResult);
+      __ok('v0.76.0 结算 settleTransition 一次性标记生效：第二块面板（金币翻倍）同刻开、不重播过场',
+        !!seen && seen.s === 'result-scene',
+        seen ? ('scene=' + seen.s) : 'showOverlay 没被调到');
+    } finally { showOverlay = realSO; }
+  })();
   (function () {
     var sh = __card('shihun');
     function pv() { return previewDamage(sh); }
@@ -2860,7 +3115,7 @@
     __ok('v0.61.39 易物 四列卡面都不再写「换入的牌本回合费用 -1」',
       ['ganshiren', 'wuseng', 'yincha', 'tianshi'].every(function (h) {
         __base(h); return __card('yiwu').t(false).indexOf('换入的牌本回合费用 -1') < 0
-          && __card('yiwu').t(false).indexOf('选择 1 张手牌与弃牌堆交换') >= 0;
+          && __card('yiwu').t(false).indexOf('选择 1 张手牌与抽牌堆交换') >= 0;
       }));
     // 反误伤：万剑归宗 A 列的减费文案仍在（别把共用的消费端一起删了）
     __base('ganshiren');
@@ -4921,8 +5176,13 @@
     /* ============ C. 背景：地图改用 bg_map.jpg（setBg 支持扩展名）============ */
     __ok('v0.61.41 背景 带扩展名只补 bg_ 前缀、不补 .png（素材/bg/ 的命名约定不破）',
       bgRel('map.jpg') === 'bg/bg_map.jpg' && bgRel('map.jpeg') === 'bg/bg_map.jpeg');
-    __ok('v0.61.41 背景 不带扩展名沿用 bg_<name>.png（菜单与战斗三幕零改动）',
-      bgRel('menu') === 'bg/bg_menu.png' && bgRel('act1') === 'bg/bg_act1.png' && bgRel('act3') === 'bg/bg_act3.png');
+    __ok('v0.61.41 背景 不带扩展名沿用 bg_<name>.png（战斗三幕零改动）',
+      bgRel('act1') === 'bg/bg_act1.png' && bgRel('act3') === 'bg/bg_act3.png');
+    /* v0.76.0：主菜单那格改指 bg/menu/menu_3.png（原素材/bg/bg_menu.png 已删，同图挪位） */
+    __ok('v0.76.0 背景 menu 特判到 bg/menu/menu_3.png（不再拼出已删的 bg_menu.png）',
+      bgRel('menu') === 'bg/menu/menu_3.png', String(bgRel('menu')));
+    __ok('v0.76.0 bgRel(\'menu\') 与主菜单轮换表 MENU_BGS 用的是同一份图（没多留一份重复体）',
+      MENU_BGS.indexOf(bgRel('menu')) >= 0, String(bgRel('menu')));
     __ok('v0.61.41 背景 地图表三幕 + 无尽全指向 bg_map.jpg 且 endless 有值（不会 404）',
       MAP_BG[1] === 'map.jpg' && MAP_BG[2] === 'map.jpg' && MAP_BG[3] === 'map.jpg' && MAP_BG.endless === 'map.jpg',
       JSON.stringify(MAP_BG));
@@ -6278,8 +6538,8 @@
     })();
 
     /* ---------- G3. 主菜单背景走 JS 内联（不能在 CSS 写 url()） ---------- */
-    __ok('v0.65.0 bgRel(\'menu\') 仍是 bg/bg_menu.png（#bg 那条兜底底图，setBg(\'menu\') 还在调）',
-      bgRel('menu') === 'bg/bg_menu.png', String(bgRel('menu')));
+    __ok('v0.65.0 bgRel(\'menu\') 指向包内真实存在的兜底底图（#bg 那条，setBg(\'menu\') 还在调）',
+      bgRel('menu') === 'bg/menu/menu_3.png', String(bgRel('menu')));
     /* v0.66.0：主菜单真背景换成三张轮换图 —— 路径**必须**写全（不能用 bgRel：它固定拼
        'bg/bg_'+name+'.png'，套不进 bg/menu/ 这个子目录）。三张都要在包内，否则轮换到某一张就是一片黑。 */
     __ok('v0.66.0 MENU_BGS 恰好三张、路径写全（bg/menu/ 子目录 ⇒ 不能用 bgRel 拼）',

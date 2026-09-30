@@ -7,6 +7,62 @@
  * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
  * ============================================================================ */
 /* ===================== 流程推进 ===================== */
+/* ===================== v0.76.0：胜负结算的墨色过场 =====================
+   用户口径：「胜负结算动画可以做，但不只要淡入淡出，还要**场景的合理过渡**」，形态圈定为
+   「收尾拍 敌人消散，手牌与牌堆依次收拢 → 留白 → 墨汁自四边洇入、盖满战场 →
+    揭幕 墨从中裂开褪去 → 结算面板自下升起 + 落款印章」，并分级「普通轻 / 精英·Boss·结局重」。
+
+   **为什么包成一个函数而不是改四条结算路径**：`showOverlay` 是它们的唯一汇合点。
+   包在它外面 ⇒ 四条路径的正文（数值、文案、按钮）一个字都不用改，
+   「面板长什么样」与「面板怎么出场」彻底解耦，回滚也只回滚这一个函数。
+
+   ⚠️ **第一句必须是无头 / 低配 / 减弱动态的早返回、且同刻调 `openFn()`**：
+      四条结算路径的既有断言全是「`showOverlay` 之后**立刻**读 DOM」，过场一旦异步化，
+      它们会集体变红。这一句也是「冒烟照常打印并退出」的保障（没有它就会漏定时器）。
+   ⚠️ **一次性**：`doubleGold()` 会把 `showBattleResult` 再调一次（同一场战斗的第二块面板），
+      过场不能重播 —— 判据是 `G._settlePlayed`，由 `startBattle` / `revive` 两处重置。 */
+let _settleSkipBound=false;
+function settleTransition(tier, mode, openFn){
+  if(!animLive() || menuFxOff() || G._settlePlayed){ openFn(); return; }
+  G._settlePlayed=true;
+  const heavy=(tier==='heavy');
+  const app=document.getElementById('app');
+  const veil=document.getElementById('scene-veil');
+  const timers=[];
+  let opened=false, done=false;
+  const open=()=>{ if(opened) return; opened=true; openFn(); };
+  const finish=()=>{ if(done) return; done=true;
+    for(let i=0;i<timers.length;i++) clearTimeout(timers[i]);
+    if(app) app.classList.remove('closing');
+    if(veil){ veil.className=''; veil.style.display=''; }
+    if(_settleSkipBound){ _settleSkipBound=false;
+      try{ window.removeEventListener('pointerdown', skip, true); }catch(e){} }
+  };
+  /* 可跳过：整段过场点一下就到终态。挂**捕获相** + 常驻到过场结束才摘 ——
+     与 `animBindSkip` 的常驻口径不同，这里必须摘：过场结束还留着的话，
+     之后每一次点击都会白跑一遍 `open()`/`finish()`（它们幂等，但那是纯浪费）。 */
+  function skip(){ open(); finish(); }
+  if(!_settleSkipBound){ _settleSkipBound=true;
+    try{ window.addEventListener('pointerdown', skip, true); }catch(e){} }
+  const later=(ms, fn)=>{ timers.push(setTimeout(fn, ms)); };
+
+  /* 收尾拍：三拍错开全靠 CSS 的 transition-delay，这里只挂一个类。 */
+  if(app) app.classList.add('closing');
+  if(!heavy){
+    /* 轻档：**只铺一块看不见的挡板**，不铺墨。`#scene-veil` 静息是 display:none，
+       给个 display:block 而不加 .show ⇒ opacity 仍是 0，但**照样吃得下点击**
+       （opacity:0 的元素会命中测试，visibility:hidden 才不会）。
+       没有这一下的话，这 0.5 秒里战场还是可交互的 —— 结算面板还没开，
+       而敌人已经死光，玩家能继续点牌。 */
+    if(veil) veil.style.display='block';
+    later(520, ()=>{ open(); finish(); });
+    return;
+  }
+  /* 重档：收尾拍 .45 → 墨自四边洇入 .55 → 留白 .3 → 揭幕（开面板 + 墨从中裂开 .5） */
+  later(450, ()=>{ if(veil){ veil.style.display='block'; veil.className='show '+(mode==='lose'?'lose':'win'); } });
+  later(1300, ()=>{ open(); if(veil) veil.classList.add('parting'); });
+  later(1850, finish);
+}
 function winFight(){
   if(G.battleOver) return; // v0.61 B4：重入守卫 —— 一场战斗只结算一次胜利
   G.battleOver=true;
@@ -46,12 +102,18 @@ function showBattleResult(r){
   const names=G.enemies.map(e=>e.name).join('、');
   const healTxt = r.h ? `恢复 <b style="color:var(--green)">+${r.h}</b> 生命${r.isBoss?'（50%）':''}` : '';
   const doubleBtn = (!G.goldDoubled && r.g>0) ? `<button class="btn" onclick="doubleGold()">看广告 · 金币翻倍（再 +${r.g}）</button>` : '';
-  showOverlay(`<h2>战 斗 结 算</h2>
+  const html=`<h2>战 斗 结 算</h2>
     <p>击败 <b>${names}</b><br>
     获得金币 <b style="color:var(--gold)">+${G.battleGold}</b> · 本场耗血 <b style="color:var(--red)">${r.hpLost}</b>${healTxt?` · ${healTxt}`:''}</p>
     <p style="font-size:14px">当前生命 <b>${G.hp}</b> / ${G.maxHp}</p>
     ${doubleBtn}
-    <button class="btn" onclick="continueAfterBattle()">继续</button>`);
+    <button class="btn" onclick="continueAfterBattle()">继续</button>`;
+  /* 分级：`G.rewardTier` 由 winFight 按 精英/Boss 算好（'elite'/'boss' ⇒ 重档）。
+     ⚠️ **不要读 `G.battleResult.isBoss` 之外的东西**：showBossReward 会把 rewardTier 清成 null，
+     而 doubleGold 是在那之前调回来的 —— 两处一起判才稳。
+     ⚠️ 第三实参 `result-scene` 是「面板自下升起」那一套 keyframe 的**唯一**挂钩，漏传不报错。 */
+  const tier=(G.rewardTier==='elite'||G.rewardTier==='boss'||r.isBoss)?'heavy':'light';
+  settleTransition(tier, 'win', ()=>showOverlay(html, undefined, 'result-scene'));
 }
 function doubleGold(){
   const r=G.battleResult; if(!r || G.goldDoubled) return;
@@ -139,10 +201,15 @@ function loseGame(){
   const reviveBtn = G.revivedFree
     ? `<button class="btn" onclick="reviveAd()">看广告 · 复活回满血继续</button>`
     : `<button class="btn" onclick="reviveFree()">免费复活 · 回满血继续</button>`;
-  showOverlay(`<h2>妖气侵蚀了你</h2><p>你被击败了。<br>运气和牌组都还差一点。</p>
+  const html=`<h2>妖气侵蚀了你</h2><p>你被击败了。<br>运气和牌组都还差一点。</p>
     <p style="color:var(--gold)">当前得分 <b>${G.score}</b>　（${where} · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
     ${reviveBtn}
-    <button class="btn ghost" onclick="giveUp()">放弃 · 结束本局</button>`);
+    <button class="btn ghost" onclick="giveUp()">放弃 · 结束本局</button>`;
+  /* 败局走**重档**、`mode='lose'`（暗红墨自上压）。
+     ⚠️ `setBg('defeat.jpg')` 留在上面**同步**执行，不挪进过场里：这一句是状态的一部分
+        （revive 要靠它被换回来），延迟 1.3 秒换底图只会让「败局」晚一拍才被看见。
+        墨幕盖上去的正是**已经换好的**那张底图。 */
+  settleTransition('heavy', 'lose', ()=>showOverlay(html, undefined, 'result-scene'));
 }
 function giveUp(){
   const sc=G.score||calcScore();
@@ -157,6 +224,9 @@ function revive(){
      否则 battleOver 恒为 true → 之后打死最后一个敌人时 winFight() 在重入守卫处直接 return，
      战斗永远不结算，表现为「敌人已清」但界面卡死。 */
   G.battleOver=false;
+  /* v0.76.0：复活回到的是**同一场战斗**，结算过场的一次性标记也要一起清 ——
+     否则看了败局墨幕、复活、再打赢 Boss，胜利结算会静默地不铺墨（而没有任何闸会响）。 */
+  G._settlePlayed=false;
   G.hp=G.maxHp; G.weak=0; G.gouhun=0; G.thorns=0; G.block=0; G.burn=0;
   G.discard=G.discard.concat(G.hand); G.hand=[];
   /* v0.74.0：复活回的是**同一场战斗** ⇒ 必须把战斗背景铺回去（失败屏刚把它换成了 bg_defeat）。
@@ -183,11 +253,14 @@ function showVictory(){
   /* v0.74.0：通关专用整屏背景。恢复不用单独写 —— 两个出口 startEndless() 与 startGame()
      都经 showHeroSelect()→setBg('hero_select.jpg')，中途回主菜单则由 setBg('menu') 接管。 */
   setBg('victory.jpg');
-  showOverlay(`<h2>通 关 ！</h2><p>你一路打上了塔顶，镇服了百鬼。<br>剩余生命 ${G.hp} / ${G.maxHp}。</p>
+  const html=`<h2>通 关 ！</h2><p>你一路打上了塔顶，镇服了百鬼。<br>剩余生命 ${G.hp} / ${G.maxHp}。</p>
     <p style="color:var(--gold)">本局得分 <b>${G.score}</b>（含通关加成 +5000）　（第 ${G.act} 幕 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
     <p style="font-size:13px;color:var(--dim)">镇妖塔已开启——无尽攀爬，层数越高妖魔越凶，冲击周榜。</p>
     <button class="btn ghost" onclick="startEndless()">进入镇妖塔 · 无尽模式</button>
-    <button class="btn" onclick="startGame()">再打一局</button>`);
+    <button class="btn" onclick="startGame()">再打一局</button>`;
+  /* 通关是**最重**的一档（金墨自下升）。`giveUp()` 刻意**不接** —— 它不是结算，
+     是结算面板上的一个次级出口，给它铺一场墨幕会显得「又赢了一次」。 */
+  settleTransition('heavy', 'win', ()=>showOverlay(html, undefined, 'result-scene'));
 }
 
 /* ===================== 本局存档 + 排行榜 ===================== */

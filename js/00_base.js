@@ -590,6 +590,122 @@ function bossPhaseIntro(name){
   }catch(e){}
 }
 
+/* ===================== v0.76.0：敌人台词气泡（精英 / Boss 四档） =====================
+   剧本与形态约定在 `敌人台词剧本.md`；这里只讲**为什么这么写**。
+
+   ⚠️ **决策与渲染必须分开**：`sayPick` 是纯函数（可无头断言、不建节点、不建定时器），
+      `pumpSay` 才碰 DOM。本仓的冒烟跑在 vm 沙箱里，**任何漏进去的定时器都会让 node 进程
+      多等一轮**；漏成自续的（rAF 轮询）就永远退不出去。
+   ⚠️ 所以 `pumpSay` 的**第一句**就是无头 / 低配 / 减弱动态的早返回 —— 这是本项
+      「冒烟照常打印并退出」的唯一保障。
+   ⚠️ 锚点必须用 `enemyEl(e)`（按 `data-uid` 找），**绝不能按 DOM 下标**：
+      `js/60_boot.js` 渲染的是 `G.enemies.filter(e=>alive(e)||e.dying)`（下标 ≠ 数组下标）。
+   ⚠️ 气泡挂 `document.body`，**不能**挂进 `#enemy-panel`：它的 `isolation:isolate`
+      会把内部 z-index 夹到 0 层 ⇒ 气泡被手牌与浮层盖住。 */
+const SAY_TIER_FIELD={in:'sayIn', hit:'sayHit', low:'sayLow', out:'sayOut'};
+const SAY_TIER_MS={in:2600, hit:1800, low:2200, out:1800, mid:2200};
+const SAY_QUEUE=[];
+let SAY_BUSY=false;
+/* 每一枚气泡领一个号；`clearSay` 把号推一格 ⇒ 在飞的那两个收尾定时器当场作废。
+   ⚠️ 没有这个号的话：玩家点掉气泡（clearSay 把 SAY_BUSY 置回 false）之后立刻又有新台词
+      上屏（SAY_BUSY=true），**旧的那个收尾定时器**随后到点，会把 SAY_BUSY 抹成 false 并
+      再 pump 一次 ⇒ 两个气泡同屏。 */
+let SAY_TOK=0;
+
+/* 纯函数：给定敌人与档位，返回该念的那句并记一次性标记；没有 / 已经念过 ⇒ null。
+   可无头调用：不建节点、不建定时器。
+   ⚠️ 两句判空的**顺序是刻意的** —— 「这个敌人根本没有这一档」必须在**建 `_said` 之前**
+      返回，否则普通敌人过一遍就凭空长出 `_said`（冒烟里有一条专门钉这个）。 */
+function sayPick(e, tier){
+  if(!e) return null;
+  const f=SAY_TIER_FIELD[tier];
+  if(!f || !e[f]) return null;
+  const seen=(e._said=e._said||{});
+  if(seen[tier]) return null;
+  seen[tier]=1;
+  return e[f];
+}
+/* 中段那两条（谢必安分化 / 阎罗天子二阶段）不走四档的记名：它们绑的是 Boss 的
+   **独有机制分支**，一个 Boss 只会经历一次，而分支自己已经有幂等旗标（splitDone / phase2）。 */
+function sayMidPick(key){
+  const m=(typeof ENEMY_SAY_MID!=='undefined') ? ENEMY_SAY_MID[key] : null;
+  return (m && m.text) ? m.text : null;
+}
+function enemySay(e, tier){
+  const line=sayPick(e, tier);
+  if(!line) return;
+  SAY_QUEUE.push({e:e, line:line, tier:tier});
+  pumpSay();
+}
+/* `speaker` 与 `anchor` 分开：谢必安分化那一条是**谢必安**说的，可说出口的那一刻它已经被
+   两只必安顶掉了 —— 锚在它身上必然落空。锚到先手那只必安（`splice` 之后它正占着原来那
+   一格，位置逐像素对得上），话还是谢必安的。 */
+function enemySayMid(speaker, anchor){
+  const line=sayMidPick(speaker && speaker.key);
+  if(!line) return;
+  SAY_QUEUE.push({e:anchor||speaker, line:line, tier:'mid'});
+  pumpSay();
+}
+/* 玩家任何一次点击 / 出牌立即收掉。**捕获相**：抢在卡牌自己的 pointerdown 之前 ——
+   气泡正压在敌人头顶，而敌人就是拖拽落点，不能挡操作。
+   常驻一个监听、不做配对：与 `animBindSkip` 同一条理由（配对在交叠时会互相摘掉对方）。 */
+let _saySkipBound=false;
+function bindSaySkip(){
+  if(_saySkipBound) return;
+  if(typeof window==='undefined' || !window.addEventListener) return;
+  _saySkipBound=true;
+  window.addEventListener('pointerdown', function(){ clearSay(); }, true);
+}
+function clearSay(){
+  SAY_TOK++;                 // 作废在飞的收尾定时器（见 SAY_TOK 的注释）
+  SAY_QUEUE.length=0;
+  SAY_BUSY=false;
+  const el=document.getElementById('enemy-say');
+  if(el) el.remove();
+}
+/* 渲染侧。**第一句必须是无头早返回**（见本块开头）。 */
+function pumpSay(){
+  if(SAY_BUSY || !SAY_QUEUE.length) return;
+  if(!animLive() || menuFxOff()){ SAY_QUEUE.length=0; return; }
+  let it=null, eel=null;
+  /* 用循环不用递归：递归看着更短，但栈深 = 被丢弃的条数，而且读的人得自己推「它一定会终止」。 */
+  while(SAY_QUEUE.length){
+    const head=SAY_QUEUE.shift();
+    eel=enemyEl(head.e);
+    if(eel){ it=head; break; }
+    /* 锚点还没上屏 ⇒ **放回队首**，等下一次 `render()` 收尾那一拍再试。
+       真会发生的窗口只有一个：谢必安分化出来的两只必安，从 `splice` 到下一次 render 之间。
+       ⚠️ 但**已经不在 `G.enemies` 里的**就是真没了（被打死 / 被换下）⇒ 丢掉，
+          否则堵在队首的那一条会把后面全卡住。 */
+    if(G && G.enemies && G.enemies.indexOf(head.e)>=0){ SAY_QUEUE.unshift(head); return; }
+  }
+  if(!it) return;
+  const old=document.getElementById('enemy-say'); if(old) old.remove();
+  const el=document.createElement('div');
+  el.id='enemy-say'; el.className='tier-'+it.tier;
+  el.textContent=it.line;
+  document.body.appendChild(el);
+  /* 坐标照抄 `#drag-dmg`（`js/60_boot.js` 同一个约定）：锚在敌人立绘**头顶正中**。
+     不新创坐标口径 —— 换皮之后立绘位置会变，两处用同一套取法才能一起对。 */
+  const r=eel.getBoundingClientRect();
+  el.style.left=(r.left+r.width/2)+'px';
+  el.style.top=r.top+'px';
+  void el.offsetWidth;   // 先把「未展开」态刷一帧，否则紧接着加 .on 不触发过渡
+  el.classList.add('on');
+  SAY_BUSY=true;
+  const tok=++SAY_TOK;
+  setTimeout(function(){
+    if(tok!==SAY_TOK) return;
+    el.classList.remove('on');
+    setTimeout(function(){
+      if(tok!==SAY_TOK) return;
+      if(el.parentNode) el.remove();
+      SAY_BUSY=false;
+      pumpSay();
+    }, 260);
+  }, SAY_TIER_MS[it.tier] || 1800);
+}
+
 /* ===================== 锁破裂解锁过渡（v0.62.0） =====================
    用户要求：「用 锁_破裂_黑底_960x960_24fps.mp4 这个动画效果于下一关卡图标的解锁过渡，
    锁破裂后展示相连的下面关卡的对应图标」。

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v0.75.0</title>
+<title>志怪塔 · 原型 v0.76.0</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -357,6 +357,12 @@
           两个旋钮都没动，战报栏宽度和手牌重叠度保持原样。 */
   .hand-area{--pile-w:50px; --pile-h:76px; --pile-spine:5px; --hand-pad-b:6px;}
   .pile{position:relative; flex:0 0 auto; align-self:flex-end;
+        cursor:pointer;   /* v0.76.0：点它可以看牌堆内容（showPile）。
+                             ⚠️ 这里**只能加 cursor** —— 它不进盒模型、不参与层叠。
+                                不许加 padding / 改 position / 改尺寸 / 加 z-index：
+                                上面那条注释讲了加 z-index 会反过来盖住手牌，
+                                而 _drvpile.js 逐条钉着两个堆的 rect、与手牌的
+                                「不重叠」与「底对齐」——那些断言没有别的兜底。 */
         margin-bottom:var(--hand-pad-b,6px);
         width:calc(var(--pile-w) + var(--pile-spine)); height:var(--pile-h);}
   /* 侧棱（一摞牌的书口）：木纹来自 side.png。
@@ -680,9 +686,15 @@
         承诺；flex-wrap 只保证「放不下才换行」，给不出列数。
      ⚠️ 这里只动容器与排列，**不动任何卡宽** —— 全局 .card{width:132px} 与
         .reward-cards .card{min-height:200px} 是手牌/图鉴/奖励三选一共用的，有产物闸钉着。 */
-  #overlay.forge-scene #overlayWrap{max-width:none; width:100%;}
-  #overlay.forge-scene .panel{padding:22px 14px;}
-  #overlay.forge-scene .reward-cards{display:grid; grid-template-columns:repeat(3, max-content);
+  /* v0.76.0 牌堆页（pile-scene，点抽牌堆/弃牌堆看内容）：**与 forge-scene 共用下面三条**，
+     不复制第二份 —— 复制出来的两份必然漂（改了一处忘了另一处，矮屏档尤其容易漏）。
+     分组而不是各写一条，是为了让「两个场景同一套容器与排列」在源码里是**一条**约定。
+     ⚠️ 只有容器与排列共享：锻造的 .forge-pair / 箭头 / 红色升级描述**不**并进来，
+        牌堆页是单张卡（没有对照、没有升级预览）。 */
+  #overlay.forge-scene #overlayWrap, #overlay.pile-scene #overlayWrap{max-width:none; width:100%;}
+  #overlay.forge-scene .panel,        #overlay.pile-scene .panel{padding:22px 14px;}
+  #overlay.forge-scene .reward-cards, #overlay.pile-scene .reward-cards{
+    display:grid; grid-template-columns:repeat(3, max-content);
     justify-content:center; align-items:start; gap:12px 10px;}
   .forge-pair{display:flex; align-items:center; gap:9px;}
   .forge-arrow{display:flex; align-items:center; justify-content:center; flex:0 0 auto; opacity:.85;}
@@ -701,16 +713,28 @@
      实测余量：640×360 两组一行 462px（可用 ≈612）✓；844×390 三组一行 698px（可用 ≈816）✓。
      ≤560px 是矩阵外的一档，防溢出用（那一档全局卡宽已自降到 98px）。 */
   @media (max-width:700px){
-    #overlay.forge-scene .reward-cards{grid-template-columns:repeat(2, max-content);}
+    #overlay.forge-scene .reward-cards, #overlay.pile-scene .reward-cards{grid-template-columns:repeat(2, max-content);}
   }
   @media (max-width:560px){
-    #overlay.forge-scene .reward-cards{grid-template-columns:repeat(1, max-content);}
+    #overlay.forge-scene .reward-cards, #overlay.pile-scene .reward-cards{grid-template-columns:repeat(1, max-content);}
   }
   /* 矮屏（矩阵里 960×540 / 844×390 / 640×360 三档）：把纵向内边距收回去，多让出一行卡的高度。
      ⚠️ 必须**用同一条选择器**写在这里 —— 基档那条 (1,2,0) 压得过矮屏档的 `.panel`(0,1,0)，
         不加这条的话 844×390 会在 22px 的内边距上白丢 20px 内容高。同特异度、写在后面 ⇒ 这条赢。 */
   @media (max-height:560px){
-    #overlay.forge-scene .panel{padding:12px 10px;}
+    #overlay.forge-scene .panel, #overlay.pile-scene .panel{padding:12px 10px;}
+    /* v0.76.0：844×390 上十张牌折成**四行**（三组一行 × 四行），内容高 660+，而面板上限
+       是 94dvh（=366）。卡高**不能动** —— `.card.has-frame` 的子元素全是**百分比定位**
+       （图窗 35.16% / 名牌 48.02% / 类型条 10.99%），压扁卡片就是把边框美术整张拉歪；
+       而 104×150（比例 0.693）是 v0.71.0 定的、与基档 132×200（0.66）基本同形，越压越歪。
+       ⇒ 只能从**卡以外**的留白里把整行挤出来：标题下间距 / 段落行距 / 网格上下留白 /
+          行间距，四处一共让出约 44px。实测让出后前两行**完整可见**，第三行起转入面板内
+          滚动 —— 那是本仓既有的、用户明确允许的那一类（不是整页滑）。
+       ⚠️ 不改 `.panel` 的 `padding:12px 10px`：那一条同时被两处产物闸钉着
+          （forge 与 pile 各一条），改了是拿一条闸换 8px，不划算。 */
+    #overlay.forge-scene .reward-cards, #overlay.pile-scene .reward-cards{gap:6px 10px; margin:4px 0;}
+    #overlay.forge-scene .panel h2, #overlay.pile-scene .panel h2{margin-bottom:4px;}
+    #overlay.forge-scene .panel p, #overlay.pile-scene .panel p{line-height:1.35; margin-bottom:4px;}
   }
   /* v0.73.0 事件房背景 / v0.74.0 另加六张整屏场景背景（商店/篝火/胜利/失败/选英雄/胜利奖励）：
      把 #overlay 那层常驻黑幕放松，让底下那张场景图真的看得见（不放松的话任何深色夜景图
@@ -1254,6 +1278,17 @@
      ⚠️ 选择器必须带 `.menu-title`：(0,3,0) 才对得过基样式的 `.menu-title .menu-art`（0,2,0）。 */
   .low-spec .menu-title .menu-art{animation:none;}
   .low-spec .menu-hit{transition:none;}
+  /* v0.76.0：结算墨幕也纳入低配门禁。JS 侧本来就有 `menuFxOff()` 早返回（低配根本不铺墨），
+     这一条是给「JS 没跑到」兜底 —— 本仓的既有口径：CSS 与 JS 两层都要有。
+     ⚠️ 下面那条**必须重新抬特异度**：通用的 `.low-spec #overlay.ov-enter #overlayWrap` 是 (2,2,0)，
+        而 `#overlay.result-scene.ov-enter #overlayWrap` 是 (2,3,0) —— 低一档，压不过。
+        多一个 `.low-spec` 到 (2,3,1) 才赢得干脆，不用赌书写顺序。 */
+  .low-spec #scene-veil{display:none;}
+  .low-spec #app.closing #enemy-panel,
+  .low-spec #app.closing #hand,
+  .low-spec #app.closing .pile,
+  .low-spec #app.closing #actions{opacity:1; transition:none;}
+  .low-spec #overlay.result-scene.ov-enter #overlayWrap{animation:none;}
   /* v0.65.0：系统级「减弱动态效果」——全项目此前零处理，这是第一个缺口。
      复用同一套关闭规则，不改造既有 22 条 keyframes。 */
   @media (prefers-reduced-motion: reduce){
@@ -1274,6 +1309,11 @@
     .menu-hit{transition:none;}
     button.btn,button.btn.ghost{transition:none;}
     #overlay{transition:none;}
+    /* v0.76.0：结算墨幕。与低配那一组同理，两条都要各自抬特异度（@media 不加特异度，
+       通用的 `#overlay.ov-enter #overlayWrap` 只有 (2,1,0)，压不过 resultRise 的 (2,3,0)）。 */
+    #scene-veil{display:none;}
+    #app.closing #enemy-panel,#app.closing #hand,#app.closing .pile,#app.closing #actions{opacity:1; transition:none;}
+    #overlay.result-scene.ov-enter #overlayWrap{animation:none;}
   }
 
   /* —— 出卡动效：攻击=符箓+朱砂爆裂，防御=金光护体，召唤=黑雾聚形 —— */
@@ -1313,6 +1353,51 @@
   @keyframes sealCrack{0%{transform:scale(1.55) rotate(-4deg); filter:blur(7px); opacity:0;} 62%{transform:scale(.97) rotate(1deg); opacity:1;} 100%{transform:scale(1) rotate(0); filter:blur(0); opacity:1;}}
   @keyframes eyeBlink{0%,44%,56%,100%{opacity:1;} 50%{opacity:.25;}}
   @keyframes sealStamp{0%{opacity:0; transform:scale(2.3) rotate(-7deg)}55%{opacity:1; transform:scale(.92) rotate(-2deg)}100%{opacity:1; transform:scale(1) rotate(0)}}
+  /* ===================== v0.76.0：胜负结算的墨色过场（#scene-veil） =====================
+     用户口径：「不只要淡入淡出，还要场景的合理过渡」，形态圈定为
+     「收尾拍 → 留白 → 墨汁自四边洇入 → 墨从中裂开褪去 → 结算面板自下升起」，
+     并分级——普通战斗只走轻的那一拍，精英 / Boss / 通关 / 败局走完整墨幕；
+     胜＝金墨自下升，负＝暗红墨自上压。
+
+     与 #boss-intro 的关系：**并列件，不复用**。它是 Boss **入场**专用、innerHTML 用完即清，
+     这里要的是「盖住整个战场再揭开」，生命周期完全不同。共用的只有那套墨色配方。
+     z-index 70（= #boss-intro）：必须压在 #overlay 的 10 之上，「揭幕」才成立 ——
+     墨在中缝裂开的那一拍，底下的结算面板正好自下升起来。
+
+     ⚠️ 三条硬约定：
+       ① 静息是 `display:none`。**不要改成只留 opacity:0** —— 那会变成一块恒在的全屏挡板。
+       ② 洇入方向与 #boss-intro 的 inkSpread **是反的**，所以另起 keyframe 而不照抄：
+          inkSpread 是 scale(.55)→1，从**中心**长出来（印章登场要的就是这个）；
+          而「自四边洇入」要的是**外缘往中心收**——渐变的透明心在正中、不透明边在最外，
+          元素从 1.5 倍缩回 1 倍时，那圈不透明的边才从屏幕外滑进来把战场淹掉。
+          照抄 inkSpread 会做成「从中间炸开一个墨团」，与用户要的正好相反。
+       ③ 揭幕用 clip-path 的 `inset(0 50% 0 50%)`：墨**从中缝往两边退**，一条竖缝越开越大。
+          这一句就是「墨从中裂开褪去」的字面实现，不需要切两块 div（切块后渐变会各算各的，反而裂得不像）。 */
+  #scene-veil{position:fixed; inset:0; z-index:70; display:none; opacity:0; pointer-events:auto; overflow:hidden;}
+  /* ⚠️ `.show` 只负责「显形 + 铺墨」，**不进盒模型** —— 轻档那一拍靠的就是「display:block 但没 .show」：
+     一个 opacity:0 的全屏元素**照样吃得下点击**，正好拿来当那 0.5 秒的挡板（见 settleTransition）。 */
+  #scene-veil.show{display:block; opacity:1;}
+  #scene-veil .veil-ink{position:absolute; inset:0; animation:veilBleedIn .55s ease-out forwards;}
+  /* 金墨自下升：透明的「心」留在上方 ⇒ 不透明的那一头落在**底边**，随缩放自下往上淹。
+     负局反过来：心在上方之外 ⇒ 暗红压下来。 */
+  #scene-veil.win  .veil-ink{background:radial-gradient(circle at 50% 14%, rgba(46,32,10,0) 12%, rgba(24,16,4,.95) 100%);}
+  #scene-veil.lose .veil-ink{background:radial-gradient(circle at 50% 86%, rgba(72,6,0,0) 12%, rgba(72,6,0,.95) 100%);}
+  #scene-veil.parting .veil-ink{animation:inkPart .5s ease-in forwards;}
+  @keyframes veilBleedIn{from{opacity:0; transform:scale(1.5);} to{opacity:1; transform:scale(1);}}
+  @keyframes inkPart{from{opacity:1; clip-path:inset(0 0 0 0);} to{opacity:0; clip-path:inset(0 50% 0 50%);}}
+  /* 结算面板**自下升起**。特异度 (2,3,0) > 通用进场 `#overlay.ov-enter #overlayWrap` 的 (2,1,0)，
+     压得住 overlayIn，不靠书写顺序（与 scrollDrop 同一手法）。
+     ⚠️ 也正因为抬到了 (2,3,0)，两处黑名单里那两条通用规则**压不过它** —— 各自要单独写一条。 */
+  @keyframes resultRise{from{opacity:0; transform:translateY(28px) scale(.99);} to{opacity:1; transform:none;}}
+  #overlay.result-scene.ov-enter #overlayWrap{animation:resultRise .5s cubic-bezier(.2,.8,.2,1) both;}
+  /* 收尾拍：敌人先散、手牌次之、牌堆再次 —— 三拍全靠 transition-delay 错开，JS 只挂一个 .closing。
+     ⚠️ 只动 opacity，**一律不动 transform/filter**：`.hand-area` / `#hand` 上一旦出现那两个属性，
+        它们就成了 position:fixed 后代的**包含块**，#fx-layer 的整套锚点坐标系当场失效
+        （`.pile` 那份自查专门扫这条，扫的是**规则文本**，写在 .closing 里一样会红）。 */
+  #app.closing #enemy-panel{opacity:0; transition:opacity .34s ease;}
+  #app.closing #hand{opacity:0; transition:opacity .3s ease .12s;}
+  #app.closing .pile{opacity:0; transition:opacity .3s ease .24s;}
+  #app.closing #actions{opacity:0; transition:opacity .26s ease .3s;}
   /* —— 交互式新手引导 —— */
   #tut-hint{position:fixed; left:50%; bottom:92px; transform:translateX(-50%); z-index:30; background:rgba(24,18,12,.96); border:1px solid var(--gold); border-radius:10px; padding:10px 18px; color:var(--gold); font-size:14px; letter-spacing:1px; box-shadow:0 6px 20px rgba(0,0,0,.6); pointer-events:none; white-space:nowrap;}
   #tut-hint .tut-tag{display:inline-block; background:var(--red); color:#fff; border-radius:4px; padding:1px 8px; margin-right:6px; font-size:12px; letter-spacing:0;}
@@ -1344,6 +1429,25 @@
   #drag-block .fx-sign{color:#0398fa;}
   #drag-block.dyn{opacity:.9;}
   #drag-block.off{display:none;}
+  /* v0.76.0：敌人台词气泡（精英 / Boss，四档）。与 #drag-dmg 同一套锚点约定：
+     固定定位 + translate(-50%,-100%)，坐标由脚本按 enemyEl(e) 的 rect 写在行内。
+     三条硬约束，改动前先读：
+       ① 挂 body，**不挂** #enemy-panel —— 后者的 isolation:isolate 会把内部 z-index 夹到 0 层。
+       ② pointer-events:none —— 气泡正压在敌人头顶，而敌人就是**拖拽落点**，绝不能挡操作
+          （收气泡走的是 window 上捕获相的 pointerdown，不需要它自己可点）。
+       ③ 不加 margin：底边正好落在立绘顶边，多一点就会盖住敌人头顶的意图图标。 */
+  #enemy-say{position:fixed; z-index:34; pointer-events:none; box-sizing:border-box; max-width:64vw;
+    transform:translate(-50%,-100%) translateY(6px);
+    background:rgba(14,11,9,.9); border:1px solid rgba(214,183,120,.42); border-radius:10px;
+    padding:6px 13px; color:#e9dcc0; font-family:var(--font-kai); font-size:14px; line-height:1.45;
+    letter-spacing:.5px; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,.9);
+    box-shadow:0 4px 14px rgba(0,0,0,.5);
+    opacity:0; transition:opacity .22s ease, transform .22s ease;}
+  #enemy-say.on{opacity:1; transform:translate(-50%,-100%) translateY(0);}
+  /* 档位只改描边色，不改几何 —— 四档共用同一套尺寸，「濒死」不该比「出场」占更多位置。 */
+  #enemy-say.tier-low{border-color:rgba(200,96,60,.6); color:#f0cdb4;}
+  #enemy-say.tier-out{border-color:rgba(140,120,96,.45); color:#c9bda6;}
+  #enemy-say.tier-mid{border-color:rgba(226,196,120,.72); color:#f5e6bd;}
   /* —— 成就 · 卡背 / 头像框外观（局外收集奖励） —— */
   body[data-cardback="cb_jinsha"]{--cb:linear-gradient(90deg,#d4af37,#8c6d1f,#d4af37);}
   body[data-cardback="cb_moqi"]{--cb:linear-gradient(90deg,#1a1a1a,#000,#1a1a1a);}
@@ -1788,11 +1892,12 @@
 <div id="float-msg"></div>
 <div id="turn-banner"></div>
 <div id="boss-intro"></div>
+<div id="scene-veil"><div class="veil-ink"></div></div>
 <div id="rotate-tip"><div class="rt-ico">▯</div><div class="rt-main">请 横 屏</div><div class="rt-sub">《志怪塔》是横屏游戏，把手机转过来即可继续</div></div>
 <div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
-  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.75.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
+  <h1 class="title">志 怪 塔 <small>· 玩法原型 v0.76.0</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
   <div id="topbar" onclick="toggleTopbar()"></div>
   <div id="field">
     <div id="log"></div>

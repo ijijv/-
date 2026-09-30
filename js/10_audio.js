@@ -391,8 +391,15 @@ function potionIcon(p){
 }
 /* v0.61.41：name 带扩展名（如 'map.jpg'）时只补 bg_ 前缀、**不再补 .png**，否则沿用 bg_<name>.png ——
    用户给的地图背景是 .jpg，不想为了一个后缀去转码重压（转成 PNG 只会更大）。
-   路径拼法单独抽成 bgRel 是为了能被冒烟直接对拍（setBg 本体要真 DOM，沙箱里量不到）。 */
-function bgRel(name){ return (/\.[A-Za-z0-9]+$/.test(name)) ? ('bg/bg_'+name) : ('bg/bg_'+name+'.png'); }
+   路径拼法单独抽成 bgRel 是为了能被冒烟直接对拍（setBg 本体要真 DOM，沙箱里量不到）。
+   v0.76.0：主菜单那格改指 bg/menu/menu_3.png —— 它与原来的素材/bg/bg_menu.png **逐字节相同**
+   （同为 400323 字节、同一个 md5），而 menu_3.png 本来就是主菜单轮换背景 MENU_BGS 的第三张
+   ⇒ 同图挪位，零内容损失、零观感变化、少一份 400KB 重复体。
+   ⚠️ **不能**走下面 'bg/bg_'+name 那条通配：它拼出来的正是本批删掉的那个文件。 */
+function bgRel(name){
+  if(name==='menu') return 'bg/menu/menu_3.png';
+  return (/\.[A-Za-z0-9]+$/.test(name)) ? ('bg/bg_'+name) : ('bg/bg_'+name+'.png');
+}
 /* v0.74.0：**整屏专用背景**一览 —— 背景是这六张之一时，背后一定是一个「盖着面板的
   独立场景」（商店/篝火/胜利/失败/选英雄/胜利奖励），与事件房同理 ⇒ #overlay 的黑幕要放松。
   键取 setBg 的**入参原样**（带扩展名）：bgRel 对带扩展名的只补 bg_ 前缀。
