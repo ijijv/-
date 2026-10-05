@@ -77,6 +77,10 @@ function dealDamageTo(e,n,ignoreBlock,floatDelay,point){
     d+=(G.attackBuff||0)+(G.turnAtkBuff||0);
     if((e.kind==='ghost'||e.kind==='jiangshi') && hasRelic('taomujian')) d=Math.floor(d*1.25);
     if(e.kind==='yao' && hasRelic('tongqianjian')) d=Math.floor(d*1.25);
+    /* 血魔刀[金·阴差]：生命低于最大生命 30% 时，攻击牌伤害 +25%（临界值随最大生命自动联动）。 */
+    if(G.hero==='yincha' && hasRelic('xuemodao') && G.hp < G.maxHp*0.3) d=Math.floor(d*1.25);
+    /* 太上咒箓[金·天师]：目标身上诅咒满 6 层时，其受到的伤害 +25%。 */
+    if(hasRelic('taishangzhou') && (e.curse||0)>=6) d=Math.floor(d*1.25);
     if(G.weak>0 && !ignoreBlock) d=Math.floor(d*0.75);
     if(e.key==='xiuluowang' && (G.karmaFire||0)>0) d=Math.floor(d*0.7);
   }
@@ -130,10 +134,19 @@ function applyCurse(e, n){
   // 设置诅咒上限为6
   e.curse = Math.min(6, potentialCurse);
 
-  // 如果是符箓天师且有溢出，转换为格挡
+  // 如果是符箓天师且有溢出，转换为格挡（镇魔印[蓝·天师]：每层溢出转化的格挡值 +1 ⇒ 1 层 = 2 点）
   if(G.hero === 'tianshi' && overflow > 0) {
-    gainBlock(overflow);
-    log(`诅咒溢出：${overflow} 层诅咒转换为 ${overflow} 点格挡`);
+    const _ob=overflow*relicCurseOverflowBlock();
+    gainBlock(_ob);
+    log(`诅咒溢出：${overflow} 层诅咒转换为 ${_ob} 点格挡`);
+  }
+  /* 雷法心诀[紫·天师]：敌人诅咒**达到** 6 层的那一刻，受到 4 点雷击（特效走雷符精灵图）。
+     判据是跃迁（<6 → 6）—— 已在 6 层再施咒不会重复触发。
+     伤害走 point=true = 不吃增伤/弱化/桃木剑，与「受到伤害为 4 的雷击」的定值口径一致。 */
+  if(hasRelic('leifaxinjue') && currentCurse < 6 && e.curse >= 6 && e.hp > 0){
+    playFx('lei', enemyEl(e));
+    dealDamageTo(e, 4, false, 0, true);
+    log(`雷法心诀：${e.name} 诅咒满 6 层，受到 4 点雷击`);
   }
 
   if(e.curse>=6) unlockAchievement('zuzhou');
@@ -371,7 +384,9 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
   log(`${attacker.name} 对你造成 ${loss} 点伤害${absorbed>0?`（格挡吸收 ${absorbed}）`:''}`);
   // —— 本回合“受到攻击时”触发（荆棘符/铜皮铁骨/反震/卸甲等），非闪避命中即结算 ——
   if(full>0){
-    if((G.thorns||0)>0){ sfx('thorns'); attacker.hp-=G.thorns; log(`荆棘/反震：反弹 ${G.thorns} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }
+    /* 罗汉拳套[蓝·武僧]：永久自带反伤 1（与临时【荆棘】叠加，走同一条结算）。 */
+    const _th=(G.thorns||0)+relicThorns();
+    if(_th>0){ sfx('thorns'); attacker.hp-=_th; log(`荆棘/反震：反弹 ${_th} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }
     if((G.hitHeal||0)>0){ heal(G.hitHeal); log(`荆棘符：受击恢复 ${G.hitHeal} 点生命`); }
     if((G.hitCurse||0)>0){ applyCurse(attacker, G.hitCurse); log(`铜皮/荆棘：对 ${attacker.name} 施加 ${G.hitCurse} 层【诅咒】`); }
     if((G.hitShiqi||0)>0){ gainShiqi(G.hitShiqi); log(`反震：受击获得 ${G.hitShiqi} 点【尸气】`); }
@@ -459,6 +474,10 @@ function gainBlock(n){
   if(n>0){ G.blockGainedTurn=(G.blockGainedTurn||0)+n; sfx(cardPlayWindow?'card_defense':'block'); playFx('block', 'player'); floatDamage('+'+n, 'block', document.querySelector('#player-panel .hpbar')); }
 }
 function heal(n){ if(n>0) playFx('heal', 'player'); G.hp=Math.min(G.maxHp, G.hp+n); sfx('heal'); const bar=document.querySelector('#player-panel .hpbar'); floatDamage('+'+n, 'heal', bar); }
+/* 阴阳鱼[蓝·通用]：**受到负面效果**时恢复 2 点生命。
+   负面效果 = 虚弱 / 勾魂 / 缠绕 / 灼烧 / 忘忧 / 业火（enemyAct 里对玩家施加 debuff 的六处）。
+   统一走 heal() ⇒ 带 heal 特效；本函数由这六处调用，别在别的地方重复调用。 */
+function playerDebuffReceived(){ if(hasRelic('yinyangyu')){ heal(2); log('阴阳鱼：受到负面效果，恢复 2 点生命'); } }
 function discardRandomHand(){ if(!G.hand.length) return null; const i=Math.floor(rng()*G.hand.length); const c=G.hand.splice(i,1)[0]; if(c.type!=='junk') G.discard.push(c); sfx('card_discard'); log(`弃掉【${c.name}】`); return c; }   // v0.61.32
 function enemyRandomDiscard(){
   if(!G.hand.length){ log('缠绕生效，但你已无手牌可弃'); return; }
@@ -757,9 +776,20 @@ function drawCards(n){
 /* ===================== 回合流程 ===================== */
 let CURSE_THIS_TURN = 0; // 本回合施加的诅咒数量
 
+/* —— 战斗开始类遗物（统一入口）——
+   为什么单独拎成函数并**在 beginBattle 的 render 之后**调用：
+     尸玉/引魂灯/不动明王像都会立刻播特效（playFx('shiqi'|'summon'|'block','player')），
+     而 fxAnchorRect('player') 要量 #player-panel —— 一局的第一场战斗打到 beginBattle 之前
+     #player-panel 还是空的（上一屏是英雄地图），量到 0×0 会掉进「屏幕中心」兜底。
+     beginBattle 里 render() 已在 L807 之后 ⇒ 锚点必然就绪。 */
+function applyBattleStartRelics(){
+  if(hasRelic('shiyu')){ gainShiqi(3); log('尸玉：战斗开始获得 3 点【尸气】'); }
+  if(hasRelic('yinhundeng')){ addSummon({type:'yinbing', v:4, dur:3, healV:2}); log('引魂灯：战斗开始自带一只阴兵'); }
+  if(G.hero==='wuseng' && hasRelic('budongmingwang')){ gainBlock(5); G.xiejia=Math.max(G.xiejia||0, 2); floatMsg('不动明王像 · 卸甲'); log('不动明王像：开局触发【卸甲生元】（+5 格挡，卸甲 2 回合）'); }
+}
 function startBattle(keys){
   SCENE='battle';
-  fxStopAll();   // v0.64.0：清掉上一场遗留的特效元素（有的一直播到帧尾才自删，不清理会跨场景残影）
+  fxStopAll();
   setBg(G.endless?'act3':'act'+G.act);
   G.enemies = keys.map(k=>makeEnemy(ENEMIES[k], k));
   /* v0.61.31：Boss/精英轨必须**在这一行之后**判定 —— G.enemies 到上一行才存在，
@@ -775,7 +805,8 @@ function startBattle(keys){
   G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=0; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.karmaFire=0; G.duhun=null; G.xiejia=0; G.zhouyuA=false; G.尸气=0; G.exhausted=[];
   G.xisuiTurns=0; // v0.61.33：洗髓经是「本场战斗内接下来 N 回合」的增益，原来此处漏重置 → 上一关末尾打出会漏到下一关开头
   G.deck.forEach(c=>c.sealed=0);
-  if(hasRelic('zhaohunfan')){ G.hp=Math.min(G.maxHp,G.hp+3); log('招魂幡：恢复 3 点生命'); }
+  /* 招魂幡[白] 本次改造：从「开战 +3」改为「战后额外恢复 4」—— 已挪到 40_flow.winFight，
+     以免与「战斗开始类遗物」的语义打架（开战回血会让 battleStartHp 虚高，污染「本场耗血」统计）。 */
   G.battleStartHp=G.hp;
   log(`—— 遭遇 ${G.enemies.map(e=>e.name).join('、')} ——`);
   const beginBattle=()=>{
@@ -792,6 +823,7 @@ function startBattle(keys){
        ⇒ 玩家在**屏幕正中**看到一个 96px 的小特效，而不是贴在自己身上。
        G.enemies 到这里已经就绪，render 幂等无害；这也顺带成为两个牌堆计数徽章的首次填充点。 */
     if(typeof render==='function') render();
+    applyBattleStartRelics();
     /* v0.76.0：出场台词在 **render 之后**发 —— 气泡锚在 `.enemy` 的 rect 上，
        DOM 没建出来就量不到。全发一遍不会多出气泡：`sayPick` 对普通敌人返 null
        （连 `_said` 都还没建）。
@@ -850,8 +882,8 @@ function startTurn(){
   if(G.hero==='ganshiren'){
     const summonCount = G.summons.filter(s=>s.dur>0).length;
     if(summonCount > 0) {
-      G.尸气 = Math.min(G.maxShiQi, G.尸气 + summonCount);
-      log(`养尸为用：获得 ${summonCount} 点【尸气】（当前 ${G.尸气}/${G.maxShiQi}）`);
+      G.尸气 = Math.min(relicMaxShiqi(), G.尸气 + summonCount);
+      log(`养尸为用：获得 ${summonCount} 点【尸气】（当前 ${G.尸气}/${relicMaxShiqi()}）`);
     }
   }
   // 召唤单位·回合开始效果（纸人[武僧]、阴兵[武僧]、五通神全英雄）
@@ -883,6 +915,7 @@ function startTurn(){
   });
   let n=5; if(G.gouhun>0){ n-=1; log('勾魂：本回合少抽 1 张牌'); } n=Math.max(1,n); if(G.dodgeDraw>0){ n+=G.dodgeDraw; log(`额外摸 ${G.dodgeDraw} 张（上回合效果）`); G.dodgeDraw=0; }
   if(hasRelic('yinyangjing')){ n+=1; log('阴阳镜：多抽 1 张'); }
+  if(hasRelic('tongling') && G.turn===1){ n+=2; log('铜铃：战斗开始额外抽 2 张'); }   // 铜铃[白]：只在第 1 回合（= 战斗开始）多抽
   if(G.xuejiBonus>0){ n += G.xuejiBonus; log(`血祭：额外摸 ${G.xuejiBonus} 张`); }
   G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false;
   log(`—— 第 ${G.turn} 回合 · HP ${G.hp}/${G.maxHp} · 格挡 ${G.block} · 符文 ${G.energy} ——`);
@@ -950,6 +983,9 @@ function summonAct(s){
 }
 /* 召唤单位消散时的结算（#41/#43/#47/#48） */
 function onSummonDeath(s){
+  /* 骨铃[紫·赶尸人]：每个召唤单位死亡时，恢复等于其「费用」的生命（回血一律走 heal ⇒ 吸血特效）。
+     刻意放在最前面 —— 死亡结算先于敌人攻击，回血也应在同一拍发生（与 md 口径一致）。 */
+  if(hasRelic('guling')){ const _sc=SUMMON_COST[s.type]; if(_sc && _sc.c>0){ heal(_sc.c); log(`骨铃：${_sc.n}消散，恢复 ${_sc.c} 点生命`); } }
   if(s.type==='zhiren'){
     if(G.hero==='ganshiren'){ gainShiqi(2); log('纸人死亡，获得 2 点【尸气】'); }
   } else if(s.type==='xiaogui'){
@@ -1101,26 +1137,26 @@ function enemyAct(){
       case 'block': sfx('enemy_block'); e.block+=e.intent.v; log(`${e.name} 获得 ${e.intent.v} 点格挡`); break;
       case 'heal': sfx('enemy_heal'); e.hp=Math.min(e.maxHp, e.hp+e.intent.v); log(`${e.name} 恢复 ${e.intent.v} 点生命`); break;
       /* v0.61.32：虚弱从通用 enemy_debuff 拆出（狐妖/判官） */
-      case 'weak': sfx('kw_weak'); if(!G.debuffImmune){ G.weak=2; playFx('weak', 'player'); floatMsg('你被【虚弱】'); log(`${e.name} 对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【虚弱】`); break;
+      case 'weak': sfx('kw_weak'); if(!G.debuffImmune){ G.weak=2; playFx('weak', 'player'); floatMsg('你被【虚弱】'); log(`${e.name} 对你施加【虚弱】`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【虚弱】`); break;
       /* v0.61.32：勾魂从通用 enemy_debuff 拆出（白无常/拘魂使/阎罗） */
-      case 'gouhun': sfx('kw_gouhun'); if(!G.debuffImmune){ G.gouhun=1; playFx('gouhun', 'player'); floatMsg('勾魂'); log(`${e.name} 勾魂：你下回合少抽 1 张`); } else log(`佛渡免疫了${e.name}的【勾魂】`); break;
-      case 'strength': { sfx('enemy_strength'); const _sB4=e.strength||0; addEnemyStrength(e, e.intent.v); const _sGot=(e.strength||0)-_sB4; if(_sGot>0) log(`${e.name} 力量 +${_sGot}`); if(e.intent.weak){ sfx('kw_weak'); if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】`); } else log(`佛渡免疫了${e.name}的【暗夜威压】`); } if(e.intent.sealHeal){ const h=(G.wangyouDrunk||0)*8; if(h>0){ e.hp=Math.min(e.maxHp, e.hp+h); log(`${e.name} 汲取你饮下的忘忧汤，回复 ${h} 点生命`); } G.wangyouDrunk=0; } break; }
+      case 'gouhun': sfx('kw_gouhun'); if(!G.debuffImmune){ G.gouhun=1; playFx('gouhun', 'player'); floatMsg('勾魂'); log(`${e.name} 勾魂：你下回合少抽 1 张`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【勾魂】`); break;
+      case 'strength': { sfx('enemy_strength'); const _sB4=e.strength||0; addEnemyStrength(e, e.intent.v); const _sGot=(e.strength||0)-_sB4; if(_sGot>0) log(`${e.name} 力量 +${_sGot}`); if(e.intent.weak){ sfx('kw_weak'); if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【暗夜威压】`); } if(e.intent.sealHeal){ const h=(G.wangyouDrunk||0)*8; if(h>0){ e.hp=Math.min(e.maxHp, e.hp+h); log(`${e.name} 汲取你饮下的忘忧汤，回复 ${h} 点生命`); } G.wangyouDrunk=0; } break; }
       // v0.61.01：连击不吃蓄力加值，也不消耗已存的蓄力（用户拍板口径）
       // v1.0.11：出手动作只在开头挂一次（连击 n 段是同一个动作，不要每段重播）
       case 'multi': { enemyAttackAnim(e); for(let i=0;i<e.intent.n;i++){ if(G.hp<=0) break; dealDamageToPlayer(e.intent.v,e,i*140,{multi:true}); } break; }
-      case 'discard': sfx('enemy_debuff'); if(!G.debuffImmune){ G.pendingDiscard++; floatMsg('下回合随机弃 1 张牌'); log(`${e.name} 缠绕你：下回合开始随机弃 1 张牌`); } else log(`佛渡免疫了${e.name}的【缠绕】`); break;
+      case 'discard': sfx('enemy_debuff'); if(!G.debuffImmune){ G.pendingDiscard++; floatMsg('下回合随机弃 1 张牌'); log(`${e.name} 缠绕你：下回合开始随机弃 1 张牌`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【缠绕】`); break;
       case 'attackBlock': { sfx('enemy_attack'); enemyAttackAnim(e); dealDamageToPlayer(e.intent.v,e); if(e.intent.block>0) sfx('enemy_block'); e.block+=e.intent.block; log(`${e.name} 攻击并格挡 ${e.intent.block}`); break; }
       case 'summon': { sfx('enemy_summon'); const uk=e.intent.unit||'xiaojianshi'; const un=ENEMIES[uk].name; playFx('jiangshi', enemyEl(e)); let added=0; /* v1.0.9：上限判据改用**存活**数 —— 敌人阵亡只置 dying 标记、从不从 G.enemies 移除，
                    旧判据 `G.enemies.length>=5` 会被尸体占满 ⇒ 几轮后僵王再也召不出小僵尸（招牌机制哑火）。 */
                  for(let i=0;i<e.intent.n;i++){ if(aliveEnemies().length>=5) break; G.enemies.push(makeEnemy(ENEMIES[uk], uk)); added++; } log(`${e.name} 召唤了 ${added} 只${un}`); break; }
       case 'aoe': { enemyAttackAnim(e); dealDamageToPlayer(e.intent.v,e); if(G.summons.length){ G.summons.shift(); log(`${e.name} 的幽冥之气驱散了一个召唤单位`); } break; }
-      case 'burn': sfx('enemy_debuff'); if(!G.debuffImmune){ G.burn=(G.burn||0)+e.intent.v; playFx('burn', 'player'); floatMsg(`灼烧 +${e.intent.v}`); log(`${e.name} 对你施加灼烧（每回合 -${e.intent.v*2} 生命，可叠加）`); } else log(`佛渡免疫了${e.name}的【灼烧】`); break;
+      case 'burn': sfx('enemy_debuff'); if(!G.debuffImmune){ G.burn=(G.burn||0)+e.intent.v; playFx('burn', 'player'); floatMsg(`灼烧 +${e.intent.v}`); log(`${e.name} 对你施加灼烧（每回合 -${e.intent.v*2} 生命，可叠加）`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【灼烧】`); break;
       /* v0.61.32：生死簿记账（原先整段静默） */
       case 'jiming': { sfx('boss_ledger'); e.ledgerActive=true; e.ledgerDmg=0; const avail=AFFIXES.filter(a=>!(e.affixes||[]).some(x=>x.id===a.id)); if(avail.length){ const a=avail[Math.floor(rng()*avail.length)]; e.ledgerAffix={id:a.id, tier:1}; log(`${e.name} 记下你的名字，并记下一条罪状【${a.name}】`); } else { e.ledgerAffix=null; log(`${e.name} 记下你的名字（罪状已记满）`); } floatMsg('生死簿 · 记名'); break; }
       case 'qingsuan': { sfx('enemy_qingsuan'); const ledger=e.ledgerDmg||0; const dmg=Math.min(24, Math.floor(ledger*0.3)); if(e.ledgerAffix){ const a=AFFIXES.find(x=>x.id===e.ledgerAffix.id); if(a){ if(!e.affixes) e.affixes=[]; e.affixes.push({id:a.id, tier:1}); if(a.id==='pingbi'){ e.block+=8; e.pingbi=(e.pingbi||0)+8; } log(`${e.name} 清算：【${a.name}】生效——${a.desc}`); } } e.ledgerActive=false; e.ledgerDmg=0; e.ledgerAffix=null; if(dmg>0){ floatMsg('生死簿 · 清算'); const dead=directDamage(dmg, `${e.name} 清算生死簿：反弹 ${dmg} 点伤害`); if(dead) return; /* v0.61 B10：判负已在 directDamage→loseGame 幂等收口，棋盘停格属正常终局，不再续跑其余敌人 */ } else log(`${e.name} 翻开生死簿：无账可清`); break; }
       /* v0.61.32：业火附体是修罗王招牌机制，从通用 buff 拆出 */
-      case 'yehuo': sfx('boss_yehuo'); if(!G.debuffImmune){ G.karmaFire=2; playFx('yehuo', 'player'); floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害 -30%，每次造成伤害反噬 1 点生命，它受到的诅咒层数翻倍`); } else log(`佛渡免疫了${e.name}的【业火】`); break;
-      case 'wangyou': sfx('enemy_debuff'); G.wangyouTurns=2; G.wangyouDrunk=0; playFx('wangyou', 'player'); floatMsg('忘忧 · 两回合'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合开始时可选 1 张手牌「饮下」弃置，否则受 8 点真实伤害`); break;
+      case 'yehuo': sfx('boss_yehuo'); if(!G.debuffImmune){ G.karmaFire=2; playFx('yehuo', 'player'); floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害 -30%，每次造成伤害反噬 1 点生命，它受到的诅咒层数翻倍`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【业火】`); break;
+      case 'wangyou': sfx('enemy_debuff'); G.wangyouTurns=2; G.wangyouDrunk=0; playFx('wangyou', 'player'); floatMsg('忘忧 · 两回合'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合开始时可选 1 张手牌「饮下」弃置，否则受 8 点真实伤害`); playerDebuffReceived(); break;
       case 'dormant': sfx('enemy_dormant'); log(`${e.name} 在观望`); break;
     }
     // v0.61 C1：一次魅惑 = 削减该敌人「一整次行动」的全部伤害（连击各段、蓄力重击都算），行动结束才消耗 1 层
@@ -1130,10 +1166,10 @@ function enemyAct(){
   }
   if((G.zombieDmg||0)>0){ const jw=G.enemies.find(en=>en.key==='jiangwang' && en.hp>0); if(jw){ const heal=Math.floor(G.zombieDmg/2); jw.hp=Math.min(jw.maxHp, jw.hp+heal); log(`僵王吸食小僵尸的血气，回复 ${heal} 点生命`); } G.zombieDmg=0; }
   if(aliveEnemies().length===0){ winFight(); return; }
-  // 苦行武僧：敌人攻击全部结算完（格挡已按需消耗）之后，才算「格挡存留」——未用完的保留最多 3 点。
+  // 苦行武僧：敌人攻击全部结算完（格挡已按需消耗）之后，才算「格挡存留」——未用完的保留（上限 3，金刚经残页[紫·武僧]升到 6）。
   // 卸甲生元[#23B]持续期间不清零（改为到期时整体转生命，见下一行）。
-  if(G.hero==='wuseng' && !(G.xiejia>0)) G.block = Math.min(3, G.block);
-  if(G.xiejia>0){ G.xiejia--; if(G.xiejia===0 && G.block>0){ const h=G.block; G.block=0; G.hp=Math.min(G.maxHp, G.hp+h); sfx('heal'); floatMsg(`卸甲生元 · 格挡化血 +${h}`); log(`卸甲生元：${h} 点格挡转化为生命`); } }
+  if(G.hero==='wuseng' && !(G.xiejia>0)) G.block = Math.min(relicBlockKeep(), G.block);
+  if(G.xiejia>0){ G.xiejia--; if(G.xiejia===0 && G.block>0){ const h=G.block; G.block=0; heal(h); floatMsg(`卸甲生元 · 格挡化血 +${h}`); log(`卸甲生元：${h} 点格挡转化为生命`); } }
   resolveEndBlock();
   logTurnSummary();
   startTurn();
@@ -1241,12 +1277,13 @@ function doPlayCard(i){
   // 燃魂(#36)：本回合每打出对应类型的牌（燃魂自身除外），恢复 2 点生命
   if(G.ranhunType && !(G.ranhunSelf && G.ranhunSelf===c)){
     const mt = G.ranhunType==='ghost' ? isGhostCard(c) : (c.type===G.ranhunType);
-    if(mt){ const rh=(G.ranhunHeal!=null?G.ranhunHeal:2); G.hp=Math.min(G.maxHp, G.hp+rh); floatMsg('+'+rh+' 生命'); log(`燃魂：打出【${c.name}】，恢复 ${rh} 点生命`); }
+    if(mt){ const rh=(G.ranhunHeal!=null?G.ranhunHeal:2); heal(rh); floatMsg('+'+rh+' 生命'); log(`燃魂：打出【${c.name}】，恢复 ${rh} 点生命`); }
   }
   // 尸王(#48)：成功打出后记录卡牌引用，等召唤物消散再回弃牌堆
   if(c.id==='shi_wang' && G.hero==='ganshiren'){ G.shiWangCard=c; }
   if(TUT && TUT.step===1) advanceTut();
-  if(c.type==='attack' && hasRelic('shehunling')){ G.hp=Math.min(G.maxHp, G.hp+2); log('摄魂铃：回复 2 点生命'); }
+  /* 摄魂铃[金] 本次改造：2 → 3，并改走 heal() ⇒ 每次触发都带回血特效（用户口径：回血一律要特效）。 */
+  if(c.type==='attack' && hasRelic('shehunling')){ heal(3); log('摄魂铃：回复 3 点生命'); }
   G.attackBuff=prevBuff;
   if(G.hp<=0){ G.hp=0; loseGame(); return; }   // v0.61 B2：死亡先判 —— 同帧自爆绝杀按判负，不再带 0 血进胜利结算
   if(aliveEnemies().length===0){ winFight(); return; }

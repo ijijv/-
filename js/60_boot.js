@@ -315,25 +315,31 @@ function renderTopbar(){
   // 预尸气：下一回合召唤物将带来的【尸气】进账（仅茅山赶尸人；0 就不显示）
   const preShiqi=preShiqiNextTurn();
   // 如果当前角色是茅山赶尸人，显示尸气
+  const maxShiQiNow=relicMaxShiqi();   // 尸玉：12 → 15
+  const maxXuenuNow=relicMaxXuenu();   // 血玉：10 → 14
   if(G.hero === 'ganshiren') {
-    html += `<span class="stat stat-shiqi"><span class="sb-long">尸气: <b>${G.尸气}/${G.maxShiQi}</b>${preShiqi>0?`<span class="stat-preshiqi" data-tip="kw:预尸气">预+${preShiqi}</span>`:''}</span><span class="sb-short">尸气 <b>${G.尸气}/${G.maxShiQi}</b></span></span>`;
+    // 尸玉在场：芯片加「蓝色火焰包围」进阶态（.relic-flame-blue，见原型.html）
+    html += `<span class="stat stat-shiqi${hasRelic('shiyu')?' relic-flame-blue':''}"><span class="sb-long">尸气: <b>${G.尸气}/${maxShiQiNow}</b>${preShiqi>0?`<span class="stat-preshiqi" data-tip="kw:预尸气">预+${preShiqi}</span>`:''}</span><span class="sb-short">尸气 <b>${G.尸气}/${maxShiQiNow}</b></span></span>`;
   }
   // 如果当前角色是血祭阴差，显示血怒（整局累积资源）
   if(G.hero === 'yincha') {
-    html += `<span class="stat stat-xuenu"><span class="sb-long">血怒: <b>${G.xuenu||0}/${G.maxXuenu||10}</b></span><span class="sb-short">血怒 <b>${G.xuenu||0}/${G.maxXuenu||10}</b></span></span>`;
+    // 燃血令：血怒标识旁挂「累积读数」（每满 20 换 1 符文）
+    const rageAcc=(hasRelic('ranxueling')?`<span class="stat-rageaccum" data-tip="relic:ranxueling">+${G.rageAccum||0}/20</span>`:'');
+    // 血玉在场：芯片加「紫色火焰包围」进阶态（.relic-flame-purple）
+    html += `<span class="stat stat-xuenu${hasRelic('xueyu')?' relic-flame-purple':''}"><span class="sb-long">血怒: <b>${G.xuenu||0}/${maxXuenuNow}</b></span><span class="sb-short">血怒 <b>${G.xuenu||0}/${maxXuenuNow}</b></span>${rageAcc}</span>`;
   }
   html += `<button class="tb-toggle" onclick="event.stopPropagation();toggleTopbar()">${TOPBAR_OPEN?'▴ 收起详情':'▾ 详情'}</button>`;
   if(TOPBAR_OPEN){
     const buffs=playerBuffHTML();
     // 遗物：详情页内带插图（图标 + 名称）——不再显示在玩家面板下方
-    const relics=G.relics.length?`<div class="player-relics">${G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('')}</div>`:'';
+    const relics=G.relics.length?`<div class="player-relics">${G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip${relicUsedCls(id)}" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('')}</div>`:'';
     // 召唤物：入详情页；只在战斗中显示（召唤物在 startBattle 时清空）
     const summons=(SCENE==='battle' && G.summons && G.summons.length)?`<div class="tb-summons">${G.summons.map(s=>summonHTML(s)).join('')}</div>`:'';
     const potion=potionBagHTML();
     /* v1.0.3：顶栏芯片的**完整写法**。这一行只在手机横屏档显示（基档 display:none，
        选择器 `.tb-detail .stat.stat-detail-full` 是为了压过 :1262 的 `.tb-detail .stat`），
        桌面档的四个芯片本来就写着全文 ⇒ 详情里再来一行是重复的，所以基档不给看。 */
-    const statsDetail=`<span class="stat stat-detail-full">${statsFull}${G.hero==='ganshiren'?` · 尸气 ${G.尸气}/${G.maxShiQi}${preShiqi>0?`（下回合预+${preShiqi}）`:''}`:''}${G.hero==='yincha'?` · 血怒 ${G.xuenu||0}/${G.maxXuenu||10}`:''}</span>`;
+    const statsDetail=`<span class="stat stat-detail-full">${statsFull}${G.hero==='ganshiren'?` · 尸气 ${G.尸气}/${maxShiQiNow}${preShiqi>0?`（下回合预+${preShiqi}）`:''}`:''}${G.hero==='yincha'?` · 血怒 ${G.xuenu||0}/${maxXuenuNow}${hasRelic('ranxueling')?`（累积 ${G.rageAccum||0}/20）`:''}`:''}</span>`;
     html+=`<div class="tb-detail">
       ${statsDetail}
       ${potion}
@@ -343,6 +349,23 @@ function renderTopbar(){
     </div>`;
   }
   el.innerHTML=html;
+}
+/* —— 符文图标按英雄换皮（用户口径「每个角色的符文样式」）——
+   静态 <img src="素材/rune.png"> 保留为**默认 + 兜底**：打包.py 只内联这一处静态 src，
+   单文件产物离线也能出图。运行时按 G.hero 换成 素材/rune_<hero>.png；
+   新图缺失时 onerror 回落默认图 —— 绝不出现空白符文。
+   ⚠️ 新素材没生成前本函数是**零副作用**的（找不到图就回落，与改动前逐像素相同）。 */
+const RUNE_HERO = { tianshi:'rune_tianshi.png', ganshiren:'rune_ganshiren.png', wuseng:'rune_wuseng.png', yincha:'rune_yincha.png' };
+let RUNE_CUR='';
+function syncRuneIcon(){
+  const img=document.querySelector('#rune-display .rune-icon');
+  if(!img || !G) return;
+  if(!img.dataset.def) img.dataset.def=img.getAttribute('src')||'';
+  const rel=RUNE_HERO[G.hero]||'rune.png';
+  if(RUNE_CUR===rel) return;
+  RUNE_CUR=rel;
+  img.onerror=()=>{ img.onerror=null; img.src=img.dataset.def; };
+  img.src=assetURL(rel, true);
 }
 /* v1.0.7（手机端性能）：三个面板的 innerHTML 按**内容去重**（写一次、没变就不写）。
    线上取证：修好战报抽屉之后 render() 桌面中位仍有 ~4ms，全部落在三处 innerHTML 赋值上
@@ -392,9 +415,10 @@ function render(){
     <div class="hero-art-box">${artImg('hero/'+G.hero+'.png', `<div class="hero-emoji">🀄</div>`, 'hero-art')}${summonFold}</div>
     <div class="pname" data-tip="hero:${G.hero}">${heroName}</div>
     ${heroMech?`<div class="pmech" data-tip="hero:${G.hero}">⚙ ${heroMech}</div>`:''}
-    <span class="hpbar${G.block>0?' has-block':''}"><i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>
+    <span class="hpbar${G.block>0?' has-block':''}${hasRelic('xuemodao')?' xuemodao':''}${(hasRelic('xuemodao')&&G.hp<G.maxHp*0.3)?' xue-active':''}">${hasRelic('xuemodao')?'<i class="hpmark" data-tip="relic:xuemodao"></i>':''}<i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>
     <div class="pstats"><span class="pstat-hp"><i></i>${G.hp}/${G.maxHp}</span>${(G.block>0||preBlock>0)?`<span class="pstat-block"><i></i>${G.block}</span>`:''}${preBlock>0?`<span class="pstat-preblock" data-tip="kw:预格挡"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0 L10 6.5 H6.8 V12 H3.2 V6.5 H0 Z" fill="#4aa8ff"/></svg>${preBlock}</span>`:''}</div>${summonBar}${pbuffs?'<div class="pbuffs">'+pbuffs+'</div>':''}`);
   renderTopbar();
+  syncRuneIcon();
   const _epEl=document.getElementById('enemy-panel');
   /* v0.72.0：第二个实参从 `G.enemies.indexOf(e)`（**未过滤**的下标）改成 filter 后的位置。
      弧线的秩是 `存活数-1-pos`，它要求 pos 密集地铺满 0..存活数-1 —— 一旦数组里躺着阵亡的

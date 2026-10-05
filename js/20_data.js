@@ -39,8 +39,8 @@ const KEYWORDS = [
   ['开天眼','本回合你的攻击牌伤害提升（数值显示在顶部状态栏）。'],
   ['佛渡','清除自身所有负面状态（虚弱/勾魂/缠绕/灼烧/业火等）与手中【怨气】废牌，本回合免疫敌人施加的负面效果；升级后额外获得格挡或尸气。【忘忧】无法解除。消耗（每场战斗限用一次）。'],
   ['血祭','下回合多摸牌；本回合若受伤，再多摸 1 张。'],
-  ['血怒','阴差专属资源，上限 10 层、整局累积。打出扣血牌每失去 1 点生命 +1 层；「每层 +N」类牌打出时消耗实际用到的层数。'],
-  ['尸气','赶尸人专属资源：上限 12 点，战斗内跨回合累积、每场战斗清零。用于强化召唤（纸人/五通神）与引爆类牌（咒雨）；每消耗 1 点回复 1 点生命。'],
+  ['血怒','阴差专属资源，上限 10 层（持有【血玉】时 +4）、整局累积。打出扣血牌每失去 1 点生命 +1 层；「每层 +N」类牌打出时消耗实际用到的层数。'],
+  ['尸气','赶尸人专属资源：上限 12 点（持有【尸玉】时 +3），战斗内跨回合累积、每场战斗清零。用于强化召唤（纸人/五通神）与引爆类牌（咒雨）；每消耗 1 点回复 1 点生命。'],
   ['召唤寿命','召唤单位能存活到第几回合（每回合结束 -1，归零即消散）。五通神按「回合开始」结算寿命，其余按「回合结束」结算。'],
   ['吸血','按实际造成的伤害等比回复生命（过量击杀只按敌人剩余血量计）。敌方也有【吸血】词缀。'],
   ['渡魂','接下来 5 回合内，你对敌人造成的伤害按比例转化为回复生命。'],
@@ -575,6 +575,13 @@ const CARDS = [
       addSummon({type:'shi_wang', v:10, dur:5});
       floatMsg('尸王 · 苏醒');
       log('尸王：消耗 10 点【尸气】，召唤尸王（持续 5 回合）'); }},
+  /* 断刃[金·通用] 的附加卡：**不进任何卡池**（weightedCard 里按 id 排除），
+     只在获得【断刃】遗物时由 grantRelic() 塞进牌库。0 费、稳定 5 伤、不吃增伤与弱化、不可升级。
+     ⚠️ `point=true` 是**唯一**能跳过攻击力/桃木剑/铜钱剑/虚弱/业火的口径（见 30_engine.dealDamageTo），
+        别改成普通 dealDamageTo(t,5) —— 那样「不吃增伤与弱化」的承诺就废了。 */
+  {id:'duanren_leifu', name:'断刃雷符', type:'attack', rarity:'gold', cost:0,
+    t:()=>'造成 5 点稳定伤害（不吃增伤与弱化），不可升级',
+    eff:()=>{ const t=curEnemy(); if(!t) return; dealDamageTo(t,5,false,0,true); }},
 ];
 /* ===================== 卡面短文案（v0.69.0） =====================
    背景：牌框换成真美术后，铭牌窗只占卡高 28%，132x200 的卡上 .cdesc 实测**只装得下 3 行**
@@ -1033,14 +1040,21 @@ const RELIC_SFX = {
   zhaohunfan:'relic_bell',   shehunling:'relic_bell',
   zhushabi:'relic_fu',       jifengfu:'relic_fu',        hushenfu:'relic_fu',
   taomujian:'relic_fu',      tongqianjian:'relic_fu',
-  yinyangjing:'relic_mirror',daoxin:'relic_mirror',      baiguilu:'relic_mirror'
+  yinyangjing:'relic_mirror',daoxin:'relic_mirror',      baiguilu:'relic_mirror',
+  /* —— 本次新增 15 件：按「铃 / 符·笔·剑 / 镜·录·道心」同一套三分类落键 —— */
+  tongling:'relic_bell',     guling:'relic_bell',        ranxueling:'relic_bell',
+  duanren:'relic_fu',        zhenmoyin:'relic_fu',       leifaxinjue:'relic_fu',
+  taishangzhou:'relic_fu',   luohanquan:'relic_fu',      jingangjing:'relic_fu',
+  xuemodao:'relic_fu',
+  yinyangyu:'relic_mirror',  shiyu:'relic_mirror',       yinhundeng:'relic_mirror',
+  budongmingwang:'relic_mirror', xueyu:'relic_mirror'
 };
 function relicSfxFor(r){ return (r && RELIC_SFX[r.id]) || 'relic'; }
 /* —— 尸气 —— */
 function gainShiqi(n){ if(!n || n<=0) return;
-  tipOnce('shiqi', '<b>【尸气】</b>是茅山赶尸人的专属资源：上限 12 点、<b>战斗内跨回合累积，每场战斗清零</b>。场上每有 1 个召唤物，回合开始就 +1；攒着可以强化【五通神】，或用【咒雨】一次引爆。每消耗 1 点【尸气】会回复 1 点生命。');
+  tipOnce('shiqi', `<b>【尸气】</b>是茅山赶尸人的专属资源：上限 ${relicMaxShiqi()} 点、<b>战斗内跨回合累积，每场战斗清零</b>。场上每有 1 个召唤物，回合开始就 +1；攒着可以强化【五通神】，或用【咒雨】一次引爆。每消耗 1 点【尸气】会回复 1 点生命。`);
   const __before=(G.尸气||0);
-  G.尸气 = Math.min(G.maxShiQi||12, __before+n);
+  G.尸气 = Math.min(relicMaxShiqi(), __before+n);
   if(G.尸气>__before){ sfxOnce('card_shiji', 120); playFx('shiqi', 'player'); } }   // v0.61.25：尸气真的涨了才出声，且防同帧叠音；v0.64.0 补特效（同理：涨了才播）
 function hasShiqi(n){ return (G.尸气||0) >= n; }
 function spendShiqi(n){ if(!hasShiqi(n)) return false; G.尸气 -= n;
@@ -1049,8 +1063,15 @@ function spendShiqi(n){ if(!hasShiqi(n)) return false; G.尸气 -= n;
 /* —— 血怒（不自动烧；只在使用“每层+N”效果时消耗实际用到的层数） —— */
 function gainRage(n){ if(!n || n<=0) return;
   const __b=(G.xuenu||0);
-  G.xuenu = Math.min(G.maxXuenu||10, __b+n);
-  if(G.xuenu>__b){ sfx('card_xuenu'); playFx('xuenu', 'player'); } }   // v0.61.32：满 10 层后不再出声（满了就「涨不上去」了）；v0.64.0 补特效
+  G.xuenu = Math.min(relicMaxXuenu(), __b+n);
+  const _got = G.xuenu-__b;
+  if(G.xuenu>__b){ sfx('card_xuenu'); playFx('xuenu', 'player'); }   // v0.61.32：满层后不再出声（满了就「涨不上去」了）；v0.64.0 补特效
+  /* 燃血令[金·阴差]：每累积 20 点血怒，立刻获得 1 符文（累计口径 —— 不随消耗回退，
+     读数 G.rageAccum 挂在血怒标识旁，见 js/60_boot.js 顶栏）。 */
+  if(hasRelic('ranxueling') && _got>0){
+    G.rageAccum=(G.rageAccum||0)+_got;
+    while(G.rageAccum>=20){ G.rageAccum-=20; G.energy+=1; floatMsg('燃血令 · 符文 +1'); log(`燃血令：累积血怒满 20，获得 1 点符文（现 ${G.energy}）`); }
+  } }
 function rageLayers(){ return G.xuenu||0; }
 /* per=每层加成, cap=加成上限：返回可使用的层数，并就地消耗 */
 function rageSpend(per, cap){ const layers=Math.floor(cap/per); const use=Math.min(layers, rageLayers()); if(use>0){ G.xuenu -= use; } return use; }
@@ -1063,6 +1084,10 @@ function addSummon(o){ G.summonsMadeTurn=(G.summonsMadeTurn||0)+1;
   sfx('card_summon');   // v0.61.32：所有己方召唤的**唯一**入口（含尸王与附灵术）
   G.summons.push(o); return o; }
 /* 五通神「回合开始」效果（现形当回合立即结算一次，之后每个回合开始再触发；寿命 -1） */
+/* 召唤单位的「费用」（骨铃[紫·赶尸人] 死亡回血按此口径）——
+   召唤物对象本身不带 cost 字段 ⇒ 这里按「产出它的牌的基础费用」给一个稳定口径：
+   纸人 1 / 小鬼 1 / 阴兵 1（阴兵过境 3 费召 2~3 只，摊到每只取 1）/ 五通神 2 / 尸王 0（消耗尸气而非符文）。 */
+const SUMMON_COST = { zhiren:{c:1,n:'纸人'}, xiaogui:{c:1,n:'小鬼'}, yinbing:{c:1,n:'阴兵'}, wutong:{c:2,n:'五通神'}, shi_wang:{c:0,n:'尸王'} };
 function wutongTick(s, noDecay){   // v0.61.39：noDecay=true 时只结算效果、不扣寿命（附灵术/群鬼乱舞用）
   const b=s.v||3;
   if(G.hero==='yincha'){ heal(b); log(`五通神：恢复 ${b} 点生命`); }
@@ -1166,23 +1191,114 @@ function returnShiWangCard(){
 }
 
 
-/* ===================== 遗物数据（8 个） ===================== */
+/* ===================== 遗物数据 =====================
+   —— 本次改造（v1.0.0 内）：按《遗物设计.md》定稿，现有 12 件改 7 件，新增 15 件（3 通用 + 12 专属）。
+   ⚠️ 专属遗物带 hero 字段（'tianshi'|'ganshiren'|'wuseng'|'yincha'），只进该英雄的掉落池；
+      过滤在 js/50_ui.js 的 weightedRelic() / showRelicReward()（两个入口覆盖三处掉落点）。
+   ⚠️ 桃木剑 / 铜钱剑 / 疾风符 / 护身符 **本次不动**（用户口径：「我都没碰」）。
+   ⚠️ 新遗物必须配 素材/relic/<id>.png，缺图会静默空白（relicIcon → artImg onerror）。 */
 const RELICS = [
-  {id:'zhaohunfan', name:'招魂幡', rarity:'white', desc:'每场战斗开始恢复 3 点生命'},
-  {id:'zhushabi', name:'朱砂笔', rarity:'white', desc:'攻击牌伤害 +2'},
+  {id:'zhaohunfan', name:'招魂幡', rarity:'white', desc:'每场战斗结束额外恢复 4 点生命'},
+  {id:'zhushabi', name:'朱砂笔', rarity:'white', desc:'攻击牌伤害 +3'},
   {id:'jifengfu', name:'疾风符', rarity:'purple', desc:'每回合第 1 张技能牌符文 -1（最低 0）'},
   {id:'taomujian', name:'桃木剑', rarity:'blue', desc:'对鬼怪/僵尸类敌人伤害 +25%'},
-  {id:'yinyangjing', name:'阴阳镜', rarity:'blue', desc:'每回合多抽 1 张牌'},
-  {id:'jubaopen', name:'聚宝盆', rarity:'blue', desc:'战斗获得金币 +50%'},
+  {id:'yinyangjing', name:'阴阳镜', rarity:'purple', desc:'每回合多抽 1 张牌'},
+  {id:'jubaopen', name:'聚宝盆', rarity:'blue', desc:'战斗获得金币 +50%；商店灵汁打 7 折'},
   {id:'daoxin', name:'道心', rarity:'white', desc:'每场战斗首次受致命伤时，改为保留 1 点生命'},
-  {id:'baiguilu', name:'百鬼录', rarity:'gold', desc:'每击败 1 个精英，永久 +5 最大生命'},
+  {id:'baiguilu', name:'百鬼录', rarity:'gold', desc:'每击败 1 个精英或 Boss，永久 +5 最大生命'},
   {id:'hushenfu', name:'护身符', rarity:'purple', desc:'每回合开始获得 2 点格挡'},
   {id:'tongqianjian', name:'铜钱剑', rarity:'blue', desc:'对「妖」类敌人伤害 +25%'},
-  {id:'fanhunxiang', name:'返魂香', rarity:'purple', desc:'战斗胜利后额外恢复 10 点生命'},
-  {id:'shehunling', name:'摄魂铃', rarity:'gold', desc:'每打出一张攻击牌，恢复 2 点生命'},
+  {id:'fanhunxiang', name:'返魂香', rarity:'purple', desc:'战斗胜利后额外恢复 6 点生命'},
+  {id:'shehunling', name:'摄魂铃', rarity:'gold', desc:'每打出一张攻击牌，恢复 3 点生命'},
+
+  /* —— 新增 · 通用（四英雄共享池） —— */
+  {id:'tongling',    name:'铜铃',   rarity:'white', desc:'战斗开始时额外抽 2 张牌'},
+  {id:'yinyangyu',   name:'阴阳鱼', rarity:'blue',  desc:'受到负面效果时，恢复 2 点生命'},
+  {id:'duanren',     name:'断刃',   rarity:'gold',  desc:'牌库中生成一张 0 费、稳定 5 点伤害的雷符（不吃增伤与弱化），不可升级，算攻击牌，可循环'},
+
+  /* —— 新增 · 专属 · 符箓天师（诅咒流） —— */
+  {id:'zhenmoyin',    hero:'tianshi',   name:'镇魔印',     rarity:'blue',   desc:'溢出的诅咒转化的格挡值 +1'},
+  {id:'leifaxinjue',  hero:'tianshi',   name:'雷法心诀',   rarity:'purple', desc:'敌人每次诅咒达到 6 层，受到 4 点雷击'},
+  {id:'taishangzhou', hero:'tianshi',   name:'太上咒箓',   rarity:'gold',   desc:'敌人身上的诅咒达到 6 层时，其受到的伤害 +25%'},
+
+  /* —— 新增 · 专属 · 茅山赶尸人（尸气流） —— */
+  {id:'shiyu',       hero:'ganshiren', name:'尸玉',       rarity:'blue',   desc:'尸气上限 +3；战斗开始时获得 3 点尸气'},
+  {id:'guling',      hero:'ganshiren', name:'骨铃',       rarity:'purple', desc:'每个召唤单位死亡时，恢复等于其费用的生命'},
+  {id:'yinhundeng',  hero:'ganshiren', name:'引魂灯',     rarity:'gold',   desc:'战斗开始时，自带一只非升级的阴兵'},
+
+  /* —— 新增 · 专属 · 苦行武僧（格挡流） —— */
+  {id:'luohanquan',    hero:'wuseng',   name:'罗汉拳套',   rarity:'blue',   desc:'永久自带反伤为 1 的荆棘'},
+  {id:'jingangjing',   hero:'wuseng',   name:'金刚经残页', rarity:'purple', desc:'回合结束保留的格挡上限 3 → 6'},
+  {id:'budongmingwang',hero:'wuseng',   name:'不动明王像', rarity:'gold',   desc:'开局直接触发非升级的卸甲生元'},
+
+  /* —— 新增 · 专属 · 血祭阴差（血怒流） —— */
+  {id:'xueyu',       hero:'yincha',    name:'血玉',       rarity:'blue',   desc:'血怒上限 +4'},
+  {id:'ranxueling',  hero:'yincha',    name:'燃血令',     rarity:'purple', desc:'每累积 20 点血怒，立刻获得 1 符文'},
+  {id:'xuemodao',    hero:'yincha',    name:'血魔刀',     rarity:'gold',   desc:'生命低于 30% 时，攻击牌伤害 +25%'},
+];
+/* —— 待交付美术素材登记（设计稿见项目根目录《美术设计要求.md》）——
+   设计已定稿、图还没到手。这些路径在 `_patch/verify_dist.py` 的 [1] 素材覆盖闸里**按名单豁免**，
+   否则「缺图」会让打包闸假红，逼得人要么乱塞占位图、要么把闸整个关掉。
+   ⚠️ 图交付之后**必须把对应条目删掉** —— 删一条，闸就多守一张（名单会随交付缩短，不会烂在这）。
+   ⚠️ 只登记「路径写死在 id 规则里、被闸扫到」的那两类：`relic/<id>.png` 与 `card/<id>.png`。
+      符文 / buff / fx 这些走的是运行时拼串（`buff/`+id+'.png'），闸本来就扫不到，不必登记。 */
+const ART_PENDING = [
+  'relic/tongling.png', 'relic/yinyangyu.png', 'relic/duanren.png',
+  'relic/zhenmoyin.png', 'relic/leifaxinjue.png', 'relic/taishangzhou.png',
+  'relic/shiyu.png', 'relic/guling.png', 'relic/yinhundeng.png',
+  'relic/luohanquan.png', 'relic/jingangjing.png', 'relic/budongmingwang.png',
+  'relic/xueyu.png', 'relic/ranxueling.png', 'relic/xuemodao.png',
+  'card/duanren_leifu.png',
 ];
 function hasRelic(id){ return G && G.relics.includes(id); }
 function relById(id){ return RELICS.find(r=>r.id===id); }
+/* —— 获得遗物的**唯一入口** ——
+   ⚠️ 三处获取点都必须走这里：精英三选一 pickRelic()、Boss 战利品 showBossReward()、
+      古井许愿 doWellOffer()。漏一处就会出现「拿到【断刃】却没有断刃雷符」这种半截状态。
+   需要「获得即生效/发牌」的遗物都挂在这个函数里，别再散落到各入口。 */
+function grantRelic(r){
+  if(!r) return;
+  if(!hasRelic(r.id)) G.relics.push(r.id);
+  if(r.id==='duanren'){ G.deck.push(cardById('duanren_leifu')); log('断刃：牌库中生成一张【断刃雷符】'); }
+}
+
+/* —— 遗物对「上限类 / 被动数值」的加成：统一走函数 ——
+   为什么不是直接改 G.maxShiQi / G.maxXuenu：
+     遗物是**中途获得**的，若写成一次性赋值，存档续档后就会与遗物态脱节。
+     派生函数读的时候现算，天然与 G.relics 一致（存档只存 relics 即可）。 */
+function relicMaxShiqi(){ return 12 + (hasRelic('shiyu') ? 3 : 0); }        // 尸玉：尸气上限 +3
+function relicMaxXuenu(){ return 10 + (hasRelic('xueyu') ? 4 : 0); }        // 血玉：血怒上限 +4
+function relicBlockKeep(){ return hasRelic('jingangjing') ? 6 : 3; }        // 金刚经残页：保留上限 3→6
+function relicThorns(){ return hasRelic('luohanquan') ? 1 : 0; }            // 罗汉拳套：反伤基线 1
+function relicCurseOverflowBlock(){ return 1 + (hasRelic('zhenmoyin') ? 1 : 0); }   // 镇魔印：溢出转格挡 +1
+/* 道心：本场战斗已触发过 ⇒ 遗物图标要变灰（用户定稿要求「本场战斗使用后，要变成灰色的图」）。
+   三个遗物展示点都拼上这个类：60_boot.js 顶栏详情、50_ui.js runStatusHTML / mapTopbarHTML。 */
+function relicUsedCls(id){ return (id==='daoxin' && G && G.daoxinUsed) ? ' relic-used' : ''; }
+/* —— 英雄被动的「遗物加成」追加行 ——
+   用户定稿：「如果涉及被动的修改，获得对应遗物也要将点击角色显示的被动信息及时修改」。
+   做法：被动**全文一个字不删**，只在 tooltip 末尾追加一行「遗物加成 · …」，把被遗物改写的
+   数值（上限 / 保留量 / 溢出格挡等）如实列出。接入点：resolveTip 的 type==='hero' 分支。 */
+function relicPassiveExtra(heroId){
+  const rows=[];
+  if(heroId==='tianshi'){
+    if(hasRelic('zhenmoyin'))   rows.push(`诅咒溢出转格挡 ${relicCurseOverflowBlock()} 点/层`);
+    if(hasRelic('leifaxinjue')) rows.push('敌人诅咒满 6 层时额外受 4 点雷击');
+    if(hasRelic('taishangzhou'))rows.push('敌人诅咒满 6 层时其受到的伤害 +25%');
+  } else if(heroId==='ganshiren'){
+    if(hasRelic('shiyu'))       rows.push(`尸气上限 ${relicMaxShiqi()} 点`);
+    if(hasRelic('guling'))      rows.push('召唤物死亡时按其费用回血');
+    if(hasRelic('yinhundeng'))  rows.push('战斗开始自带一只阴兵');
+  } else if(heroId==='wuseng'){
+    if(hasRelic('jingangjing')) rows.push(`回合结束保留格挡 ${relicBlockKeep()} 点`);
+    if(hasRelic('luohanquan'))  rows.push(`自带反伤 ${relicThorns()}`);
+    if(hasRelic('budongmingwang'))rows.push('开局触发【卸甲生元】');
+  } else if(heroId==='yincha'){
+    if(hasRelic('xueyu'))       rows.push(`血怒上限 ${relicMaxXuenu()} 层`);
+    if(hasRelic('ranxueling'))  rows.push('每累积 20 血怒得 1 符文');
+    if(hasRelic('xuemodao'))    rows.push('生命低于 30% 时攻击牌伤害 +25%');
+  }
+  return rows.length ? `<div class="tt-line" style="color:#8ad0ff">遗物加成 · ${rows.join('；')}</div>` : '';
+}
 
 /* ===================== 灵汁（战斗消耗品，类药水） ===================== */
 const POTIONS = [
@@ -1306,7 +1422,7 @@ function resolveTip(spec){
     return `<div class="tt-title">${icon}${def.name} ${badge}</div><div class="tt-line">生命 ${hp}</div>${intent?`<div class="tt-line">意图：${intent}</div>`:''}${mech?`<div class="tt-line" style="color:var(--gold)">机制：${mech}</div>`:''}<div class="tt-story">${STORIES[key]||''}</div>`;
   }
   if(type==='relic'){ const r=relById(key); return r?`<div class="tt-title">${r.name} <span style="font-size:11px;color:var(--dim)">${RNAME[r.rarity]}</span></div><div class="tt-line">${r.desc}</div>`:''; }
-  if(type==='hero'){ const h=HEROES.find(x=>x.id===key); return h?`<div class="tt-title">${h.name}</div><div class="tt-line">${h.desc}</div><div class="tt-line" style="color:var(--gold)">被动 · ${h.passive}</div>`:''; }
+  if(type==='hero'){ const h=HEROES.find(x=>x.id===key); return h?`<div class="tt-title">${h.name}</div><div class="tt-line">${h.desc}</div><div class="tt-line" style="color:var(--gold)">被动 · ${h.passive}</div>${relicPassiveExtra(key)}`:''; }
   if(type==='kw'){ const kw=KEYWORDS.find(x=>x[0]===key); return kw?`<div class="tt-title">【${key}】</div><div class="tt-line">${kw[1]}</div>`:''; }
   if(type==='affix'){ const a=AFFIXES.find(x=>x.id===key); return a?`<div class="tt-title">词缀 · ${a.name}</div><div class="tt-line">${a.desc}</div>`:''; }
   if(type==='potionbag') return potionTooltipHTML();

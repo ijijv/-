@@ -82,7 +82,8 @@
 
   /* ============ 1) 静态结构 ============ */
   rep.cardsTotal = CARDS.length;
-  __ok('CARDS 恰为 48 张', CARDS.length === 48, '实际 ' + CARDS.length);
+  /* 49 = 原 48 张 + 断刃遗物的附加卡【断刃雷符】（id 被 weightedCard 排除，不进任何奖励池）。 */
+  __ok('CARDS 恰为 49 张（48 原卡 + 断刃雷符）', CARDS.length === 49, '实际 ' + CARDS.length);
   var ids = CARDS.map(function (c) { return c.id; });
   __ok('卡牌 id 无重复', new Set(ids).size === ids.length);
   var okRar = ['white', 'blue', 'purple', 'gold'];
@@ -6171,9 +6172,9 @@
         var e = CARD_FX[k];
         return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon'].indexOf(e.a) >= 0;
       }));
-    __ok('v0.64.0 CARD_FX 没有覆盖全部 48 张 —— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
+    __ok('v0.64.0 CARD_FX 没有覆盖全部 49 张 —— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
       + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；23 张是有素材的那批',
-      Object.keys(CARD_FX).length === 23 && CARDS.length === 48);
+      Object.keys(CARD_FX).length === 23 && CARDS.length === 49);
 
     /* ---------- F3. 纯函数：盒子尺寸 ---------- */
     __ok('v0.64.0 fxBoxSize 下夹 96、上夹 min(vw,vh)×0.9（帧画布 960×960 四周留空，照锚点框贴必然偏大；'
@@ -6892,6 +6893,20 @@
       (function () { try { return potionIcon({ id: '__nope__' }) === ''; } catch (e) { return false; } })());
     __ok('v0.67.0 遗物图标**没有**被字牌化（relicIcon 永远出 <img>，占位只管灵汁）',
       icZhu.indexOf('ricon-fb') < 0 && icZhao.indexOf('ricon-fb') < 0);
+    /* v1.0.x：新遗物的图还在 ART_PENDING 名单里 ⇒ 带字牌兜底；已交付的图不带。
+       两头都钉住：漏了前者 ⇒ 新遗物是空格子；漏了后者 ⇒ v0.67.0 那条钉子会松。 */
+    var __pendIds = ART_PENDING.filter(function (p) { return p.indexOf('relic/') === 0; })
+      .map(function (p) { return p.slice(6, -4); });
+    __ok('v1.0.x 待交付美术的 ' + __pendIds.length + ' 件新遗物出字牌占位（.ricon-fb 写名字末字）',
+      __pendIds.length > 0 && __pendIds.every(function (id) {
+        var r = relById(id);
+        return !!r && relicIcon(r).indexOf('ricon-fb') >= 0;
+      }),
+      __pendIds.join(','));
+    __ok('v1.0.x 已交付的遗物图**不带**字牌兜底（ART_PENDING 之外一律没有 data-fallback）',
+      RELICS.filter(function (r) { return __pendIds.indexOf(r.id) < 0; }).every(function (r) {
+        return relicIcon(r).indexOf('ricon-fb') < 0;
+      }));
 
     /* 只加函数不插调用点 = 等于没接。三个渲染点逐个断，并且断插入位置在 .cname **之前**
        （插到 .cdesc 之后会被 flex 排到文字下面，读起来像"图标掉到卡底了"）。 */

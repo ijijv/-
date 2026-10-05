@@ -148,7 +148,7 @@ function fogTier(r,c){
 }
 function fogVisible(r,c){ return fogTier(r,c)!=='hidden'; }
 function runStatusHTML(){
-  const relicNames = G.relics.length ? G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('') : '无';
+  const relicNames = G.relics.length ? G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip${relicUsedCls(id)}" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('') : '无';
   return `<div class="run-status">
     <span>生命 <b>${G.hp}</b>/${G.maxHp}</span>
     <span>金币 <b>${G.gold}</b></span>
@@ -166,10 +166,10 @@ function mapTopbarHTML(){
   const hero=HEROES.find(h=>h.id===G.hero);
   const hpPct=G.maxHp>0 ? Math.max(0, Math.min(100, Math.round(G.hp/G.maxHp*100))) : 0;
   let res='';
-  if(G.hero==='ganshiren') res=`<span class="mt-shiqi">尸气 <b>${G.尸气}/${G.maxShiQi}</b></span>`;
-  else if(G.hero==='yincha') res=`<span class="mt-xuenu">血怒 <b>${G.xuenu||0}/${G.maxXuenu||10}</b></span>`;
+  if(G.hero==='ganshiren') res=`<span class="mt-shiqi">尸气 <b>${G.尸气}/${relicMaxShiqi()}</b></span>`;
+  else if(G.hero==='yincha') res=`<span class="mt-xuenu">血怒 <b>${G.xuenu||0}/${relicMaxXuenu()}</b></span>`;
   const relics=G.relics.length
-    ? `<span class="mt-relics">${G.relics.map(id=>{const r=relById(id); return `<span class="prelic-chip" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('')}</span>`
+    ? `<span class="mt-relics">${G.relics.map(id=>{const r=relById(id); return `<span class="prelic-chip${relicUsedCls(id)}" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('')}</span>`
     : '<span>无遗物</span>';
   return `<div class="map-topbar">
     <span class="mt-portrait">${artImg('hero/'+G.hero+'.png','','')}</span>
@@ -826,7 +826,7 @@ function unknownWell(){
 function doWellOffer(){
   G.hp=Math.max(1,G.hp-8); sfx('hurt'); log('古井许愿：以 8 点生命为代价，换取一件遗物');
   const relic=weightedRelic();
-  if(!hasRelic(relic.id)) G.relics.push(relic.id);
+  grantRelic(relic);
   sfx(relicSfxFor(relic)); log(`获得遗物【${relic.name}】`);   // v0.61.32：铃/幡·符/笔/剑·镜/录 三类分化
   showOverlay(`<h2>古井许愿</h2><p>井水翻涌，一件旧物浮上水面：</p>
     <div class="reward-cards"><div class="relic ${RCOLOR[relic.rarity]}">${relicIcon(relic)}<div class="cname">${relic.name}</div><div class="cdesc">${relic.desc}</div><div class="ctype">遗物</div></div></div>
@@ -847,8 +847,10 @@ function unknownTemple(){
   // 无头古庙：随机赐福（恢复生命 / 最大生命 / 金币 / 卡牌）
   const roll=Math.floor(rng()*4);
   let msg='';
-  if(roll===0){ const h=15; G.hp=Math.min(G.maxHp,G.hp+h); msg=`恢复 ${h} 点生命`; sfx('heal'); }
-  else if(roll===1){ G.maxHp+=5; G.hp=Math.min(G.maxHp,G.hp+5); msg='最大生命 +5（并恢复 5 点生命）'; sfx('heal'); }
+  /* ⚠️ 回血一律走 heal() —— 它内部已含 playFx('heal','player') + sfx('heal') + 飘字，
+     用户定稿要求「每次触发的回血效果都要触发特效」（含遗物类回血）。此处不再手写 sfx/直接改 G.hp。 */
+  if(roll===0){ heal(15); msg='恢复 15 点生命'; }
+  else if(roll===1){ G.maxHp+=5; heal(5); msg='最大生命 +5（并恢复 5 点生命）'; }
   else if(roll===2){ G.gold+=20; msg='获得 20 金币'; sfx('gold'); }
   else { const c=weightedCard(); G.deck.push(c); msg=`获得卡牌【${c.name}】`; sfx('card'); }
   log('无头古庙赐福：'+msg);
@@ -871,7 +873,9 @@ function unknownEmpty(){
 
 /* ===================== 奖励与篝火 ===================== */
 function weightedCard(){
-  const eligible=CARDS.filter(c=> (c.id!=='shi_wang' || G.hero==='ganshiren') && (!c.needs || deckHasMechanic(c.needs)));
+  /* duanren_leifu 与 shi_wang 同理：**只能由遗物/卡牌自身生成，不进任何奖励池**，
+     否则玩家会在三选一里白嫖到断刃专属卡。 */
+  const eligible=CARDS.filter(c=> (c.id!=='shi_wang' || G.hero==='ganshiren') && c.id!=='duanren_leifu' && (!c.needs || deckHasMechanic(c.needs)));
   const poolAll=eligible.length? eligible : CARDS;
   const tier=G.rewardTier||'normal';
 
@@ -1043,8 +1047,10 @@ function afterReward(){
   else goNext();
 }
 function weightedRelic(){
-  const avail=RELICS.filter(r=>!hasRelic(r.id));
-  const pool=avail.length? avail : RELICS;
+  /* 专属遗物过滤：带 hero 的只进该英雄池；通用（无 hero）四人共用。
+     本函数是 Boss 战利品（40_flow.js）与古井许愿（doWellOffer）的入口 ⇒ 只改这一处即可覆盖两处。 */
+  const avail=RELICS.filter(r=>(!r.hero || r.hero===G.hero) && !hasRelic(r.id));
+  const pool=avail.length? avail : RELICS.filter(r=>!r.hero || r.hero===G.hero);
   for(let attempt=0; attempt<6; attempt++){
     const r=rng()*100; const rarity=r<55?'white':r<85?'blue':r<97?'purple':'gold';
     const p=pool.filter(x=>x.rarity===rarity);
@@ -1053,7 +1059,8 @@ function weightedRelic(){
   return pool[Math.floor(rng()*pool.length)];
 }
 function showRelicReward(){
-  const unowned = RELICS.filter(r=>!hasRelic(r.id));
+  /* 同上：精英三选一也要过专属过滤 */
+  const unowned = RELICS.filter(r=>(!r.hero || r.hero===G.hero) && !hasRelic(r.id));
   if(!unowned.length){ goNext(); return; }
   const picks = shuffle([...unowned]).slice(0,3);
   G.relicPicks=picks;
@@ -1061,7 +1068,7 @@ function showRelicReward(){
   showOverlay(`<h2>获得遗物 · 三选一</h2><p>遗物本局永久生效，点击获得（或跳过）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="skipRelic()">跳过</button>`);
 }
 /* v0.61.32：遗物音按法器类别分化（同古井许愿那一处） */
-function pickRelic(i){ const r=G.relicPicks[i]; if(!hasRelic(r.id)) G.relics.push(r.id); sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`); hideOverlay(); goNext(); }
+function pickRelic(i){ const r=G.relicPicks[i]; grantRelic(r); sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`); hideOverlay(); goNext(); }
 function skipRelic(){ hideOverlay(); goNext(); }
 
 function showCampfire(){
@@ -1091,7 +1098,7 @@ function renderCampfire(){
     ${actionBtns}
     ${leaveBtn}`);
 }
-function restAtCamp(){ G.hp=Math.min(G.maxHp,G.hp+20); log('在篝火旁休息，恢复 20 生命'); G.campActed=true; saveRun(); renderCampfire(); }
+function restAtCamp(){ heal(20); log('在篝火旁休息，恢复 20 生命'); G.campActed=true; saveRun(); renderCampfire(); }
 function showRestConfirm(){
   showOverlay(`<h2>休息 · 恢复 20 生命</h2><p>当前生命 ${G.hp}/${G.maxHp}。确定休息恢复 20 点生命吗？（与锻造二选一）</p>
     <button class="btn" onclick="restAtCamp()">确定 · 休息</button>
@@ -1149,7 +1156,8 @@ function renderShop(){
   /* v0.74.0：整屏鬼市背景。理由同上 —— 续档的 d.scene==='shop' 分支直呼 renderShop()。 */
   setBg('shop.jpg');
   const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" onclick="buyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
-  const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const ok=G.gold>=price; return `<div class="relic r-blue ${ok?'':'disabled'}" onclick="buyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${price} 金币</div></div>`; }).join('');
+  /* 聚宝盆（蓝）：灵汁 7 折 —— 界面把**原价划掉**、新价加亮，让折扣「看得见」（用户定稿要求）。 */
+  const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const base=potionPriceBase(); const ok=G.gold>=price; const priceTxt=(price!==base)?`<s class="price-old">${base}</s> <b class="price-new">${price}</b>`:`${price}`; return `<div class="relic r-blue ${ok?'':'disabled'}" onclick="buyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${priceTxt} 金币</div></div>`; }).join('');
   showOverlay(`<h2>鬼 市</h2>${runStatusHTML()}<p>你带着 <b style="color:var(--gold)">${G.gold}</b> 金币。<br>买卡价格随购买递增，跨商店延续；灵汁每买一瓶更贵。</p>
     <div class="reward-cards">${cards}</div>
     <div style="color:var(--gold);margin:8px 0 2px">— 灵汁 —</div>
@@ -1168,7 +1176,10 @@ function buyCard(i){
 
   saveRun(); renderShop();
 }
-function potionPrice(){ return 30 + 5*(G.potionBought||0); }
+/* 灵汁原价（未打折）。界面上要在聚宝盆在场时把它「划掉」再展示新价，所以必须留一个原价出口。 */
+function potionPriceBase(){ return 30 + 5*(G.potionBought||0); }
+/* 聚宝盆：商店灵汁打 7 折（向下取整，保底 1 金币）。buyPotion 走这里 ⇒ 只能按折后价扣钱。 */
+function potionPrice(){ const b=potionPriceBase(); return hasRelic('jubaopen') ? Math.max(1, Math.floor(b*0.7)) : b; }
 function buyPotion(i){
   const price=potionPrice();
   if(G.gold<price){ floatMsg(`金币不足（需 ${price}）`); return; }
@@ -1591,7 +1602,7 @@ function cardBody(c){
      手机横屏档把 `.ct-type/.ct-sep` 藏掉之后，手牌左下角有「攻击／防御」可辨，
      面板里却什么都没有 ⇒ 玩家没法靠类型筛牌（用户 2026-10-05 报障）。
      三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 桌面逐像素不变。 */
-  return `${cardFrame()}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost">${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span>`;
+  return `${cardFrame()}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${c.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span>`;
 }
 function forgeCardHTML(c,i){
   /* v0.75.0：锻造卡面从「一张卡 + 卡内一行红字预览」改成**一组两列对照** ——
@@ -1614,7 +1625,7 @@ function forgeCardHTML(c,i){
   const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" onclick="forgeCard(${i})">
     ${cardFrame()}<div class="cname">${cc.name}${cc.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${badge}</div>
     ${cardArt(cc)}${exhaustMark(cc)}
-    <div class="cost">${cardCost(cc)}</div>
+    <div class="cost"${cc.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(cc)}</div>
     <div class="cplate" data-cardid="${cc.id}" data-cardup="${cc.up?1:0}">
     <div class="cdesc${descCls}">${wrapKw(cardText(cc,cc.up))}</div>
     </div><div class="ctype"><span class="ct-type">${TNAME[cc.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[cc.rarity]}</span></div><span class="ct-corner">${TNAME[cc.type]}</span>
@@ -1641,7 +1652,7 @@ function groupHand(){
 }
 function handCardHTML(c, disabled, i, n){
   const eff=effectiveCost(c);
-  const costHtml = eff<cardCost(c) ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
+  const costHtml = (eff<cardCost(c) || c.id==='duanren_leifu') ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
   /* v0.61.33：删除卡面「预伤徽章」（含数值 / 落空 / 诅咒×N 等标签）。
      原因：徽章按「上次锁定的敌人」算，拖动改指向另一只时数字不跟着变，会显示错伤害。
      预伤改为只在拖拽时浮在**目标敌人头顶**（60_boot.js showDragPreview），并跟随所指目标变化。 */
@@ -1870,7 +1881,9 @@ const AOE_CARDS = ['wanjian', 'baigui'];   // 打全体：不需要拖拽箭头�
      · 画皮 —— 定向施加【魅惑】；咒印 —— 定向施加【诅咒】
    攻击牌里 万剑归宗 / 百鬼夜行 打全体、无需箭头（已由 AOE_CARDS 排除）。 */
 const TARGETED_CARDS = ['leifu','huofu','jianfu','zhanyaojian','tianlei','tiebushan','shihun','qungui',
-  'taomufu','shihunzhou','shixue','zhongkui','zhenyaoling','huapi'];
+  'taomufu','shihunzhou','shixue','zhongkui','zhenyaoling','huapi',
+  /* 断刃雷符：断刃遗物发的 0 费攻击牌，eff 走 curEnemy() ⇒ 同样要箭头（否则只能打最右那只） */
+  'duanren_leifu'];
 function needsTarget(c){
   // 咒印：目标随角色变 —— 赶尸人=拿尸气、武僧=给自己挂吸血，都不指向敌人；天师/阴差才定向施咒
   if(c.id==='zhouyin') return G.hero!=='ganshiren' && G.hero!=='wuseng';

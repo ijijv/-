@@ -84,29 +84,34 @@ function winFight(){
   if(hpLost===0) unlockAchievement('wushang');
   if(G.energy===0) unlockAchievement('lingfu');
   if(isBoss) unlockAchievement('tushen');
-  let h=0;
+  let h=0, extra=0;   // h = 基础战后恢复；extra = 「战后额外恢复」（招魂幡/返魂香，结算面板单独标识）
   if(!G.finalBoss){
-    h=8;
-    if(isBoss){ h=Math.floor(G.maxHp*0.5); G.hp=Math.min(G.maxHp, G.hp+h); log(`击败 Boss，汲取妖气恢复 ${h} 点生命（50%）`); }
-    else { G.hp=Math.min(G.maxHp,G.hp+h); log(`战后恢复 ${h} 点生命`); }
-    if(hasElite && hasRelic('baiguilu')){ G.maxHp+=5; G.hp=Math.min(G.maxHp,G.hp+5); log('百鬼录：击败精英，最大生命 +5'); }
-    if(hasRelic('fanhunxiang')){ G.hp=Math.min(G.maxHp, G.hp+10); log('返魂香：战后额外恢复 10 点生命'); }
+    if(isBoss){ h=Math.floor(G.maxHp*0.5); log(`击败 Boss，汲取妖气恢复 ${h} 点生命（50%）`); }
+    else { h=8; log(`战后恢复 ${h} 点生命`); }
+    if(h>0) heal(h);   // 回血一律走 heal ⇒ 带 heal 特效（用户口径：每次回血都要特效）
+    /* 百鬼录[金] 本次改造：精英 → 精英和 Boss，均为 +5 最大生命（并回复 5 点生命）。 */
+    if((hasElite || isBoss) && hasRelic('baiguilu')){ G.maxHp+=5; heal(5); log('百鬼录：击败精英/Boss，最大生命 +5'); }
+    if(hasRelic('fanhunxiang')){ extra+=6; log('返魂香：战后额外恢复 6 点生命'); }
+    if(hasRelic('zhaohunfan')){ extra+=4; log('招魂幡：战斗结束额外恢复 4 点生命'); }
+    if(extra>0) heal(extra);
   }
   G.pendingRelic = hasElite || isBoss;
   G.rewardTier = isBoss?'boss':hasElite?'elite':'normal';
   G.lastGold=g; G.battleGold=g; G.goldDoubled=false;
-  G.battleResult={g, hpLost, h, isBoss, finalBoss:G.finalBoss};
+  G.battleResult={g, hpLost, h, extra, isBoss, finalBoss:G.finalBoss};
   showBattleResult(G.battleResult);
 }
 function showBattleResult(r){
   const names=G.enemies.map(e=>e.name).join('、');
+  /* 「战后额外恢复」标识（招魂幡/返魂香）—— md 明确要求单列，别和基础恢复混在一句里。 */
+  const extraTxt = r.extra ? `额外汇总恢复 <b style="color:var(--green)">+${r.extra}</b> 生命` : '';
   const healTxt = r.h ? `恢复 <b style="color:var(--green)">+${r.h}</b> 生命${r.isBoss?'（50%）':''}` : '';
   /* v1.0.1：广告入口全部隐藏（尚未接入广告）—— 保留 doubleGold / adPlaceholder 本体，
      接广告后把这一行还原即可。 */
   const doubleBtn = '';
   const html=`<h2>战 斗 结 算</h2>
     <p>击败 <b>${names}</b><br>
-    获得金币 <b style="color:var(--gold)">+${G.battleGold}</b> · 本场耗血 <b style="color:var(--red)">${r.hpLost}</b>${healTxt?` · ${healTxt}`:''}</p>
+    获得金币 <b style="color:var(--gold)">+${G.battleGold}</b> · 本场耗血 <b style="color:var(--red)">${r.hpLost}</b>${healTxt?` · ${healTxt}`:''}${extraTxt?` · ${extraTxt}`:''}</p>
     <p style="font-size:14px">当前生命 <b>${G.hp}</b> / ${G.maxHp}</p>
     ${doubleBtn}
     <button class="btn" onclick="continueAfterBattle()">继续</button>`;
@@ -130,7 +135,7 @@ function continueAfterBattle(){
 function showBossReward(){
   G.rewardTier = null; // v0.61 B5：Boss 奖励是遗物/灵汁/锻造、不产卡 —— 就地清空 tier，别让「boss」泄漏到下一场商店的稀有度表
   const relic=weightedRelic();
-  if(!hasRelic(relic.id)) G.relics.push(relic.id);
+  grantRelic(relic);
   const potion=randomPotion(); G.potions.push(potion);
   log(`击败幕主，获得遗物【${relic.name}】和灵汁【${potion.name}】`);
   showOverlay(`<h2>Boss 战利品</h2><p>你击败了幕主，收获丰厚：</p>

@@ -85,6 +85,10 @@ def dump_ids():
           "fxRows:Object.keys(FX_SHEETS).reduce(function(o,k){ o[k]=FX_SHEETS[k].rows; return o; },{}),"
           # v0.69.0 §D5：KEYWORDS 的键（唯一真相源在游戏作用域）。用来数「零引用词条」——
           # 见下面那条反向钉。
+          # v1.0.x：待交付美术名单（唯一真相源在 20_data.js 的 ART_PENDING）。
+          # 这些是「设计已定稿、图还没到」的路径，[1] 必须把它们从 want 里摘掉，
+          # 否则每加一件新遗物/新卡就先红一次，逼人塞占位图或直接关闸。
+          "artPending:ART_PENDING,"
           "kw:KEYWORDS.map(function(k){return k[0];})})")
     env = dict(os.environ, SMOKE_DUMP=js)
     r = subprocess.run(['node', HOST], capture_output=True, text=True, cwd=ROOT, env=env)
@@ -271,10 +275,19 @@ def main():
           '从 10_audio.js 反推出牌框正视图（%s）' % ','.join(_ui_card))
     want += _ui_card
     want = list(dict.fromkeys(want))   # MAP_BG 四档同名 map.jpg，去重后再报数
-    miss = [w for w in want if w not in keys]
-    check(not miss, '游戏请求的 %d 个素材全部命中' % len(want))
+    # v1.0.x：待交付美术（ART_PENDING，见 js/20_data.js）按名单豁免。
+    # 名单里的路径不再要求命中，但会单独打印一行「还欠 N 张」——
+    # 图交付后应从 ART_PENDING 里删掉对应条目，闸就会重新守住它（名单只会越来越短）。
+    _pending = set(ids.get('artPending') or [])
+    _pend_hit = sorted(w for w in want if w in _pending and w not in keys)
+    _want_req = [w for w in want if w not in _pending]
+    miss = [w for w in _want_req if w not in keys]
+    check(not miss, '游戏请求的 %d 个素材全部命中' % len(_want_req))
     for w in miss[:20]:
         print('       缺: %s' % w)
+    if _pend_hit:
+        print('  注: 待交付美术 %d 张（ART_PENDING 已豁免，交付后请从名单删除）' % len(_pend_hit))
+        print('      ' + '、'.join(_pend_hit))
     check(not miss_music, '%d 首基础 BGM 各有一个扩展名命中' % len(ids['music']))
     for w in miss_music:
         print('       缺: %s' % w)

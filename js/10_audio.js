@@ -426,7 +426,16 @@ function refreshPileCounts(){
 /* v0.67.0：有灵石图的 id 走 lingshi/（朱砂笔/护身符/返魂香），其余遗物照旧 relic/。
    尺寸不另立类，**原样复用 .ricon** —— 它 `object-fit:contain` + 是 flex 列的子项，
    「超出边框」和「压住文字」在结构上就不可能发生；与既有 9 个遗物卡也是同一套观感。 */
-function relicIcon(r){ return artImg(lingshiSrc(r.id) || ('relic/'+r.id+'.png'), '', 'ricon'); }
+/* v1.0.x：新遗物的图还没交付时不再「静默空白」—— 回落成写着名字末字的字牌（同 potionIcon 口径）。
+   ⚠️ **只给 ART_PENDING 名单里的**补兜底。已交付的图一律不带（裂了照旧走 imgFail）——
+      否则每条 relicIcon 的返回值里都会带上一段没用的 data-fallback，
+      「遗物图标没有被字牌化」那条冒烟钉子（v0.67.0）会被误伤。 */
+function relicIcon(r){
+  const o = r || {};
+  const src = lingshiSrc(o.id) || ('relic/'+o.id+'.png');
+  const fb = (typeof ART_PENDING !== 'undefined' && ART_PENDING.indexOf(src) >= 0) ? String(o.name || '').slice(-1) : '';
+  return artImg(src, fb ? `<div class="ricon ricon-fb">${fb}</div>` : '', 'ricon');
+}
 /* v0.67.0：灵汁图标。有贴图的出 <img>；**没贴图的出「字牌」占位**（.ricon-fb，写名字末字）。
    为什么不是空串也不是空底框：
      · 空串 —— 同排的 .reward-cards 是 `align-items:stretch`，一排放 4 张卡时，

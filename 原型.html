@@ -67,6 +67,18 @@
   .stat-shiqi b{color:#b98bff;}
   /* 预尸气：紧挨「尸气: N/12」的紫色小标 —— 下回合召唤物将带来的尸气进账。0 时不渲染（同预格挡口径） */
   .stat-preshiqi{display:inline-block; margin-left:4px; font-size:12px; font-weight:bold; color:#b98bff; border-bottom:1px dashed rgba(185,139,255,.55); cursor:help;}
+  /* 燃血令：血怒芯片旁的「累积血怒」读数（每满 20 换 1 符文） */
+  .stat-rageaccum{display:inline-block; margin-left:4px; font-size:12px; font-weight:bold; color:#ff9a6b; border-bottom:1px dashed rgba(255,154,107,.55); cursor:help;}
+  /* 尸玉 / 血玉：资源芯片的「火焰包围」进阶态（CSS 版；后续可换成 fx 精灵图，见美术设计要求.md） */
+  @keyframes relicFlameBlue{0%,100%{box-shadow:0 0 5px 1px rgba(70,150,255,.5), inset 0 0 5px rgba(70,150,255,.45);} 50%{box-shadow:0 0 13px 3px rgba(130,195,255,.9), inset 0 0 9px rgba(130,195,255,.7);}}
+  @keyframes relicFlamePurple{0%,100%{box-shadow:0 0 5px 1px rgba(160,80,255,.5), inset 0 0 5px rgba(160,80,255,.45);} 50%{box-shadow:0 0 13px 3px rgba(205,140,255,.9), inset 0 0 9px rgba(205,140,255,.7);}}
+  .stat.relic-flame-blue{animation:relicFlameBlue 1.6s ease-in-out infinite; border-radius:6px;}
+  .stat.relic-flame-purple{animation:relicFlamePurple 1.6s ease-in-out infinite; border-radius:6px;}
+  /* 聚宝盆：鬼市灵汁「划掉原价 / 展示新价」（用户定稿要求「生动的界面改动」） */
+  .price-old{opacity:.5; font-weight:normal; text-decoration:line-through;}
+  .price-new{color:#ffd97a; font-size:15px;}
+  /* 道心：本场战斗已触发 ⇒ 遗物图标变灰（用户定稿要求） */
+  .prelic-chip.relic-used{filter:grayscale(1); opacity:.5;}
   .hpbar,.enemyhpbar{width:150px; height:12px; background:#000; border:1px solid var(--ink3); border-radius:6px; overflow:hidden; display:inline-block; vertical-align:middle; position:relative;}
   .hpbar i,.enemyhpbar i{position:absolute; left:0; top:0; height:100%; display:block; transition:width .4s cubic-bezier(.22,1,.36,1);}
   .hpbar i.hpfill,.enemyhpbar i.hpfill{background:var(--red);}
@@ -75,6 +87,11 @@
   /* v0.61.20(P9)：有格挡时血条套一层「斜纹护罩」纹理 —— 不再是纯色替换，灰度下仍看得出底下是血 */
   #player-panel .hpbar.has-block .hpfill{background:repeating-linear-gradient(45deg,#5bb8d8 0 3px,#3a9cc0 3px 6px); box-shadow:0 0 6px rgba(90,180,210,.4);}
   #player-panel .hpbar.has-block .hpghost{background:rgba(160,210,240,.35);}
+  /* 血魔刀（金）：血条上 30% 处的触发竖线；血量低于该线时整条转金色（=攻击 +25% 生效中）。
+     竖线用百分比定位 ⇒ 血量上限变化时临界值自动跟着走，无需改代码。 */
+  .hpbar .hpmark{position:absolute; left:30%; top:0; width:2px; height:100%; background:rgba(255,215,120,.9); box-shadow:0 0 4px rgba(255,215,120,.85); z-index:2; pointer-events:none;}
+  #player-panel .hpbar.xuemodao.xue-active .hpfill{background:linear-gradient(180deg,#ffe89a,#d99a1e); box-shadow:0 0 8px rgba(255,210,90,.75);}
+  #player-panel .hpbar.xuemodao.xue-active .hpghost{background:rgba(255,210,90,.35);}
   .hp-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.7); z-index:1; pointer-events:none;}
   /* 血条下方数值（血量+格挡） */
   .pstats{display:flex; gap:10px; justify-content:center; margin-top:3px; font-size:13px; font-weight:bold;}
