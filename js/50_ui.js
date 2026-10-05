@@ -22,7 +22,8 @@ const NODE_ICON_LOCKED = 'locked.png';
    曲线改由 drawMapLinks 用 SVG 二次贝塞尔现画（还要做沿路径延长的光边动画，贴图做不到）。
    v0.62.0：用户明确授权后，这两张图已从 素材/map/ 下**真正删除**（不再有「退役但仍占盘」的状态）。 */
 /* v0.61.42：地图落位 —— 5 个槽位（%），每格随机占一个 + 抖动，故而不再整齐排成等距列。
-   槽位间距 21%，抖动上限 ±4% / ±7px ⇒ 不会越槽、也不会与相邻列撞在一起。 */
+   槽位间距 21%，抖动上限 ±3% / ±7px ⇒ 不会越槽、也不会与相邻列撞在一起。
+   v0.76.1：±4% → ±3%（理由见 js/20_data.js 的 assignSlots 头注：96% 处节点贴画心边被裁）。 */
 const MAP_SLOT_PCT = [8, 29, 50, 71, 92];
 function mapSlotPct(node){
   const i = (node && typeof node.sx==='number') ? node.sx : 2;
@@ -401,7 +402,9 @@ function nodeOutlineTier(tier){
 function applyMapTextures(){
   const q=function(sel){ try{ return document.querySelector(sel); }catch(e){ return null; } };
   const set=function(el, v){ if(el && el.style) el.style.backgroundImage=v; };
-  const u=function(rel){ return 'url("'+assetURL(rel)+'")'; };
+  /* v1.0.8（手机端性能）：带 wantBlob=true —— 这三张都是大图（含 bg_map.jpg），
+     单文件产物里是几百 KB 的 base64，而每次进地图场景都要重新塞进 CSS。 */
+  const u=function(rel){ return 'url("'+assetURL(rel, true)+'")'; };
   set(q('.map-roller.top'), u('map/scroll_top.png'));
   set(q('.map-roller.bot'), u('map/scroll_bottom.png'));
   set(q('#map-sheet'), u('bg/bg_map.jpg')+', '+u('map/scroll_paper.jpg'));
@@ -1246,6 +1249,7 @@ function loadSave(){
 }
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
+  if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }   // v0.76.2 云存档：同上
 }
 /* v0.61.32：解锁音单独成函数 —— 冒烟里 unlockBestiary/unlockAchievement 都被换成空函数，
    写在它们体内验不到（同 overlaySfx 的理由）。两个调用点各一行转发。 */
@@ -1371,7 +1375,7 @@ function signInPanelHTML(){
   let html=`<div class="menu-panel">`;
   if(signedToday()){
     html+=`<p style="color:var(--green);margin-bottom:8px">✓ 今日已签到 · 连续 <b>${SAVE.streak||0}</b> 天</p>`;
-    html+=`<button class="btn ghost" onclick="doAdDouble()">看广告 · 签到奖励翻倍（再 +5 金币）</button>`;
+    /* v1.0.1：广告入口隐藏（未接广告）—— doAdDouble / adPlaceholder 本体保留，接广告后还原这一行。 */
     if(SAVE.signInBonus>0) html+=`<p style="color:var(--gold);margin-top:8px;font-size:13px">开局将额外携带 +${SAVE.signInBonus} 金币</p>`;
   } else {
     html+=`<button class="btn" onclick="doSignIn()">每日签到 · 领取 +5 开局金币</button>`;
@@ -1526,7 +1530,31 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   const sceneChanged = !!scene && scene !== wasScene;
   if(ov && ov.classList) ov.classList.toggle('ov-enter', !wasOpen || sceneChanged);
   if(scene && ov.classList) ov.classList.add(scene);
-  const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none'; }
+  const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none';
+  ovMarkCornerBtns(); }
+/* v1.0.12（用户 2026-10-05：「所有界面的返回/确认按钮放到左上角跟右上角，方便按」）——
+   小屏横屏时，把面板**末尾**那一串直接子级行动按钮钉到屏幕两上角（拇指区）：
+     · 文本以 返回/放弃/跳过 开头 → 左上；其余（继续/离开/确定…）→ 右上（close-x 左边）。
+   门槛（三条同时成立才打标，防误伤）：
+     ① 末尾存在连续的直接子级 button.btn（反应面板「看完内容点底部按钮」的结构）；
+     ② 面板**全部**直接子级按钮都在这串里 —— 设置菜单（7 枚按钮被 <p> 隔断）、
+        篝火选项屏（锻造/休息按钮在中段）整体是按钮流，钉走一枚边角会割烂布局 ⇒ 跳过；
+     ③ 主菜单壳（body.at-menu）整体跳过 —— menu-root / 存档面板有自己的排版。
+   打标只加类：桌面与冒烟档 CSS 不理会 ⇒ 逐像素不变；手机横屏档由 CSS 接管（见 原型.html）。 */
+function ovMarkCornerBtns(){
+  const oc=document.getElementById('overlayContent'); if(!oc || !oc.children) return;
+  const kids=oc.children; let i=kids.length-1; const run=[];
+  while(i>=0 && kids[i].tagName==='BUTTON' && kids[i].classList.contains('btn')){ run.unshift(kids[i]); i--; }
+  if(!run.length) return;
+  for(let j=0;j<kids.length;j++){
+    if(kids[j].tagName==='BUTTON' && kids[j].classList.contains('btn') && run.indexOf(kids[j])<0) return;
+  }
+  if(document.body && document.body.classList && document.body.classList.contains('at-menu')) return;
+  run.forEach(b=>{
+    const t=(b.textContent||'').trim();
+    b.classList.add(/^(返回|放弃|跳过)/.test(t) ? 'ov-act-l' : 'ov-act-r');
+  });
+}
 function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
   document.getElementById('overlay').classList.add('hidden'); }
 function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }
@@ -1552,8 +1580,18 @@ function cardBody(c){
   /* v0.69.0：`.ctype` 从 `.cplate` **里面**移到闭标签**之后**。
      原因见 原型.html 里 .card.has-frame .ctype 的注释：它现在是相对 .card 绝对定位的，
      留在 .cplate 里会按 .cplate 的高度解析 top:48.02%（差 4 倍以上），且被 .cplate 的
-     overflow:hidden 裁掉。这三个模板（cardBody / forgeCardHTML / handCardHTML）必须一起改。 */
-  return `${cardFrame()}${cardArt(c)}${exhaustMark(c)}<div class="cost">${cardCost(c)}</div><div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div>`;
+     overflow:hidden 裁掉。这三个模板（cardBody / forgeCardHTML / handCardHTML）必须一起改。
+     v1.0.6：再改一次版式 —— 卡名（.cname）也从 `.cplate` 里**挪到牌面顶部**（图窗上沿那条
+     标题带，见 原型.html `.card.has-frame .cname` 的推导）。铭牌窗因此**整块归描述**，
+     描述可用高度从约 34px（3 行）涨到约 49px（4 行），v0.69.0 那套「≤30 列」的长文案
+     不再擦着截断边缘。⚠️ 同样三个模板必须一起改，漏一处那张卡就还是旧版面。 */
+  /* v1.0.11：铭牌带的文字也拆成 type / 分隔符 / rarity 三个 span，并补上左下角的 `.ct-corner`。
+     为什么 —— 手牌（handCardHTML）早就是「三 span + 左下角小墨牌」，而**面板**里的卡
+     （锻造 / 易物 / 弃牌 / 商店 / 牌堆 / 奖励三选一 …）一直只有那条铭牌带：
+     手机横屏档把 `.ct-type/.ct-sep` 藏掉之后，手牌左下角有「攻击／防御」可辨，
+     面板里却什么都没有 ⇒ 玩家没法靠类型筛牌（用户 2026-10-05 报障）。
+     三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 桌面逐像素不变。 */
+  return `${cardFrame()}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost">${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span>`;
 }
 function forgeCardHTML(c,i){
   /* v0.75.0：锻造卡面从「一张卡 + 卡内一行红字预览」改成**一组两列对照** ——
@@ -1574,11 +1612,12 @@ function forgeCardHTML(c,i){
   const lock = !c.up && !canUpgrade(c);   // 升级无变化的牌：置灰、不可锻造
   /* 一张卡面。cls / badge / descCls 三个都是给「左」「右」两张卡分身的差异入口。 */
   const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" onclick="forgeCard(${i})">
-    ${cardFrame()}${cardArt(cc)}${exhaustMark(cc)}
+    ${cardFrame()}<div class="cname">${cc.name}${cc.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${badge}</div>
+    ${cardArt(cc)}${exhaustMark(cc)}
     <div class="cost">${cardCost(cc)}</div>
-    <div class="cplate"><div class="cname">${cc.name}${cc.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${badge}</div>
+    <div class="cplate" data-cardid="${cc.id}" data-cardup="${cc.up?1:0}">
     <div class="cdesc${descCls}">${wrapKw(cardText(cc,cc.up))}</div>
-    </div><div class="ctype">${TNAME[cc.type]} · ${RNAME[cc.rarity]}</div>
+    </div><div class="ctype"><span class="ct-type">${TNAME[cc.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[cc.rarity]}</span></div><span class="ct-corner">${TNAME[cc.type]}</span>
   </div>`;
   /* 已升级 / 不可升级：本来就**没有「升级后」可看**（前者已经是终态、后者升了也不变），
      维持单张卡的原样，不配箭头也不配右卡。 */
@@ -1616,9 +1655,24 @@ function handCardHTML(c, disabled, i, n){
      按下标找必然找错。无头下 animDrawQueued 早退、根本不往 NEW_CARDS 里写 ⇒ 这里恒为空串，
      输出与今天**逐字节相同**（冒烟只查 class="cost" / card/leifu.png / cardPointerDown，本就安全）。 */
   const newAttr = NEW_CARDS.has(c) ? ' data-new' : '';
+  /* v1.0.1（手机端重影）：正在「飞进来」的牌，并把隐身**写进 HTML 本身**（`;opacity:0`）。
+     原先只由动画层在开播那一刻给**当前那个元素**写内联 opacity —— 而 render() 会把 #hand
+     整块重写：手机上 340ms 的飞行窗口里一旦再跑一次 render，旧元素连同它的 opacity:0 一起被丢掉、
+     新元素正常显形 ⇒ 画面里同时有飞行的克隆与已落位的手牌，就是用户报的「重影」。
+     写进 HTML 后，无论中途重渲染几次，终态那张都是隐形的；收尾由 Anim 的 settle 恢复
+     （它同时会去找**当前 DOM 里**那张牌，不是只恢复它记下的旧元素）。
+     判据是 FLYING_CARDS（**真正在本层飞**的牌，开播登记 / 收尾摘掉），不是 NEW_CARDS ——
+     后者是「本次抽到的」，settle 前一直挂着，拿它判断万一有残留就会把牌永久藏住。
+     ⚠️ 首抽那一刻本集合还是空的（play 在 render 尾部才登记），所以**首抽不靠这行**隐身 ——
+        那一路仍是动画层自己写 opacity，与今天完全一致。无头下集合恒空 ⇒ 输出**逐字节相同**。 */
+  const flying = (typeof FLYING_CARDS!=='undefined') && FLYING_CARDS.has(c);
   /* sealTag 与 ctype 都在 .cplate **之后**（两者都是相对 .card 绝对定位的）——
      .exhaust-tag 改绝对定位后不再吃 ~16px 行高，这才是「被封印的牌描述看不全」的根因。 */
-  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}"${newAttr} style="--rot:${rot}deg" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div>${sealTag}<div class="ctype">${TNAME[c.type]} · ${RNAME[c.rarity]}</div></div>`;
+  /* v1.0.3：铭牌窗那条木带的文字拆成三个 span（type / 分隔符 / rarity）。
+     桌面档三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 逐像素不变；
+     手机横屏档（原型.html 的 ⑦ 块）藏掉 type 与分隔符、只留稀有度，
+     类型改由卡片左下角的 `.ct-corner` 小墨牌显示（同样是 TNAME[c.type]）。 */
+  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}"${newAttr} style="--rot:${rot}deg${flying?';opacity:0':''}" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div>${sealTag}<div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span></div>`;
 }
 function intentText(e){
   const st=(e.strength||0); // v0.61 C2：力量每点 +1
@@ -1778,7 +1832,7 @@ function enemyPanelHTML(e, idx){
   return `<div class="enemy ${eSize} ${ey>0?'edepth':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" style="z-index:${2000-ey}; --ex:${ex}px; --ey:${-ey}px">
     ${artImg('enemy/'+e.key+'.png', '', 'eportrait '+eSize)}
     <div class="ename" data-tip="enemy:${e.key}">${KIND_ICON[e.kind]||''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
-    <span class="stat">生命 <b>${e.hp}</b>/${e.maxHp}</span>
+    <span class="stat">生命 <b>${Math.max(0,e.hp)}</b>/${e.maxHp}</span>
     <span class="enemyhpbar"><i class="hpghost" data-w="${ehp}" style="width:${ehPrev}%"></i><i class="hpfill" data-w="${ehp}" style="width:${ehPrev}%"></i></span>
     ${e.block>0?`<span class="stat">格挡 <b>${e.block}</b></span>`:''}
     <div class="badges">${badges}</div>
@@ -1798,7 +1852,14 @@ function summonHTML(s){
     : s.type==='yinbing'?`阴兵：每回合末${G.hero==='tianshi'?'优先攻击🎯标记敌（上一次施咒的敌人）':'对随机敌人'}造成 ${v} 点伤害${G.hero==='wuseng'?`；存活时每回合开始 +${s.up?4:3} 格挡`:''}${G.hero==='yincha'?'；攻击时为你恢复 2 点生命':''}`
     : s.type==='shi_wang'?`尸王：每回合末对全体敌人造成 ${v} 点伤害`
     : (G.hero==='yincha'?`五通神：每回合开始你 +${v} 生命`:`五通神：每回合开始你 +${v} 格挡`);
-  return `<span class="summon">${label} · 剩 ${s.dur} 回合</span>`;
+  /* v1.0.3：筹码条形式 —— 正文只留「短名 数值 · 剩 N」，完整机制描述进 title 与 .sb-long。
+     ⚠️ 完整描述**一个字都没删**：它同时出现在 title 与 .sb-long 里 ——
+        桌面档（含顶栏详情）显示 .sb-long 原文，与改动前逐字相同；
+        手机横屏档才换成 .sb-short（原型.html 的 ⑥ 块）。
+        冒烟 :506-513 / :1021-1023 / :2076-2078 都是按 indexOf 断言标签全文仍在 ⇒ 必须保留。
+     短名从 label 的「X：…」前半段取（下面每个分支的格式统一是「类型名：描述」）⇒ 不需要新名字表。 */
+  const name = label.slice(0, label.indexOf('：')) || label;
+  return `<span class="summon" title="${label}"><span class="sb-long">${label} · 剩 ${s.dur} 回合</span><span class="sb-short">${name} ${v} · 剩 ${s.dur}</span></span>`;
 }
 
 /* ===================== 拖拽出牌（阶段② 骨架） ===================== */

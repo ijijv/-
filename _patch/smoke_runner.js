@@ -6221,8 +6221,8 @@
       (function () { fxStopAll(); fxStopAll(); return Object.keys(FX_LIVE).length === 0; })());
 
     /* ---------- F6. 真跑一次：元素尺寸/背景/锚点都写对了吗 ---------- */
-    __ok('v0.64.0 关掉流畅模式后 playFx 真的建出元素：尺寸=盒子、background-size=8×盒子（8 列要横向铺 8 格）、'
-      + '第 0 帧偏移 (0,0)，且结束后 fxStopAll 能清干净 FX_LIVE',
+    __ok('v0.64.0/v1.0.7 关掉流畅模式后 playFx 真的建出元素：外层尺寸=盒子、内层 background-size=8×盒子'
+      + '（8 列要横向铺 8 格）、首帧 transform 偏移 (0,0)，且结束后 fxStopAll 能清干净 FX_LIVE',
       (function () {
         var keep = SETTINGS.lowSpec; SETTINGS.lowSpec = false;
         var out = '?';
@@ -6231,12 +6231,13 @@
           // 在每次重跑 fx_tune.py 后跟着变；这里测的是「盒子/background-size/首帧偏移」的机制
           var el = playFx('lei', null, { scale: 1 }); // 桩里 querySelector 全 null ⇒ 落屏幕中心、短边 0 ⇒ 96
           var live = Object.keys(FX_LIVE);
-          out = [el ? el.style.width : 'no-el', el ? el.style.backgroundSize : '',
-                 el ? el.style.backgroundPosition : '', live.join(',')].join('|');
+          var _in = el ? el.firstChild : null;
+          out = [el ? el.style.width : 'no-el', _in ? _in.style.backgroundSize : '',
+                 _in ? _in.style.transform : '', live.join(',')].join('|');
           fxStopAll();
         } catch (e) { out = 'THROW ' + e.message; }
         SETTINGS.lowSpec = keep;
-        return out === '96px|768px auto|0px 0px|lei' && Object.keys(FX_LIVE).length === 0;
+        return out === '96px|768px auto|translate(0px,0px)|lei' && Object.keys(FX_LIVE).length === 0;
       })());
     __ok('v0.64.0 同名特效**重播而不是叠加**（key 表里同名只留一个）—— 连击/五通神每回合 tick 会反复触发，'
       + '叠加会在玩家身上堆出十几个元素',
@@ -6269,12 +6270,13 @@
         var pos = '?', live = -1;
         try {
           var el = fxSeek('lei', 9, null, { scale: 1 });   // 96px 盒子：第 9 帧 = 第 2 排第 2 格 ⇒ (-96,-96)
-          pos = el ? el.style.backgroundPosition : 'no-el';
+          var _in = el ? el.firstChild : null;
+          pos = _in ? _in.style.transform : 'no-el';
           live = Object.keys(FX_LIVE).length;
         } catch (e) { pos = 'THROW ' + e.message; }
         SETTINGS.lowSpec = keep;
         fxStopAll();
-        return pos === '-96px -96px' && live === 0;
+        return pos === 'translate(-96px,-96px)' && live === 0;
       })());
     __ok('v0.64.0 playFx / fxSeek 真的把 i0 算进去了（i0 是「素材开头那几格全透明不播」的偏移）：'
       + 'curse 的 i0=4，钉第 0 帧落在第 5 格（-384px 0px）而不是第 1 格；钉第 9 帧落在第 2 排第 6 格',
@@ -6284,14 +6286,16 @@
         try {
           if (FX_SHEETS.curse.i0 === 4) {
             var e0 = fxSeek('curse', 0, null, { scale: 1 });   // 96px 盒子、i0=4 ⇒ 第 5 格 ⇒ (-384, 0)
-            a = e0 ? e0.style.backgroundPosition : 'no-el';
+            var i0_ = e0 ? e0.firstChild : null;
+            a = i0_ ? i0_.style.transform : 'no-el';
             var e1 = fxSeek('curse', 9, null, { scale: 1 });   // 4+9=13 ⇒ 第 2 排第 6 格 ⇒ (-480, -96)
-            b = e1 ? e1.style.backgroundPosition : 'no-el';
+            var i1_ = e1 ? e1.firstChild : null;
+            b = i1_ ? i1_.style.transform : 'no-el';
           }
         } catch (e) { a = 'THROW ' + e.message; }
         SETTINGS.lowSpec = keep;
         fxStopAll();
-        return a === '-384px 0px' && b === '-480px -96px';
+        return a === 'translate(-384px,0px)' && b === 'translate(-480px,-96px)';
       })());
     __ok('v0.64.0 fxSeek 越界会被夹回素材范围内（i0+f-1 之后不再往下走，不会切到第 3 排别的特效身上）',
       (function () {
@@ -6299,11 +6303,12 @@
         var a = '?';
         try {
           var el = fxSeek('lei', 999, null, { scale: 1 });   // lei: i0=0, f=11 ⇒ 夹到第 10 帧 = 第 2 排第 3 格
-          a = el ? el.style.backgroundPosition : 'no-el';
+          var _in = el ? el.firstChild : null;
+          a = _in ? _in.style.transform : 'no-el';
         } catch (e) { a = 'THROW ' + e.message; }
         SETTINGS.lowSpec = keep;
         fxStopAll();
-        return a === '-192px -96px';
+        return a === 'translate(-192px,-96px)';
       })());
     /* ---------- F7. 接线是否还在（源码级，防静默移除） ---------- */
     __ok('v0.64.0 引擎的 9 个收口点都真的挂了 playFx：受击/格挡/回血/吸血/诅咒/尸气/血怒 + 敌人意图(蓄力·虚弱·勾魂·灼烧·召唤·业火·忘忧)',
@@ -6626,7 +6631,7 @@
       + '重写模板时最容易漏绑 onclick，这条就是防它）',
       (function () {
         var s = __code(showStartScreen);
-        var must = ['onclick="steleBreak(this,continueRun)"', 'onclick="steleBreak(this,startGame)"',
+        var must = ['onclick="steleBreak(this,openSaves)"', 'onclick="steleBreak(this,startGame)"',
                     'onclick="talisOpen(this,viewBestiary)"', 'onclick="talisOpen(this,viewLeaderboard)"',
                     'onclick="talisOpen(this,showSettings)"'];
         var miss = must.filter(function (a) { return s.indexOf(a) < 0; });
@@ -6666,11 +6671,20 @@
         var m = /off\s*\?\s*0\s*:\s*(\d+)/.exec(__code(talisOpen));
         return !!m && parseInt(m[1], 10) >= 400;
       })());
-    __ok('v0.66.0 主菜单版本号仍在 <h2 class="menu-title"> 里（三处版本号同步是项目惯例，别在重写时丢）',
+    /* v1.0.0：这条从**正向**翻成**反向**。
+       版本号已按用户要求移出主菜单，改挂页面左上角常驻的 `#ver-tag`（原型.html 的正文 HTML，
+       不在这些函数里 ⇒ 那半由 verify_dist.py 的两条断言逐字守：源码处数 + 产物存活）。
+       这里留一条反向钉的意义：v0.74.0 补「版本号同步」那条闸，起因正是主菜单这处
+       从 v0.69.0 一路停到 v0.74.0 没人发现。谁再把这处加回来，版本号会重新分裂成两处 ——
+       那时必须**同时**改掉 verify_dist.py 的处数断言，而不是默默多出一处不同步。
+       ⚠️ 判据只认紧跟标题的 `<small>· v…</small>`（200 字符窗），与旧断言同一个窗口口径；
+          不加裸 `v0.` 全文搜索 —— 菜单模板里还有别处的版本字样会误报。 */
+    __ok('v1.0.0 主菜单标题里**没有**版本号（已移到页面左上角常驻的 #ver-tag）',
       (function () {
         var s = __code(showStartScreen);
-        var iT = s.indexOf('menu-title">'), iV = s.indexOf('v0.', iT);
-        return iT >= 0 && iV > iT && iV - iT < 200;
+        var iT = s.indexOf('menu-title">'), iV = s.indexOf('v0.', iT), iV1 = s.indexOf('v1.', iT);
+        if (iT < 0) return false;
+        return (iV < 0 || iV - iT >= 200) && (iV1 < 0 || iV1 - iT >= 200);
       })());
 
     /* ---------- v0.68.2：body.at-menu —— 「背后是主菜单」时整个战斗界面不渲染 ---------- */

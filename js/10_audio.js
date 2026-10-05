@@ -7,7 +7,7 @@
  * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
  * ============================================================================ */
 /* ===================== 音效（Web Audio 合成 + 外置采样可选） ===================== */
-let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1, lowSpec:false, endTurnHint:true }; // v0.61.20(P1)：endTurnHint 结束回合软提示开关
+let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1, lowSpec:false, endTurnHint:true, perfReadout:false }; // v0.61.20(P1)：endTurnHint 结束回合软提示开关；v1.0.5：perfReadout 真机性能读数（默认关）
 function loadSettings(){ try{ const r=Store.getJSON('zhiguaitower_settings_v1'); if(r) SETTINGS=Object.assign(SETTINGS, r); }catch(e){} }
 function persistSettings(){ try{ Store.setJSON('zhiguaitower_settings_v1', SETTINGS); }catch(e){} }
 function fx(){ return !SETTINGS.lowSpec; }   // 流畅模式：关闭震屏/抖动/飘字等重特效
@@ -316,14 +316,67 @@ const AUD_EXTS = ['.mp3','.ogg','.wav','.m4a'];
 const BGM_EXTS = ['.ogg','.mp3','.wav','.m4a'];
 /* 单文件打包：打包.py 把下面这行的 null 换成 { '相对路径': 'data:...' }；开发时保持 null，照常读本地 素材/ */
 var ASSET_MAP = null;
-function assetURL(rel){ return (ASSET_MAP && ASSET_MAP[rel]) ? ASSET_MAP[rel] : ASSET_BASE + rel; }
+/* 拆包（多文件、走 http 发布，见 打包.py --split）：图片已转成 WebP 落盘，打包.py 会把下面这行改成
+   true，assetURL 据此把 .png/.jpg 换名成 .webp。三种口径互不干扰：
+     单文件产物 —— 走 ASSET_MAP（键仍是原始 .png 名），根本走不到这一行；
+     拆包产物   —— ASSET_MAP=null + 本行 true ⇒ 取 素材/xxx.webp；
+     开发树     —— ASSET_MAP=null + 本行 false ⇒ 照常读原图。
+   ⚠️ 正则只认图片扩展名：BGM 的 .ogg/.mp3 也走 assetURL（见 startBGM），换名会把它们换没。 */
+var ASSET_WEBP = false;
+/* v1.0.1（手机端性能）：单文件产物的素材是 base64 data URI（单张卡图 10~72KB、立绘 84~118KB、
+   牌框 front.png 更是一张手牌一份）。而 render() 每次都把 #hand / #enemy-panel / #player-panel
+   整块 innerHTML 重建 ⇒ 一次操作要拼**上兆**的 base64 字符串再交给 HTML 解析器，
+   手机上就是「每点一下卡半拍、有延迟」。抽牌克隆更狠：每条克隆内嵌一整张卡图。
+   这里给**会被反复拼进 HTML 的图片**（artImg / cardFrame 这两条渲染热路径）提供一条短地址：
+   把 data URI 转成 blob: 对象地址并缓存（同一素材只转一次），拼进 HTML 的只剩几十字节，
+   浏览器还按地址复用已解码的图，不再反复解析同一串 base64。
+   ⚠️ 只对**热路径**开（`assetURL(rel, true)`）：音频与菜单背景这两条是**一次性赋值**、不进
+      render 循环，照旧拿 data URI —— 不为它们改变既有机制（那是「file:// 下也能拿到」的依据）。
+   v1.0.8（手机端性能）：**特效精灵图（playFx）、战斗背景（setBg）、地图卷轴（applyMapTextures）**
+      也改判为热路径。它们虽「每次只赋一次值」，但**每次出牌 / 每换一次场景就赋一次**，而单文件
+      产物（TapTap 包）里那些值都是几百 KB 的 base64 大字串 —— 塞进 CSS url() / `<img src>` 时，
+      浏览器要先逐字解析这串、再 base64 解码、再解图，真机上就是每次出牌 / 进关卡一次的
+      100~300ms 尖峰（录屏读数）。blob 已在卡面（artImg）/ 牌框（cardFrame）上跑了很久、
+      且 TapTap 容器里显示正常，所以扩用是安全的。
+   ⚠️ 不写回 ASSET_MAP：它仍是**内联表本身**（data URI 字面量），probe_dist/verify_dist 的
+      「值全是 data:」断言查的就是它，回填会把那种直读路径（sampleURL 等）一起改掉。
+   拆包产物（ASSET_MAP=null）与开发树根本走不到这一层；转换不可用（无 Blob/createObjectURL）
+   或不是 base64 时**原样返回 data URI**，行为与改动前逐字相同。 */
+const ASSET_OBJ_URLS = {};
+function dataURItoBlobURL(uri){
+  try{
+    if(typeof Blob==='undefined' || typeof URL==='undefined' || !URL.createObjectURL) return null;
+    const comma=uri.indexOf(',');
+    if(comma<0) return null;
+    const head=uri.slice(5, comma);
+    if(head.indexOf('base64')<0) return null;      // 百分比编码的 data URI：本项目没有，不冒险
+    const bin=atob(uri.slice(comma+1));
+    const n=bin.length, bytes=new Uint8Array(n);
+    for(let i=0;i<n;i++) bytes[i]=bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], {type:head.split(';')[0]||'application/octet-stream'}));
+  }catch(e){ return null; }
+}
+function assetURL(rel, wantBlob){
+  if(ASSET_MAP && ASSET_MAP[rel]){
+    const v=ASSET_MAP[rel];
+    if(v.slice(0,5)!=='data:') return v;           // 本就是普通地址（拆包相对路径）⇒ 透传
+    if(!wantBlob) return v;                        // 音频 / 一次性背景：保持 data URI 原样
+    const c=ASSET_OBJ_URLS[rel];
+    if(c) return c;                                // 同一素材只转一次
+    const u=dataURItoBlobURL(v);
+    if(!u) return v;
+    ASSET_OBJ_URLS[rel]=u;
+    return u;
+  }
+  return ASSET_BASE + (ASSET_WEBP ? rel.replace(/\.(png|jpe?g|bmp)$/i, '.webp') : rel);
+}
 function imgFail(el){ el.outerHTML = el.dataset.fallback || ''; }
 /* ⚠️ v0.64.1：`draggable="false"` 是修 bug 的，别删 —— <img> **默认就是可拖的**，左键按住一移，
    浏览器会开始原生拖图并抛 pointercancel，把所有自绘的指针拖拽（地图滑动、出牌）**当场掐断**。
    症状是「左键拖不动 / 一拖就断」，而中键反而正常（中键不触发原生拖拽）—— 这是最难联想到的一类。
    全项目图片都从这里出，所以在这一处掐掉最省事；CSS 侧另有一道 -webkit-user-drag:none 兜底。 */
 function artImg(src, fallback, cls){
-  return `<img class="${cls||''}" src="${assetURL(src)}" draggable="false" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
+  return `<img class="${cls||''}" src="${assetURL(src, true)}" draggable="false" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
 }
 function cardArt(c){ return `<div class="cart-wrap">${artImg('card/'+c.id+'.png', '', 'cart')}</div>`; }
 /* v0.68.0：真美术牌框（ui/card/front.png = 385x583 木框 + 上「图窗」下「铭牌窗」）。
@@ -339,7 +392,7 @@ function cardFrameFail(el){
   imgFail(el);
 }
 function cardFrame(){
-  return `<img class="cframe" src="${assetURL('ui/card/front.png')}" draggable="false" onerror="cardFrameFail(this)" alt="">`;
+  return `<img class="cframe" src="${assetURL('ui/card/front.png', true)}" draggable="false" onerror="cardFrameFail(this)" alt="">`;
 }
 /* v0.69.0：抽牌堆 / 弃牌堆的两张图（back.png 顶面、side.png 侧棱）。
    走的是和 cardFrame() **同一条** assetURL 的路：把地址写进 CSS 变量，
@@ -444,7 +497,10 @@ function setBg(name){
   if(document.body && document.body.classList)
     document.body.classList.toggle('evt-bg', /^evt_/.test(_bgName) || !!SCENE_BG[_bgName]);
   var el=document.getElementById('bg'); if(!el) return;
-  var path=assetURL(bgRel(name));
+  /* v1.0.8（手机端性能）：带 wantBlob=true —— 战斗背景**每换一次场景就重新赋值一次**，
+     而单文件产物里这是往 <img src> 塞一整串几百 KB 的 base64（要解析 + base64 解码 + 解图），
+     真机上就是「进关卡卡一下」。拆包产物返回短相对路径，带不带第二参都一样。 */
+  var path=assetURL(bgRel(name), true);
   el.onload=function(){ document.body.classList.add('has-bg'); };
   el.onerror=function(){ el.style.display='none'; document.body.classList.remove('has-bg'); };
   el.src=path;

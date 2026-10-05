@@ -28,10 +28,17 @@ function dummyEl() {
     _s: new Set(),
     add() {}, remove() {}, toggle() {}, contains() { return false; },
   };
-  return {
+  const el = {
     style: {}, dataset: {}, classList,
-    setAttribute() {}, removeAttribute() {}, appendChild() {}, removeChild() {},
-    insertBefore() {}, remove() {}, addEventListener() {}, removeEventListener() {},
+    /* v1.0.7：appendChild / firstChild 以前是空实现 —— 于是「建子元素再挂上去」这类代码
+       在沙箱里等于没发生，冒烟看不到子元素。00_base.js 的 playFx 改成
+       「外层裁切窗 + 内层精灵图」之后就要靠 firstChild 取内层，所以这里补成**真记账**。 */
+    childNodes: [],
+    appendChild(c) { if (c) this.childNodes.push(c); return c; },
+    removeChild(c) { const i = this.childNodes.indexOf(c); if (i >= 0) this.childNodes.splice(i, 1); return c; },
+    insertBefore(c) { this.childNodes.unshift(c); return c; },
+    setAttribute() {}, removeAttribute() {},
+    remove() {}, addEventListener() {}, removeEventListener() {},
     _text: '', _html: '',
     set textContent(v) { this._text = String(v); }, get textContent() { return this._text; },
     set innerHTML(v) { this._html = String(v); }, get innerHTML() { return this._html; },
@@ -42,6 +49,10 @@ function dummyEl() {
     querySelector() { return null; }, querySelectorAll() { return []; },
     focus() {}, blur() {}, click() {}, contains() { return false; },
   };
+  Object.defineProperty(el, 'firstChild', {
+    get() { return this.childNodes.length ? this.childNodes[0] : null; },
+  });
+  return el;
 }
 
 function makeSandbox() {

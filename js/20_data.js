@@ -869,14 +869,23 @@ function cardById(id){ const c=CARDS.find(x=>x.id===id); return {...c, up:false}
 const GRANTS = { curse:['zhouyin','zhiren','shihunzhou','zhouyu'], summon:['zhiren','xiaogui','wutong','yinbingguo'] };
 function deckHasMechanic(mech){ return GRANTS[mech].some(id=>G.deck.some(c=>c.id===id)); }
 /* ===================== 英雄（初始角色选择） ===================== */
+/* v0.76.1：新增 brief（一句话定位，选英雄卡上显示）与 passiveShort（被动精简版）。
+   ⚠️ desc / passive 是**全文**，一个字都没删 —— 它们仍是 tooltip（resolveTip 的 type==='hero'）
+      与战斗页 pmech 的唯一来源。选英雄卡改用 brief/passiveShort，是为了让四张卡不再被
+      两段长文撑成一面字墙（用户报「文字冗长枯燥，面板单调」）。
+   ⚠️ 卡上**必须**留一句被动（本仓红线：任何信息都不能只存在于 hover 里，触屏一律靠 :active 兜底）。 */
 const HEROES = [
   {id:'tianshi', name:'符箓天师', desc:'精通符咒，用诅咒削弱并连锁击杀敌人。', mech:'咒印道体', passive:'【咒印道体】每回合开始对【诅咒】层数最高的敌人施加 1 层【诅咒】；施加产生的溢出（超过上限 6 层）每层转化为 1 点格挡。',
+   brief:'诅咒连锁 · 以咒杀敌', passiveShort:'回合开始给诅咒最高的敌人 +1 诅咒，溢出转格挡',
    deck:[['leifu',3],['jingang',2],['juling',1],['duhunguiji',1],['zhouyin',1],['zhiren',1],['shouyi',1]]},  // v0.61.35 天师初始卡池：雷符×3 金刚符×2 聚灵×1 渡魂归己×1 咒印×1 纸人×1 守一×1（共 10 张；去掉佛渡/画皮、加纸人）
   {id:'ganshiren', name:'茅山赶尸人', desc:'役使尸骸，靠尸气与召唤物持续输出。', mech:'尸气', passive:'每回合开始时，场上每有 1 个召唤单位，获得 1 点【尸气】。召唤单位死亡时，获得 2 点【尸气】。每消耗 1 点【尸气】，回复 1 点生命。【尸气】可用于加强召唤系卡牌效果。',
+   brief:'召唤尸傀 · 尸气续航', passiveShort:'回合开始每个召唤物 +1 尸气，消耗尸气回血',
    deck:[['leifu',2],['jingang',1],['zhouyin',1],['sheshen',1],['fuling',1],['zhiren',1],['shi_wang',1],['shouyi',1],['xiaogui',1],['wutong',1]]},  // v0.61.37 赶尸人初始卡池：雷符×2 金刚符×1 咒印×1 舍身×1 附灵术×1 纸人×1 尸王×1 守一×1 小鬼×1 五通神×1（共 11 张；金刚符 2→1、去佛渡/血契、加咒印/附灵术/五通神）
   {id:'wuseng', name:'苦行武僧', desc:'以守为攻，格挡既是盾也是矛。', mech:'格挡保留', passive:'每回合开始获得 2 点格挡；回合结束未用完的格挡保留最多 3 点。',
+   brief:'格挡护体 · 以守为攻', passiveShort:'回合开始 +2 格挡，回合结束保留最多 3 点',
    deck:[['leifu',2],['jingang',2],['jinzhong',1],['tiebushan',1],['xueqi',1],['fanzhen',1],['zhouyu',1],['shouyi',1]]},
   {id:'yincha', name:'血祭阴差', desc:'以血为引，燃烧生命换取爆发。', mech:'血怒 · 以血换力', passive:'【血怒】上限 10 层、整局累积（开新局才清零）。打出扣血牌时每失去 1 点生命，自动 +1 层【血怒】；带“每层 +N（上限 M）”的牌打出时消耗对应【血怒】爆发，生命越低部分牌越强。',
+   brief:'自伤蓄怒 · 绝境爆发', passiveShort:'扣血即 +1 血怒（上限 10），消耗血怒爆发',
    deck:[['leifu',3],['jingang',1],['huofu',1],['fenfu',1],['xueqi',1],['shouyi',1],['ranxue',1],['zhiren',1]]},  // v0.61.39 阴差初始卡池：雷符×3 金刚符×1 火符×1 焚符×1 血契×1 守一×1 燃血术×1 纸人×1（8 种、共 10 张）
 ];
 let cardPlayWindow=false; // 阴差被动·以血引怒：doPlayCard 执行 c.eff 期间为 true
@@ -1081,6 +1090,26 @@ function preBlockNextTurn(){
   for(const s of G.summons){ if(s.dur>0) n+=summonTurnBlock(s); }
   return n;
 }
+/* v1.0.4：预伤害 —— 下一回合「回合末」场上召唤物预计造成的**总伤害**（供折叠键的「伤 X」）。
+   口径逐条对齐 summonAct()：纸人/小鬼/阴兵打单体 v，尸王对**全体**打 s.v（每只一份）。
+   ⚠️ 排除五通神 —— 它走「回合开始」给格挡/回血，从不造成伤害（summonAct 的 type 白名单里也没有它）。
+   ⚠️ 小鬼「命中带诅咒目标 +2/3」与纸人「阴差回血」不计：前者依赖随机目标、是偶发项
+      （与 30_engine.js 里小鬼卡面预览同口径），后者根本不是伤害。 */
+function preSummonDamage(){
+  if(!G || !G.summons) return 0;
+  const sw=G.summons.some(x=>x.type==='shi_wang' && x.dur>0);
+  const bleed=G.bleedSummons ? Math.floor((G.hpLostTurn||0)/2)*(G.bleedSummonsBonus||1) : 0;
+  let n=0;
+  for(const s of G.summons){
+    if((s.dur||0)<=0) continue;
+    if(s.type==='shi_wang'){ n += (s.v||0)*aliveEnemies().length; continue; }
+    if(s.type==='zhiren'||s.type==='xiaogui'||s.type==='yinbing'){
+      n += (s.v||0) + ((s.type!=='shi_wang' && sw)?1:0) + bleed;
+    }
+    /* wutong / 其它：不造成伤害，不计 */
+  }
+  return n;
+}
 /* 预尸气：下一回合开始时，场上召唤物将带来的【尸气】合计（仅茅山赶尸人，供顶栏显示）。
    ＝ ①本回合末会消散的召唤物的死亡返还（纸人 2 / 小鬼 2 或 3 / 阴兵 1）
      ＋ ②下回合开始仍在场的召唤物，每个 +1（＝「养尸为用」被动）。
@@ -1252,8 +1281,11 @@ function tooltipEl(){
   if(!el){ el=document.createElement('div'); el.id='tooltip'; document.body.appendChild(el); }
   return el;
 }
-function showTip(html, ev){
+function showTip(html, ev, cardMode){
   const el=tooltipEl(); el.innerHTML=html; el.classList.add('show');
+  /* v1.0.4：卡的长按浮层放宽到 min(340px,88vw) —— 牌面短版被裁掉的机制全文在这里补全。
+     桌面 hover 路径不传第三参 ⇒ tt-card 恒被摘掉 ⇒ 桌面样式与行为一个像素都不变。 */
+  el.classList.toggle('tt-card', !!cardMode);
   const pad=14, w=el.offsetWidth||250, h=el.offsetHeight||90;
   let x=ev.clientX+pad, y=ev.clientY+pad;
   if(x+w>window.innerWidth-8) x=ev.clientX-w-pad;
@@ -1303,6 +1335,87 @@ function onDocClick(e){
 }
 document.addEventListener('click', onDocClick);
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') hideTip(); });
+
+/* ===================== 触屏长按简介（v1.0.4） ===================== */
+/* 手机没有 hover ⇒ 上面那套 mouseover/mouseout 在触屏上**永远不触发**，「长按看完整
+   信息」在手机上等于全站失效（战斗 / 锻造 / 选牌 / 牌库一并如此，与哪个面板无关）。
+   这里补一条**触摸专有**的长按通道，覆盖三类目标：
+     ① 面板里的卡（锻造 / 选牌 / 牌库 / 奖励 / 商店 …）—— 卡面 `.cdesc` 是 overflow:hidden，
+        窄屏下机制被裁，长按弹**全文**（口径与手牌放大 showCardZoom 完全一致：走 c.t()，
+        不是牌面短版 cardText）；
+     ② 任意 [data-tip]（敌人 / 遗物 / 关键词 / 词缀 / 药水 / 徽章）；
+     ③ 召唤物筹码（.summon 只有原生 title= 浮层，触屏根本看不到）→ 兜底成我们的浮层。
+   ⚠️ 手牌整体跳过：#hand 已有 cardPointerDown 的 500ms → showCardZoom 通道，
+      两条路同时挂会在同一张牌上打架（先弹浮层再开面板）。
+   ⚠️ 只认 e.pointerType==='touch' ⇒ 桌面鼠标/触控板行为零变化。 */
+const TIP_HOLD_MS=420, TIP_MOVE_PX=10;
+let TIP_TIMER=null, TIP_START=null, TIP_SWALLOW=0;
+function tipCancelHold(){ if(TIP_TIMER){ clearTimeout(TIP_TIMER); TIP_TIMER=null; } TIP_START=null; }
+/* 从被触摸的节点反查一张卡的 id / 升级态。`.cplate` 带着 data-cardid（cardBody 与
+   forgeCardHTML 两处模板写的），这里先 locate 到外层 .card，再在其**内部**查属性 ——
+   这样点卡面任何位置（图窗 / 费用 / 铭牌 / 描述）都能命中，不必给 18 个 .card 根节点逐个补属性。
+   ⚠️ 必须用 querySelector 在卡内找，不能用 closest 从触点往上找：点图窗时那条链上并没有 .cplate。 */
+function tipCardOf(target){
+  const cardEl=target && target.closest ? target.closest('.card') : null;
+  const holder=cardEl && cardEl.querySelector ? cardEl.querySelector('[data-cardid]') : null;
+  if(!holder) return null;
+  return { id:holder.getAttribute('data-cardid'), up:holder.getAttribute('data-cardup')==='1' };
+}
+/* 卡的长按浮层：标题 + 费用 + **全文**机制 + 升级预览 + 消耗提示。
+   ⚠️ 全文统一走 c.t()（与 showCardZoom 同源）—— 牌面上印的是短版 cardText，
+      长按要看的就是被裁掉的那截全文，用 cardText 就白弹了。 */
+function resolveCardTip(id, up){
+  const base=CARDS.find(x=>x.id===id); if(!base) return '';
+  const cc=up?Object.assign({}, base, {up:true}):base;
+  const title=`<div class="tt-title">${cc.name}${cc.up?' <span style="color:var(--green)">↑</span>':''} <span style="font-size:11px;color:var(--dim)">${TNAME[cc.type]} · ${RNAME[cc.rarity]}</span></div>`;
+  const cost=`<div class="tt-line">符文费用：${cardCost(cc)}</div>`;
+  const body=`<div class="tt-body">${wrapKw(String(cc.t(cc.up)))}</div>`;
+  const prev=(!cc.up && canUpgrade(base))?`<div class="tt-line" style="color:var(--red2)">升级后 → ${wrapKw(String(base.t(true)))}</div>`:'';
+  const one=isOneUse(cc)?`<div class="tt-line" style="color:var(--red2)">消耗 · 每场战斗限用一次</div>`:'';
+  return title+cost+body+prev+one;
+}
+/* 该触点是否有可长按的内容；返回 {html, card}。 */
+function tipSpecAt(target){
+  if(!target || !target.closest) return null;
+  if(target.closest('#hand')) return null;          // 手牌交给 showCardZoom
+  const c=tipCardOf(target);
+  if(c){ const html=resolveCardTip(c.id, c.up); if(html) return { html, card:true }; }
+  const t=target.closest('[data-tip]');
+  if(t){ const html=resolveTip(t.getAttribute('data-tip')); if(html) return { html, card:false }; }
+  const s=target.closest('.summon[title]');
+  if(s){ const txt=s.getAttribute('title'); if(txt) return { html:`<div class="tt-line">${txt}</div>`, card:false }; }
+  return null;
+}
+document.addEventListener('pointerdown', function(e){
+  if(e.pointerType!=='touch') return;
+  const spec=tipSpecAt(e.target); if(!spec) return;
+  tipCancelHold();
+  TIP_START={ x:e.clientX, y:e.clientY, spec };
+  TIP_TIMER=setTimeout(function(){
+    TIP_TIMER=null; const st=TIP_START; if(!st) return;
+    /* 锚点抬高 44px：否则浮层正好压在指尖底下，等于没弹。 */
+    showTip(st.spec.html, { clientX:st.x, clientY:st.y-44 }, st.spec.card);
+    TIP_SWALLOW=1;                                // 抬指那一下的 click 要吞掉，别把牌/选项点掉
+  }, TIP_HOLD_MS);
+}, true);
+document.addEventListener('pointermove', function(e){
+  if(e.pointerType!=='touch' || !TIP_START) return;
+  if(Math.abs(e.clientX-TIP_START.x)>TIP_MOVE_PX || Math.abs(e.clientY-TIP_START.y)>TIP_MOVE_PX) tipCancelHold();
+});
+/* 抬指/被打断：清计时器。若此时浮层已经弹出（TIP_SWALLOW>0），补一个 350ms 兜底清零 ——
+   浏览器在「长按后拖动过」这类情况下**可能不补发 click**，没有兜底的话那个 1 会留到
+   下一次**无关的**点击上被吞掉（用户会感觉「点一下没反应」）。 */
+document.addEventListener('pointerup', function(e){ if(e.pointerType!=='touch') return; tipCancelHold();
+  if(TIP_SWALLOW>0) setTimeout(function(){ TIP_SWALLOW=0; }, 350); });
+document.addEventListener('pointercancel', function(e){ if(e.pointerType!=='touch') return; tipCancelHold();
+  if(TIP_SWALLOW>0) setTimeout(function(){ TIP_SWALLOW=0; }, 350); });
+/* 长按成功 → 抬指 → click：capture 阶段吞掉这一次（早于所有 onclick 与 onDocClick），
+   于是「看完整信息」不会顺手把这张牌 / 这个选项点掉，浮层也留在原地供阅读。
+   ⚠️ 只吞一次：下一次点击照常执行（onDocClick 同时把浮层收起），不会连吃用户的真实操作。
+      桌面鼠标 TIP_SWALLOW 恒为 0 ⇒ 零影响。 */
+document.addEventListener('click', function(e){
+  if(TIP_SWALLOW>0){ TIP_SWALLOW=0; e.stopPropagation(); e.preventDefault(); }
+}, true);
 /* 按英雄取费用：数值＝全英雄通用；对象＝{ganshiren:0, default:2}（如附灵术 A 列免费、D 列升级 1 费） */
 function _costPick(v){ if(v==null) return null; if(typeof v!=='object') return v; return v[G.hero]!=null?v[G.hero]:(v.default!==undefined?v.default:null); }
 function cardCost(c){ const u=_costPick(c.costU); return c.up && u!=null ? u : _costPick(c.cost); }
@@ -1480,7 +1593,7 @@ function makeEnemy(def, key){
   const hpMul = summon ? 1 : (def.boss ? 1.6 : def.elite ? 1.4 : 1.25);
   const atkMul = summon ? 1 : (def.boss ? 1.4 : def.elite ? 1.3 : 1.25);
   // 无尽：随层数线性成长（召唤物除外）
-  const endMul = (!summon && G && G.endless) ? (1 + (G.endlessFloor||0)*ENDLESS_GROWTH) : 1;
+  const endMul = (!summon && G && G.endless) ? endlessGrowMul(G.endlessFloor) : 1;   // v1.0.1：分段加速
   const hp = Math.round(def.hp * hpMul * endMul);
   const scaleAtk = it => { const c={...it}; if(c.v && (c.type==='attack'||c.type==='multi'||c.type==='attackBlock')) c.v=Math.round(c.v*atkMul*endMul); return c; };
   const intents = def.intents.map(scaleAtk);
@@ -1648,10 +1761,14 @@ function assignTypes(act, R, rows, minionPool, elitePool, bossPool, quotaOverrid
 }
 
 /* —— v0.61.42 落位（用户要求「图标不要规规整整 / 不要紧凑」）——
-   每格随机占 5 个槽位之一，再叠 ±4% 横向 / ±7px 纵向抖动 ⇒ 图标不再排成等距直列，
+   每格随机占 5 个槽位之一，再叠 ±3% 横向 / ±7px 纵向抖动 ⇒ 图标不再排成等距直列，
    路径随之变得长短不一、互不平行。槽位由 R 洗牌后取前 n 个**再升序**，
    所以「列序 = 槽位序」—— linkRows 的「边不交叉」性质靠它保住（否则线会拧成一团）。
-   槽位百分比表在 50_ui.js 的 MAP_SLOT_PCT，两边的槽数必须一致（冒烟有断言）。 */
+   槽位百分比表在 50_ui.js 的 MAP_SLOT_PCT，两边的槽数必须一致（冒烟有断言）。
+   ⚠️ v0.76.1：横向抖动由 ±4% 收成 ±3%。槽位表本身（8~92）不动 —— 冒烟的夹紧断言
+      钉着 mapSlotPct({sx:9})===92 / ({sx:-3})===8。但 92+4=96% 落在 760px 画心上时，
+      56px 的节点右沿只剩 2px 余量，描边发光贴着画心边被裁掉 ⇒ 收窄抖动即可：
+      极值变成 5%~95%，两侧各留约 10px。R() 的调用次数没变，下游随机流不受影响。 */
 const MAP_SLOT_N = 5;
 function pickSlots(R, n){
   const all=[]; for(let i=0;i<MAP_SLOT_N;i++) all.push(i);
@@ -1667,7 +1784,7 @@ function assignSlots(R, rows){
       // 末层 Boss **居中**且不抖：它要收拢所有路线，摆到边上会拉出一条很斜的长线
       if(r===rows.length-1){ nd.sx=2; nd.jx=0; nd.jy=0; continue; }
       nd.sx=(typeof sl[c]==='number') ? sl[c] : Math.round(c*(MAP_SLOT_N-1)/Math.max(1,n-1));
-      nd.jx=Math.round((R()*2-1)*4);   // ±4%：槽间距 21%，绝不越槽
+      nd.jx=Math.round((R()*2-1)*3);   // ±3%：槽间距 21%，绝不越槽（v0.76.1 由 ±4 收窄，见文件头注释）
       nd.jy=Math.round((R()*2-1)*7);   // ±7px：行高 88px 撑得住，也不会碰到上下行
     }
   }
@@ -1820,6 +1937,16 @@ const ENDLESS_MINIONS = ['youhun','zhizharen','huyao','jiangshi','shanxiao','shu
 const ENDLESS_ELITES = ['baiwuchang','heiwuchang','huapigui','yecha','juhunshi','niumamian','xiuluojiang'];
 const ENDLESS_BOSSES = ['jiangwang','hanba','xueshi','xiebian','panguanwang','mengpowang','yewang','xiuluowang','yanluotianzi'];
 const ENDLESS_GROWTH = 0.06; // 每爬 1 层，敌人生命/攻击 +6%
+/* v1.0.1：无尽难度**分段缓慢加速** —— 前 10 层每层 +6%；过 10 层起每层再叠 +2%；
+   过 20 层起再叠 +2%。纯直线到高层会「同一套数值磨很久」，分段让后期压力真上来，
+   但仍是多项式增长（非指数爆炸），不会一刀砍死。词缀叠加仍走 rollAffixes 的「每 2 层 +1（上限 6）」。 */
+function endlessGrowMul(floor){
+  const f = Math.max(0, floor|0);
+  let m = 1 + f*ENDLESS_GROWTH;
+  if(f>10) m += (f-10)*0.02;
+  if(f>20) m += (f-20)*0.02;
+  return m;
+}
 function randEndlessFight(){
   // 15% 概率刷精英（单个），否则 2~3 个小怪；词缀由 rollAffixes 按层数叠加
   if(rng()<0.15) return [ENDLESS_ELITES[Math.floor(rng()*ENDLESS_ELITES.length)]];

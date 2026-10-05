@@ -457,9 +457,17 @@
     var rcs = window.getComputedStyle(rc);
     var tracks = (rcs.gridTemplateColumns || '').trim();
     /* ⚠️ display 不是 grid 时 computed gridTemplateColumns 是 `none`（一个词）⇒ 轨道数会
-       误报成 1。所以**先把 display 一起打出来**，判据由 probe 那边两条一起看。 */
+       误报成 1。所以**先把 display 一起打出来**，判据由 probe 那边两条一起看。
+       ⚠️ v0.76.1：v0.61.42 起的列数由 `repeat(3, max-content)` 换成
+       `repeat(auto-fit, <单元格宽>)` 之后，**必须只数非零轨道** —— auto-fit 会把空轨道收成
+       `0px`，但它仍占一个词位（实测 1000px 容器 + 4 张卡 ⇒ `229px 0px 0px 229px` 这种），
+       直接 split 会把 3 轨数成 5、6 轨。文案格式一字不改（probe 用正则解析 `⇒ 轨道数 (\d+)`）。 */
+    var tracksN = 0;
+    if (rcs.display === 'grid' && tracks && tracks !== 'none') {
+      tracksN = tracks.split(/\s+/).filter(function (s) { return parseFloat(s) > 0; }).length;
+    }
     log('  .reward-cards display=' + rcs.display + '  gridTemplateColumns=' + tracks
-        + '  ⇒ 轨道数 ' + (rcs.display === 'grid' && tracks && tracks !== 'none' ? tracks.split(/\s+/).length : 0));
+        + '  ⇒ 轨道数 ' + tracksN);
     var pairs = rc.querySelectorAll('.forge-pair');
     log('  .forge-pair 共 ' + pairs.length + ' 组（可升级的牌才成组）');
     var singles = rc.querySelectorAll(':scope > .card');
@@ -561,9 +569,15 @@
     var rcs = window.getComputedStyle(rc);
     var tracks = (rcs.gridTemplateColumns || '').trim();
     /* ⚠️ 与 forgeReport 同一条坑：display 不是 grid 时 computed gridTemplateColumns
-       是 `none`（一个词）⇒ 轨道数会误报成 1。所以 display 一起打，由 probe 两条一起看。 */
+       是 `none`（一个词）⇒ 轨道数会误报成 1。所以 display 一起打，由 probe 两条一起看。
+       ⚠️ v0.76.1：与 forgeReport 一样**只数非零轨道**（auto-fit 把空轨道收成 `0px`
+       但仍占词位）—— 理由与那处长注释完全相同，别只改一处。 */
+    var tracksN = 0;
+    if (rcs.display === 'grid' && tracks && tracks !== 'none') {
+      tracksN = tracks.split(/\s+/).filter(function (s) { return parseFloat(s) > 0; }).length;
+    }
     log('  .reward-cards display=' + rcs.display + '  gridTemplateColumns=' + tracks
-        + '  ⇒ 轨道数 ' + (rcs.display === 'grid' && tracks && tracks !== 'none' ? tracks.split(/\s+/).length : 0));
+        + '  ⇒ 轨道数 ' + tracksN);
     var cards = rc.querySelectorAll(':scope > .card');
     log('  卡 ' + cards.length + ' 张（该堆 ' + src.length + ' 张）'
         + (cards[0] ? '  首卡 ' + Math.round(cards[0].getBoundingClientRect().width)

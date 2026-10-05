@@ -260,7 +260,11 @@
           var pel = document.querySelector(probes[pi][0]);
           if (!pel) { still.push(probes[pi][0] + '(节点不在)'); continue; }
           var pb = cs(pel, 'backgroundImage');
-          if (pb.indexOf('data:') < 0 || pb.indexOf('素材/') >= 0) still.push(probes[pi][0] + '=' + pb.slice(0, 30));
+          /* v1.0.8（手机端性能）：applyMapTextures 改走 assetURL(rel, true)，产物里拿到的是
+             `blob:` 短地址（为了不把几百 KB 的 base64 每次进地图都塞进 CSS）。本条断言的本意是
+             「不许是那条在产物里会静默 404 的相对路径」，`blob:` 与 `data:` 同样满足 ⇒ 两者都收。 */
+          if ((pb.indexOf('data:') < 0 && pb.indexOf('blob:') < 0) || pb.indexOf('素材/') >= 0)
+            still.push(probes[pi][0] + '=' + pb.slice(0, 30));
         }
         mapNote = still.length ? ('没覆盖成内联：' + still.join(' / ')) : '三条地图纹理都覆盖成 data URI 了';
         t(still.length === 0, 'F 地图卷轴/画心的 CSS 兜底被 assetURL 覆盖成内联（否则产物里有 4 个静默 404）', mapNote);
@@ -309,7 +313,10 @@
         /* 走生产入口：setBg 顺带挂 body.evt-bg，CSS 再据此放松 #overlay 的黑幕。 */
         setBg(evMap['well']);
         var bgEl = document.getElementById('bg');
-        var wantSrc = assetURL(bgRel(evMap['well']));
+        /* v1.0.8（手机端性能）：setBg 现在带 wantBlob=true（战斗背景每次换场景都要重赋，
+           不能把几百 KB 的 base64 塞进 <img src>）⇒ 这里取址也要带第二参，才能拿到同一个
+           缓存 blob 地址。ASSET_OBJ_URLS 会缓存，所以第二次取到的是同一个串，等值仍成立。 */
+        var wantSrc = assetURL(bgRel(evMap['well']), true);
         t(!!bgEl && bgEl.src === wantSrc,
           'G setBg(事件背景) 把 #bg 指向了内联的那张图',
           bgEl ? ('尾部 ' + String(bgEl.src).slice(-24)) : '#bg 不在');

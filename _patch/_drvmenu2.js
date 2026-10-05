@@ -23,6 +23,19 @@
   var q = new URLSearchParams(location.search);
   var box = null;
 
+  /* v0.76.1：`css=` 参数与 _drvclip.js 的同名参数**同一套约定** —— 把候选 CSS 注入到 head
+     末尾（同特异度时后来者胜），用来扫参 / 造出「宿主小游戏那一层」才有的条件。
+     本批的用处：`--q "&css=:root{--sys-cap-r:130px}"` 假装 TapTap 那枚原生胶囊占了右侧
+     130px，看主菜单右上角那三枚法器有没有真的整体左移（真实宿主里 --sys-cap-r 由
+     js/60_boot.js 的 sysSafeInit() 写，无头里没有 tt/wx/dd/qq ⇒ 只能手工注入）。 */
+  (function () {
+    var extra = q.get('css');
+    if (!extra) return;
+    var st = document.createElement('style');
+    st.textContent = extra;
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
   function badge(t) {
     if (q.get('clean')) { document.title = 'DBG(clean)'; return; }
     if (!box) {

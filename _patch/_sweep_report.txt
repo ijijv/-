@@ -1,0 +1,4894 @@
+menu@1280x720
+HDR ui=menu iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter menu-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 0,0 1280x720
+BOX .panel = 0,0 1280x720
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 0,0 1280x720
+BOX .menu-stage = 0,0 1280x720
+BOX .menu-col-stele = 77,245 350x374
+BOX .menu-row-talis = 1003,0 200x108
+BOX .menu-titlebar = 0,36 1280x198
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF img.menu-art rect=1090,-3 27x108 超右=0超下=0超左=0超上=3 tr=matrix(0.999995, -0.00327444, 0.00327444, 0.999995, -0.0109229, -3.3358)
+OVF img.menu-art rect=1163,-2 31x108 超右=0超下=0超左=0超上=2 tr=matrix(0.999894, 0.0145273, -0.0145273, 0.999894, 0.0273484, -1.88235)
+OVFn=2
+INT span.menu-artbox scrollW>client=2 scrollH>client=0 overflow=visible/visible
+INTn=1
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+heroselect@1280x720
+HDR ui=heroselect iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter hero-scene bodyClass=at-menu evt-bg has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 290,157 700x406
+BOX .panel = 290,157 700x406
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 317,268 646x255
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+opening@1280x720
+HDR ui=opening iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=at-menu evt-bg has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,166 620x389
+BOX .panel = 330,166 620x389
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 357,276 566x200
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 147x37 min=37 「看广告 · 重随一次」
+TCH button.btn.ghost 62x37 min=37 「跳过」
+ALIn=0
+map@1280x720
+HDR ui=map iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 0,0 1280x720
+BOX .panel = 0,0 1280x0 [不可见]
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 260,130 760x494
+BOX .map-bottombar = 0,668 1280x52
+BOX .map-roller.top = 244,86 792x44
+BOX .mt-menu = 1234,11 36x36
+BOX .map-node.o-reached = 447,543 52x68
+SCOPE=#overlay
+OVF div#map-sheet.map-wrap.map-sheet rect=260,-554 760x1208 超右=0超下=0超左=0超上=554 tr=matrix(1, 0, 0, 1, -380, -684)
+OVFn=1
+INT div#map-viewport.map-viewport scrollW>client=0 scrollH>client=30 overflow=hidden/hidden
+INTn=1
+OVLn=0
+OCC div.map-node.locked 中心(640,-503)在视口外
+OCC div.map-node.locked 中心(982,-420)在视口外
+OCC div.map-node.locked 中心(313,-338)在视口外
+OCC div.map-node.locked 中心(336,-251)在视口外
+OCC div.map-node.locked 中心(336,-171)在视口外
+OCC div.map-node.locked 中心(640,-169)在视口外
+OCC div.map-node.locked 中心(648,-100)在视口外
+OCC div.map-node.locked 中心(959,-88)在视口外
+OCC div.map-node.locked 中心(465,-5)在视口外
+OCC div.map-node.locked 中心(936,-11)在视口外
+OCC div.map-node.locked 中心(632,70)被 small 盖住
+OCC div.map-node.locked 中心(807,67)被 div.map-plaque 盖住
+OCCn=12
+ZROn=0
+TCHn=23
+TCH button.mt-menu 36x36 min=36 「☰」
+TCH button.btn.ghost 160x37 min=37 「菜单（重开 / 退出）」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+TCH div.map-node.locked 42x42 min=42 「」
+ALI 父=div.map-row.current n=3 top差=6 bottom差=6 高=68/68/68 项=button.map-node.o-reached,button.map-node.o-reached,button.map-node.o-reached
+ALIn=1
+battle@1280x720
+HDR ui=battle iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720 [不可见]
+BOX #overlayWrap = 0,0 1280x720 [不可见]
+BOX .panel = 0,0 1280x0 [不可见]
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 260,130 760x494 [不可见]
+BOX .map-bottombar = 0,668 1280x52 [不可见]
+BOX .map-roller.top = 244,86 792x44 [不可见]
+BOX .mt-menu = 1234,11 36x36 [不可见]
+BOX .map-node.o-reached = 272,536 52x68 [不可见]
+SCOPE=#app
+OVF div#log rect=1280,0 300x720 超右=300超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 300, 0)
+OVFn=1
+INT div.hand-area scrollW>client=4 scrollH>client=6 overflow=visible/visible
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=6 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT h1.title scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=9
+OVLn=0
+OCC span.log-chip 中心(1461,22)在视口外
+OCC span.log-chip 中心(1504,22)在视口外
+OCC span.log-chip 中心(1547,22)在视口外
+OCC div.card.has-frame 中心(409,496)被 span.tip-tag 盖住
+OCC div.card.has-frame 中心(484,495)被 b 盖住
+OCC div.card.has-frame 中心(560,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(635,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(710,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(785,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(861,495)被 div#tip-bubble.show 盖住
+OCCn=10
+ZROn=0
+TCHn=7
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 62x37 min=37 「战报」
+TCH button#viewDeck.btn.ghost 62x37 min=37 「牌库」
+TCH button#menuBtn.btn.ghost 62x37 min=37 「菜单」
+ALIn=0
+battlemany@1280x720
+HDR ui=battlemany iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720 [不可见]
+BOX #overlayWrap = 0,0 1280x720 [不可见]
+BOX .panel = 0,0 1280x0 [不可见]
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 260,130 760x494 [不可见]
+BOX .map-bottombar = 0,668 1280x52 [不可见]
+BOX .map-roller.top = 244,86 792x44 [不可见]
+BOX .mt-menu = 1234,11 36x36 [不可见]
+BOX .map-node.o-reached = 629,539 52x68 [不可见]
+SCOPE=#app
+OVF div#log rect=1280,0 300x720 超右=300超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 300, 0)
+OVFn=1
+INT div.hand-area scrollW>client=4 scrollH>client=6 overflow=visible/visible
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=6 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT h1.title scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=9
+OVLn=0
+OCC span.log-chip 中心(1461,22)在视口外
+OCC span.log-chip 中心(1504,22)在视口外
+OCC span.log-chip 中心(1547,22)在视口外
+OCC div.card.has-frame 中心(409,496)被 span.tip-tag 盖住
+OCC div.card.has-frame 中心(484,495)被 b 盖住
+OCC div.card.has-frame 中心(560,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(635,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(710,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(785,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(861,495)被 div#tip-bubble.show 盖住
+OCCn=10
+ZROn=0
+TCHn=7
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 62x37 min=37 「战报」
+TCH button#viewDeck.btn.ghost 62x37 min=37 「牌库」
+TCH button#menuBtn.btn.ghost 62x37 min=37 「菜单」
+ALIn=0
+piledraw@1280x720
+HDR ui=piledraw iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter pile-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 0,82 1280x556
+BOX .panel = 0,82 1280x556
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,189 1250x412
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCC div.card.has-frame 中心(498,501)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(640,501)被 div#tip-bubble.show 盖住
+OCCn=2
+ZROn=0
+TCHn=0
+ALIn=0
+pilediscard@1280x720
+HDR ui=pilediscard iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter pile-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 0,82 1280x556
+BOX .panel = 0,82 1280x556
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,189 1250x412
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCC div.card.has-frame 中心(498,501)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(640,501)被 div#tip-bubble.show 盖住
+OCCn=2
+ZROn=0
+TCHn=0
+ALIn=0
+shop@1280x720
+HDR ui=shop iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,178 620x363
+BOX .panel = 330,178 620x363
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 357,365 566x43
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 159x37 min=37 「删一张牌（4 金币）」
+TCH button.btn.ghost 90x37 min=37 「返回地图」
+ALI 父=div#overlayContent.panel n=3 top差=5 bottom差=2 高=44/37/37 项=button.btn,button.btn.ghost,button.btn.ghost
+ALIn=1
+campfire@1280x720
+HDR ui=campfire iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,191 620x337
+BOX .panel = 330,191 620x337
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 189x37 min=37 「删牌 · 调整牌组（可选）」
+TCH button.btn.ghost 172x37 min=37 「休息（恢复 20 生命）」
+ALI 父=div#overlayContent.panel n=2 top差=5 bottom差=2 高=44/37 项=button.btn,button.btn.ghost
+ALIn=1
+restconfirm@1280x720
+HDR ui=restconfirm iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,269 620x182
+BOX .panel = 330,269 620x182
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 62x37 min=37 「返回」
+ALI 父=div#overlayContent.panel n=2 top差=5 bottom差=2 高=44/37 项=button.btn,button.btn.ghost
+ALIn=1
+event@1280x720
+HDR ui=event iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter bodyClass=evt-bg has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,255 620x211
+BOX .panel = 330,255 620x211
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 90x37 min=37 「转身离开」
+ALI 父=div#overlayContent.panel n=2 top差=5 bottom差=2 高=44/37 项=button.btn,button.btn.ghost
+ALIn=1
+forge@1280x720
+HDR ui=forge iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter forge-scene bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 0,43 1280x634
+BOX .panel = 0,43 1280x634
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,150 1250x836 超右=0超下=266
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 174,150 304x200
+BOX .forge-arrow = 315,239 22x22
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF button.btn.ghost rect=609,1000 62x37 超右=0超下=317超左=0超上=0
+OVF div.reward-cards rect=15,150 1250x836 超右=0超下=266超左=0超上=0
+OVFn=2
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=383 overflow=auto/auto
+INTn=1
+OVLn=0
+OCC div.card.has-frame 中心(240,886)在视口外
+OCC div.card.has-frame 中心(412,886)在视口外
+OCC button.btn.ghost 中心(640,1019)在视口外
+OCCn=3
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 62x37 min=37 「返回」
+ALIn=0
+bestiary@1280x720
+HDR ui=bestiary iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,43 620x634
+BOX .panel = 330,43 620x634
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 357,149 566x2094 超右=0超下=1523
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF div#bestiary-grid rect=357,149 566x2094 超右=0超下=1523超左=0超上=0
+OVFn=1
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=1607 overflow=auto/auto
+INTn=1
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+leaderboard@1280x720
+HDR ui=leaderboard iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,276 620x168
+BOX .panel = 330,276 620x168
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 357,380 566x23
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+deck@1280x720
+HDR ui=deck iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,161 620x399
+BOX .panel = 330,161 620x399
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 357,229 566x304
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+reward@1280x720
+HDR ui=reward iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,166 620x389
+BOX .panel = 330,166 620x389
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 357,276 566x200
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 62x37 min=37 「跳过」
+ALIn=0
+relicreward@1280x720
+HDR ui=relicreward iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,175 620x371
+BOX .panel = 330,175 620x371
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 357,285 566x182
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 62x37 min=37 「跳过」
+ALIn=0
+bossreward@1280x720
+HDR ui=bossreward iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,171 620x378
+BOX .panel = 330,171 620x378
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 357,282 566x182
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 90x37 min=37 「继续前进」
+ALI 父=div#overlayContent.panel n=2 top差=5 bottom差=2 高=44/37 项=button.btn,button.btn.ghost
+ALIn=1
+result@1280x720
+HDR ui=result iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,235 620x250
+BOX .panel = 330,235 620x250
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+victory@1280x720
+HDR ui=victory iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,215 620x291
+BOX .panel = 330,215 620x291
+BOX #topbar = 124,46 1032x16
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,68 1032x644
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,68 1032x222
+BOX .battle = 124,68 1032x2
+BOX #player-panel = 148,70 200x0 [不可见]
+BOX #enemy-panel = 362,68 794x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,72 1032x200
+BOX #hand = 305,72 735x200
+BOX .pile-discard = 124,190 55x76
+BOX .pile-draw = 1101,190 55x76
+BOX .rune-display = 187,122 110x150
+BOX .endcol = 1048,106 45x132
+BOX #endTurn = 1048,106 45x132
+BOX .hint = 124,274 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,251 7x15
+BOX #pile-discard-n = 171,251 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 175x37 min=37 「进入镇妖塔 · 无尽模式」
+ALI 父=div#overlayContent.panel n=2 top差=5 bottom差=2 高=44/37 项=button.btn,button.btn.ghost
+ALIn=1
+defeat@1280x720
+HDR ui=defeat iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=evt-bg has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,233 620x253
+BOX .panel = 330,233 620x253
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 133x37 min=37 「放弃 · 结束本局」
+ALI 父=div#overlayContent.panel n=2 top差=5 bottom差=2 高=44/37 项=button.btn,button.btn.ghost
+ALIn=1
+settings@1280x720
+HDR ui=settings iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 1280x720
+BOX #overlayWrap = 330,43 620x634
+BOX .panel = 330,43 620x634
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=8 overflow=auto/auto
+INTn=1
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=7
+TCH input 566x16 min=16 「」
+TCH input 566x16 min=16 「」
+TCH button.btn.ghost 118x37 min=37 「开启流畅模式」
+TCH button.btn.ghost 202x37 min=37 「浮字自检（四档各放一次）」
+TCH button.btn.ghost 104x37 min=37 「关闭软提示」
+TCH button.btn.ghost 118x37 min=37 「查看新手引导」
+TCH button.btn.ghost 90x37 min=37 「返回菜单」
+ALIn=0
+log@1280x720
+HDR ui=log iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720 [不可见]
+BOX #overlayWrap = 0,0 1280x720 [不可见]
+BOX .panel = 0,0 1280x0 [不可见]
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 1280,0 300x720 超右=300超下=0
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 260,130 760x494 [不可见]
+BOX .map-bottombar = 0,668 1280x52 [不可见]
+BOX .map-roller.top = 244,86 792x44 [不可见]
+BOX .mt-menu = 1234,11 36x36 [不可见]
+BOX .map-node.o-reached = 424,537 52x68 [不可见]
+SCOPE=#app
+OVF div#log rect=1280,0 300x720 超右=300超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 300, 0)
+OVFn=1
+INT div.hand-area scrollW>client=4 scrollH>client=6 overflow=visible/visible
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=6 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT h1.title scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=9
+OVLn=0
+OCC span.log-chip 中心(1461,22)在视口外
+OCC span.log-chip 中心(1504,22)在视口外
+OCC span.log-chip 中心(1547,22)在视口外
+OCC div.card.has-frame 中心(409,496)被 span.tip-tag 盖住
+OCC div.card.has-frame 中心(484,495)被 b 盖住
+OCC div.card.has-frame 中心(560,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(635,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(710,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(785,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(861,495)被 div#tip-bubble.show 盖住
+OCCn=10
+ZROn=0
+TCHn=7
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 62x37 min=37 「战报」
+TCH button#viewDeck.btn.ghost 62x37 min=37 「牌库」
+TCH button#menuBtn.btn.ghost 62x37 min=37 「菜单」
+ALIn=0
+logopen@1280x720
+HDR ui=logopen iw=1280 ih=720 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=log-open has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=none
+BOX #app = 110,0 1060x720
+BOX #overlay = 0,0 1280x720 [不可见]
+BOX #overlayWrap = 0,0 1280x720 [不可见]
+BOX .panel = 0,0 1280x0 [不可见]
+BOX #topbar = 124,46 1032x44
+BOX h1.title = 124,10 1032x32
+BOX #field = 124,96 1032x616
+BOX #log = 980,0 300x720
+BOX #col-main = 124,96 1032x522
+BOX .battle = 124,96 1032x290
+BOX #player-panel = 148,96 200x290
+BOX #enemy-panel = 362,103 794x283
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 124,388 1032x212
+BOX #hand = 305,388 735x212
+BOX .pile-discard = 124,518 55x76
+BOX .pile-draw = 1101,518 55x76
+BOX .rune-display = 187,450 110x150
+BOX .endcol = 1048,428 45x132
+BOX #endTurn = 1048,428 45x132
+BOX .hint = 124,602 1032x16
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 1148,579 7x15
+BOX #pile-discard-n = 171,579 7x15
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 360,475 560x96
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 260,130 760x494 [不可见]
+BOX .map-bottombar = 0,668 1280x52 [不可见]
+BOX .map-roller.top = 244,86 792x44 [不可见]
+BOX .mt-menu = 1234,11 36x36 [不可见]
+BOX .map-node.o-reached = 470,542 52x68 [不可见]
+SCOPE=#app
+OVFn=0
+INT div.hand-area scrollW>client=4 scrollH>client=6 overflow=visible/visible
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=6 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT h1.title scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=3 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=9
+OVL button#menuBtn.btn.ghost × span.log-chip 相交 11x21=226px²
+OVLn=1
+OCC button#logToggle.btn.ghost 中心(981,26)被 div#log 盖住
+OCC button#viewDeck.btn.ghost 中心(1051,26)被 div.log-head 盖住
+OCC button#menuBtn.btn.ghost 中心(1121,26)被 div.log-head 盖住
+OCC div.card.has-frame 中心(409,496)被 span.tip-tag 盖住
+OCC div.card.has-frame 中心(484,495)被 b 盖住
+OCC div.card.has-frame 中心(560,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(635,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(710,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(785,494)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(861,495)被 div#tip-bubble.show 盖住
+OCC button#endTurn.btn 中心(1071,494)被 div#log 盖住
+OCC div#pile-draw.pile.pile-draw 中心(1129,556)被 div#log 盖住
+OCCn=12
+ZROn=0
+TCHn=7
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 62x37 min=37 「战报」
+TCH button#viewDeck.btn.ghost 62x37 min=37 「牌库」
+TCH button#menuBtn.btn.ghost 62x37 min=37 「菜单」
+ALIn=0
+menu@844x390
+HDR ui=menu iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter menu-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 0,0 844x390
+BOX .panel = 0,0 844x390
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 0,0 844x390
+BOX .menu-stage = 0,0 844x390
+BOX .menu-col-stele = 51,95 227x240
+BOX .menu-row-talis = 612,0 181x59
+BOX .menu-titlebar = 0,20 844x129
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF img.menu-art rect=761,-3 17x59 超右=0超下=0超左=0超上=3 tr=matrix(0.999851, 0.0172747, -0.0172747, 0.999851, 0.0506512, -2.93167)
+OVF img.menu-art rect=695,-2 15x59 超右=0超下=0超左=0超上=2 tr=matrix(0.999989, 0.00460664, -0.00460664, 0.999989, 0.00989286, -2.1475)
+OVFn=2
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+heroselect@844x390
+HDR ui=heroselect iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter hero-scene bodyClass=at-menu evt-bg has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 72,37 700x315
+BOX .panel = 72,37 700x315
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 83,113 678x213
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+opening@844x390
+HDR ui=opening iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=at-menu evt-bg has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,57 620x276
+BOX .panel = 112,57 620x276
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 123,132 598x150
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INT div.cdesc scrollW>client=0 scrollH>client=25 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INTn=3
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 117x24 min=24 「看广告 · 重随一次」
+TCH button.btn.ghost 44x24 min=24 「跳过」
+ALIn=0
+map@844x390
+HDR ui=map iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 0,0 844x390
+BOX .panel = 0,0 844x0 [不可见]
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 42,111 760x209
+BOX .map-bottombar = 0,359 844x31
+BOX .map-roller.top = 26,72 792x39
+BOX .mt-menu = 800,7 36x36
+BOX .map-node.o-reached = 84,268 38x54
+SCOPE=#overlay
+OVF div#map-sheet.map-wrap.map-sheet rect=42,-562 760x901 超右=0超下=0超左=0超上=562 tr=matrix(1, 0, 0, 1, -380, -673)
+OVFn=1
+INT div#map-viewport.map-viewport scrollW>client=0 scrollH>client=19 overflow=hidden/hidden
+INTn=1
+OVLn=0
+OCC div.map-node.locked 中心(422,-533)在视口外
+OCC div.map-node.locked 中心(582,-474)在视口外
+OCC div.map-node.locked 中心(422,-406)在视口外
+OCC div.map-node.locked 中心(285,-342)在视口外
+OCC div.map-node.locked 中心(118,-277)在视口外
+OCC div.map-node.locked 中心(262,-286)在视口外
+OCC div.map-node.locked 中心(88,-227)在视口外
+OCC div.map-node.locked 中心(255,-215)在视口外
+OCC div.map-node.locked 中心(95,-154)在视口外
+OCC div.map-node.locked 中心(278,-166)在视口外
+OCC div.map-node.locked 中心(764,-157)在视口外
+OCC div.map-node.locked 中心(95,-99)在视口外
+OCC div.map-node.locked 中心(551,-89)在视口外
+OCC div.map-node.locked 中心(72,-28)在视口外
+OCC div.map-node.locked 中心(278,-35)在视口外
+OCC div.map-node.locked 中心(756,-39)在视口外
+OCC div.map-node.locked 中心(126,26)被 span.mt-col 盖住
+OCC div.map-node.locked 中心(764,34)被 span.mt-row 盖住
+OCC div.map-node.locked 中心(110,92)被 div.map-roller.top 盖住
+OCC div.map-node.locked 中心(285,94)被 div.map-roller.top 盖住
+OCCn=20
+ZROn=0
+TCHn=31
+TCH button.btn.ghost 128x24 min=24 「菜单（重开 / 退出）」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+TCH div.map-node.locked 30x30 min=30 「」
+ALI 父=div.map-row.current n=2 top差=5 bottom差=5 高=54/54 项=button.map-node.o-reached,button.map-node.o-reached
+ALIn=1
+battle@844x390
+HDR ui=battle iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390 [不可见]
+BOX #overlayWrap = 0,0 844x390 [不可见]
+BOX .panel = 0,0 844x0 [不可见]
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 42,111 760x209 [不可见]
+BOX .map-bottombar = 0,359 844x31 [不可见]
+BOX .map-roller.top = 26,72 792x39 [不可见]
+BOX .mt-menu = 800,7 36x36 [不可见]
+BOX .map-node.o-reached = 84,270 38x54 [不可见]
+SCOPE=#app
+OVF div#log rect=844,0 300x390 超右=300超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 300, 0)
+OVF div.pile-slab rect=-4,289 11x47 超右=0超下=0超左=4超上=0
+OVFn=2
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=45 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=44 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=22 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=4 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INTn=18
+OVL button#logToggle.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#viewDeck.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#menuBtn.btn.ghost × div#topbar 相交 42x1=42px²
+OVLn=3
+OCC span.log-chip 中心(1025,22)在视口外
+OCC span.log-chip 中心(1068,22)在视口外
+OCC span.log-chip 中心(1111,22)在视口外
+OCCn=3
+ZROn=0
+TCHn=11
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 80x22 min=22 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 42x24 min=24 「战报」
+TCH button#viewDeck.btn.ghost 42x24 min=24 「牌库」
+TCH button#menuBtn.btn.ghost 42x24 min=24 「菜单」
+TCH div#topbar 832x30 min=30 「0 第 1 幕 · 1/14 层 牌」
+TCH button#endTurn.btn 80x31 min=31 「结束回合」
+TCH div#pile-discard.pile.pile-discard 35x49 min=35 「0」
+TCH div#pile-draw.pile.pile-draw 35x49 min=35 「5」
+ALIn=0
+battlemany@844x390
+HDR ui=battlemany iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390 [不可见]
+BOX #overlayWrap = 0,0 844x390 [不可见]
+BOX .panel = 0,0 844x0 [不可见]
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 42,111 760x209 [不可见]
+BOX .map-bottombar = 0,359 844x31 [不可见]
+BOX .map-roller.top = 26,72 792x39 [不可见]
+BOX .mt-menu = 800,7 36x36 [不可见]
+BOX .map-node.o-reached = 243,269 38x54 [不可见]
+SCOPE=#app
+OVF div#log rect=844,0 300x390 超右=300超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 300, 0)
+OVF div.pile-slab rect=-4,289 11x47 超右=0超下=0超左=4超上=0
+OVFn=2
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=45 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=44 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=22 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=4 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INTn=18
+OVL button#logToggle.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#viewDeck.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#menuBtn.btn.ghost × div#topbar 相交 42x1=42px²
+OVLn=3
+OCC span.log-chip 中心(1025,22)在视口外
+OCC span.log-chip 中心(1068,22)在视口外
+OCC span.log-chip 中心(1111,22)在视口外
+OCCn=3
+ZROn=0
+TCHn=11
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 80x22 min=22 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 42x24 min=24 「战报」
+TCH button#viewDeck.btn.ghost 42x24 min=24 「牌库」
+TCH button#menuBtn.btn.ghost 42x24 min=24 「菜单」
+TCH div#topbar 832x30 min=30 「0 第 1 幕 · 1/14 层 牌」
+TCH button#endTurn.btn 80x31 min=31 「结束回合」
+TCH div#pile-discard.pile.pile-discard 35x49 min=35 「0」
+TCH div#pile-draw.pile.pile-draw 35x49 min=35 「5」
+ALIn=0
+piledraw@844x390
+HDR ui=piledraw iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter pile-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 0,12 844x367
+BOX .panel = 0,12 844x367
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 11,71 822x306
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INT div.cdesc scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=15 overflow=auto/auto
+INT div.cdesc scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INTn=6
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+pilediscard@844x390
+HDR ui=pilediscard iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter pile-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 0,12 844x367
+BOX .panel = 0,12 844x367
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 11,71 822x306
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INT div.cdesc scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=15 overflow=auto/auto
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INTn=6
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+shop@844x390
+HDR ui=shop iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,56 620x278
+BOX .panel = 112,56 620x278
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 123,198 598x33
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=3
+TCH button.btn.ghost 127x24 min=24 「删一张牌（4 金币）」
+TCH button.btn.ghost 68x24 min=24 「返回地图」
+TCH button.btn 76x27 min=27 「继续前进」
+ALIn=0
+campfire@844x390
+HDR ui=campfire iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,87 620x215
+BOX .panel = 112,87 620x215
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=3
+TCH button.btn.ghost 153x24 min=24 「删牌 · 调整牌组（可选）」
+TCH button.btn.ghost 138x24 min=24 「休息（恢复 20 生命）」
+TCH button.btn 141x27 min=27 「锻造（升级一张牌）」
+ALIn=0
+restconfirm@844x390
+HDR ui=restconfirm iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,137 620x115
+BOX .panel = 112,137 620x115
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 44x24 min=24 「返回」
+TCH button.btn 90x27 min=27 「确定 · 休息」
+ALIn=0
+event@844x390
+HDR ui=event iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter bodyClass=evt-bg has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,128 620x135
+BOX .panel = 112,128 620x135
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 68x24 min=24 「转身离开」
+TCH button.btn 105x27 min=27 「献祭 8 点生命」
+ALIn=0
+forge@844x390
+HDR ui=forge iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter forge-scene bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 0,12 844x367
+BOX .panel = 0,12 844x367
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 11,71 822x618 超右=0超下=299
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 40,71 248x150
+BOX .forge-arrow = 153,135 22x22
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF button.btn.ghost rect=400,693 44x24 超右=0超下=327超左=0超上=0
+OVF div.reward-cards rect=11,71 822x618 超右=0超下=299超左=0超上=0
+OVFn=2
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=351 overflow=auto/auto
+INT div.cdesc scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=13 overflow=hidden/hidden
+INTn=21
+OVLn=0
+OCC div.card.has-frame 中心(92,458)在视口外
+OCC div.card.has-frame 中心(236,458)在视口外
+OCC div.card.has-frame 中心(350,458)在视口外
+OCC div.card.has-frame 中心(494,458)在视口外
+OCC div.card.has-frame 中心(608,458)在视口外
+OCC div.card.has-frame 中心(752,458)在视口外
+OCC div.card.has-frame 中心(92,614)在视口外
+OCC div.card.has-frame 中心(236,614)在视口外
+OCC button.btn.ghost 中心(422,705)在视口外
+OCCn=9
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 44x24 min=24 「返回」
+ALIn=0
+bestiary@844x390
+HDR ui=bestiary iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,12 620x367
+BOX .panel = 112,12 620x367
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 123,88 598x2094 超右=0超下=1792
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF div#bestiary-grid rect=123,88 598x2094 超右=0超下=1792超左=0超上=0
+OVFn=1
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=1830 overflow=auto/auto
+INTn=1
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+leaderboard@844x390
+HDR ui=leaderboard iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,135 620x121
+BOX .panel = 112,135 620x121
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 123,209 598x19
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+deck@844x390
+HDR ui=deck iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,16 620x359
+BOX .panel = 112,16 620x359
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 123,58 598x304
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+reward@844x390
+HDR ui=reward iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,57 620x276
+BOX .panel = 112,57 620x276
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 123,132 598x150
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INT div.cdesc scrollW>client=0 scrollH>client=24 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=14 overflow=hidden/hidden
+INTn=3
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 44x24 min=24 「跳过」
+ALIn=0
+relicreward@844x390
+HDR ui=relicreward iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,62 620x265
+BOX .panel = 112,62 620x265
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 123,138 598x139
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 44x24 min=24 「跳过」
+ALIn=0
+bossreward@844x390
+HDR ui=bossreward iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,61 620x268
+BOX .panel = 112,61 620x268
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 123,136 598x139
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 68x24 min=24 「继续前进」
+TCH button.btn 141x27 min=27 「锻造（升级一张牌）」
+ALIn=0
+result@844x390
+HDR ui=result iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,110 620x170
+BOX .panel = 112,110 620x170
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn 195x27 min=27 「看广告 · 金币翻倍（再 +12）」
+TCH button.btn 50x27 min=27 「继续」
+ALIn=0
+victory@844x390
+HDR ui=victory iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,94 620x202
+BOX .panel = 112,94 620x202
+BOX #topbar = 6,23 832x8
+BOX h1.title = 6,1 832x22
+BOX #field = 6,33 832x356
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,33 832x120
+BOX .battle = 6,33 832x2
+BOX #player-panel = 6,35 101x0 [不可见]
+BOX #enemy-panel = 115,33 723x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,35 832x118
+BOX #hand = 110,35 603x118
+BOX .pile-discard = 6,98 35x49
+BOX .pile-draw = 803,98 35x49
+BOX .rune-display = 46,74 59x79
+BOX .endcol = 718,79 80x31
+BOX #endTurn = 718,79 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,135 6x12
+BOX #pile-discard-n = 35,135 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 141x24 min=24 「进入镇妖塔 · 无尽模式」
+TCH button.btn 76x27 min=27 「再打一局」
+ALIn=0
+defeat@844x390
+HDR ui=defeat iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=evt-bg has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,111 620x168
+BOX .panel = 112,111 620x168
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 105x24 min=24 「放弃 · 结束本局」
+TCH button.btn 155x27 min=27 「免费复活 · 回满血继续」
+ALIn=0
+settings@844x390
+HDR ui=settings iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 844x390
+BOX #overlayWrap = 112,12 620x367
+BOX .panel = 112,12 620x367
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF button.btn.ghost rect=297,454 80x24 超右=0超下=88超左=0超上=0
+OVF button.btn.ghost rect=382,454 92x24 超右=0超下=88超左=0超上=0
+OVF button.btn.ghost rect=479,454 68x24 超右=0超下=88超左=0超上=0
+OVF p rect=123,421 598x19 超右=0超下=50超左=0超上=0
+OVF button.btn.ghost rect=340,381 164x24 超右=0超下=15超左=0超上=0
+OVFn=5
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=113 overflow=auto/auto
+INTn=1
+OVLn=0
+OCC button.btn.ghost 中心(422,393)在视口外
+OCC button.btn.ghost 中心(337,466)在视口外
+OCC button.btn.ghost 中心(428,466)在视口外
+OCC button.btn.ghost 中心(513,466)在视口外
+OCCn=4
+ZROn=0
+TCHn=8
+TCH input 598x16 min=16 「」
+TCH input 598x16 min=16 「」
+TCH button.btn.ghost 92x24 min=24 「开启流畅模式」
+TCH button.btn.ghost 164x24 min=24 「浮字自检（四档各放一次）」
+TCH button.btn.ghost 80x24 min=24 「关闭软提示」
+TCH button.btn.ghost 92x24 min=24 「查看新手引导」
+TCH button.btn.ghost 68x24 min=24 「返回菜单」
+TCH button.btn 76x27 min=27 「关闭音效」
+ALIn=0
+log@844x390
+HDR ui=log iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 300, 0)
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390 [不可见]
+BOX #overlayWrap = 0,0 844x390 [不可见]
+BOX .panel = 0,0 844x0 [不可见]
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 844,0 300x390 超右=300超下=0
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 42,111 760x209 [不可见]
+BOX .map-bottombar = 0,359 844x31 [不可见]
+BOX .map-roller.top = 26,72 792x39 [不可见]
+BOX .mt-menu = 800,7 36x36 [不可见]
+BOX .map-node.o-reached = 243,261 38x54 [不可见]
+SCOPE=#app
+OVF div#log rect=844,0 300x390 超右=300超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 300, 0)
+OVF div.pile-slab rect=-4,289 11x47 超右=0超下=0超左=4超上=0
+OVFn=2
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=45 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=44 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=22 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=4 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INTn=18
+OVL button#logToggle.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#viewDeck.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#menuBtn.btn.ghost × div#topbar 相交 42x1=42px²
+OVLn=3
+OCC span.log-chip 中心(1025,22)在视口外
+OCC span.log-chip 中心(1068,22)在视口外
+OCC span.log-chip 中心(1111,22)在视口外
+OCCn=3
+ZROn=0
+TCHn=11
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 80x22 min=22 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 42x24 min=24 「战报」
+TCH button#viewDeck.btn.ghost 42x24 min=24 「牌库」
+TCH button#menuBtn.btn.ghost 42x24 min=24 「菜单」
+TCH div#topbar 832x30 min=30 「0 第 1 幕 · 1/14 层 牌」
+TCH button#endTurn.btn 80x31 min=31 「结束回合」
+TCH div#pile-discard.pile.pile-discard 35x49 min=35 「0」
+TCH div#pile-draw.pile.pile-draw 35x49 min=35 「5」
+ALIn=0
+logopen@844x390
+HDR ui=logopen iw=844 ih=390 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=log-open has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=none
+BOX #app = 0,0 844x390
+BOX #overlay = 0,0 844x390 [不可见]
+BOX #overlayWrap = 0,0 844x390 [不可见]
+BOX .panel = 0,0 844x0 [不可见]
+BOX #topbar = 6,23 832x30
+BOX h1.title = 6,1 832x22
+BOX #field = 6,55 832x334
+BOX #log = 544,0 300x390
+BOX #col-main = 6,55 832x286
+BOX .battle = 6,55 832x168
+BOX #player-panel = 6,58 101x165
+BOX #enemy-panel = 115,55 723x168
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,223 832x118
+BOX #hand = 110,223 603x118
+BOX .pile-discard = 6,287 35x49
+BOX .pile-draw = 803,287 35x49
+BOX .rune-display = 46,263 59x79
+BOX .endcol = 718,267 80x31
+BOX #endTurn = 718,267 80x31
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 831,323 6x12
+BOX #pile-discard-n = 35,323 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 211,316 422x70
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 42,111 760x209 [不可见]
+BOX .map-bottombar = 0,359 844x31 [不可见]
+BOX .map-roller.top = 26,72 792x39 [不可见]
+BOX .mt-menu = 800,7 36x36 [不可见]
+BOX .map-node.o-reached = 236,261 38x54 [不可见]
+SCOPE=#app
+OVF div.pile-slab rect=-4,289 11x47 超右=0超下=0超左=4超上=0
+OVFn=1
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=56 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=45 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=44 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=33 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=22 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=4 overflow=visible/visible
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#hand scrollW>client=0 scrollH>client=4 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INT div.cplate scrollW>client=0 scrollH>client=2 overflow=hidden/hidden
+INTn=18
+OVL button#viewDeck.btn.ghost × span.log-chip 相交 40x12=483px²
+OVL button#menuBtn.btn.ghost × span.log-chip 相交 39x12=470px²
+OVL button#logToggle.btn.ghost × span.log-chip 相交 37x12=446px²
+OVL div#topbar × span.log-chip 相交 40x9=378px²
+OVL div#topbar × span.log-chip 相交 40x9=378px²
+OVL div#topbar × span.log-chip 相交 40x9=378px²
+OVL button#logToggle.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#viewDeck.btn.ghost × div#topbar 相交 42x1=42px²
+OVL button#menuBtn.btn.ghost × div#topbar 相交 42x1=42px²
+OVLn=9
+OCC button#logToggle.btn.ghost 中心(721,12)被 span.log-chip 盖住
+OCC button#viewDeck.btn.ghost 中心(767,12)被 span.log-chip 盖住
+OCC button#menuBtn.btn.ghost 中心(813,12)被 span.log-chip 盖住
+OCC div.card.has-frame 中心(559,283)被 div.log-line 盖住
+OCC button#endTurn.btn 中心(758,282)被 div.log-line 盖住
+OCC div#pile-draw.pile.pile-draw 中心(820,311)被 div.log-sep 盖住
+OCCn=6
+ZROn=0
+TCHn=11
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 80x22 min=22 「▴ 收起详情」
+TCH button#logToggle.btn.ghost 42x24 min=24 「战报」
+TCH button#viewDeck.btn.ghost 42x24 min=24 「牌库」
+TCH button#menuBtn.btn.ghost 42x24 min=24 「菜单」
+TCH div#topbar 832x30 min=30 「0 第 1 幕 · 1/14 层 牌」
+TCH button#endTurn.btn 80x31 min=31 「结束回合」
+TCH div#pile-discard.pile.pile-discard 35x49 min=35 「0」
+TCH div#pile-draw.pile.pile-draw 35x49 min=35 「5」
+ALIn=0
+menu@430x932
+
+HDR ui=menu iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter menu-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 0,0 430x932
+BOX .panel = 0,0 430x932
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 0,0 430x932
+BOX .menu-stage = 0,0 430x932
+BOX .menu-col-stele = 26,317 454x485 超右=49超下=0
+BOX .menu-row-talis = 241,0 163x140
+BOX .menu-titlebar = 0,47 430x121
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF div.menu-col-stele.menu-tier rect=26,317 454x485 超右=50超下=0超左=0超上=0
+OVF img.menu-art rect=305,-3 35x140 超右=0超下=0超左=0超上=3 tr=matrix(0.999995, -0.00327444, 0.00327444, 0.999995, -0.0109229, -3.3358)
+OVF img.menu-art rect=359,-2 40x140 超右=0超下=0超左=0超上=2 tr=matrix(0.999894, 0.0145273, -0.0145273, 0.999894, 0.0273484, -1.88235)
+OVFn=3
+INT div#overlayWrap scrollW>client=49 scrollH>client=0 overflow=visible/visible
+INT div#overlayContent.panel scrollW>client=49 scrollH>client=0 overflow=visible/visible
+INT div.menu-root scrollW>client=49 scrollH>client=0 overflow=visible/visible
+INT div.menu-stage scrollW>client=49 scrollH>client=0 overflow=visible/visible
+INT span.menu-artbox scrollW>client=2 scrollH>client=0 overflow=visible/visible
+INTn=5
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+heroselect@430x932
+
+HDR ui=heroselect iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter hero-scene bodyClass=at-menu evt-bg has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,164 421x605
+BOX .panel = 4,164 421x605
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,248 399x489
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=0
+ALIn=0
+opening@430x932
+
+HDR ui=opening iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=at-menu evt-bg has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,314 421x305
+BOX .panel = 4,314 421x305
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,398 399x158
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INT div.cdesc scrollW>client=0 scrollH>client=17 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INTn=2
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 131x31 min=31 「看广告 · 重随一次」
+TCH button.btn.ghost 52x31 min=31 「跳过」
+ALIn=0
+map@430x932
+
+HDR ui=map iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 0,0 430x932
+BOX .panel = 0,0 430x0 [不可见]
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 13,98 404x766
+BOX .map-bottombar = 0,886 430x46
+BOX .map-roller.top = 0,76 430x22
+BOX .mt-menu = 387,6 36x36
+BOX .map-node.o-reached = 183,790 40x54
+SCOPE=#overlay
+OVF div#map-sheet.map-wrap.map-sheet rect=13,-110 404x996 超右=0超下=0超左=0超上=110 tr=matrix(1, 0, 0, 1, -202, -208)
+OVFn=1
+INT div#map-viewport.map-viewport scrollW>client=0 scrollH>client=22 overflow=hidden/hidden
+INTn=1
+OVLn=0
+OCC div.map-node.locked 中心(215,-72)在视口外
+OCC div.map-node.locked 中心(308,1)被 div.map-topbar 盖住
+OCC div.map-node.locked 中心(211,71)被 div.map-plaque 盖住
+OCCn=3
+ZROn=0
+TCHn=29
+TCH button.btn.ghost 143x31 min=31 「菜单（重开 / 退出）」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+TCH div.map-node.locked 32x32 min=32 「」
+ALIn=0
+battle@430x932
+
+HDR ui=battle iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932 [不可见]
+BOX #overlayWrap = 0,0 430x932 [不可见]
+BOX .panel = 0,0 430x0 [不可见]
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 13,98 404x766 [不可见]
+BOX .map-bottombar = 0,886 430x46 [不可见]
+BOX .map-roller.top = 0,76 430x22 [不可见]
+BOX .mt-menu = 387,6 36x36 [不可见]
+BOX .map-node.o-reached = 37,797 40x54 [不可见]
+SCOPE=#app
+OVF div#log rect=430,0 292x932 超右=292超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 292.391, 0)
+OVF div.pile-slab rect=-3,818 10x39 超右=0超下=0超左=3超上=0
+OVFn=2
+INT div.cdesc scrollW>client=0 scrollH>client=47 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=38 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=37 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=36 overflow=hidden/hidden
+INT div#hand scrollW>client=28 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=27 overflow=hidden/hidden
+INT div.battle scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div#enemy-panel scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=5 overflow=hidden/hidden
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=20
+OVL div.card.has-frame × button#endTurn.btn 相交 24x41=995px²
+OVL div.card.has-frame × button#endTurn.btn 相交 1x41=25px²
+OVLn=2
+OCC span.log-chip 中心(603,22)在视口外
+OCC span.log-chip 中心(646,22)在视口外
+OCC span.log-chip 中心(689,22)在视口外
+OCC div.card.has-frame 中心(137,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(157,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(177,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(197,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(217,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(237,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(257,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(277,778)被 div#tip-bubble.show 盖住
+OCCn=11
+ZROn=0
+TCHn=10
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH div#pile-discard.pile.pile-discard 30x40 min=30 「0」
+TCH div#pile-draw.pile.pile-draw 30x40 min=30 「5」
+TCH button#logToggle.btn.ghost 52x31 min=31 「战报」
+TCH button#viewDeck.btn.ghost 52x31 min=31 「牌库」
+TCH button#menuBtn.btn.ghost 52x31 min=31 「菜单」
+TCH button#endTurn.btn 96x41 min=41 「结束回合」
+ALIn=0
+battlemany@430x932
+
+HDR ui=battlemany iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932 [不可见]
+BOX #overlayWrap = 0,0 430x932 [不可见]
+BOX .panel = 0,0 430x0 [不可见]
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 26,354 398x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 13,98 404x766 [不可见]
+BOX .map-bottombar = 0,886 430x46 [不可见]
+BOX .map-roller.top = 0,76 430x22 [不可见]
+BOX .mt-menu = 387,6 36x36 [不可见]
+BOX .map-node.o-reached = 179,790 40x54 [不可见]
+SCOPE=#app
+OVF div#log rect=430,0 292x932 超右=292超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 292.391, 0)
+OVF div.pile-slab rect=-3,818 10x39 超右=0超下=0超左=3超上=0
+OVFn=2
+INT div.cdesc scrollW>client=0 scrollH>client=47 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=38 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=37 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=36 overflow=hidden/hidden
+INT div#hand scrollW>client=28 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=27 overflow=hidden/hidden
+INT div.battle scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div#enemy-panel scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=5 overflow=hidden/hidden
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=21
+OVL div.card.has-frame × button#endTurn.btn 相交 24x41=995px²
+OVL div.card.has-frame × button#endTurn.btn 相交 1x41=25px²
+OVLn=2
+OCC span.log-chip 中心(603,22)在视口外
+OCC span.log-chip 中心(646,22)在视口外
+OCC span.log-chip 中心(689,22)在视口外
+OCC div.card.has-frame 中心(137,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(157,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(177,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(197,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(217,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(237,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(257,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(277,778)被 div#tip-bubble.show 盖住
+OCCn=11
+ZROn=0
+TCHn=10
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH div#pile-discard.pile.pile-discard 30x40 min=30 「0」
+TCH div#pile-draw.pile.pile-draw 30x40 min=30 「5」
+TCH button#logToggle.btn.ghost 52x31 min=31 「战报」
+TCH button#viewDeck.btn.ghost 52x31 min=31 「牌库」
+TCH button#menuBtn.btn.ghost 52x31 min=31 「菜单」
+TCH button#endTurn.btn 96x41 min=41 「结束回合」
+ALIn=0
+piledraw@430x932
+
+HDR ui=piledraw iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter pile-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 0,37 430x857
+BOX .panel = 0,37 430x857
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,128 400x838 超右=0超下=34
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF div.reward-cards rect=15,128 400x838 超右=0超下=34超左=0超上=0
+OVFn=1
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=109 overflow=auto/auto
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INTn=6
+OVLn=0
+OCC div.card.has-frame 中心(215,717)被 div#tip-bubble.show 盖住
+OCCn=1
+ZROn=0
+TCHn=1
+TCH button#overlayCloseX.close-x 38x38 min=38 「✕」
+ALIn=0
+pilediscard@430x932
+
+HDR ui=pilediscard iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter pile-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 0,37 430x857
+BOX .panel = 0,37 430x857
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,128 400x838 超右=0超下=34
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF div.reward-cards rect=15,128 400x838 超右=0超下=34超左=0超上=0
+OVFn=1
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=109 overflow=auto/auto
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INTn=5
+OVLn=0
+OCC div.card.has-frame 中心(215,717)被 div#tip-bubble.show 盖住
+OCCn=1
+ZROn=0
+TCHn=1
+TCH button#overlayCloseX.close-x 38x38 min=38 「✕」
+ALIn=0
+shop@430x932
+
+HDR ui=shop iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,317 421x297
+BOX .panel = 4,317 421x297
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,464 399x35
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=3
+TCH button.btn.ghost 142x31 min=31 「删一张牌（4 金币）」
+TCH button.btn.ghost 78x31 min=31 「返回地图」
+TCH button.btn 96x36 min=36 「继续前进」
+ALIn=0
+campfire@430x932
+
+HDR ui=campfire iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,333 421x265
+BOX .panel = 4,333 421x265
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=3
+TCH button.btn.ghost 170x31 min=31 「删牌 · 调整牌组（可选）」
+TCH button.btn.ghost 154x31 min=31 「休息（恢复 20 生命）」
+TCH button.btn 171x36 min=36 「锻造（升级一张牌）」
+ALIn=0
+restconfirm@430x932
+
+HDR ui=restconfirm iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,397 421x138
+BOX .panel = 4,397 421x138
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 52x31 min=31 「返回」
+TCH button.btn 111x36 min=36 「确定 · 休息」
+ALIn=0
+event@430x932
+
+HDR ui=event iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter bodyClass=evt-bg has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,387 421x159
+BOX .panel = 4,387 421x159
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 78x31 min=31 「转身离开」
+TCH button.btn 130x36 min=36 「献祭 8 点生命」
+ALIn=0
+forge@430x932
+
+HDR ui=forge iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter forge-scene bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 0,37 430x857
+BOX .panel = 0,37 430x857
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,149 400x1688 超右=0超下=905
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 97,149 236x158
+BOX .forge-arrow = 204,217 22x22
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF button.btn.ghost rect=189,1851 52x31 超右=0超下=950超左=0超上=0
+OVF div.reward-cards rect=15,149 400x1688 超右=0超下=905超左=0超上=0
+OVFn=2
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=1011 overflow=auto/auto
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc.upgrade-preview scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INTn=21
+OVLn=0
+OCC div.card.has-frame 中心(146,1078)在视口外
+OCC div.card.has-frame 中心(284,1078)在视口外
+OCC div.card.has-frame 中心(146,1248)在视口外
+OCC div.card.has-frame 中心(284,1248)在视口外
+OCC div.card.has-frame 中心(146,1418)在视口外
+OCC div.card.has-frame 中心(284,1418)在视口外
+OCC div.card.has-frame 中心(146,1588)在视口外
+OCC div.card.has-frame 中心(284,1588)在视口外
+OCC div.card.has-frame 中心(146,1758)在视口外
+OCC div.card.has-frame 中心(284,1758)在视口外
+OCC button.btn.ghost 中心(215,1866)在视口外
+OCCn=11
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 52x31 min=31 「返回」
+ALIn=0
+bestiary@430x932
+
+HDR ui=bestiary iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,37 421x857
+BOX .panel = 4,37 421x857
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 15,122 399x3439 超右=0超下=2629
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVF div#bestiary-grid rect=15,122 399x3439 超右=0超下=2629超左=0超上=0
+OVFn=1
+INT div#overlayContent.panel scrollW>client=0 scrollH>client=2698 overflow=auto/auto
+INTn=1
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button#overlayCloseX.close-x 38x38 min=38 「✕」
+ALIn=0
+leaderboard@430x932
+
+HDR ui=leaderboard iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,399 421x135
+BOX .panel = 4,399 421x135
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 15,482 399x21
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button#overlayCloseX.close-x 38x38 min=38 「✕」
+ALIn=0
+deck@430x932
+
+HDR ui=deck iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,207 421x519
+BOX .panel = 4,207 421x519
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 15,257 399x452
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button#overlayCloseX.close-x 38x38 min=38 「✕」
+ALIn=0
+reward@430x932
+
+HDR ui=reward iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,314 421x305
+BOX .panel = 4,314 421x305
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,398 399x158
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INT div.cdesc scrollW>client=0 scrollH>client=16 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=6 overflow=hidden/hidden
+INTn=3
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 52x31 min=31 「跳过」
+ALIn=0
+relicreward@430x932
+
+HDR ui=relicreward iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,314 421x304
+BOX .panel = 4,314 421x304
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,399 399x157
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=1
+TCH button.btn.ghost 52x31 min=31 「跳过」
+ALIn=0
+bossreward@430x932
+
+HDR ui=bossreward iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=- bodyClass=has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,319 421x294
+BOX .panel = 4,319 421x294
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 15,404 399x142
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 78x31 min=31 「继续前进」
+TCH button.btn 171x36 min=36 「锻造（升级一张牌）」
+ALIn=0
+result@430x932
+
+HDR ui=result iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,369 421x195
+BOX .panel = 4,369 421x195
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn 233x36 min=36 「看广告 · 金币翻倍（再 +12）」
+TCH button.btn 66x36 min=36 「继续」
+ALIn=0
+victory@430x932
+
+HDR ui=victory iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=evt-bg has-bg
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,342 421x249
+BOX .panel = 4,342 421x249
+BOX #topbar = 6,72 418x16
+BOX h1.title = 6,6 418x62
+BOX #field = 6,94 418x814
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,94 418x246
+BOX .battle = 6,94 418x10
+BOX #player-panel = 424,94 0x0 [不可见]
+BOX #enemy-panel = 414,102 10x2
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,106 418x200
+BOX #hand = 120,106 174x200
+BOX .pile-discard = 6,260 30x40
+BOX .pile-draw = 394,260 30x40
+BOX .rune-display = 36,192 80x114
+BOX .endcol = 298,186 96x41
+BOX #endTurn = 298,186 96x41
+BOX .hint = 6,308 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,288 6x12
+BOX #pile-discard-n = 29,288 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 157x31 min=31 「进入镇妖塔 · 无尽模式」
+TCH button.btn 96x36 min=36 「再打一局」
+ALIn=0
+defeat@430x932
+
+HDR ui=defeat iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter result-scene bodyClass=evt-bg has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,369 421x193
+BOX .panel = 4,369 421x193
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=2
+TCH button.btn.ghost 118x31 min=31 「放弃 · 结束本局」
+TCH button.btn 186x36 min=36 「免费复活 · 回满血继续」
+ALIn=0
+settings@430x932
+
+HDR ui=settings iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=ov-enter scroll-scene bodyClass=at-menu has-bg
+LOGCLASS  tr=none
+BOX #app = 0,0 0x0 [不可见]
+BOX #overlay = 0,0 430x932
+BOX #overlayWrap = 4,200 421x532
+BOX .panel = 4,200 421x532
+BOX #topbar = 0,0 0x0 [不可见]
+BOX h1.title = 0,0 0x0 [不可见]
+BOX #field = 0,0 0x0 [不可见]
+BOX #log = 0,0 0x0 [不可见]
+BOX #col-main = 0,0 0x0 [不可见]
+BOX .battle = 0,0 0x0 [不可见]
+BOX #player-panel = 0,0 0x0 [不可见]
+BOX #enemy-panel = 0,0 0x0 [不可见]
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 0,0 0x0 [不可见]
+BOX #hand = 0,0 0x0 [不可见]
+BOX .pile-discard = 0,0 0x0 [不可见]
+BOX .pile-draw = 0,0 0x0 [不可见]
+BOX .rune-display = 0,0 0x0 [不可见]
+BOX .endcol = 0,0 0x0 [不可见]
+BOX #endTurn = 0,0 0x0 [不可见]
+BOX .hint = 0,0 0x0 [不可见]
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 0,0 0x0 [不可见]
+BOX #pile-discard-n = 0,0 0x0 [不可见]
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 不存在
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 不存在
+BOX .map-bottombar = 不存在
+BOX .map-roller.top = 不存在
+BOX .mt-menu = 不存在
+BOX .map-node.o-reached = 不存在
+SCOPE=#overlay
+OVFn=0
+INTn=0
+OVLn=0
+OCCn=0
+ZROn=0
+TCHn=8
+TCH input 399x16 min=16 「」
+TCH input 399x16 min=16 「」
+TCH button.btn.ghost 104x31 min=31 「开启流畅模式」
+TCH button.btn.ghost 182x31 min=31 「浮字自检（四档各放一次）」
+TCH button.btn.ghost 91x31 min=31 「关闭软提示」
+TCH button.btn.ghost 104x31 min=31 「查看新手引导」
+TCH button.btn.ghost 78x31 min=31 「返回菜单」
+TCH button.btn 96x36 min=36 「关闭音效」
+ALIn=0
+log@430x932
+
+HDR ui=log iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=matrix(1, 0, 0, 1, 292.391, 0)
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932 [不可见]
+BOX #overlayWrap = 0,0 430x932 [不可见]
+BOX .panel = 0,0 430x0 [不可见]
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 430,0 292x932 超右=292超下=0
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 13,98 404x766 [不可见]
+BOX .map-bottombar = 0,886 430x46 [不可见]
+BOX .map-roller.top = 0,76 430x22 [不可见]
+BOX .mt-menu = 387,6 36x36 [不可见]
+BOX .map-node.o-reached = 21,795 40x54 [不可见]
+SCOPE=#app
+OVF div#log rect=430,0 292x932 超右=292超下=0超左=0超上=0 tr=matrix(1, 0, 0, 1, 292.391, 0)
+OVF div.pile-slab rect=-3,818 10x39 超右=0超下=0超左=3超上=0
+OVFn=2
+INT div.cdesc scrollW>client=0 scrollH>client=47 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=38 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=37 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=36 overflow=hidden/hidden
+INT div#hand scrollW>client=28 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=27 overflow=hidden/hidden
+INT div.battle scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div#enemy-panel scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=5 overflow=hidden/hidden
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=20
+OVL div.card.has-frame × button#endTurn.btn 相交 24x41=995px²
+OVL div.card.has-frame × button#endTurn.btn 相交 1x41=25px²
+OVLn=2
+OCC span.log-chip 中心(603,22)在视口外
+OCC span.log-chip 中心(646,22)在视口外
+OCC span.log-chip 中心(689,22)在视口外
+OCC div.card.has-frame 中心(137,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(157,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(177,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(197,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(217,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(237,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(257,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(277,778)被 div#tip-bubble.show 盖住
+OCCn=11
+ZROn=0
+TCHn=10
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH div#pile-discard.pile.pile-discard 30x40 min=30 「0」
+TCH div#pile-draw.pile.pile-draw 30x40 min=30 「5」
+TCH button#logToggle.btn.ghost 52x31 min=31 「战报」
+TCH button#viewDeck.btn.ghost 52x31 min=31 「牌库」
+TCH button#menuBtn.btn.ghost 52x31 min=31 「菜单」
+TCH button#endTurn.btn 96x41 min=41 「结束回合」
+ALIn=0
+logopen@430x932
+
+HDR ui=logopen iw=430 ih=932 docOvX=0 docOvY=0 bodyOvX=0 ovClass=map-scene hidden bodyClass=log-open has-bg
+TIP 「提示【诅咒】是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成」
+LOGCLASS  tr=none
+BOX #app = 0,0 430x932
+BOX #overlay = 0,0 430x932 [不可见]
+BOX #overlayWrap = 0,0 430x932 [不可见]
+BOX .panel = 0,0 430x0 [不可见]
+BOX #topbar = 6,72 418x44
+BOX h1.title = 6,6 418x62
+BOX #field = 6,122 418x786
+BOX #log = 138,0 292x932
+BOX #col-main = 6,122 418x774
+BOX .battle = 6,122 418x538
+BOX #player-panel = 334,122 90x224
+BOX #enemy-panel = 160,354 264x306
+BOX #turn-summary = 0,0 0x0 [不可见]
+BOX .hand-area = 6,662 418x200
+BOX #hand = 120,662 174x200
+BOX .pile-discard = 6,816 30x40
+BOX .pile-draw = 394,816 30x40
+BOX .rune-display = 36,748 80x114
+BOX .endcol = 298,742 96x41
+BOX #endTurn = 298,742 96x41
+BOX .hint = 6,864 418x32
+BOX .menu-root = 不存在
+BOX .menu-stage = 不存在
+BOX .menu-col-stele = 不存在
+BOX .menu-row-talis = 不存在
+BOX .menu-titlebar = 不存在
+BOX .reward-cards = 不存在
+BOX #bestiary-grid = 不存在
+BOX .kwlist = 不存在
+BOX #rotate-tip = 0,0 0x0 [不可见]
+BOX #pile-draw-n = 417,844 6x12
+BOX #pile-discard-n = 29,844 6x12
+BOX .forge-pair = 不存在
+BOX .forge-arrow = 不存在
+BOX #scene-veil = 0,0 0x0 [不可见]
+BOX #tip-bubble = 108,589 215x194
+BOX #drag-dmg = 不存在
+BOX #drag-block = 不存在
+BOX #map-viewport = 13,98 404x766 [不可见]
+BOX .map-bottombar = 0,886 430x46 [不可见]
+BOX .map-roller.top = 0,76 430x22 [不可见]
+BOX .mt-menu = 387,6 36x36 [不可见]
+BOX .map-node.o-reached = 21,794 40x54 [不可见]
+SCOPE=#app
+OVF div.pile-slab rect=-3,818 10x39 超右=0超下=0超左=3超上=0
+OVFn=1
+INT div.cdesc scrollW>client=0 scrollH>client=47 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=38 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=37 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=36 overflow=hidden/hidden
+INT div#hand scrollW>client=28 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=27 overflow=hidden/hidden
+INT div.battle scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div#enemy-panel scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.enemy.e-normal scrollW>client=0 scrollH>client=18 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div.cdesc scrollW>client=0 scrollH>client=15 overflow=hidden/hidden
+INT div#end-turn-hint scrollW>client=10 scrollH>client=0 overflow=visible/visible
+INT div.cdesc scrollW>client=0 scrollH>client=5 overflow=hidden/hidden
+INT div#field scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#col-main scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hand-area scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div#pile-draw.pile.pile-draw scrollW>client=4 scrollH>client=0 overflow=visible/visible
+INT div.hero-art-box scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INT div#pile-discard.pile.pile-discard scrollW>client=0 scrollH>client=2 overflow=visible/visible
+INTn=20
+OVL div.card.has-frame × button#endTurn.btn 相交 24x41=995px²
+OVL div.card.has-frame × button#endTurn.btn 相交 1x41=25px²
+OVLn=2
+OCC button#logToggle.btn.ghost 中心(155,53)被 div.log-line 盖住
+OCC button#viewDeck.btn.ghost 中心(215,53)被 div.log-line 盖住
+OCC button#menuBtn.btn.ghost 中心(275,53)被 div.log-line 盖住
+OCC div#topbar 中心(215,94)被 div.log-sep 盖住
+OCC button.tb-toggle 中心(326,94)被 div.log-sep 盖住
+OCC div.card.has-frame 中心(137,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(157,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(177,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(197,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(217,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(237,777)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(257,778)被 div#tip-bubble.show 盖住
+OCC div.card.has-frame 中心(277,778)被 div#tip-bubble.show 盖住
+OCC button#endTurn.btn 中心(346,762)被 div#log 盖住
+OCC div#pile-draw.pile.pile-draw 中心(409,836)被 div#log 盖住
+OCCn=15
+ZROn=0
+TCHn=10
+TCH span.log-chip 40x21 min=21 「伤害」
+TCH span.log-chip 40x21 min=21 「获得」
+TCH span.log-chip 40x21 min=21 「状态」
+TCH button.tb-toggle 93x28 min=28 「▴ 收起详情」
+TCH div#pile-discard.pile.pile-discard 30x40 min=30 「0」
+TCH div#pile-draw.pile.pile-draw 30x40 min=30 「5」
+TCH button#logToggle.btn.ghost 52x31 min=31 「战报」
+TCH button#viewDeck.btn.ghost 52x31 min=31 「牌库」
+TCH button#menuBtn.btn.ghost 52x31 min=31 「菜单」
+TCH button#endTurn.btn 96x41 min=41 「结束回合」
+ALIn=0

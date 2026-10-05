@@ -12,9 +12,26 @@
  * ========================================================================= */
 
 /* 存储 —— 所有 localStorage 读写都走这里。微信/Cocos 阶段只换这一个对象 */
+/* v1.0.9：写盘失败不再静默。此前所有调用点都 `try{}catch(e){}` 把返回值吞掉 ⇒
+   隐私模式 / 站点数据被禁 / 配额满时，本局档根本没落盘而玩家零提示（刷新即失档，
+   表现为「继续爬塔」按钮凭空消失，会被当成 Bug）。只在**本局档**的三个键上提示，
+   设置 / 成就 / 榜单等其它键保持静默，避免刷屏；提示只发一次（_storeWarned 一次性闩）。 */
+let _storeWarned=false;
+function _storeIsRunKey(k){
+  try{ return typeof RUN_SLOTS!=='undefined' && RUN_SLOTS.indexOf(k)>=0; }catch(e){ return false; }
+}
 const Store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
-  set(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } },
+  set(k,v){
+    try{ localStorage.setItem(k,v); return true; }
+    catch(e){
+      if(!_storeWarned && _storeIsRunKey(k)){
+        _storeWarned=true;
+        try{ floatMsg('⚠ 存档失败：浏览器存储不可用，本局进度不会保存'); }catch(e2){}
+      }
+      return false;
+    }
+  },
   del(k){ try{ localStorage.removeItem(k); }catch(e){} },
   getJSON(k){ const r=Store.get(k); if(r==null) return null; try{ return JSON.parse(r); }catch(e){ return null; } },
   setJSON(k,o){ return Store.set(k, JSON.stringify(o)); }
@@ -60,7 +77,13 @@ const AdSlot = {
 
 /* ===================== 工具 ===================== */
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=rngInt(i+1); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function log(msg){ if(!G) return; G.log.push(msg); if(G.log.length>800) G.log.shift(); }
+/* v1.0.7（手机端性能）：LOG_SEQ 是「本局累计写入过多少行」的**单调计数器**。
+   为什么需要它：G.log 有 800 行上限，满了以后 push+shift 会让 G.log.length 恒为 800，
+   于是「长度没变」既可能是「没有新行」也可能是「进了一行、掉了一行」—— 光凭长度分不开。
+   战报抽屉的增量渲染（60_boot.js 的 renderLogBox）靠它判断「这几次 render 之间新增了几行」。
+   它对存档/冒烟**零影响**：不入 G、不参与序列化，只是一个加载期就存在、只增不减的全局。 */
+let LOG_SEQ=0;
+function log(msg){ if(!G) return; G.log.push(msg); if(G.log.length>800) G.log.shift(); LOG_SEQ++; }
 
 /* ===================== 飘字提示（debuff 视觉反馈） ===================== */
 function floatMsg(msg){
@@ -218,13 +241,23 @@ function fxCellPos(i, cols, box){
   const c=Math.max(1, cols||8);
   return { x:-(i%c)*box, y:-Math.floor(i/c)*box };
 }
+/* v1.0.7（手机端性能）：格子偏移 → 内层精灵图的 transform。
+   background-position 不是合成属性（改一次 = 主线程重光栅化一次）；transform 是，
+   所以动画期间只动 transform。**数值与 fxCellPos 完全同号同值**，可见格子逐像素一致。 */
+function fxCellTf(p){ return 'translate('+p.x+'px,'+p.y+'px)'; }
 /* 四个字符串别名 → 选择器。fxAnchorRect（创建时）与 fxResolveAnchor（重锚时）共用这一张表，
-   别各写一份 —— v0.64.0 就是靠改这张表把 'summon' 从「屏幕中心」挪到 #player-panel 的。 */
+   别各写一份 —— v0.64.0 就是靠改这张表把 'summon' 从「屏幕中心」挪到 #player-panel 的。
+   v1.0.2：'player' / 'summon' 从 #player-panel 再往下落到**立绘框**（.hero-art-box）。
+   为什么要落立绘而不是整块面板：面板 = 立绘 + 名字 + 机制 + 血条 + 数值，中心落在
+   「名字/血条」那一段 —— 手机横屏把立绘抬了一档之后，面板更高、中心更低，
+   特效会明显沉到角色腰以下。立绘框的总高就是立绘本身，落它 = 特效跟着立绘走。
+   ⚠️ 盒子边长**不变**：fxBoxSize 取锚点的短边，而立绘框与面板等宽（.hero-art-box 是 100% 宽）
+      ⇒ 变的只有落点（上移到立绘中心），不是尺寸。尺寸的档差仍由敌人/面板的宽度给。 */
 function fxAliasSel(anchor){
-  return anchor==='player' ? '#player-panel'
+  return anchor==='player' ? '#player-panel .hero-art-box'
        : anchor==='field'  ? '#enemy-panel'
        : anchor==='enemy'  ? '#enemy-panel'
-       : anchor==='summon' ? '#player-panel' : null;
+       : anchor==='summon' ? '#player-panel .hero-art-box' : null;
 }
 /* 锚点 → 视口矩形。'enemy'/'field'/'player'/'summon' 四个别名之外也能直接传元素。
    v0.64.0 起 'summon' 也落到 **#player-panel**（原先落「屏幕中心」，短边恒 0 ⇒ 被 96px 下限兜住，
@@ -270,6 +303,11 @@ function fxAnchorSpec(anchor){
     const uid=(anchor.dataset && anchor.dataset.uid) ? anchor.dataset.uid : null;
     if(uid) return { kind:'uid', v:uid };                      // 敌人：render() 重写 innerHTML 后按 uid 找回
     if(anchor.id==='player-panel' || anchor.id==='enemy-panel') return { kind:'sel', v:'#'+anchor.id };
+    /* v1.0.2：立绘框与面板一样是 render() 每次重建的，但它在 #player-panel 里唯一且可描述
+       ⇒ 存选择器、不存元素引用（存引用会游离 ⇒ 重锚解不到而冻结，特效留在半路）。
+       与下面 hpbar 那条同一套口径。 */
+    if(anchor.classList && anchor.classList.contains && anchor.classList.contains('hero-art-box') &&
+       (typeof anchor.closest!=='function' || anchor.closest('#player-panel'))) return { kind:'sel', v:'#player-panel .hero-art-box' };
     /* 玩家血条（多数飘字的锚点）也是每次 render 重建的，但它永远在 #player-panel 里且唯一。
        closest 在 vm_host 的 dummyEl 上可能不存在 ⇒ 必须守卫。 */
     if(anchor.classList && anchor.classList.contains && anchor.classList.contains('hpbar') &&
@@ -385,18 +423,64 @@ function playFx(name, anchor, opts){
   const tp =Math.round(r.top+r.height/2-box/2-oy);
   if(isFinite(lft)) el.style.left=lft+'px';
   if(isFinite(tp))  el.style.top =tp+'px';
-  el.style.backgroundImage='url("'+assetURL('fx/'+name+'.png')+'")';
-  el.style.backgroundSize=(S.c*box)+'px auto';
+  /* v1.0.7（手机端性能）：整张精灵图挂**内层**，靠 transform 平移切格；外层只当裁切窗（overflow:hidden）。
+     为什么要动它：旧写法把整张图当外层的 background、每帧改 background-position —— 那不是合成属性，
+     每改一次都要主线程重新光栅化整块，而这张图 3840px 宽、盒子最大到数百 px。手机上实测每帧几十 ms、
+     整段动画把帧率压到 15~31（longtask 273~313ms，录屏读数）。transform 在合成器上跑，
+     几十帧只光栅化一次。可见区域仍是第 i 格，与非合成版逐像素一致。
+     rows 用素材真实排数 S.rows；缺字段时按「最大要播到的帧」回推，免得内层不够高把末帧裁掉。 */
+  const c0=Math.max(1, S.c||8);
+  const rows=S.rows || (Math.floor(((S.i0||0)+Math.max(1,S.f||1)-1)/c0)+1);
+  /* v1.0.9（手机端性能）：**按排拆分**的精灵图 —— 手机端「打出手牌那一瞬间卡」的正解。
+     单文件 / TapTap 产物里，打包.py 把每张 3840×2880 的整图按排切成 rows 张 3840×480 的小图
+     （键 fx/<name>_r<行>.png；只是横着切一刀，逐像素不变）。为什么要切：整图当 CSS background
+     挂上去时，浏览器要一次**解码 11.06 Mpx ≈ 42 MB** 的位图，30 张合计 1195 MB，手机图片缓存
+     根本留不住 ⇒ 每次出牌都重解一遍（真机 100~200ms），录屏里那串 100~276ms 的尖峰正是它。
+     按排只解 1.8 Mpx（≈7 MB），内层合成层也从 4248×3717 缩到 4248×540，尖峰随之落到十几毫秒。
+     拆包产物 / 开发树没有按排键（ASSET_MAP 为空或 ASSET_MAP=null）⇒ strip=false ⇒ 走整图原逻辑，
+     像素与行为完全不变（冒烟宿主里 ASSET_MAP 就是 null，走的正是这条老路）。 */
+  const stripRel=function(r){ return 'fx/'+name+'_r'+r+'.png'; };
+  const strip=!!(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP[stripRel(0)]);
+  const inner=document.createElement('div');
+  inner.className='fx-sheet-in';
+  inner.style.width=(c0*box)+'px';
+  inner.style.height=((strip?1:rows)*box)+'px';
+  /* v1.0.8（手机端性能）：这里必须带 wantBlob=true。单文件产物（TapTap 包）里不带第二参时，
+     assetURL 会返回**整张精灵图的 base64 字串**（3840px 宽，几百 KB），而它被塞进 CSS 的
+     background-image，且**每次出牌都新建一个**：浏览器要逐字解析并保存这串值，真机上就是
+     「每次释放卡牌卡一下」。拆包产物（ASSET_MAP=null）本来就返回短相对路径，带不带都一样。 */
+  const i0=S.i0||0;
+  const row0=Math.floor(i0/c0);
+  /* v1.0.9：**提前把下一排解好**。换排那一刻才挂上去的话，浏览器会有一两帧画不出这一排
+     （background 还没解码完 ⇒ 该帧背景透明，肉眼就是「特效闪一下」）。提前一排（换排间隔
+     8 帧 ≈ 333ms，够解 1.8 Mpx）+ 同 URL 命中图片缓存（assetURL 的 blob 地址按 rel 缓存
+     ⇒ 两次取到同一个 URL）⇒ 换排那一帧直接出画。只在按排模式下跑：冒烟里 strip=false，
+     整个函数一次都不进（vm 沙箱没有 Image）。 */
+  const preloaded={};
+  const preRow=function(r){
+    if(!strip || r<0 || r>=rows || preloaded[r]) return;
+    preloaded[r]=1;
+    const im=new Image();
+    im.src=assetURL(stripRel(r), true);
+    if(im.decode){ try{ im.decode().catch(function(){}); }catch(e){} }
+  };
+  inner.style.backgroundImage='url("'+assetURL(strip?stripRel(row0):('fx/'+name+'.png'), true)+'")';
+  inner.style.backgroundSize=(c0*box)+'px auto';
   /* v0.64.0：i0 = 起始帧。素材每张图的两端都有整格的**全透明**帧（实测最长首空 6 帧、尾空 9 帧），
      是出图时留的余量，不是动作的一部分。照原始帧数从第 0 格播的后果：
      开头 0.2 秒画面上什么都没有（像点了没反应），结尾又挂着一个透明元素不删。
-     裁剪边界由 _patch/fx_tune.py 用 PIL 逐帧量覆盖率算得，写进 FX_SHEETS。 */
-  const i0=S.i0||0;
-  const p0=fxCellPos(i0, S.c, box);
-  el.style.backgroundPosition=p0.x+'px '+p0.y+'px';
+     裁剪边界由 _patch/fx_tune.py 用 PIL 逐帧量覆盖率算得，写进 FX_SHEETS。
+     v1.0.9：按排图只有**一排**高，纵偏移恒 0（横偏移仍是格内列号），起点落在 (i0%8, 0)。 */
+  const p0 = strip ? { x:-(i0%c0)*box, y:0 } : fxCellPos(i0, c0, box);
+  inner.style.transform=fxCellTf(p0);
+  preRow(row0+1);                             // 一进场就把下一排排上队（见 preRow 注释）
+  el.appendChild(inner);
   fxLayer().appendChild(el);
   if(opts.still) return el;                   // 钉帧：不进 FX_LIVE、不排 rAF（只给截图夹具用）
-  const st={ el:el, key:key, i:0, S:S, i0:i0, box:box, dead:false, pend:null,
+  const st={ el:el, inner:inner, key:key, i:0, S:S, i0:i0, box:box, dead:false, pend:null,
+             /* v1.0.9：按排模式的两个游标 —— c0 是列数（算行号），row 是当前挂着的那一排（换排才改
+                backgroundImage；同一排内只动 transform）。非按排模式下 strip=false，两字段闲置。 */
+             strip:strip, c0:c0, row:row0, preRow:preRow,
              /* v0.69.0 重锚字段：spec 是可重新解析的锚点描述符（不存元素引用 —— render() 每次
                 整块重写面板 innerHTML，引用必然游离）；ax/ay 是锚点矩形内的比例（精灵图取中心）；
                 bx/by 是盒子自身偏移（半个格子 + ox/oy 内容框修正）；lx/ly 是上次写入值，用于短路。 */
@@ -410,7 +494,23 @@ function playFx(name, anchor, opts){
     const now=(window.performance&&performance.now?performance.now():Date.now());
     const i=Math.floor((now-st.t0)/st.dur);
     if(i>=S.f){ fxStop(key); return; }
-    if(i!==st.i){ st.i=i; const p=fxCellPos(st.i0+i, S.c, box); el.style.backgroundPosition=p.x+'px '+p.y+'px'; }
+    if(i!==st.i){
+      st.i=i;
+      const k=st.i0+i;
+      if(st.strip){
+        /* v1.0.9：按排 —— 帧只在**当前那一排**里横向平移（transform 是合成属性，几乎零成本）；
+           跨排时才换 backgroundImage（那一下要解一排小图 ≈7MB，而不是整图 42MB）。
+           换排间隔 = 8 帧 ≈ 333ms（24fps），有足够余量让浏览器在后台把下一排解好。 */
+        const r=Math.floor(k/st.c0);
+        if(r!==st.row){
+          st.row=r; st.preRow(r+1);      // 先排下一排的解码，再换当前排（顺序反了换排仍会闪）
+          st.inner.style.backgroundImage='url("'+assetURL(stripRel(r), true)+'")';
+        }
+        st.inner.style.transform=fxCellTf({ x:-(k%st.c0)*box, y:0 });
+      } else {
+        st.inner.style.transform=fxCellTf(fxCellPos(k, st.c0, box));
+      }
+    }
     st.raf=requestAnimationFrame(step);
   });
   return el;
@@ -424,9 +524,20 @@ function fxSeek(name, i, anchor, opts){
   if(!el) return null;
   const box=parseFloat(el.style.width)||0;
   const i0=S.i0||0;
+  const c0=Math.max(1, S.c||8);
   const k=Math.max(0, Math.min(i0+S.f-1, i0+(i|0)));
-  const p=fxCellPos(k, S.c, box);
-  el.style.backgroundPosition=p.x+'px '+p.y+'px';
+  /* v1.0.9：与 playFx 同一套「按排 or 整图」判据（这里重算而不是读 el 上的字段：fxSeek 只给截图夹具用，
+     多一处状态反而多一处漂点）。按排时先把 backgroundImage 换到 k 所在那一排，再横向平移。 */
+  const inEl=el.firstChild;
+  if(inEl){
+    if(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP['fx/'+name+'_r0.png']){
+      const r=Math.floor(k/c0);
+      inEl.style.backgroundImage='url("'+assetURL('fx/'+name+'_r'+r+'.png', true)+'")';
+      inEl.style.transform=fxCellTf({ x:-(k%c0)*box, y:0 });
+    } else {
+      inEl.style.transform=fxCellTf(fxCellPos(k, c0, box));
+    }
+  }
   return el;
 }
 /* opts.crit：大伤害档（阈值与打击音效同源，见 10_audio.js 的 isCritHit） */
@@ -461,8 +572,24 @@ function heroAnim(state){
   if(state){
     void box.offsetWidth;
     box.classList.add('hero-'+state);
-    if(state==='hit'||state==='attack') setTimeout(function(){ box.classList.remove('hero-'+state); },350);
+    if(state==='hit') setTimeout(function(){ box.classList.remove('hero-hit'); },360);
+    if(state==='attack') setTimeout(function(){ box.classList.remove('hero-attack'); },400);
   }
+}
+/* v1.0.11：敌人「出手」动作 —— 向玩家方向（左下）冲一下。
+   为什么不用 HITFX 那套「登记集合 + render 时写进 HTML」：那是给**受击**用的，
+   因为受击发生在 render 之前、类要能活过一次重建；而敌人出手发生在 enemyAct 里，
+   整个敌人回合内不跑 render（弧线 --ex/--ey 在回合开始前就已写好）⇒
+   直接挂到当前那个 DOM 元素上就行，不需要任何集合、也不需要改渲染函数。
+   ⚠️ 类必须在 300ms 后摘掉：留着的话元素会一直挂着那个 animation 声明，
+     下一次 render 重建的元素倒无所谓，但若中途没 render（例如敌方回合是最后一段），
+     这类会一直留在 DOM 上，将来任何一次重排都可能让它重播一次。
+   ⚠️ 降级走 CSS（`.low-spec .enemy.e-atk{animation:none}`），与 `.enemy.hit` 同一口径，
+     所以这里**不判 fx()** —— 与 heroAnim 保持一致，别让两条腿的开关长在不同地方。 */
+function enemyAttackAnim(e){
+  var el=enemyEl(e); if(!el) return;
+  el.classList.remove('e-atk'); void el.offsetWidth; el.classList.add('e-atk');
+  setTimeout(function(){ el.classList.remove('e-atk'); },300);
 }
 /* 全屏震屏 screenShake 已移除（见 CSS 注释） */
 function turnBanner(text){
@@ -520,16 +647,20 @@ function cinnabarBurst(x,y){
   setTimeout(()=>d.remove(), 600);
 }
 function defenseFx(){
+  /* v1.0.2：锚点从 #player-panel 改到**立绘框**（与 fxAliasSel 的 'player' 同一处口径），
+     盾环因此罩住角色本体而不是面板中心（面板中心落在名字/血条那一段）。
+     立绘框量不到时退回面板 —— 别再往下掉到百分比兜底（那会跑到屏幕左上角）。 */
   const p=document.getElementById('player-panel');
-  const r=p?p.getBoundingClientRect():null;
+  const a=(p && p.querySelector) ? (p.querySelector('.hero-art-box') || p) : p;
+  const r=a?a.getBoundingClientRect():null;
   const s=Math.max(130, (r?r.width:180)*1.25);
   const d=document.createElement('div'); d.className='fx-halo';
   d.style.width=s+'px'; d.style.height=s+'px';
   /* v0.69.0：锚的正是 #player-panel —— **就是那个随敌人数上下移动的面板**，
      而 .fx-halo 是 `left:0;top:0` + `transform:translate(-50%,-50%)`（原型.html:885），
      所以 left/top 就是中心点。ax/ay 取 0.5/0.45（历史值）。 */
-  const st = p ? fxTrack(d, p, 0.5, 0.45, 0, 0) : null;
-  if(!p){ d.style.left=(window.innerWidth*0.28)+'px'; d.style.top=(window.innerHeight*0.3)+'px'; }
+  const st = a ? fxTrack(d, a, 0.5, 0.45, 0, 0) : null;
+  if(!a){ d.style.left=(window.innerWidth*0.28)+'px'; d.style.top=(window.innerHeight*0.3)+'px'; }
   fxLayer().appendChild(d);
   setTimeout(()=>{ d.remove(); if(st) fxUntrack(st); }, 650);
 }
@@ -1028,6 +1159,10 @@ function playLockBreak(hostEl, onReveal, opts){
    声明在这一侧（视觉层）而不是 50_ui.js：生成 data-new 的是 handCardHTML，
    摘掉 opacity 的是 Anim 的收尾，分处两个文件 —— 放这儿谁都不用去依赖另一边。 */
 const NEW_CARDS = new WeakSet();
+/* v1.0.1（手机端重影）：**此刻真正在本层飞行**的牌 —— 开播时登记、settle 收尾时摘掉。
+   handCardHTML 拿它决定「终态那张要不要隐身」。比「NEW_CARDS + 有 pending 批次」精确得多：
+   只在飞行窗口内隐形，万一 NEW_CARDS 有残留（build 早退没来得及清）也不会把牌永久藏住。 */
+const FLYING_CARDS = new WeakSet();
 function animLive(){
   try{ return typeof window!=='undefined' && typeof window.innerWidth==='number' && window.innerWidth>0; }
   catch(e){ return false; }
@@ -1149,22 +1284,41 @@ const Anim = {
     }
     if(!anims.length) return 0;
     const hide=(p.hide||[]).slice();
-    for(let i=0;i<hide.length;i++){ try{ hide[i].el.style.opacity='0'; }catch(e){} }
+    for(let i=0;i<hide.length;i++){ try{ hide[i].el.style.opacity='0'; if(hide[i].card) FLYING_CARDS.add(hide[i].card); }catch(e){} }
     const self=this;
-    let left=anims.length, settled=false;
+    let left=anims.length, settled=false, guard=0;
     const settle=function(){
       if(settled) return; settled=true;
+      if(guard){ try{ clearTimeout(guard); }catch(e){} guard=0; }
       /* cancel 而不是 finish：克隆马上要删，没有「停在末帧」的必要；
          cancel 触发的是 oncancel 不是 onfinish ⇒ 不会绕回 tick、不会递归。 */
       for(let i=0;i<anims.length;i++){ try{ anims[i].cancel(); }catch(e){} }
       for(let i=0;i<nodes.length;i++){ try{ if(nodes[i].parentNode) nodes[i].parentNode.removeChild(nodes[i]); }catch(e){} }
+      let live=null;
       for(let i=0;i<hide.length;i++){
         /* keep:true（弃牌用）= **不还原**透明度。理由：弃掉的那张牌此刻已经不在 G.hand 里了，
            还原只会让它在手牌里「先飞走再弹回来」，一直亮到下一次 render 重写 innerHTML 才消失。
            它的手牌元素是**陈旧 DOM**（render 会整块覆盖），留着隐形正好。
            NEW_CARDS 的清理不能跟着一起跳过 —— 两件事本来就没关系。 */
         if(!hide[i].keep){ try{ hide[i].el.style.opacity=''; }catch(e){} }
-        try{ if(hide[i].card) NEW_CARDS.delete(hide[i].card); }catch(e){}
+        try{ if(hide[i].card){ NEW_CARDS.delete(hide[i].card); FLYING_CARDS.delete(hide[i].card); if(!hide[i].keep) (live||(live=[])).push(hide[i].card); } }catch(e){}
+      }
+      /* v1.0.1（手机端重影）：上面恢复的是**开播那一刻记下的元素**，而这一拍里 render() 很可能
+         又跑过一次、把 #hand 整块重写 ⇒ 那个元素已经游离，真正在屏上的新元素还带着隐身
+         （handCardHTML 会把「正在飞」的牌直接写成 opacity:0，见 50_ui.js）。
+         按下标（#hand 的子节点顺序 = G.hand 顺序）找回**当前 DOM 里**那张牌并恢复。
+         keep（弃牌）不进 live：那张牌已经不在 G.hand 里，找不到也不该找。 */
+      if(live){
+        try{
+          const hand=document.getElementById('hand');
+          if(hand && hand.children && typeof G!=='undefined' && G && G.hand){
+            const n=Math.min(hand.children.length, G.hand.length);
+            for(let i=0;i<n;i++){
+              const c=G.hand[i], el=hand.children[i];
+              if(c && el && el.style && live.indexOf(c)>=0) el.style.opacity='';
+            }
+          }
+        }catch(e){}
       }
       for(let i=0;i<self.flights.length;i++){
         if(self.flights[i].settle===settle){ self.flights.splice(i,1); break; }
@@ -1173,6 +1327,15 @@ const Anim = {
     };
     const tick=function(){ if(--left>0) return; settle(); };
     for(let i=0;i<anims.length;i++){ anims[i].onfinish=tick; }
+    /* v1.0.1（手机端兜底）：onfinish 是收尾的唯一来源，但部分安卓 WebView（X5 / 系统 WebView）
+       在 preserve-3d + backface-visibility 的组合下会漏发 finish 事件 —— 那样克隆会**永远停在
+       手牌位上**：看起来就是「手牌区停着一张不动的牌」（重影），而每一拍都留下一个游离克隆，
+       Anim.flights 也永不落地 ⇒ 越打越卡。这里按「本条载荷最晚结束时刻 + 200ms」兜一次，
+       settle 幂等，真收到 onfinish 时它只是空跑。headless 下 play() 早在 animLive() 就返回，
+       不会排任何定时器（冒烟看的「零定时器」约定不受影响）。 */
+    let maxDelay=0;
+    for(let i=0;i<items.length;i++){ const d=(items[i] && items[i].delay)||0; if(d>maxDelay) maxDelay=d; }
+    try{ guard=setTimeout(function(){ try{ settle(); }catch(e){} }, dur+off+maxDelay+200); }catch(e){}
     animBindSkip();
     this.flights.push({ key:(p && p.key)||'', settle:settle });
     return (p && p.hold) || 0;

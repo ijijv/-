@@ -101,7 +101,9 @@ function winFight(){
 function showBattleResult(r){
   const names=G.enemies.map(e=>e.name).join('、');
   const healTxt = r.h ? `恢复 <b style="color:var(--green)">+${r.h}</b> 生命${r.isBoss?'（50%）':''}` : '';
-  const doubleBtn = (!G.goldDoubled && r.g>0) ? `<button class="btn" onclick="doubleGold()">看广告 · 金币翻倍（再 +${r.g}）</button>` : '';
+  /* v1.0.1：广告入口全部隐藏（尚未接入广告）—— 保留 doubleGold / adPlaceholder 本体，
+     接广告后把这一行还原即可。 */
+  const doubleBtn = '';
   const html=`<h2>战 斗 结 算</h2>
     <p>击败 <b>${names}</b><br>
     获得金币 <b style="color:var(--gold)">+${G.battleGold}</b> · 本场耗血 <b style="color:var(--red)">${r.hpLost}</b>${healTxt?` · ${healTxt}`:''}</p>
@@ -171,7 +173,7 @@ function nextEndlessLap(){
   sfx('ui_endless');   // v0.61.32：无尽进入下一层的过渡音
   MAP=genEndlessMap();
   G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
-  showOverlay(`<h2>第 ${G.endlessFloor} 层 · 镇妖塔</h2><p>塔身继续向上延伸，妖魔愈发凶戾。<br>敌人属性与词缀随层数继续攀升。</p><button class="btn" onclick="hideOverlay(); showMap({entry:true});">继续攀登</button>`);
+  showOverlay(`<h2>第 ${G.endlessFloor} 关 · 镇妖塔</h2><p>塔身继续向上延伸，妖魔愈发凶戾。<br>敌人属性与词缀随关数继续攀升。</p><button class="btn" onclick="hideOverlay(); showMap({entry:true});">继续攀登</button>`);
 }
 function calcScore(){
   const kills=G.totalKills||0;
@@ -197,9 +199,11 @@ function loseGame(){
      （**它原先根本不调 setBg，这一句是本次必须补的**，否则复活后背后仍是那张败局图）；
      giveUp() 保留这张图（「本局结束」本来就还是败局，观感一致）；showStartScreen() 走 setBg('menu')。 */
   setBg('defeat.jpg');
-  const where = G.endless ? `镇妖塔 · 第 ${G.endlessFloor} 层` : `第 ${G.act} 幕 · 第 ${G.mapRow+1} 层`;
+  const where = G.endless ? `镇妖塔 · 第 ${G.endlessFloor} 关` : `第 ${G.act} 幕 · 第 ${G.mapRow+1} 层`;
+  /* v1.0.1：广告入口隐藏 —— 只保留**首次免费复活**；用过之后不再出现「看广告复活」的入口。
+     reviveAd / adPlaceholder 本体保留，接广告后还原这一行即可。 */
   const reviveBtn = G.revivedFree
-    ? `<button class="btn" onclick="reviveAd()">看广告 · 复活回满血继续</button>`
+    ? ''
     : `<button class="btn" onclick="reviveFree()">免费复活 · 回满血继续</button>`;
   const html=`<h2>妖气侵蚀了你</h2><p>你被击败了。<br>运气和牌组都还差一点。</p>
     <p style="color:var(--gold)">当前得分 <b>${G.score}</b>　（${where} · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
@@ -214,8 +218,9 @@ function loseGame(){
 function giveUp(){
   const sc=G.score||calcScore();
   submitScore(sc);
+  rankNoteEndlessRun();   // v1.0.1：无尽局结束 → 按关数入榜（普通局的用时榜由 showVictory 记）
   clearRunSave();
-  const where = G.endless ? `镇妖塔 · 第 ${G.endlessFloor} 层` : `第 ${G.act} 幕`;
+  const where = G.endless ? `镇妖塔 · 第 ${G.endlessFloor} 关` : `第 ${G.act} 幕`;
   showOverlay(`<h2>本局结束</h2><p style="color:var(--gold)">最终得分 <b>${sc}</b></p><p>已记入周榜（${where}）。</p><button class="btn" onclick="showStartScreen()">返回主菜单</button>`);
 }
 function revive(){
@@ -249,13 +254,23 @@ function showVictory(){
   sfx('win');
   track('runWin');
   G.score=calcScore()+5000; submitScore(G.score);
+  /* v1.0.1：通关计时榜 —— 全仓只有这里意味着「完整打通三幕」，正是「仅三幕通关者入榜」的唯一入口。
+     用时起点 startTs 由 confirmNewGame / continueRun 落定（并随存档往返）。 */
+  const __elapsed=Math.max(0, Date.now()-(G.startTs||Date.now()));
+  rankSubmitNormal(__elapsed, G.hero);
+  /* v1.0.1：通关次数榜 —— 与计时榜同一入口（track('runWin') 在上面第 255 行已累加），
+     平台侧提交的是**累计次数**，服务端 better 策略保留最大值 ⇒ 每通关一次提交一次即可。 */
+  rankSubmitClear();
+  /* v1.0.1：无尽模式继承 —— 把收关时的英雄 / 牌库 / 遗物 / 灵汁留档，进镇妖塔时原样继承（生命回满、金币清零）。 */
+  SAVE.endlessSeed={ hero:G.hero, deck:(G.deck||[]).map(cardSnap),
+    relics:(G.relics||[]).slice(), potions:(G.potions||[]).map(potionSnap) };
   SAVE.endlessUnlocked=true; persistSave(); // 三幕通关解锁镇妖塔无尽模式
   /* v0.74.0：通关专用整屏背景。恢复不用单独写 —— 两个出口 startEndless() 与 startGame()
      都经 showHeroSelect()→setBg('hero_select.jpg')，中途回主菜单则由 setBg('menu') 接管。 */
   setBg('victory.jpg');
   const html=`<h2>通 关 ！</h2><p>你一路打上了塔顶，镇服了百鬼。<br>剩余生命 ${G.hp} / ${G.maxHp}。</p>
-    <p style="color:var(--gold)">本局得分 <b>${G.score}</b>（含通关加成 +5000）　（第 ${G.act} 幕 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
-    <p style="font-size:13px;color:var(--dim)">镇妖塔已开启——无尽攀爬，层数越高妖魔越凶，冲击周榜。</p>
+    <p style="color:var(--gold)">本局用时 <b>${rankFmtTime(__elapsed)}</b> · 得分 <b>${G.score}</b>（含通关加成 +5000）　（第 ${G.act} 幕 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
+    <p style="font-size:13px;color:var(--dim)">已记入<b>通关计时榜</b>与<b>通关次数榜</b>（本机累计 ${rankClearCount()} 次）。镇妖塔已开启——继承本局牌库与遗物，关数越高妖魔越凶，冲击<b>关卡榜</b>。</p>
     <button class="btn ghost" onclick="startEndless()">进入镇妖塔 · 无尽模式</button>
     <button class="btn" onclick="startGame()">再打一局</button>`;
   /* 通关是**最重**的一档（金墨自下升）。`giveUp()` 刻意**不接** —— 它不是结算，
@@ -264,7 +279,19 @@ function showVictory(){
 }
 
 /* ===================== 本局存档 + 排行榜 ===================== */
+/* v1.0.1：3 个存档槽。**1 号槽沿用旧键名** ⇒ 老玩家的单档天然落进 1 号槽，不需要迁移代码。 */
 const RUN_KEY='zhiguaitower_run_v1';
+const RUN_SLOTS=[RUN_KEY, 'zhiguaitower_run_s2_v1', 'zhiguaitower_run_s3_v1'];
+let RUN_SLOT=0;                                   // 当前进行中的槽位（0 基）；新局 / 续档时落定
+function runKeyOf(i){ const n=RUN_SLOTS.length; return RUN_SLOTS[Math.max(0, Math.min(n-1, i|0))]; }
+function setRunSlot(i){ const n=RUN_SLOTS.length; RUN_SLOT=Math.max(0, Math.min(n-1, i|0)); }
+function firstFreeSlot(){ for(let i=0;i<RUN_SLOTS.length;i++){ if(!readRun(i)) return i; } return -1; }
+function slotInfo(i){
+  const d=readRun(i); if(!d) return null;
+  /* v1.0.12：无尽档也要在存档管理面板里认得出（显示「镇妖塔 · 第 N 关」而不是「第 4 幕」） */
+  return { act:d.act||1, row:(d.mapRow||0)+1, hp:d.hp||0, maxHp:d.maxHp||0, gold:d.gold||0, score:d.score||0, hero:d.hero||'',
+           endless:!!d.endless, floor:d.endlessFloor||0 };
+}
 /* —— 断点续玩：全场景实时存档（战斗/篝火/商店/地图） —— */
 let SCENE='menu';
 /* v0.75.0：oneShot（万剑归宗的 0 费一次性副本）必须**往返存档**。
@@ -291,10 +318,12 @@ function restoreEnemy(d){
   return e;
 }
 function saveRun(scene){
-  if(!G || G.endless) return; // 无尽模式不落档
+  if(!G) return;   /* v1.0.12：无尽模式也落档（用户 2026-10-05 拍板：无尽可存档续玩）。
+                      无尽地图由 mapSeed+endlessFloor 派生（genEndlessMap），存下这两个值即可复现。 */
   const s=scene || SCENE || 'map';
   const data={
     v:3, scene:s,               // v3：新增 mapSeed（地图随机化的复现依据）
+    endless:!!G.endless, endlessFloor:G.endlessFloor||0,   // v1.0.12：无尽档的两个复现锚
     act:G.act, mapRow:G.mapRow, mapCol:G.mapCol, mapPath:(G.mapPath||[]).slice(),
     mapSeed:G.mapSeed||0,
     hero:G.hero, hp:G.hp, maxHp:G.maxHp, gold:G.gold, energy:G.energy, block:G.block,
@@ -306,9 +335,21 @@ function saveRun(scene){
     weak:G.weak||0, gouhun:G.gouhun||0, thorns:G.thorns||0, burn:G.burn||0, dodge:G.dodge||0, debuffImmune:G.debuffImmune||0,
     pendingEnergy:G.pendingEnergy||0, pendingDiscard:G.pendingDiscard||0,
     turnAtkBuff:G.turnAtkBuff||0, karmaFire:G.karmaFire||0, bloodPact:G.bloodPact||0, retain:G.retain||0, xiejia:G.xiejia||0,
+    /* v1.0.9：补齐**跨回合持久**字段。此前只存了 xiejia / retain，下面这些漏存 ⇒
+       续档时被 newState() 的默认值静默归零，玩家在生效回合刷新即被吃掉收益
+       （实测：卸甲生元升级后结束回合该得 6 点尸气，过一次存读档变 0）。
+       · pendingSeal 是死字段（全库无读）故不存；
+       · bleedSummons / hpLostTurn 是 bleedSummonsBonus 生效的前提，必须一起存，
+         否则单独存那个倍率没有任何意义（bleedSummons=false 时它算出来恒 0）。 */
+    endBlockKind:G.endBlockKind||null, xiejiaUp:!!G.xiejiaUp, xiejiaHealCap:G.xiejiaHealCap||0,
+    ybTarget:(G.ybTarget!=null?G.ybTarget:-1),
+    retainHeal:G.retainHeal||0, pendingBlockStart:G.pendingBlockStart||0,
+    zombieDmg:G.zombieDmg||0, bleedSummons:!!G.bleedSummons, bleedSummonsBonus:(G.bleedSummonsBonus||1),
+    hpLostTurn:G.hpLostTurn||0,
     shiqi:G.尸气||0, xuenu:G.xuenu||0, xisuiTurns:G.xisuiTurns||0, xisuiShiqi:G.xisuiShiqi||0,
     duhun:G.duhun||null, xuejiBonus:G.xuejiBonus||0, turnStats:G.turnStats||null,
     totalHpLost:G.totalHpLost||0, totalKills:G.totalKills||0, score:calcScore(),
+    startTs:G.startTs||0,        // v1.0.1：本局开局时刻（通关计时榜的用时靠它，随存档往返）
     relics:G.relics||[], potions:(G.potions||[]).map(potionSnap),
     removeCount:G.removeCount||0, shopMarkup:G.shopMarkup||0, potionBought:G.potionBought||0,
     shopWares:G.shopWares?G.shopWares.map(cardSnap):null,
@@ -318,15 +359,23 @@ function saveRun(scene){
     log:G.log||[],
     rng:rngSnapshot()            // v0.61.06：随机态随存档落盘，续档后牌序/掉落可复现
   };
-  try{ Store.setJSON(RUN_KEY, data); }catch(e){}
+  try{ Store.setJSON(runKeyOf(RUN_SLOT), data); }catch(e){}
+  /* v0.76.2：本局档变了 ⇒ 给云存档记一笔脏（只为 TapTap 端排队，非 TapTap 环境是 no-op）。
+     ⚠️ 上传**不在这里直发** —— 官方频控 createArchive/updateArchive 一分钟只能一次。 */
+  if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }
 }
-function hasRunSave(){ try{ return !!Store.get(RUN_KEY); }catch(e){ return false; } }
-function readRun(){ try{ return Store.getJSON(RUN_KEY); }catch(e){ return null; } }
-function clearRunSave(){ try{ Store.del(RUN_KEY); }catch(e){} }
-function continueRun(){
-  let d; try{ d=Store.getJSON(RUN_KEY); }catch(e){}
-  if(!d){ floatMsg('没有可继续的进度'); return; }
+function hasRunSave(){ try{ for(let i=0;i<RUN_SLOTS.length;i++){ if(Store.get(runKeyOf(i))) return true; } return false; }catch(e){ return false; } }
+function readRun(i){ try{ return Store.getJSON(runKeyOf(i==null?RUN_SLOT:i)); }catch(e){ return null; } }
+function clearRunSave(i){ try{ Store.del(runKeyOf(i==null?RUN_SLOT:i)); }catch(e){} }
+/* v1.0.1：加载指定槽位。`slot` 省略时读当前槽（默认 0 号 = 旧键名），
+   所以「主菜单·续」不再直连这里 —— 它先开存档管理面板（openSaves → showSavesPanel），
+   由面板里的「续玩」带着槽号调进来。 */
+function continueRun(slot){
+  if(slot!=null) setRunSlot(slot);
+  let d; try{ d=Store.getJSON(runKeyOf(RUN_SLOT)); }catch(e){}
+  if(!d){ floatMsg('该存档位是空的'); return; }
   G=newState();
+  G.startTs=d.startTs||Date.now();   // v1.0.1：老档没有 startTs ⇒ 以本次续档时刻为计时起点
   rngRestore(d.rng);          // v0.61.06：先恢复随机态，再重放后续判定
   G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.mapPath=Array.isArray(d.mapPath)?d.mapPath:[]; G.hero=d.hero; // 老存档没 mapPath → 空数组，连线退化成只有「可达」
   // v0.61.39 修 bug：G.hp/G.maxHp/G.gold 原先写在同一行末尾，被上面那句 `//` 注释整段吞掉，
@@ -339,7 +388,10 @@ function continueRun(){
   var __isNewSave = (d.v>=3);
   if(__isNewSave){ G.mapSeed=(d.mapSeed>>>0)||1; }
   else { G.mapSeed=((((d.rng&&d.rng.s)||0)>>>0) || (rngSeedNow()>>>0) || 1); G.mapCol=-1; G.mapPath=[]; }
-  buildActs(G.mapSeed);
+  /* v1.0.12：无尽档 —— 先恢复 endless/endlessFloor，再按 mapSeed+endlessFloor 复现当关地图
+     （genEndlessMap 是派生函数，与 buildActs 之于三幕图同一地位；老档没有这两键 ⇒ 回落 false/0，走原路）。 */
+  G.endless=!!d.endless; G.endlessFloor=d.endlessFloor||0;
+  if(G.endless){ MAP=genEndlessMap(); } else { buildActs(G.mapSeed); }
   if(!(G.mapRow>=0 && G.mapRow<MAP.length)) G.mapRow=Math.max(0, Math.min(G.mapRow||0, MAP.length-1));
   G.deck=(d.deck||[]).map(cardRestore);
   G.hand=(d.hand||[]).map(cardRestore);
@@ -363,6 +415,12 @@ function continueRun(){
   G.weak=d.weak||0; G.gouhun=d.gouhun||0; G.thorns=d.thorns||0; G.burn=d.burn||0; G.dodge=d.dodge||0; G.debuffImmune=d.debuffImmune||0;
   G.pendingEnergy=d.pendingEnergy||0; G.pendingDiscard=d.pendingDiscard||0;
   G.turnAtkBuff=d.turnAtkBuff||0; G.karmaFire=d.karmaFire||0; G.bloodPact=d.bloodPact||0; G.retain=d.retain||0; G.xiejia=d.xiejia||0;
+  /* v1.0.9：与 saveRun 新增字段一一对应的恢复（老档没有这些键 ⇒ 各自回落到默认值，安全） */
+  G.endBlockKind=d.endBlockKind||null; G.xiejiaUp=!!d.xiejiaUp; G.xiejiaHealCap=d.xiejiaHealCap||0;
+  G.ybTarget=(d.ybTarget!=null?d.ybTarget:-1);
+  G.retainHeal=d.retainHeal||0; G.pendingBlockStart=d.pendingBlockStart||0;
+  G.zombieDmg=d.zombieDmg||0; G.bleedSummons=!!d.bleedSummons; G.bleedSummonsBonus=(d.bleedSummonsBonus||1);
+  G.hpLostTurn=d.hpLostTurn||0;
   G.duhun=d.duhun||null; G.xuejiBonus=d.xuejiBonus||0; G.turnStats=d.turnStats||{dmgTaken:0,blocked:0,dealt:0,kills:[]};
   G.totalHpLost=d.totalHpLost||0;
   G.尸气=d.shiqi||0; G.xuenu=d.xuenu||0; G.xisuiTurns=d.xisuiTurns||0; G.xisuiShiqi=d.xisuiShiqi||0;
@@ -383,12 +441,7 @@ function continueRun(){
   else if(d.scene==='unknown'){ SCENE='unknown'; showUnknown(); }
   else { SCENE='map'; showMap({entry:true}); }   // v0.62.0：续档落在地图页 → 走进场动画（Boss 层缓入到当前层）
 }
-function viewLeaderboard(){
-  const wk=weekKey();
-  const list=(SAVE.highScores||[]).filter(h=>h.week===wk).map((h,i)=>{
-    const where = h.mode==='endless' ? `镇妖塔 · 第 ${h.floor} 层` : `第 ${h.act} 幕`;
-    return `<p>${i+1}. <b style="color:var(--gold)">${h.score}</b> 分　${where} · ${h.date}</p>`;
-  }).join('') || '<p style="color:var(--dim)">本周暂无记录</p>';
-  showOverlay(`<h2>周 榜 行 榜</h2><p style="font-size:12px;color:var(--dim)">每周一重置 · 本机 Top 10 · ${wk}</p><div class="kwlist">${list}</div>`, true, 'scroll-scene');
-}
+/* v1.0.1：排行榜面板挪到 js/56_rank.js（通关计时榜 + 无尽关卡榜 + 通关次数榜 + 平台榜适配层）。
+   这里保留旧函数名当入口，主菜单的 `talisOpen(this,viewLeaderboard)` 一个字不用改。 */
+function viewLeaderboard(){ showRankPanel(); }
 

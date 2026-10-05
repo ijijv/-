@@ -203,30 +203,43 @@ def main():
     _shard_src = sorted(set(re.findall(r"menuShardsHTML\(\s*'([^']+)'", _boot)))
     check(_shard_src and set(_shard_src) <= set(_ui_menu),
           '石碑碎片复用主菜单 UI 图（%s ⊆ %s）' % (','.join(_shard_src), ','.join(_ui_menu)))
-    # v0.74.0：**三处版本号必须同步**。
-    # 起因：主菜单标题那一处（60_boot.js 里的 `<small>· v…</small>`）从 v0.69.0 起就
-    # **再没跟着升过**，一路停在 v0.69.0 直到本批才发现 —— 整整落后五个版本。
-    # 既有那条冒烟断言只查**格式**（`menu-title` 之后 200 字符内出现 `v0.`），不查**取值**，
-    # 所以它看着是绿的、什么也没守住。「三处版本号同步」是项目惯例却没有一条闸看着它 ⇒ 补上。
+    # v0.74.0 立「多处版本号必须同步」，v1.0.0 **把处数从三处改成两处**。
+    # v1.0.0 的改动：用户要求「把版本号重置为 V1.0.0，放在游戏左上角，要迷你字号」
+    #   ⇒ 新增 `#ver-tag`（原型.html 的 body 首行，常驻左上角，z-index 60 > #overlay 10），
+    #     并**摘掉**原来那两处 —— h1.title 里的 `<small>· 玩法原型 v…</small>` 与
+    #     60_boot.js 主菜单模板串里的 `<small>· v…</small>`。
+    #   摘掉不只是「用户没要」：那两处一个跟着居中标题、一个只在主菜单里，
+    #   都是**进游戏就看不见**的位置，本来就是这次要换掉的理由。
+    #   所以旧的两处**反向钉住**（下面的 _old）：谁再把它们加回来，
+    #   版本号就会重新分裂成三处不同步 —— v0.74.0 那条闸当初正是为此而补。
     # ⚠️ 取值必须从**源码树**取，不能从 dist 取：主菜单那处在 60_boot.js 的模板串里，
     #   产物里已被混淆（中文串进 base64 表，见 _patch/_diststr.py 那笔旧账）
     #   ⇒ 在 dist 上 grep 那个串是 grep 不到的，拿 dist 当判据会**假红**。
-    #   产物侧的版本号另外单独查（只查 title 那条能存活下来的），用来抓「改了源码忘了重打包」。
+    #   产物侧的版本号另外单独查（title 与 #ver-tag 两条都是正文 HTML 字面量，能存活），
+    #   用来抓「改了源码忘了重打包」。
     _vers = [
         ('原型.html <title>', re.search(r'<title>[^<]*?v(\d+\.\d+\.\d+)</title>', src)),
-        ('原型.html 顶栏 h1', re.search(r'玩法原型 v(\d+\.\d+\.\d+)', src)),
-        ('60_boot.js 主菜单', re.search(r'<small>· v(\d+\.\d+\.\d+)</small>', _boot)),
+        ('原型.html #ver-tag', re.search(r'<div id="ver-tag">V(\d+\.\d+\.\d+)</div>', src)),
     ]
     _miss = [k for k, m in _vers if not m]
-    check(not _miss, '三处版本号都还在（缺：%s）' % ','.join(_miss))
+    check(not _miss, '两处版本号都还在（缺：%s）' % ','.join(_miss))
     _vals = sorted(set(m.group(1) for _, m in _vers if m))
     check(len(_vals) == 1,
-          '三处版本号同步（%s）'
+          '两处版本号同步（%s）'
           % ','.join('%s=v%s' % (k, m.group(1)) for k, m in _vers if m))
+    _old = [k for k, m in (('原型.html h1', re.search(r'玩法原型 v\d', src)),
+                           ('60_boot.js 主菜单', re.search(r'<small>· v\d', _boot))) if m]
+    check(not _old, 'v1.0.0 起旧的两处版本号已摘除（仍在：%s）' % ','.join(_old))
     _dv = re.search(r'<title>[^<]*?v(\d+\.\d+\.\d+)</title>', html)
     check(bool(_dv) and len(_vals) == 1 and _dv.group(1) == _vals[0],
           '产物版本号与源码一致（产物 v%s / 源码 v%s）—— 不一致说明改了源码没重新打包'
           % (_dv.group(1) if _dv else '缺失', _vals[0] if len(_vals) == 1 else '?'))
+    # 左上角那枚是**常驻 UI**（#overlay 盖上来时也看得见）⇒ 单独钉它在产物里存活。
+    # 它在正文 HTML 里、不在脚本里，混淆不动它；一旦被谁挪进脚本就会被烤成 base64 而在这里红。
+    _dvt = re.search(r'<div id="ver-tag">V(\d+\.\d+\.\d+)</div>', html)
+    check(bool(_dvt) and len(_vals) == 1 and _dvt.group(1) == _vals[0],
+          '产物左上角 #ver-tag 与源码一致（产物 V%s / 源码 V%s）'
+          % (_dvt.group(1) if _dvt else '缺失', _vals[0] if len(_vals) == 1 else '?'))
     # v0.76.0：README.txt 的「版本里程碑」**每次发版重写一份** —— 规矩立了就得有闸看着它，
     # 否则它会像主菜单那处版本号一样悄悄落后（v0.69.0 一路停到 v0.74.0 才被发现）。
     # 判据取**最高版本号**而不是「有没有出现当前版本」：README 的里程碑表里全是历史版本，
@@ -317,9 +330,27 @@ def main():
             ext = os.path.splitext(fn)[1].lower()
             if ext in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.mp3', '.ogg', '.wav', '.m4a'):
                 disk.add(os.path.relpath(os.path.join(dp, fn), ASSD).replace('\\', '/'))
-    check(disk <= keys, '磁盘 %d 个素材全部打进产物（漏 %d）' % (len(disk), len(disk - keys)))
-    for d in sorted(disk - keys)[:10]:
+    # v1.0.9（手机端性能）：单文件产物把 fx 精灵图**按排拆开**了（打包.py 的 fx_row_datauris）——
+    # 磁盘上的整图 fx/<key>.png 因此不再有自己的键，改由 fx/<key>_r0..r(rows-1).png 取代（像素不变）。
+    # 这里只把「确已**完整**按排取代」的整图从 disk 里剔除；半套（缺排）不算取代 ⇒ 仍落进「漏」，
+    # 让闸门先红，而不是放一个会半途 404 的动画出去。--no-webp 不拆 ⇒ 整图键仍在，这条自然成立。
+    _fxrows = ids.get('fxRows') or {}
+    _fx_split, _fx_rowkeys = set(), set()
+    for _d in sorted(x for x in disk if x.startswith('fx/')):
+        _b = os.path.splitext(os.path.basename(_d))[0]
+        _n = int(_fxrows.get(_b) or 0)
+        if _n <= 0:
+            continue
+        _ks = ['fx/%s_r%d.png' % (_b, _i) for _i in range(_n)]
+        if all(_k in keys for _k in _ks):
+            _fx_split.add(_d)
+            _fx_rowkeys |= set(_ks)
+    _disk_need = disk - _fx_split
+    check(_disk_need <= keys, '磁盘 %d 个素材全部打进产物（漏 %d）' % (len(_disk_need), len(_disk_need - keys)))
+    for d in sorted(_disk_need - keys)[:10]:
         print('       漏: %s' % d)
+    if _fx_split:
+        print('       （fx 精灵图 %d 张已按排拆开，占 %d 个键 —— 见 [2d]）' % (len(_fx_split), len(_fx_rowkeys)))
 
     # ---- 2b. 音效文件命名（键名拼错会静默回退合成，这里拦住） ----
     print('\n[2b] 素材/sfx/ 命名合规')
@@ -435,11 +466,29 @@ def main():
         print('       缺: fx/%s.png —— playFx 会静默不播：不是崩溃，是「这张牌打了没反应」' % x)
     # 登记在册的 fx 文件都是「游戏真的会请求的」，别让它们在末尾的 unused 报告里
     # 被误报成「可考虑删掉」——照那句删了特效就没了（与 v0.62.0 卷轴三件同一类陷阱）。
-    want.extend(d for d in diskfx)
+    # v1.0.9：单文件产物里这些整图已被**按排键取代**（见 [2]）⇒ 要登记的是真正会被请求的那一批
+    # 键（fx/<key>_r<i>.png），整图路径登记进去反而与产物对不上号。
+    want.extend(sorted(set(diskfx) - _fx_split))
+    want.extend(sorted(_fx_rowkeys))
+    # 正面钉：产物里的按排键**恰好**是 FX_SHEETS.rows 算出来的那批 —— 多一个（拼错行号/整图没删干净）
+    # 或少一个（拆漏一排）都红。这条是 [2] 的补角：[2] 只管「别漏磁盘素材」，这里管「别造多余的键」。
+    _keyed_rows = set(k for k in keys if re.match(r'^fx/[a-z][a-z0-9_]*_r\d+\.png$', k))
+    check(_keyed_rows == _fx_rowkeys,
+          'fx/<名>_r<行>.png 按排键与 FX_SHEETS.rows 完全对齐（多 %d、少 %d）'
+          % (len(_keyed_rows - _fx_rowkeys), len(_fx_rowkeys - _keyed_rows)))
+    for x in sorted(_keyed_rows - _fx_rowkeys)[:8]:
+        print('       多: %s —— 产物里有个对不上 FX_SHEETS.rows 的按排键' % x)
+    # 拆不拆要么全不拆、要么全拆：半套 = 有的特效按排、有的还是整图，产物里两条 playFx 分支打架。
+    check((not _fx_split) or (len(_fx_split) == len(diskfx)),
+          'fx 精灵图按排拆分整批一致：%d 张里已拆 %d、未拆 %d'
+          % (len(diskfx), len(_fx_split), len(diskfx) - len(_fx_split)))
     if diskfx:
         _fsz = sum(os.path.getsize(os.path.join(ASSD, d.replace('/', os.sep))) for d in diskfx)
         print('  注: 素材/fx/ 共 %d 张 %.1f MB，FX_SHEETS 登记 %d 个'
               % (len(diskfx), _fsz / 1048576.0, len(_fxset)))
+        if _fx_split:
+            print('      按排拆开：%d 张 → %d 个键（每键一排 3840×480，出牌解码量 42MB → 7MB）'
+                  % (len(_fx_split), len(_fx_rowkeys)))
 
     # ---- 3. 内联处理器依赖的全局名在混淆后仍存在 ----
     print('\n[3] 内联 onclick 全局名存活')
@@ -806,28 +855,42 @@ def main():
     check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*(?:,[^{}]*)?\{[^}]*display\s*:\s*grid', _style_clean)),
           '`#overlay.forge-scene .reward-cards` 改成了 grid（flex-wrap 只保证「放不下才换行」，'
           '给不出「三组一行」这个列数承诺）')
-    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*(?:,[^{}]*)?\{[^}]*repeat\(3,\s*max-content\)', _style_clean)),
-          '基档是三组一行 `repeat(3, max-content)`（= 用户要的六列）')
-    # ⚠️ 这两条要的是「规则在**门里**」而不是「文件里有」：@media 不加特异度、靠书写顺序取胜，
-    #    一条裸写在门外的 repeat(2,…) 会把**所有**档一起降成四列，而且不报错。
-    check(any('forge-scene' in b and 'repeat(2, max-content)' in b
-              for b in _media_blocks(r'@media\s*\(max-width:\s*700px\)')),
-          '`max-width:700px` 门里有 forge-scene 的 `repeat(2, max-content)`（= 四列那档，'
-          '矩阵里只剩 640×360；844×390 按用户追加的要求必须留在六列）')
-    check(any('forge-scene' in b and 'repeat(1, max-content)' in b
-              for b in _media_blocks(r'@media\s*\(max-width:\s*560px\)')),
-          '`max-width:560px` 门里有 forge-scene 的 `repeat(1, max-content)`（一组一行，防溢出）')
+    # ⚠️ v0.76.1：判据从「写死的 `repeat(3, max-content)`」换成 **auto-fit × --cell-w**。
+    #    用户口径：「面板宽度充足，但卡牌仅排列 3 列，优化卡牌排布，合理利用面板空间」
+    #    ⇒ 列数不再写死，由「单元格宽 × 面板宽」算出来。judge 的是同一件事：
+    #    「这条规则还在，且给得出按面板宽算列数」——只是**表达方式**换了。
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*(?:,[^{}]*)?\{[^}]*'
+                          r'grid-template-columns\s*:\s*repeat\(\s*auto-fit\s*,\s*var\(--cell-w\s*,\s*304px\)\s*\)',
+                          _style_clean)),
+          '基档列数 `repeat(auto-fit, var(--cell-w,304px))`（= 按面板宽算列数，不再是写死的 3 列）')
+    check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*(?:,[^{}]*)?\{[^}]*'
+                          r'justify-content\s*:\s*center', _style_clean)),
+          'auto-fit 收掉空轨道后整格居中（少了 justify-content:center，牌少时整格贴左、右侧一片空）')
+    # ⚠️ 这两条由「门里有 repeat(2/1,…)」翻成**反向闸**：窄屏那两档的**写死列数**已删
+    #    （列数现在完全由 auto-fit 算）。谁把写死的列数加回来，它会在**所有**档一起生效
+    #    （@media 不加特异度、只比书写顺序），把 auto-fit 的承诺悄悄废掉，而且不报错。
+    check(any('forge-scene' in b and _re.search(r'repeat\(\s*\d+\s*,', b)
+              for b in _media_blocks(r'@media\s*\(max-width:\s*700px\)')) is False,
+          '`max-width:700px` 门里**没有** forge-scene 的写死列数（@media 不加特异度，'
+          '留一条就废掉 auto-fit）')
+    check(any('forge-scene' in b and _re.search(r'repeat\(\s*\d+\s*,', b)
+              for b in _media_blocks(r'@media\s*\(max-width:\s*560px\)')) is False,
+          '`max-width:560px` 门里**没有** forge-scene 的写死列数（同上）')
+    # ⚠️ 单元格宽必须与卡宽**同源**：矮屏档把卡宽降到 104，格子宽也得跟着降，
+    #    否则 auto-fit 按 304 算列数，104 宽的卡一行摆不满、右侧留一片空。
+    check(any('forge-scene' in b and '--cell-w:248px' in b
+              for b in _media_blocks(r'@media\s*\(max-height:\s*560px\)')),
+          '矮屏档把 forge 单元格宽降到 248px（= 矮屏卡宽 104×2 + 箭头槽 40）')
     check(any('forge-scene' in b and 'padding:12px 10px' in b
               for b in _media_blocks(r'@media\s*\(max-height:\s*560px\)')),
           '`max-height:560px` 门里有 forge-scene 的 `.panel{padding:12px 10px}` —— 基档那条 '
           '(1,2,0) 压得过矮屏档的 .panel(0,1,0)，没有这条，844×390 会在 22px 内边距上白丢 20px 内容高')
-    # ⚠️ 顺序闸：@media 不加特异度 ⇒ 书写顺序就是全部。降列的两条必须排在基档之后。
-    _i3 = _style_clean.find('repeat(3, max-content)')
-    _i2 = _style_clean.find('repeat(2, max-content)')
-    _i1 = _style_clean.find('repeat(1, max-content)')
-    check(-1 < _i3 < _i2 < _i1,
-          '三档列数的书写顺序是 3 → 2 → 1（实际位置 %d / %d / %d）—— @media 不加特异度，'
-          '顺序一反，窄屏那档就盖不住基档' % (_i3, _i2, _i1))
+    # ⚠️ 顺序闸：@media 不加特异度 ⇒ 书写顺序就是全部。`--cell-w` 的矮屏覆写必须排在基档之后。
+    _ibase = _style_clean.find('repeat(auto-fit, var(--cell-w,304px))')
+    _icw = _style_clean.find('--cell-w:248px')
+    check(-1 < _ibase < _icw,
+          '`--cell-w` 的矮屏覆写排在基档 grid 规则**之后**（位置 %d / %d）—— 同特异度看顺序，'
+          '反了矮屏那档就盖不住基档' % (_ibase, _icw))
     # ---- v0.76.0 §二：`pile-scene`（点抽牌堆/弃牌堆看牌堆内容）----
     # 形态与 forge-scene 同构，但**刻意共用同一份容器规则**（分组选择器，不是复制第二条）：
     # 复制出来的两份必然漂，所以下面那三条闸要的是「**同一条规则里**同时出现两个场景名」。
@@ -851,12 +914,19 @@ def main():
                           r'\s*\{[^}]*padding\s*:\s*22px\s+14px', _style_clean)),
           'forge-scene 与 pile-scene **共用同一条** .panel 内边距规则')
     check(bool(_re.search(r'#overlay\.forge-scene\s+\.reward-cards\s*,\s*#overlay\.pile-scene\s+\.reward-cards'
-                          r'\s*\{[^}]*repeat\(3,\s*max-content\)', _style_clean)),
-          'forge-scene 与 pile-scene **共用同一条** grid 规则（`repeat(3, max-content)`）—— '
-          '牌堆页也要六列，不能只抄容器不抄排列')
-    check(any('pile-scene' in b and 'repeat(2, max-content)' in b
-              for b in _media_blocks(r'@media\s*\(max-width:\s*700px\)')),
-          '`max-width:700px` 门里有 pile-scene 的 `repeat(2, max-content)`（两场景同档降列）')
+                          r'\s*\{[^}]*repeat\(\s*auto-fit\s*,\s*var\(--cell-w\s*,\s*304px\)\s*\)', _style_clean)),
+          'forge-scene 与 pile-scene **共用同一条** grid 规则（auto-fit × --cell-w）—— '
+          '写成两条各自一份就是「复制出来的必然漂」')
+    # ⚠️ 牌堆页的单元格宽 = **单卡宽**（与全局 `.card{width:132px}` 同源）。不同源就会
+    #    「卡 132、格子按 304 算」⇒ 一行摆不满、右侧留一片空，正是用户报的那个毛病。
+    check(bool(_re.search(r'#overlay\.pile-scene\s+\.reward-cards\s*\{[^}]*--cell-w\s*:\s*132px', _style_clean)),
+          '牌堆页单元格宽 = 单卡宽 132px（与全局 `.card{width:132px}` 同源）')
+    check(any('pile-scene' in b and '--cell-w:104px' in b
+              for b in _media_blocks(r'@media\s*\(max-height:\s*560px\)')),
+          '矮屏档把 pile 单元格宽降到 104px（= 矮屏卡宽）')
+    check(any('pile-scene' in b and _re.search(r'repeat\(\s*\d+\s*,', b)
+              for b in _media_blocks(r'@media\s*\(max-width:\s*700px\)')) is False,
+          '`max-width:700px` 门里**没有** pile-scene 的写死列数（两场景同档，同样由 auto-fit 算）')
     check(any('pile-scene' in b and 'padding:12px 10px' in b
               for b in _media_blocks(r'@media\s*\(max-height:\s*560px\)')),
           '`max-height:560px` 门里有 pile-scene 的 `.panel{padding:12px 10px}`（矮屏档同档收边距）')
