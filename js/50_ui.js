@@ -1283,7 +1283,7 @@ function viewBestiary(){
     if(!have){
       return `<div class="bcard locked"><div class="bname">？？？</div><div class="bmeta">${tag||'未收录'}</div><div class="bstory">尚未收录——在战斗中击败它，即可解锁它的志怪故事。</div></div>`;
     }
-    return `<div class="bcard"><div class="bname">${e.name}${tag?` <span style="font-size:12px;color:var(--red)">${tag}</span>`:''}</div><div class="bmeta">${KIND_ICON[e.kind]||''}${KIND_LABEL[e.kind]||'怪'} · 生命 ${e.hp}</div><div class="bstory">${STORIES[k]||''}</div></div>`;
+    return `<div class="bcard"><div class="bname">${e.name}${tag?` <span style="font-size:12px;color:var(--red)">${tag}</span>`:''}</div><div class="bmeta">${e.kind&&KIND_ICON[e.kind]?iconTag('ui/kind_'+e.kind+'.png', KIND_ICON[e.kind]):''}${KIND_LABEL[e.kind]||'怪'} · 生命 ${e.hp}</div><div class="bstory">${STORIES[k]||''}</div></div>`;
   }).join('');
   showOverlay(`<h2>志 怪 图 鉴</h2><p style="font-size:13px;color:var(--dim)">已收录 <b style="color:var(--gold)">${got}</b> / ${total} · 击败妖怪，把它们的志怪故事收进你的百鬼谱。</p><div id="bestiary-grid">${cards}</div>`, true, 'scroll-scene');
 }
@@ -1814,6 +1814,8 @@ function slotHeadroom(){
 function enemyPanelHTML(e, idx){
   const ehp=Math.max(0,e.hp/e.maxHp*100);
   const ehPrev=(ENEMY_HP_PREV[e.uid]===undefined)?ehp:ENEMY_HP_PREV[e.uid];
+  /* v1.0.12：与玩家血条同一套 —— 这一帧比上一帧涨了（敌人 heal / 再生 / 僵王吸血）就走「慢慢涨」慢档。 */
+  const ehGain=ehp>ehPrev+0.001;
   ENEMY_HP_PREV[e.uid]=ehp;
   /* v0.61.33：删除「点击锁定」后不再有选中态 —— 目标只由拖拽落点决定（拖拽中的高亮是 .drag-target） */
   // 纵深错落：纵向位移改由弧线槽位表主导（见 SLOT_SHAPE）。
@@ -1830,22 +1832,24 @@ function enemyPanelHTML(e, idx){
   const sh=slotShift(rank);
   const ex=sh.dx;
   const ey=sh.dy;
+  /* v1.0.13：徽章前那枚 emoji 走 iconTag —— 图到了（素材/buff/<id>.png）自动换图，没到逐字节输出原 emoji。
+     id 表见《美术设计要求.md》§4.3；词缀（AFFIXES 的 9 个 id）本来就是纯文字，图到了才多一枚图标。 */
   let badges='';
-  if(e.curse>0) badges+=`<span class="badge curse" data-tip="kw:诅咒" style="cursor:help">☠️诅咒 ×${e.curse}</span>`;
-  if(e.charm>0) badges+=`<span class="badge charm" data-tip="kw:魅惑" style="cursor:help">💘魅惑 ×${e.charm}</span>`;
-  if(e.strength>0) badges+=`<span class="badge strength" data-tip="kw:力量" style="cursor:help">💪力量 ×${e.strength}</span>`;
-  if(e.pendingDamage>0) badges+=`<span class="badge strength" data-tip="kw:蓄力" style="cursor:help">⚡蓄力 +${e.pendingDamage}</span>`;
-  if(e.seal) badges+=`<span class="badge seal" data-tip="kw:镇魂" style="cursor:help">🔒镇魂</span>`;
-  if(e.ledgerActive){ const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; badges+=`<span class="badge affix" ${la?`data-tip="affix:${la.id}" style="cursor:help"`:''}>📖生死簿·记名${lan?`·${lan}`:''}${e.ledgerDmg?`（${e.ledgerDmg}）`:''}</span>`; }
-  if(e.phase2) badges+=`<span class="badge affix" data-tip="kw:轮回" style="cursor:help">🔄轮回·二阶段</span>`;
-  if(e.affixes && e.affixes.length) e.affixes.forEach(a=>{ const af=AFFIXES.find(x=>x.id===a.id); badges+=`<span class="badge affix" data-tip="affix:${a.id}" style="cursor:help">${af?af.name:a.id}${a.tier>1?'·'+a.tier:''}</span>`; });
-  if(G.hero==='tianshi' && G.ybTarget===e.uid && G.summons.some(x=>x.type==='yinbing' && x.dur>0)) badges+=`<span class="badge ybtarget" data-tip="kw:阴兵目标" style="cursor:help">🎯阴兵目标</span>`;
+  if(e.curse>0){ const max=e.curse>=6; badges+=`<span class="badge curse${max?' curse-max':''}" data-tip="kw:诅咒" style="cursor:help">${iconTag(max?'buff/curse_6.png':'buff/curse_1_5.png','☠️')}诅咒 ×${e.curse}</span>`; }   // v1.0.13：用户交付了 curse_1_5 / curse_6 两版图 ⇒ 满 6 层换图（原方案 A）
+  if(e.charm>0) badges+=`<span class="badge charm" data-tip="kw:魅惑" style="cursor:help">${iconTag('buff/charm.png','💘')}魅惑 ×${e.charm}</span>`;
+  if(e.strength>0) badges+=`<span class="badge strength" data-tip="kw:力量" style="cursor:help">${iconTag('buff/strength.png','💪')}力量 ×${e.strength}</span>`;
+  if(e.pendingDamage>0) badges+=`<span class="badge strength" data-tip="kw:蓄力" style="cursor:help">${iconTag('buff/charge.png','⚡')}蓄力 +${e.pendingDamage}</span>`;
+  if(e.seal) badges+=`<span class="badge seal" data-tip="kw:镇魂" style="cursor:help">${iconTag('buff/seal.png','🔒')}镇魂</span>`;
+  if(e.ledgerActive){ const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; badges+=`<span class="badge affix" ${la?`data-tip="affix:${la.id}" style="cursor:help"`:''}>${iconTag('buff/ledger.png','📖')}生死簿·记名${lan?`·${lan}`:''}${e.ledgerDmg?`（${e.ledgerDmg}）`:''}</span>`; }
+  if(e.phase2) badges+=`<span class="badge affix" data-tip="kw:轮回" style="cursor:help">${iconTag('buff/reincarn.png','🔄')}轮回·二阶段</span>`;
+  if(e.affixes && e.affixes.length) e.affixes.forEach(a=>{ const af=AFFIXES.find(x=>x.id===a.id); badges+=`<span class="badge affix" data-tip="affix:${a.id}" style="cursor:help">${iconTag('buff/'+a.id+'.png','')}${af?af.name:a.id}${a.tier>1?'·'+a.tier:''}</span>`; });
+  if(G.hero==='tianshi' && G.ybTarget===e.uid && G.summons.some(x=>x.type==='yinbing' && x.dur>0)) badges+=`<span class="badge ybtarget" data-tip="kw:阴兵目标" style="cursor:help">${iconTag('buff/ybtarget.png','🎯')}阴兵目标</span>`;
   return `<div class="enemy ${eSize} ${ey>0?'edepth':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" style="z-index:${2000-ey}; --ex:${ex}px; --ey:${-ey}px">
     ${artImg('enemy/'+e.key+'.png', '', 'eportrait '+eSize)}
-    <div class="ename" data-tip="enemy:${e.key}">${KIND_ICON[e.kind]||''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
+    <div class="ename" data-tip="enemy:${e.key}">${e.kind&&KIND_ICON[e.kind]?iconTag('ui/kind_'+e.kind+'.png', KIND_ICON[e.kind]):''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
     <span class="stat">生命 <b>${Math.max(0,e.hp)}</b>/${e.maxHp}</span>
-    <span class="enemyhpbar"><i class="hpghost" data-w="${ehp}" style="width:${ehPrev}%"></i><i class="hpfill" data-w="${ehp}" style="width:${ehPrev}%"></i></span>
-    ${e.block>0?`<span class="stat">格挡 <b>${e.block}</b></span>`:''}
+    <span class="enemyhpbar${ehGain?' hp-gain':''}"><i class="hpghost" data-w="${ehp}" style="width:${ehPrev}%"></i><i class="hpfill" data-w="${ehp}" style="width:${ehPrev}%"></i></span>
+    ${e.block>0?`<span class="stat">${iconTag('buff/block.png','')}格挡 <b>${e.block}</b></span>`:''}
     <div class="badges">${badges}</div>
     <div class="intent">${intentText(e)}</div>
   </div>`;

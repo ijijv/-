@@ -79,8 +79,18 @@
   .price-new{color:#ffd97a; font-size:15px;}
   /* 道心：本场战斗已触发 ⇒ 遗物图标变灰（用户定稿要求） */
   .prelic-chip.relic-used{filter:grayscale(1); opacity:.5;}
-  .hpbar,.enemyhpbar{width:150px; height:12px; background:#000; border:1px solid var(--ink3); border-radius:6px; overflow:hidden; display:inline-block; vertical-align:middle; position:relative;}
-  .hpbar i,.enemyhpbar i{position:absolute; left:0; top:0; height:100%; display:block; transition:width .4s cubic-bezier(.22,1,.36,1);}
+  .hpbar,.enemyhpbar{width:150px; height:12px; background:#000; border:1px solid var(--ink3); border-radius:6px; overflow:hidden; display:inline-block; vertical-align:middle; position:relative; box-shadow:inset 0 1px 2px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.5);}
+  /* v1.0.12：血条**玻璃质感**（用户口径：格挡/回血时血条要有玻璃感）。
+     与既有填充**叠加**而非替换 —— 红填充 / 格挡斜纹 / 血魔刀金三条规则都还在用，
+     所以玻璃只做「外层高光 + 暗金描边」，不动任何 .hpfill 的底色。 */
+  .hpbar::after,.enemyhpbar::after{content:''; position:absolute; inset:0; pointer-events:none; z-index:4; border-radius:inherit;
+    background:linear-gradient(180deg, rgba(255,255,255,.40) 0%, rgba(255,255,255,.08) 38%, rgba(255,255,255,0) 52%, rgba(0,0,0,.30) 100%);
+    box-shadow:inset 0 0 0 1px rgba(216,192,112,.30), inset 0 1px 0 rgba(255,255,255,.45);}
+  .hpbar i,.enemyhpbar i{position:absolute; left:0; top:0; height:100%; display:block; z-index:0; transition:width .45s cubic-bezier(.22,1,.36,1);}
+  /* v1.0.12：这一次渲染比上一次**涨了**（= 回血）⇒ 换慢档，血条肉眼可见地慢慢涨。
+     ⚠️ 加在**容器**上（.hpbar/.enemyhpbar），由 render 时比对上一帧血量得出；降档不触发。 */
+  .hpbar.hp-gain i,.enemyhpbar.hp-gain i{transition-duration:.9s;}
+  .hpbar.hp-gain i.hpghost,.enemyhpbar.hp-gain i.hpghost{transition-duration:1.15s;}
   .hpbar i.hpfill,.enemyhpbar i.hpfill{background:var(--red);}
   .hpbar i.hpghost,.enemyhpbar i.hpghost{background:rgba(255,206,130,.45); transition:width .85s ease-out .15s;}
   /* 格挡时水晶蓝血条 */
@@ -89,16 +99,25 @@
   #player-panel .hpbar.has-block .hpghost{background:rgba(160,210,240,.35);}
   /* 血魔刀（金）：血条上 30% 处的触发竖线；血量低于该线时整条转金色（=攻击 +25% 生效中）。
      竖线用百分比定位 ⇒ 血量上限变化时临界值自动跟着走，无需改代码。 */
-  .hpbar .hpmark{position:absolute; left:30%; top:0; width:2px; height:100%; background:rgba(255,215,120,.9); box-shadow:0 0 4px rgba(255,215,120,.85); z-index:2; pointer-events:none;}
+  /* v1.0.12：z-index 由 2 提到 5 —— 玻璃高光层（.hpbar::after）在 z-index:4，竖线要压在它上面才看得清。 */
+  .hpbar .hpmark{position:absolute; left:30%; top:0; width:2px; height:100%; background:rgba(255,215,120,.9); box-shadow:0 0 4px rgba(255,215,120,.85); z-index:5; pointer-events:none;}
   #player-panel .hpbar.xuemodao.xue-active .hpfill{background:linear-gradient(180deg,#ffe89a,#d99a1e); box-shadow:0 0 8px rgba(255,210,90,.75);}
   #player-panel .hpbar.xuemodao.xue-active .hpghost{background:rgba(255,210,90,.35);}
-  .hp-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.7); z-index:1; pointer-events:none;}
+  /* v1.0.12：z-index 由 1 提到 5 —— 玻璃高光层（.hpbar::after，z-index:4）不再压住血量数字。 */
+  .hp-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.7); z-index:5; pointer-events:none;}
   /* 血条下方数值（血量+格挡） */
   .pstats{display:flex; gap:10px; justify-content:center; margin-top:3px; font-size:13px; font-weight:bold;}
   .pstat-hp,.pstat-block{display:inline-flex; align-items:center; gap:3px;}
   .pstat-hp i,.pstat-block i{display:inline-block; width:9px; height:9px; border-radius:50%;}
   .pstat-hp{color:#e8d9c4;} .pstat-hp i{background:var(--red);}
   .pstat-block{color:#bfe6f5;} .pstat-block i{background:repeating-linear-gradient(45deg,#7fd0e8 0 2px,#2f7f9c 2px 4px); border-radius:2px;}
+  /* v1.0.13：图标换皮（iconTag）到图之后的那枚 <img>。
+     尺寸一律跟字号走（1em），所以徽章 / 芯片 / 顶栏三种字号下都自动对齐，不必逐处写尺寸。
+     没图时 iconTag 根本不输出 <img> ⇒ 这条规则在图上齐之前是死的，两端观感零改动。 */
+  .bicon{width:1em; height:1em; object-fit:contain; display:inline-block; vertical-align:-.14em;}
+  .pstat-block .bicon,.pstat-hp .bicon{width:11px; height:11px; vertical-align:0;}
+  .pbuff .bicon{width:9px; height:9px; vertical-align:-1px; margin-right:1px;}
+  .stat .bicon{width:12px; height:12px; vertical-align:-2px; margin-right:2px;}
   /* 预格挡：紧挨格挡标记的蓝色向上箭头，箭头 9×11px（与格挡圆点 9px 同宽，不抢视线） */
   .pstat-preblock{display:inline-flex; align-items:center; gap:2px; color:#8ed0ff; font-size:11px; line-height:1;}
   .pstat-preblock svg{display:block; width:9px; height:11px; filter:drop-shadow(0 0 3px rgba(74,168,255,.6));}
@@ -262,6 +281,11 @@
   .badges{margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;}
   .badge{font-size:12px; padding:2px 8px; border-radius:20px; border:1px solid var(--ink3); color:var(--dim);}
   .badge.curse{color:#c86bd8;} .badge.charm{color:#e06b9b;} .badge.strength{color:#e08b3a;} .badge.seal{color:#3ac0c0;} .badge.thorns{color:#e06b6b;} .badge.affix{color:#e0b060;} .badge.ybtarget{color:#ffd76a; border-color:rgba(255,215,106,.7); background:rgba(255,215,106,.12);}
+  /* v1.0.12：诅咒**满 6 层**时徽章变样（太上咒箓[金·天师]的定稿要求「满 6 层诅咒图标要变化」）。
+     走代码画（美术方案 B）：金边 + 金色光晕 + 轻微放大，一眼区别于 1~5 层。
+     后四张 buff 贴图（buff/curse.png）到位后，这里可换成贴图版，届时再改这两行即可。 */
+  .badge.curse.curse-max{color:#ffd76a; border-color:rgba(255,215,106,.85); background:rgba(255,215,106,.14);
+    box-shadow:0 0 8px rgba(255,215,106,.55); transform:scale(1.06);}
   .intent{margin-top:8px; font-size:14px; color:var(--gold);}
   .intent::before{content:"⚠ 意图："; color:var(--dim);}
   .summon{font-size:12px; padding:3px 10px; border-radius:16px; border:1px solid var(--gold); color:var(--gold); background:rgba(224,179,65,.08);}
@@ -1237,10 +1261,41 @@
      与上面 shake 是同一套纪律：**每个停靠点都必须带 translate(var(--ex),var(--ey))**，
      漏掉哪一停，那一帧就跳回未抬升的弧线原点（见 :1209 那段注释）。
      挂类的是当前那个 DOM 元素（enemyEl），敌人回合内不会 render ⇒ 中途不会被重建掉。 */
-  .enemy.e-atk{animation:enemyAtk .3s ease-out;}
+  /* v1.0.12：连击按段重播（--atk-times）、依次行动按屏序错峰（--atk-delay）。
+     用长写法而不是 animation 简写 —— 简写里塞 var() 在个别旧 WebView 上会被整条丢弃。 */
+  .enemy.e-atk{animation-name:enemyAtk; animation-duration:.3s; animation-timing-function:ease-out;
+    animation-delay:var(--atk-delay,0ms); animation-iteration-count:var(--atk-times,1);}
   @keyframes enemyAtk{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}
     35%{transform:translate(calc(var(--ex,0px) - 10px),calc(var(--ey,0px) + 6px)) scale(1.03)}
     70%{transform:translate(calc(var(--ex,0px) + 3px),var(--ey,0px))}}
+  /* —— v1.0.13：非攻击行动的姿势。用户口径：「我要给每个敌人攻击都加上行为效果……格挡回血也加上
+     血条边框变成玻璃质感和血条慢慢涨的动画效果（玩家的效果也要这样改动），等等」。
+     攻击族（attack / multi / attackBlock / aoe）复用上面的 enemyAtk；这里补其余六种。
+     每条 keyframes 的停靠点都带 translate(var(--ex),var(--ey)) —— 同 :1261 那条纪律，
+     漏一停就跳回未抬升的弧线原点。--atk-delay 与攻击族共用 ⇒ 依次行动对每种行动都成立。 */
+  .enemy.e-act{animation-duration:.42s; animation-timing-function:ease-out;
+    animation-delay:var(--atk-delay,0ms); animation-iteration-count:1;}
+  .enemy.e-act-guard{animation-name:enemyGuard;}
+  .enemy.e-act-mend{animation-name:enemyMend;}
+  .enemy.e-act-gather{animation-name:enemyGather;}
+  .enemy.e-act-cast{animation-name:enemyCast;}
+  .enemy.e-act-call{animation-name:enemyCall;}
+  .enemy.e-act-rite{animation-name:enemyRite;}
+  @keyframes enemyGuard{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}
+    40%{transform:translate(calc(var(--ex,0px) - 4px),calc(var(--ey,0px) + 6px)) scale(1.02)}}
+  @keyframes enemyMend{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}
+    45%{transform:translate(var(--ex,0px),calc(var(--ey,0px) - 7px)) scale(1.03)}}
+  @keyframes enemyGather{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}
+    55%{transform:translate(calc(var(--ex,0px) + 9px),calc(var(--ey,0px) - 2px)) scale(.94)}}
+  @keyframes enemyCast{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}
+    40%{transform:translate(calc(var(--ex,0px) - 7px),calc(var(--ey,0px) + 2px)) rotate(-2deg) scale(1.02)}
+    72%{transform:translate(calc(var(--ex,0px) - 3px),var(--ey,0px)) rotate(1deg)}}
+  @keyframes enemyCall{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}
+    35%{transform:translate(var(--ex,0px),calc(var(--ey,0px) + 7px)) scale(.97)}
+    68%{transform:translate(var(--ex,0px),calc(var(--ey,0px) - 4px)) scale(1.03)}}
+  @keyframes enemyRite{0%,100%{transform:translate(var(--ex,0px),var(--ey,0px))}
+    45%{transform:translate(var(--ex,0px),calc(var(--ey,0px) - 3px)) rotate(1.4deg)}}
+  .low-spec .enemy.e-act{animation:none;}
   #hurt-vignette{position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at center, transparent 45%, rgba(178,59,46,.5) 100%); opacity:0; z-index:4;}
   #hurt-vignette.flash{animation:vignette .5s ease-out;}
   @keyframes vignette{0%{opacity:1}100%{opacity:0}}

@@ -6173,8 +6173,8 @@
         return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon'].indexOf(e.a) >= 0;
       }));
     __ok('v0.64.0 CARD_FX 没有覆盖全部 49 张 —— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
-      + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；23 张是有素材的那批',
-      Object.keys(CARD_FX).length === 23 && CARDS.length === 49);
+      + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；24 张是有素材的那批（v1.0.13 加断刃雷符）',
+      Object.keys(CARD_FX).length === 24 && CARDS.length === 49);
 
     /* ---------- F3. 纯函数：盒子尺寸 ---------- */
     __ok('v0.64.0 fxBoxSize 下夹 96、上夹 min(vw,vh)×0.9（帧画布 960×960 四周留空，照锚点框贴必然偏大；'
@@ -6893,18 +6893,15 @@
       (function () { try { return potionIcon({ id: '__nope__' }) === ''; } catch (e) { return false; } })());
     __ok('v0.67.0 遗物图标**没有**被字牌化（relicIcon 永远出 <img>，占位只管灵汁）',
       icZhu.indexOf('ricon-fb') < 0 && icZhao.indexOf('ricon-fb') < 0);
-    /* v1.0.x：新遗物的图还在 ART_PENDING 名单里 ⇒ 带字牌兜底；已交付的图不带。
-       两头都钉住：漏了前者 ⇒ 新遗物是空格子；漏了后者 ⇒ v0.67.0 那条钉子会松。 */
+    /* v1.0.13：15 张新遗物图 + 断刃雷符卡图**已全部交付** ⇒ ART_PENDING 清空，
+       原先「待交付 ⇒ 字牌兜底」那条钉子随之退役，改钉「名单必须保持为空」——
+       它不是「没用了」，而是「将来再加新遗物、图还没到时必须重新登记」的哨兵。 */
     var __pendIds = ART_PENDING.filter(function (p) { return p.indexOf('relic/') === 0; })
       .map(function (p) { return p.slice(6, -4); });
-    __ok('v1.0.x 待交付美术的 ' + __pendIds.length + ' 件新遗物出字牌占位（.ricon-fb 写名字末字）',
-      __pendIds.length > 0 && __pendIds.every(function (id) {
-        var r = relById(id);
-        return !!r && relicIcon(r).indexOf('ricon-fb') >= 0;
-      }),
-      __pendIds.join(','));
-    __ok('v1.0.x 已交付的遗物图**不带**字牌兜底（ART_PENDING 之外一律没有 data-fallback）',
-      RELICS.filter(function (r) { return __pendIds.indexOf(r.id) < 0; }).every(function (r) {
+    __ok('v1.0.13 ART_PENDING 为空（本批新遗物图已全部交付，闸从此守每一张图）',
+      ART_PENDING.length === 0, ART_PENDING.join(','));
+    __ok('v1.0.x 全部遗物图**不带**字牌兜底（ART_PENDING 之外一律没有 data-fallback）',
+      RELICS.every(function (r) {
         return relicIcon(r).indexOf('ricon-fb') < 0;
       }));
 

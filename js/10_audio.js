@@ -378,6 +378,41 @@ function imgFail(el){ el.outerHTML = el.dataset.fallback || ''; }
 function artImg(src, fallback, cls){
   return `<img class="${cls||''}" src="${assetURL(src, true)}" draggable="false" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
 }
+/* —— v1.0.13：图标换皮总接口（用户口径「所有图标的重做都由我来设计，你只要给我统筹」）——
+   同一个渲染点，**图没到就原样输出旧内容（emoji / 空），图到了自动变 <img>**，代码零改动接新素材。
+
+   ⚠️ 为什么不是直接 artImg：artImg 每次渲染都写一次 <img>，缺图时<每帧>都要发一次 404 请求 ——
+      手机端 24 个 buff 徽章 × 每拍 render 会变成请求风暴。这里改成**每个路径只探一次**：
+      首个用到它的 render 触发一次探测；探到就 render() 一次换成图，探不到就永久回落。
+   ⚠️ 回落串**必须与改动前逐字节相同**（fallback 参数原样返回）—— 五道闸与冒烟断言都靠这一条。
+   ⚠️ 冒烟沙箱（vm_host.js）里没有 Image 构造器 ⇒ 这里必然抛，被 try 吞掉 ⇒ 永久回落，闸不受影响。 */
+const ICON_PROBE = {};
+let ICON_RERENDER = false;
+/* 探到图之后**合并成一次 render**：34 枚图标各自 onload 都调一次 render 的话，
+   开机那一下会连着重排 34 遍手牌/敌阵（手机端白白卡一次）。 */
+function iconPokeRender(){
+  if(ICON_RERENDER) return;
+  ICON_RERENDER = true;
+  setTimeout(function(){ ICON_RERENDER = false; try{ render(); }catch(e){} }, 0);
+}
+function iconAvail(rel){
+  const st = ICON_PROBE[rel];
+  if(st === 'yes') return true;
+  if(st === undefined){
+    ICON_PROBE[rel] = 'no';                       // 先按「没图」渲染，探到再升级
+    try{
+      const im = new Image();
+      im.onload = function(){ ICON_PROBE[rel] = 'yes'; iconPokeRender(); };
+      im.onerror = function(){ ICON_PROBE[rel] = 'no'; };
+      im.src = assetURL(rel, true);
+    }catch(e){}
+  }
+  return false;
+}
+function iconTag(rel, fallback, cls){
+  if(!iconAvail(rel)) return fallback || '';
+  return `<img class="${cls||'bicon'}" src="${assetURL(rel, true)}" draggable="false" alt="">`;
+}
 function cardArt(c){ return `<div class="cart-wrap">${artImg('card/'+c.id+'.png', '', 'cart')}</div>`; }
 /* v0.68.0：真美术牌框（ui/card/front.png = 385x583 木框 + 上「图窗」下「铭牌窗」）。
    三处独立渲染（cardBody / forgeCardHTML / handCardHTML）都从这里取，免得各写一份飘掉。

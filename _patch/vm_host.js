@@ -28,8 +28,18 @@ function dummyEl() {
     _s: new Set(),
     add() {}, remove() {}, toggle() {}, contains() { return false; },
   };
+  /* v1.0.13：`style` 以前是裸 `{}` —— 于是 `el.style.setProperty('--atk-delay', ...)`
+     （敌人行动动画 / 血条渐涨都用它下 CSS 变量）在沙箱里直接抛
+     `style.setProperty is not a function`，探针里 startBattle 一发就断。
+     补成真记账的桩：普通属性照旧可读写，setProperty/removeProperty 也能用。 */
+  const style = {
+    _vars: {},
+    setProperty(k, v) { this._vars[k] = String(v); },
+    removeProperty(k) { delete this._vars[k]; },
+    getPropertyValue(k) { return Object.prototype.hasOwnProperty.call(this._vars, k) ? this._vars[k] : ''; },
+  };
   const el = {
-    style: {}, dataset: {}, classList,
+    style, dataset: {}, classList,
     /* v1.0.7：appendChild / firstChild 以前是空实现 —— 于是「建子元素再挂上去」这类代码
        在沙箱里等于没发生，冒烟看不到子元素。00_base.js 的 playFx 改成
        「外层裁切窗 + 内层精灵图」之后就要靠 firstChild 取内层，所以这里补成**真记账**。 */
@@ -67,6 +77,7 @@ function makeSandbox() {
     constructor() { this.loop = false; this.volume = 0.5; this._src = ''; }
     set src(v) { this._src = v; } get src() { return this._src; }
     play() { return Promise.resolve(); } pause() {}
+    load() {}   // v1.0.13：补 load —— 音频代码里会调 audioEl.load()，原先在沙箱里直接抛 not a function
     addEventListener() {} removeEventListener() {}
   }
   const ctor = () => dummyEl();

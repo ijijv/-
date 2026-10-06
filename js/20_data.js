@@ -61,9 +61,12 @@ const CARDS = [
       if(G.hero==='ganshiren'){ d=(u?7:5)+G.summons.filter(s=>s.dur>0).length; }
       else if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/(u?2:3)));
       else if(G.hero==='yincha') d+=3*rageSpend(3,6);
-      else if(t.curse>0){ t.curse-=1; d+=(u?4:3); }   // v0.61.35 天师列：+3 → +3/+4
+      else if(t.curse>0){ d+=(u?4:3); }   // v0.61.35 天师列：+3 → +3/+4
       const before=t.hp;
       dealDamageTo(t,d);
+      /* v1.0.13：诅咒改成**结算之后**才消耗 —— 原先在伤害落下前就扣掉，
+         满 6 层时这一扣当场变成 5 层，太上咒箓的「满 6 层 +25%」永远吃不到。 */
+      if(G.hero==='tianshi' && (t.curse||0)>0) t.curse-=1;
       if(before>0 && t.hp<=0){
         if(G.hero==='ganshiren'){ const __q=u?3:2; gainShiqi(__q); log(`雷符：击杀敌人，获得 ${__q} 点【尸气】`); }
         else if(G.hero==='yincha'){ gainRage(2); log('雷符：击杀敌人，获得 2 层【血怒】'); }
@@ -90,9 +93,10 @@ const CARDS = [
     eff:(u)=>{ const t=curEnemy(); if(!t) return; let d;
       if(G.hero==='wuseng'){ d=(u?10:6)+Math.floor(G.block/2); G.block=0; }
       else if(G.hero==='yincha'){ d=10+(G.hpLostTurn||0)*(u?2:1); }
-      else if(G.hero==='tianshi'){ d=(u?15:10); if(t.curse>=3){ t.curse-=3; d*=2; log('剑符：消耗 3 层【诅咒】，伤害翻倍'); } }   // v0.61.35 天师列：9/14 → 10/15
+      else if(G.hero==='tianshi'){ d=(u?15:10); if(t.curse>=3){ d*=2; log('剑符：消耗 3 层【诅咒】，伤害翻倍'); } }   // v0.61.35 天师列：9/14 → 10/15
       else { d=(u?14:10); if(hasShiqi(3)){ spendShiqi(3); d*=2; log('剑符：消耗 3 点【尸气】，伤害翻倍'); } }
-      dealDamageTo(t,d); }},
+      dealDamageTo(t,d);   // v1.0.13：诅咒消耗挪到结算之后（同雷符，见上面那条注释）
+      if(G.hero==='tianshi' && (t.curse||0)>=3) t.curse-=3; }},
   {id:'zhanyaojian', name:'斩妖剑', type:'attack', rarity:'purple', cost:2,
     t:(u)=>G.hero==='ganshiren'?`造成 ${u?12:7} 伤害。场上每有 1 个召唤单位，额外造成 2 点伤害`
       :G.hero==='wuseng'?`造成 ${u?12:8} 伤害。若目标带有【诅咒】，额外造成 6 点伤害`
@@ -156,8 +160,9 @@ const CARDS = [
     eff:(u)=>{ const t=curEnemy(); if(!t) return; let d=G.block||0;
       if(G.hero==='ganshiren') d+=Math.floor((G.尸气||0)/2)*(u?2:1);
       else if(G.hero==='yincha'){ loseHp(2); }
-      else if(G.hero==='tianshi'){ const __c=(t.curse||0); d+=__c*(u?2:1); t.curse=0; if(__c>0) sfx('kw_curse'); }   // v0.61.32
-      if(d>0) dealDamageTo(t,d); else log('铁布衫：当前没有格挡，落空'); }},
+      else if(G.hero==='tianshi'){ const __c=(t.curse||0); d+=__c*(u?2:1); if(__c>0) sfx('kw_curse'); }   // v0.61.32
+      if(d>0){ dealDamageTo(t,d); if(G.hero==='tianshi') t.curse=0; }   // v1.0.13：引爆挪到结算之后（同雷符）
+      else log('铁布衫：当前没有格挡，落空'); }},
   {id:'shihun', name:'噬魂术', type:'attack', rarity:'blue', cost:2,
     t:(u)=>G.hero==='ganshiren'?`消耗 ${u?2:4} 点【尸气】，对目标造成 ${u?18:14} 伤害。若本回合召唤过单位，费用 -1`
       :G.hero==='wuseng'?`引爆目标全部【诅咒】：每层造成 ${u?3:2} 点伤害，并获得 ${u?2:1} 点格挡`
@@ -165,9 +170,9 @@ const CARDS = [
       :`引爆目标全部【诅咒】，每层造成 ${u?6:5} 伤害`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='ganshiren'){ const __sc=u?2:4; if(!hasShiqi(__sc)){ floatMsg('尸气不足'); return false; } spendShiqi(__sc); dealDamageTo(t,u?18:14); return; }
-      if(G.hero==='wuseng'){ const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; sfx('kw_curse'); dealDamageTo(t,c*(u?3:2)); const bb=c*(u?2:1); gainBlock(bb); log(`噬魂术：引爆 ${c} 层【诅咒】，获得 ${bb} 点格挡`); return; }   // v0.61.32
+      if(G.hero==='wuseng'){ const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } sfx('kw_curse'); burstShow(enemyEl(t), c, 90, 'shihun@'+t.uid); dealDamageTo(t,c*(u?3:2)); t.curse=0; const bb=c*(u?2:1); gainBlock(bb); log(`噬魂术：引爆 ${c} 层【诅咒】，获得 ${bb} 点格挡`); return; }   // v0.61.32 / v1.0.12 分段演出 / v1.0.13 引爆挪到结算之后
       if(G.hero==='yincha'){ dealDamageTo(t,(u?16:10)+(u?3:2)*rageSpend(u?3:2,u?18:12)); return; }
-      const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } t.curse=0; sfx('kw_curse'); dealDamageTo(t,c*(u?6:5)); }},   // v0.61.32
+      const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } sfx('kw_curse'); burstShow(enemyEl(t), c, 90, 'shihun@'+t.uid); dealDamageTo(t,c*(u?6:5)); t.curse=0; }},   // v0.61.32 / v1.0.12 分段演出 / v1.0.13 引爆挪到结算之后
   {id:'qungui', name:'群鬼乱舞', type:'attack', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`消耗 ${u?2:4} 点【尸气】，所有召唤单位本回合立刻作用 1 次`
       :G.hero==='wuseng'?`造成 4 伤害。场上每有 1 个召唤单位，此牌伤害 +${u?2:1}`
@@ -214,8 +219,8 @@ const CARDS = [
       else if(G.hero==='wuseng') d=(u?6:4)+Math.min(5,Math.floor((G.block||0)/(u?2:3)));
       else if(G.hero==='yincha') d=5+Math.min(u?20:15,Math.floor((G.totalHpLost||0)/(u?3:4)));
       else { d=(u?8:6); let ratio=0.5;
-        if((t.curse||0)>=2){ t.curse-=2; ratio=1; log('嗜血：消耗 2 层【诅咒】，吸血比例提升到 100%'); }   // v0.61.35 天师列：阈值 3 层 → 2 层
-        const dealt=dealDamageTo(t,d); if(dealt>0){ const h=Math.floor(dealt*ratio); if(h>0){ heal(h); floatMsg('+'+h+' 生命'); log('嗜血：回复 '+h+' 点生命'); } } return; }
+        if((t.curse||0)>=2){ ratio=1; log('嗜血：消耗 2 层【诅咒】，吸血比例提升到 100%'); }   // v0.61.35 天师列：阈值 3 层 → 2 层
+        const dealt=dealDamageTo(t,d); if((t.curse||0)>=2) t.curse-=2; if(dealt>0){ const h=Math.floor(dealt*ratio); if(h>0){ heal(h); floatMsg('+'+h+' 生命'); log('嗜血：回复 '+h+' 点生命'); } } return; }   // v1.0.13：诅咒消耗挪到结算之后（同雷符）
       dealDamageTo(t,d); }},
   {id:'baigui', name:'百鬼夜行', type:'attack', rarity:'purple', cost:2, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`对全体敌人造成 ${u?6:4} 伤害。每有 1 个召唤单位，此牌伤害 +${u?3:2}`
@@ -468,7 +473,7 @@ const CARDS = [
       if(G.hero==='wuseng'){ sealEnemy(t,1); let d=u?15:10; if((G.block||0)>=10){ d+=(u?11:8); log(`镇妖铃：格挡 ≥10，伤害 +${u?11:8}`); } dealDamageTo(t,d); return; }
       if(G.hero==='yincha'){ loseHp(3); sealEnemy(t,1); dealDamageTo(t,(u?16:10)+(u?3:2)*rageSpend(u?3:2,u?18:12)); return; }
       // v0.61.35 天师列：伤害 10/14 → 10/15；镇魂 2 回合的条件由「带诅咒」改为「【诅咒】≥4 层，并消耗 4 层」
-      const __cc4=(t.curse||0)>=4; sealEnemy(t, __cc4?2:1); if(__cc4) t.curse-=4; dealDamageTo(t,u?15:10); }},
+      const __cc4=(t.curse||0)>=4; sealEnemy(t, __cc4?2:1); dealDamageTo(t,u?15:10); if(__cc4) t.curse-=4; }},   // v1.0.13：诅咒消耗挪到结算之后（同雷符）
 /* —— 召唤 / 秘法 41~48 —— */
   {id:'zhiren', name:'纸人', type:'spirit', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`召唤纸人。每回合末造成 ${u?4:2} 伤害。若打出时【尸气】≥4，消耗 4 点【尸气】强化：每回合末造成 ${u?7:5} 伤害。死亡时获得 2 点【尸气】（持续 2 回合）`
@@ -515,17 +520,26 @@ const CARDS = [
       wutongTick(s);
       floatMsg('五通神 · 现形'); }},
   {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:{ganshiren:3, wuseng:0, default:2}, exhaust:true,   // v0.61.37 赶尸人列 2 → 3
-    t:(u)=>G.hero==='ganshiren'?`引爆当前所有【尸气】：清零尸气，每层尸气转化为 ${u?6:5} 点伤害，随机分配给所有敌人。消耗（一次性）`
+    t:(u)=>G.hero==='ganshiren'?`引爆当前所有【尸气】：清零尸气，每层尸气转化为 ${u?6:5} 点伤害，随机分配给所有敌人（最多按 12 层计）。消耗（一次性）`
       :G.hero==='wuseng'?`将当前全部格挡转化为等量伤害，每 1 点随机打在一个敌人身上（逐点结算）。消耗牌（一次性）`
       :G.hero==='yincha'?`将 ${u?6:4} 层【诅咒】随机施加在敌人身上。每施加 1 层，恢复 2 点生命`
       :`对所有敌人施加 1 层【诅咒】。所有敌人每有 1 层【诅咒】，此牌费用 -1（最低 ${u?0:1}）`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ const q=G.尸气||0; if(q<=0){ floatMsg('没有尸气可引爆'); log('咒雨：没有尸气可引爆'); return; }
-        G.尸气=0; if(G.hero==='ganshiren' && q>0){ heal(q); log(`咒雨：引爆 ${q} 点【尸气】，回复 ${q} 点生命`); }   // v0.61.37：清零＝消耗，按新被动等量回血
-        const total=q*(u?6:5); const al=aliveEnemies(); if(!al.length) return;
+        /* v1.0.12【伤害上限】尸玉[蓝·赶尸人]把尸气上限 12→15 ⇒ 若照原式「全部尸气 × 5/6」一次引爆，
+           本卡上限会从 72 抬到 90。这里把**参与转化的层数封在 12**（= 尸玉出现前的原上限）⇒
+           本卡上限与改版前逐字持平；多出来的尸气照旧清零（"清零"文案不变），只是不再转成伤害。
+           与 噬魂术/群鬼乱舞/蚀血/桃木符 的「min(上限, 层数)」是同一套口径。 */
+        const qConv=Math.min(q, 12);
+        G.尸气=0; if(q>0){ heal(q); log(`咒雨：引爆 ${q} 点【尸气】，回复 ${q} 点生命`); }   // v0.61.37：清零＝消耗，按新被动等量回血
+        const total=qConv*(u?6:5); const al=aliveEnemies(); if(!al.length) return;
         const dist=al.map(()=>0);
         for(let i=0;i<total;i++){ dist[Math.floor(rng()*al.length)]++; }
-        al.forEach((e,i)=>{ if(dist[i]>0) dealDamageTo(e,dist[i]); });
-        log(`咒雨：引爆 ${q} 点【尸气】，造成 ${total} 点伤害随机分配`); floatMsg(`咒雨 · 引爆 ${q} 尸气`); return; }
+        /* v1.0.12【分段演出】伤害本体与改版前**逐字节相同**（每只敌人仍是一次 dealDamageTo，
+           整张牌口径的加成照样只吃一次），只是把「每只敌人的那一坨」按屏序错开 120ms 飘字/受击/音效，
+           看得见是一阵乱雨砸下来，而不是一拍全掉。 */
+        const __bStep=SETTINGS.lowSpec?0:120;
+        al.forEach((e,i)=>{ if(dist[i]>0) dealDamageTo(e,dist[i],false,i*__bStep); });
+        log(`咒雨：引爆 ${q} 点【尸气】（转化上限 12 层），造成 ${total} 点伤害随机分配`); floatMsg(`咒雨 · 引爆 ${q} 尸气`); return; }
       if(G.hero==='tianshi'){ aliveEnemies().forEach(e=>applyCurse(e,1)); return; }
       /* v0.61.10(P3)：咒雨·武僧 —— 格挡全转伤害，**真·逐点结算**：每 1 点＝独立一击，
          每击随机挑一个「当前存活」的敌人（某只被打死后，后面的点数重新随机，不会打在尸体上）。
@@ -581,7 +595,7 @@ const CARDS = [
         别改成普通 dealDamageTo(t,5) —— 那样「不吃增伤与弱化」的承诺就废了。 */
   {id:'duanren_leifu', name:'断刃雷符', type:'attack', rarity:'gold', cost:0,
     t:()=>'造成 5 点稳定伤害（不吃增伤与弱化），不可升级',
-    eff:()=>{ const t=curEnemy(); if(!t) return; dealDamageTo(t,5,false,0,true); }},
+    eff:()=>{ const t=curEnemy(); if(!t) return; dealDamageTo(t,5,false,0,true,true); }},   // v1.0.13：第 6 参 true ⇒ 打击音按伤害分级（与普通雷符同听感），而非连击段的短促音
 ];
 /* ===================== 卡面短文案（v0.69.0） =====================
    背景：牌框换成真美术后，铭牌窗只占卡高 28%，132x200 的卡上 .cdesc 实测**只装得下 3 行**
@@ -697,7 +711,7 @@ const SHORT_TEXT = {
           ? `伤 ${u ? 21 : 16}，失 5。本场每失 1 生命伤+${u ? 2 : 1}（上限+${u ? 26 : 20}）`
           : `伤${u ? 32 : 22}。目标每2层【诅咒】费-1（最低0），结算失减免×2层`,
   zhouyu:(u)=>G.hero === 'ganshiren'
-      ? `引爆全部【尸气】：每层转 ${u ? 6 : 5} 伤随机分给敌人。消耗`
+      ? `引爆全部【尸气】：每层转 ${u ? 6 : 5} 伤随机分给敌人（≤12层）。消耗`
       : G.hero === 'wuseng'
         ? `全部格挡转为等量伤，每 1 点随机打一个敌人。消耗`
         : G.hero === 'yincha'
@@ -953,6 +967,7 @@ const CARD_SFX = {
   /* A 组·玩家输出细分：17 张按听感归 4 类。一张牌只给一个音 —— 冲突时取更有辨识度的那类，
      所以「剑符」归斩击（不归符咒）、「万剑归宗」归符咒（不归群伤）、「群鬼乱舞/百鬼夜行」归群伤（不归钝击）。 */
   leifu:'atk_talisman',      huofu:'atk_talisman',      jianfu:'atk_slash',
+  duanren_leifu:'atk_talisman',   // v1.0.13：断刃雷符与普通雷符同听感（用户口径）
   zhanyaojian:'atk_slash',   tianlei:'atk_talisman',    wanjian:'atk_talisman',
   tiebushan:'atk_blunt',     shihun:'atk_slash',        shixue:'atk_slash',
   taomufu:'atk_talisman',    shihunzhou:'atk_talisman', zhongkui:'atk_blunt',
@@ -1012,6 +1027,7 @@ const FX_SHEETS = {
 const CARD_FX = {
   /* 攻击 · 单体 */
   leifu:{n:'lei',a:'enemy'},          huofu:{n:'huo',a:'enemy'},
+  duanren_leifu:{n:'lei',a:'enemy'},  // v1.0.13：沿用普通雷符的雷击精灵图（命中后敌人照走 HITFX 受击反应）
   jianfu:{n:'jian',a:'enemy'},        zhanyaojian:{n:'jian',a:'enemy'},
   tianlei:{n:'tianlei',a:'enemy'},
   /* 攻击 · 全体 */
@@ -1214,22 +1230,22 @@ const RELICS = [
   /* —— 新增 · 通用（四英雄共享池） —— */
   {id:'tongling',    name:'铜铃',   rarity:'white', desc:'战斗开始时额外抽 2 张牌'},
   {id:'yinyangyu',   name:'阴阳鱼', rarity:'blue',  desc:'受到负面效果时，恢复 2 点生命'},
-  {id:'duanren',     name:'断刃',   rarity:'gold',  desc:'牌库中生成一张 0 费、稳定 5 点伤害的雷符（不吃增伤与弱化），不可升级，算攻击牌，可循环'},
+  {id:'duanren',     name:'断刃',   rarity:'gold',  desc:'牌库中生成一张【断刃雷符】：0 费、5 点稳定伤害，不可升级'},
 
   /* —— 新增 · 专属 · 符箓天师（诅咒流） —— */
-  {id:'zhenmoyin',    hero:'tianshi',   name:'镇魔印',     rarity:'blue',   desc:'溢出的诅咒转化的格挡值 +1'},
+  {id:'zhenmoyin',    hero:'tianshi',   name:'镇魔印',     rarity:'blue',   desc:'诅咒溢出转化的格挡，每层多 1 点'},
   {id:'leifaxinjue',  hero:'tianshi',   name:'雷法心诀',   rarity:'purple', desc:'敌人每次诅咒达到 6 层，受到 4 点雷击'},
   {id:'taishangzhou', hero:'tianshi',   name:'太上咒箓',   rarity:'gold',   desc:'敌人身上的诅咒达到 6 层时，其受到的伤害 +25%'},
 
   /* —— 新增 · 专属 · 茅山赶尸人（尸气流） —— */
   {id:'shiyu',       hero:'ganshiren', name:'尸玉',       rarity:'blue',   desc:'尸气上限 +3；战斗开始时获得 3 点尸气'},
   {id:'guling',      hero:'ganshiren', name:'骨铃',       rarity:'purple', desc:'每个召唤单位死亡时，恢复等于其费用的生命'},
-  {id:'yinhundeng',  hero:'ganshiren', name:'引魂灯',     rarity:'gold',   desc:'战斗开始时，自带一只非升级的阴兵'},
+  {id:'yinhundeng',  hero:'ganshiren', name:'引魂灯',     rarity:'gold',   desc:'战斗开始时，自带一只阴兵'},
 
   /* —— 新增 · 专属 · 苦行武僧（格挡流） —— */
-  {id:'luohanquan',    hero:'wuseng',   name:'罗汉拳套',   rarity:'blue',   desc:'永久自带反伤为 1 的荆棘'},
-  {id:'jingangjing',   hero:'wuseng',   name:'金刚经残页', rarity:'purple', desc:'回合结束保留的格挡上限 3 → 6'},
-  {id:'budongmingwang',hero:'wuseng',   name:'不动明王像', rarity:'gold',   desc:'开局直接触发非升级的卸甲生元'},
+  {id:'luohanquan',    hero:'wuseng',   name:'罗汉拳套',   rarity:'blue',   desc:'永久自带 1 点反伤（荆棘）'},
+  {id:'jingangjing',   hero:'wuseng',   name:'金刚经残页', rarity:'purple', desc:'回合结束保留的格挡上限由 3 提升到 6'},
+  {id:'budongmingwang',hero:'wuseng',   name:'不动明王像', rarity:'gold',   desc:'战斗开始时自动触发【卸甲生元】'},
 
   /* —— 新增 · 专属 · 血祭阴差（血怒流） —— */
   {id:'xueyu',       hero:'yincha',    name:'血玉',       rarity:'blue',   desc:'血怒上限 +4'},
@@ -1243,12 +1259,8 @@ const RELICS = [
    ⚠️ 只登记「路径写死在 id 规则里、被闸扫到」的那两类：`relic/<id>.png` 与 `card/<id>.png`。
       符文 / buff / fx 这些走的是运行时拼串（`buff/`+id+'.png'），闸本来就扫不到，不必登记。 */
 const ART_PENDING = [
-  'relic/tongling.png', 'relic/yinyangyu.png', 'relic/duanren.png',
-  'relic/zhenmoyin.png', 'relic/leifaxinjue.png', 'relic/taishangzhou.png',
-  'relic/shiyu.png', 'relic/guling.png', 'relic/yinhundeng.png',
-  'relic/luohanquan.png', 'relic/jingangjing.png', 'relic/budongmingwang.png',
-  'relic/xueyu.png', 'relic/ranxueling.png', 'relic/xuemodao.png',
-  'card/duanren_leifu.png',
+  /* v1.0.13：15 张新遗物图 + 断刃雷符卡图**已全部交付**，名单清空 —— 闸从此守每一张图。
+     （符文 / buff / fx 走运行时拼串，闸本来就扫不到，本来也不在这里登记。） */
 ];
 function hasRelic(id){ return G && G.relics.includes(id); }
 function relById(id){ return RELICS.find(r=>r.id===id); }
@@ -1414,7 +1426,7 @@ function resolveTip(spec){
   if(type==='enemy'){
     const def=ENEMIES[key]; if(!def) return '';
     const live=(G&&G.enemies)?G.enemies.find(x=>x.key===key):null;
-    const icon=KIND_ICON[def.kind]||'';
+    const icon=KIND_ICON[def.kind]?iconTag('ui/kind_'+def.kind+'.png', KIND_ICON[def.kind]):'';   // v1.0.13：图鉴/名牌早就是这枚图标了，悬停提示漏了一处，补齐（无图时逐字节回落 emoji）
     const badge=def.boss?'👹 Boss':def.elite?'☠ 精英':'';
     const hp=live?`${live.hp}/${live.maxHp}`:`${def.hp}`;
     const intent=live?intentText(live):'';

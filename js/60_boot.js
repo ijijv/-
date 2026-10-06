@@ -227,20 +227,22 @@ function animateHpBars(){
     requestAnimationFrame(()=>requestAnimationFrame(()=>{ i.style.width=w+'%'; }));
   });
 }
+/* v1.0.13：每个状态前的那枚 emoji 走 iconTag —— 图到了（素材/buff/<id>.png）自动换图，没到逐字节输出原 emoji。
+   图标 id 表 = 《美术设计要求.md》§4.1；改名要**两处一起改**（这里 + 文档），否则图取不到。 */
 function playerBuffHTML(){
   let s='';
-  if(G.thorns>0) s+=`<span class="badge thorns" data-tip="kw:荆棘">🌵荆棘 ${G.thorns}</span>`;
-  if((G.xisuiTurns||0)>0) s+=`<span class="badge" style="color:#7fb0d8" data-tip="kw:洗髓经">🔮洗髓经 ${G.xisuiTurns}回合</span>`;
-  if(G.karmaFire>0) s+=`<span class="badge" style="color:#e06b3a" data-tip="kw:业火">🔥业火 ${G.karmaFire}回合</span>`;
-  if(G.weak>0) s+=`<span class="badge" style="color:#8ab0d8" data-tip="kw:虚弱">🥀虚弱 ${G.weak}回合</span>`;
-  if(G.gouhun>0) s+=`<span class="badge" style="color:#c86bd8" data-tip="kw:勾魂">👻勾魂</span>`;
-  if(G.burn>0) s+=`<span class="badge" style="color:#e06b3a" data-tip="kw:灼烧">🌡️灼烧 ${G.burn}层</span>`;
-  if(G.turnAtkBuff>0) s+=`<span class="badge" style="color:#c86b1a" data-tip="kw:开天眼">👁️开天眼 +${G.turnAtkBuff}</span>`;
-  if(G.dodge>0) s+=`<span class="badge" style="color:#8ab0d8" data-tip="kw:闪避">💨闪避 ${G.dodge}层</span>`;
-  if(G.debuffImmune>0) s+=`<span class="badge" style="color:#3ac0c0" data-tip="kw:佛渡">🧘佛渡免疫${G.debuffImmune>1?' '+G.debuffImmune+'回合':''}</span>`;
-  if(G.xuejiBonus>0) s+=`<span class="badge" style="color:#c86bd8" data-tip="kw:血祭">🩸血祭 +${G.xuejiBonus}摸</span>`;
-  if(G.duhun && G.duhun.turns>0) s+=`<span class="badge" style="color:#3fa060" data-tip="kw:渡魂">☯️渡魂 ${G.duhun.turns}回合</span>`;
-  if(G.xiejia>0) s+=`<span class="badge" style="color:#7fb0d8" data-tip="kw:卸甲">🛡️卸甲 ${G.xiejia}回合</span>`;
+  if(G.thorns>0) s+=`<span class="badge thorns" data-tip="kw:荆棘">${iconTag('buff/thorns.png','🌵')}荆棘 ${G.thorns}</span>`;
+  if((G.xisuiTurns||0)>0) s+=`<span class="badge" style="color:#7fb0d8" data-tip="kw:洗髓经">${iconTag('buff/xisui.png','🔮')}洗髓经 ${G.xisuiTurns}回合</span>`;
+  if(G.karmaFire>0) s+=`<span class="badge" style="color:#e06b3a" data-tip="kw:业火">${iconTag('buff/karmafire.png','🔥')}业火 ${G.karmaFire}回合</span>`;
+  if(G.weak>0) s+=`<span class="badge" style="color:#8ab0d8" data-tip="kw:虚弱">${iconTag('buff/weak.png','🥀')}虚弱 ${G.weak}回合</span>`;
+  if(G.gouhun>0) s+=`<span class="badge" style="color:#c86bd8" data-tip="kw:勾魂">${iconTag('buff/gouhun.png','👻')}勾魂</span>`;
+  if(G.burn>0) s+=`<span class="badge" style="color:#e06b3a" data-tip="kw:灼烧">${iconTag('buff/burn.png','🌡️')}灼烧 ${G.burn}层</span>`;
+  if(G.turnAtkBuff>0) s+=`<span class="badge" style="color:#c86b1a" data-tip="kw:开天眼">${iconTag('buff/kaitianyan.png','👁️')}开天眼 +${G.turnAtkBuff}</span>`;
+  if(G.dodge>0) s+=`<span class="badge" style="color:#8ab0d8" data-tip="kw:闪避">${iconTag('buff/dodge.png','💨')}闪避 ${G.dodge}层</span>`;
+  if(G.debuffImmune>0) s+=`<span class="badge" style="color:#3ac0c0" data-tip="kw:佛渡">${iconTag('buff/fodu.png','🧘')}佛渡免疫${G.debuffImmune>1?' '+G.debuffImmune+'回合':''}</span>`;
+  if(G.xuejiBonus>0) s+=`<span class="badge" style="color:#c86bd8" data-tip="kw:血祭">${iconTag('buff/xueji.png','🩸')}血祭 +${G.xuejiBonus}摸</span>`;
+  if(G.duhun && G.duhun.turns>0) s+=`<span class="badge" style="color:#3fa060" data-tip="kw:渡魂">${iconTag('buff/duhun.png','☯️')}渡魂 ${G.duhun.turns}回合</span>`;
+  if(G.xiejia>0) s+=`<span class="badge" style="color:#7fb0d8" data-tip="kw:卸甲">${iconTag('buff/xiejia.png','🛡️')}卸甲 ${G.xiejia}回合</span>`;
   return s;
 }
 /* v1.0.13：玩家立绘**右侧**的极简状态芯片（手机横屏档常显）。
@@ -249,20 +251,22 @@ function playerBuffHTML(){
       文字不丢）。顶栏「详情」里的 playerBuffHTML（完整文字）保持不动。
    ⚠️ 基档 .pbuffs{display:none}（原型.html）⇒ 桌面档零改动。 */
 function playerBuffChips(){
-  const chip=(val,col,tip)=>`<span class="pbuff" style="--c:${col}" data-tip="kw:${tip}">${val}</span>`;
+  /* v1.0.13：第 4 个参数是 buff 图标 id（与 playerBuffHTML 同一张表）。
+     没图时 iconTag 返 '' ⇒ 输出与改动前**逐字节相同**，手机档观感不变。 */
+  const chip=(val,col,tip,icon)=>`<span class="pbuff" style="--c:${col}" data-tip="kw:${tip}">${icon?iconTag('buff/'+icon+'.png',''):''}${val}</span>`;
   let s='';
-  if(G.thorns>0) s+=chip(G.thorns,'#9ec06a','荆棘');
-  if((G.xisuiTurns||0)>0) s+=chip(G.xisuiTurns,'#7fb0d8','洗髓经');
-  if(G.karmaFire>0) s+=chip(G.karmaFire,'#e06b3a','业火');
-  if(G.weak>0) s+=chip(G.weak,'#8ab0d8','虚弱');
-  if(G.gouhun>0) s+=chip('●','#c86bd8','勾魂');
-  if(G.burn>0) s+=chip(G.burn,'#e06b3a','灼烧');
-  if(G.turnAtkBuff>0) s+=chip('+'+G.turnAtkBuff,'#c86b1a','开天眼');
-  if(G.dodge>0) s+=chip(G.dodge,'#8ab0d8','闪避');
-  if(G.debuffImmune>0) s+=chip('●','#3ac0c0','佛渡');
-  if(G.xuejiBonus>0) s+=chip('+'+G.xuejiBonus,'#c86bd8','血祭');
-  if(G.duhun && G.duhun.turns>0) s+=chip(G.duhun.turns,'#3fa060','渡魂');
-  if(G.xiejia>0) s+=chip(G.xiejia,'#7fb0d8','卸甲');
+  if(G.thorns>0) s+=chip(G.thorns,'#9ec06a','荆棘','thorns');
+  if((G.xisuiTurns||0)>0) s+=chip(G.xisuiTurns,'#7fb0d8','洗髓经','xisui');
+  if(G.karmaFire>0) s+=chip(G.karmaFire,'#e06b3a','业火','karmafire');
+  if(G.weak>0) s+=chip(G.weak,'#8ab0d8','虚弱','weak');
+  if(G.gouhun>0) s+=chip('●','#c86bd8','勾魂','gouhun');
+  if(G.burn>0) s+=chip(G.burn,'#e06b3a','灼烧','burn');
+  if(G.turnAtkBuff>0) s+=chip('+'+G.turnAtkBuff,'#c86b1a','开天眼','kaitianyan');
+  if(G.dodge>0) s+=chip(G.dodge,'#8ab0d8','闪避','dodge');
+  if(G.debuffImmune>0) s+=chip('●','#3ac0c0','佛渡','fodu');
+  if(G.xuejiBonus>0) s+=chip('+'+G.xuejiBonus,'#c86bd8','血祭','xueji');
+  if(G.duhun && G.duhun.turns>0) s+=chip(G.duhun.turns,'#3fa060','渡魂','duhun');
+  if(G.xiejia>0) s+=chip(G.xiejia,'#7fb0d8','卸甲','xiejia');
   return s;
 }
 /* —— 顶栏折叠：默认展开 buff/遗物详情，点击收起 —— */
@@ -319,14 +323,14 @@ function renderTopbar(){
   const maxXuenuNow=relicMaxXuenu();   // 血玉：10 → 14
   if(G.hero === 'ganshiren') {
     // 尸玉在场：芯片加「蓝色火焰包围」进阶态（.relic-flame-blue，见原型.html）
-    html += `<span class="stat stat-shiqi${hasRelic('shiyu')?' relic-flame-blue':''}"><span class="sb-long">尸气: <b>${G.尸气}/${maxShiQiNow}</b>${preShiqi>0?`<span class="stat-preshiqi" data-tip="kw:预尸气">预+${preShiqi}</span>`:''}</span><span class="sb-short">尸气 <b>${G.尸气}/${maxShiQiNow}</b></span></span>`;
+    html += `<span class="stat stat-shiqi${hasRelic('shiyu')?' relic-flame-blue':''}">${iconTag('buff/shiqi.png','')}<span class="sb-long">尸气: <b>${G.尸气}/${maxShiQiNow}</b>${preShiqi>0?`<span class="stat-preshiqi" data-tip="kw:预尸气">预+${preShiqi}</span>`:''}</span><span class="sb-short">尸气 <b>${G.尸气}/${maxShiQiNow}</b></span></span>`;
   }
   // 如果当前角色是血祭阴差，显示血怒（整局累积资源）
   if(G.hero === 'yincha') {
     // 燃血令：血怒标识旁挂「累积读数」（每满 20 换 1 符文）
     const rageAcc=(hasRelic('ranxueling')?`<span class="stat-rageaccum" data-tip="relic:ranxueling">+${G.rageAccum||0}/20</span>`:'');
     // 血玉在场：芯片加「紫色火焰包围」进阶态（.relic-flame-purple）
-    html += `<span class="stat stat-xuenu${hasRelic('xueyu')?' relic-flame-purple':''}"><span class="sb-long">血怒: <b>${G.xuenu||0}/${maxXuenuNow}</b></span><span class="sb-short">血怒 <b>${G.xuenu||0}/${maxXuenuNow}</b></span>${rageAcc}</span>`;
+    html += `<span class="stat stat-xuenu${hasRelic('xueyu')?' relic-flame-purple':''}">${iconTag('buff/xuenu.png','')}<span class="sb-long">血怒: <b>${G.xuenu||0}/${maxXuenuNow}</b></span><span class="sb-short">血怒 <b>${G.xuenu||0}/${maxXuenuNow}</b></span>${rageAcc}</span>`;
   }
   html += `<button class="tb-toggle" onclick="event.stopPropagation();toggleTopbar()">${TOPBAR_OPEN?'▴ 收起详情':'▾ 详情'}</button>`;
   if(TOPBAR_OPEN){
@@ -394,6 +398,9 @@ function render(){
   refreshRiseK();
   const hpPct=Math.max(0,G.hp/G.maxHp*100);
   const hpPrev=(PLAYER_HP_PREV===null)?hpPct:PLAYER_HP_PREV;
+  /* v1.0.12：这一帧血量比上一帧**涨了** ⇒ 血条走「慢慢涨」慢档 + 玻璃质感（见 原型.html 的 .hpbar.hp-gain）。
+     判据用 0.001 的容差而不是严格 >：百分比是浮点，1 点血在 90 上限下是 1.11%，取整误差会误触发。 */
+  const hpGain=hpPct>hpPrev+0.001;
   PLAYER_HP_PREV=hpPct;
   const heroObj=(HEROES.find(h=>h.id===G.hero)||{});
   const heroName=heroObj.name||'';
@@ -415,8 +422,8 @@ function render(){
     <div class="hero-art-box">${artImg('hero/'+G.hero+'.png', `<div class="hero-emoji">🀄</div>`, 'hero-art')}${summonFold}</div>
     <div class="pname" data-tip="hero:${G.hero}">${heroName}</div>
     ${heroMech?`<div class="pmech" data-tip="hero:${G.hero}">⚙ ${heroMech}</div>`:''}
-    <span class="hpbar${G.block>0?' has-block':''}${hasRelic('xuemodao')?' xuemodao':''}${(hasRelic('xuemodao')&&G.hp<G.maxHp*0.3)?' xue-active':''}">${hasRelic('xuemodao')?'<i class="hpmark" data-tip="relic:xuemodao"></i>':''}<i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>
-    <div class="pstats"><span class="pstat-hp"><i></i>${G.hp}/${G.maxHp}</span>${(G.block>0||preBlock>0)?`<span class="pstat-block"><i></i>${G.block}</span>`:''}${preBlock>0?`<span class="pstat-preblock" data-tip="kw:预格挡"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0 L10 6.5 H6.8 V12 H3.2 V6.5 H0 Z" fill="#4aa8ff"/></svg>${preBlock}</span>`:''}</div>${summonBar}${pbuffs?'<div class="pbuffs">'+pbuffs+'</div>':''}`);
+    <span class="hpbar${hpGain?' hp-gain':''}${G.block>0?' has-block':''}${hasRelic('xuemodao')?' xuemodao':''}${(hasRelic('xuemodao')&&G.hp<G.maxHp*0.3)?' xue-active':''}">${hasRelic('xuemodao')?'<i class="hpmark" data-tip="relic:xuemodao"></i>':''}<i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>
+    <div class="pstats"><span class="pstat-hp"><i></i>${G.hp}/${G.maxHp}</span>${(G.block>0||preBlock>0)?`<span class="pstat-block">${iconTag('buff/block.png','<i></i>')}${G.block}</span>`:''}${preBlock>0?`<span class="pstat-preblock" data-tip="kw:预格挡"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0 L10 6.5 H6.8 V12 H3.2 V6.5 H0 Z" fill="#4aa8ff"/></svg>${preBlock}</span>`:''}</div>${summonBar}${pbuffs?'<div class="pbuffs">'+pbuffs+'</div>':''}`);
   renderTopbar();
   syncRuneIcon();
   const _epEl=document.getElementById('enemy-panel');

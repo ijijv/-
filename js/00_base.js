@@ -586,10 +586,37 @@ function heroAnim(state){
      这类会一直留在 DOM 上，将来任何一次重排都可能让它重播一次。
    ⚠️ 降级走 CSS（`.low-spec .enemy.e-atk{animation:none}`），与 `.enemy.hit` 同一口径，
      所以这里**不判 fx()** —— 与 heroAnim 保持一致，别让两条腿的开关长在不同地方。 */
-function enemyAttackAnim(e){
+function enemyAttackAnim(e, times, delayMs){
   var el=enemyEl(e); if(!el) return;
+  var t=(times|0)>1?(times|0):1;
+  var dl=(delayMs|0)>0?(delayMs|0):0;
+  /* v1.0.12：① 连击按**段**重播（multi 的 n 段）；② 依次行动按**屏幕左→右**错峰（delay）。
+     两个值都以内联 CSS 变量下发给 keyframes（原型.html 的 .enemy.e-atk 用 animation-delay /
+     animation-iteration-count 读它们）。**伤害本体仍然同步结算**，错峰的只是动作，
+     所以 enemyAct 不必改成异步。 */
+  el.style.setProperty('--atk-delay', dl+'ms');
+  el.style.setProperty('--atk-times', String(t));
   el.classList.remove('e-atk'); void el.offsetWidth; el.classList.add('e-atk');
-  setTimeout(function(){ el.classList.remove('e-atk'); },300);
+  setTimeout(function(){ el.classList.remove('e-atk'); }, dl + t*300 + 260);
+}
+/* —— v1.0.13：**非攻击类行动的身体动作** ——
+   用户口径：「我要给每个敌人攻击都加上行为效果……格挡回血也加上血条边框变成玻璃质感和血条慢慢涨的
+   动画效果（玩家的效果也要这样改动），等等」。攻击族（attack/multi/attackBlock/aoe）走上面那条
+   enemyAttackAnim（前冲抽动）；其余六种行动各有自己的姿势：
+     guard  格挡 —— 重心下沉、微后坐（抱臂护体）
+     mend   回血 —— 轻轻上浮（吸纳）
+     gather 蓄力 —— 后仰收势、缩小（攒劲）
+     cast   施法 —— 前倾侧身（施咒 / 施加负面）
+     call   召唤 —— 先顿地后微弹（呼喝）
+     rite   记账 —— 轻微颔首（判官提笔）
+   与攻击族共用同一条 --atk-delay 错峰变量 ⇒「从左到右依次行动」对**每一种**行动都成立，不只是攻击。 */
+function enemyActAnim(e, kind, delayMs){
+  var el=enemyEl(e); if(!el || !kind) return;
+  var dl=(delayMs|0)>0?(delayMs|0):0;
+  el.style.setProperty('--atk-delay', dl+'ms');
+  var cls='e-act-'+kind;
+  el.classList.remove('e-act', cls); void el.offsetWidth; el.classList.add('e-act', cls);
+  setTimeout(function(){ el.classList.remove('e-act', cls); }, dl + 700);
 }
 /* 全屏震屏 screenShake 已移除（见 CSS 注释） */
 function turnBanner(text){
