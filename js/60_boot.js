@@ -6,6 +6,19 @@
  * 拼接校验：本文件组去掉各自横幅后，应与切分前的内联脚本正文逐字节一致。
  * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
  * ============================================================================ */
+/* ===================== v1.0.17：UI 皮肤图统一注入 =====================
+   用户交付的几张 UI 图（面板旧纸纹 / 头像九宫框 / 名字按钮）用在**CSS 的 background / border-image** 上，
+   而单文件产物里 CSS 的 `url(素材/…)` 会 404 —— 打包.py 只把 素材/ 收进 ASSET_MAP（base64），
+   并不重写 CSS 里的 url()。所以统一在这里走 assetURL 把真地址写进 :root 的自定义属性，
+   CSS 侧一律写成 `var(--ui-xxx, url(素材/…))`（兜底串只服务开发树，与芯片火焰同一套写法）。
+   ⚠️ 只写 :root 一次：面板/卡片每次重建都不用再赋值，也不会有节点级样式泄漏。 */
+try{
+  const _skin=document.documentElement.style;
+  _skin.setProperty('--ui-panel-bg', `url('${assetURL('ui/hero_panel_bg.png', true)}')`);
+  _skin.setProperty('--ui-hero-frame', `url('${assetURL('ui/panel_nine.png', true)}')`);
+  _skin.setProperty('--ui-hero-name', `url('${assetURL('ui/btn_primary.png', true)}')`);
+  _skin.setProperty('--ui-hero-name-on', `url('${assetURL('ui/btn_primary_press.png', true)}')`);
+}catch(e){}
 /* ===================== 稀有度系统调试工具 ===================== */
 /**
  * 在控制台显示当前金卡补偿值
@@ -291,12 +304,13 @@ function toggleTopbar(){ TOPBAR_OPEN=!TOPBAR_OPEN; renderTopbar(); }
       ⇒ 桌面仍只看顶栏详情里的 `.tb-summons`，与改动前逐像素相同。 */
 let PSUMMONS_OPEN=false;
 function toggleSummonBar(){ PSUMMONS_OPEN=!PSUMMONS_OPEN; render(); }
-/* 折叠键上的预读：召 N · 伤 X · 挡 Y（数值为 0 的项不写，键才不会撑宽）。
+/* 折叠键上的预读：召 N · 伤 X · 挡 Y · 回 Z（数值为 0 的项不写，键才不会撑宽）。
    伤 = 下一回合末场上召唤物预计总伤害（preSummonDamage，排除五通神）；
-   挡 = 下回合开始的预计格挡（preBlockNextTurn，仅苦行武僧非 0）。 */
+   挡 = 下回合开始的预计格挡（preBlockNextTurn，仅苦行武僧非 0）；
+   回 = 这回合之后召唤物预计带来的总回复（preSummonHeal，全角色，含吸血/五通神/小鬼/骨铃/渡魂归己）。 */
 function summonFoldLabel(list){
-  const dmg=preSummonDamage(), blk=preBlockNextTurn();
-  return `召 ${list.length}${dmg>0?' · 伤 '+dmg:''}${blk>0?' · 挡 '+blk:''}`;
+  const dmg=preSummonDamage(), blk=preBlockNextTurn(), healN=preSummonHeal();
+  return `召 ${list.length}${dmg>0?' · 伤 '+dmg:''}${blk>0?' · 挡 '+blk:''}${healN>0?' · 回 '+healN:''}`;
 }
 function renderTopbar(){
   const el=document.getElementById('topbar');
@@ -304,35 +318,48 @@ function renderTopbar(){
   /* v1.0.3：手机横屏档顶栏只留**短写**，完整文字挪进详情（用户口径「状态 chip 长描述收进详情」）。
      ⚠️ `.sb-long` 里必须**逐字**保留改动前的文本（连 `<b>` 的位置也照旧）⇒ 桌面档顶栏逐像素不变；
         `.sb-short` 默认 `display:none`（原型.html 的基档），只有 T-short 档才打开。 */
-  const levelLong=G.endless?`镇妖塔 · 第 <b>${G.endlessFloor}</b> 关`:`第 <b>${G.act}</b> 幕 · <b>${G.mapRow+1}</b>/${MAP.length} 层`;
-  const levelShort=G.endless?`第 <b>${G.endlessFloor}</b> 关`:`<b>${G.act}</b>幕 <b>${G.mapRow+1}</b>/${MAP.length}`;
+  const levelLong=`第 <b>${G.act}</b> 幕 · <b>${G.mapRow+1}</b>/${MAP.length} 层`;
+  const levelShort=`<b>${G.act}</b>幕 <b>${G.mapRow+1}</b>/${MAP.length}`;
   const deckLong=`牌堆 <b>${G.drawPile.length}</b> / 弃牌 <b>${G.discard.length}</b>`;
   const deckShort=`牌 <b>${G.drawPile.length}</b>/<b>${G.discard.length}</b>`;
   /* 详情里那一行「完整信息」的固定部分（英雄资源那两段要等 preShiqi 算完，放在下面拼）。 */
-  const statsFull=`${G.endless?`镇妖塔 · 第 ${G.endlessFloor} 关`:`第 ${G.act} 幕 · ${G.mapRow+1}/${MAP.length} 层`} · 牌堆 ${G.drawPile.length} / 弃牌 ${G.discard.length}`;
+  const statsFull=`第 ${G.act} 幕 · ${G.mapRow+1}/${MAP.length} 层 · 牌堆 ${G.drawPile.length} / 弃牌 ${G.discard.length}`;
   let html=`
-    <span class="stat stat-gold"><i></i><b>${G.gold}</b></span>
+    <span class="stat stat-gold">${iconTag(STAT_ICONS.gold,'<i></i>')}<b>${G.gold}</b></span>
     <span class="stat stat-level"><span class="sb-long">${levelLong}</span><span class="sb-short">${levelShort}</span></span>
     <span class="stat stat-deck"><span class="sb-long">${deckLong}</span><span class="sb-short">${deckShort}</span></span>
 
 `;
   // 预尸气：下一回合召唤物将带来的【尸气】进账（仅茅山赶尸人；0 就不显示）
   const preShiqi=preShiqiNextTurn();
+  // 预血怒：下回合末场上小鬼将带来的【血怒】进账（仅血祭阴差；0 就不显示）
+  const preXuenu=preXuenuNextTurn();
   // 如果当前角色是茅山赶尸人，显示尸气
   const maxShiQiNow=relicMaxShiqi();   // 尸玉：12 → 15
   const maxXuenuNow=relicMaxXuenu();   // 血玉：10 → 14
   if(G.hero === 'ganshiren') {
-    // 尸玉在场：芯片加「蓝色火焰包围」进阶态（.relic-flame-blue，见原型.html）
-    html += `<span class="stat stat-shiqi${hasRelic('shiyu')?' relic-flame-blue':''}">${iconTag('buff/shiqi.png','')}<span class="sb-long">尸气: <b>${G.尸气}/${maxShiQiNow}</b>${preShiqi>0?`<span class="stat-preshiqi" data-tip="kw:预尸气">预+${preShiqi}</span>`:''}</span><span class="sb-short">尸气 <b>${G.尸气}/${maxShiQiNow}</b></span></span>`;
+    // 尸玉在场：芯片加「蓝色火焰包围」进阶态（.relic-flame-blue，见原型.html）。
+    // ⚠️ 火焰精灵图的地址必须内联成 `--chip-flame`（伪元素吃不到 inline style，只有自定义属性继承得进去）；
+    //    地址走 fxStripURL()：单文件产物里整键已被按排切走，只有 _r0 存在；它内部再 assetURL(..,true)
+    //    把 base64 换成 blob 短地址，顶栏每帧重建也不会重复解析。
+    const flameStyle = hasRelic('shiyu') ? ` style="--chip-flame:url('${fxStripURL('fx/shiqi_flame.png')}')"` : '';
+    /* v1.0.19：用户口径「预尸气显示在外面，不要折叠起来」—— 原先这段小标写在 `.sb-long` 里，
+       手机横屏档 `.stat .sb-long{display:none}` 会把它一起折掉；挪到两个 span 之外即可常显。 */
+    const preShiqiTag=preShiqi>0?`<span class="stat-preshiqi" data-tip="kw:预尸气">预+${preShiqi}</span>`:'';
+    html += `<span class="stat stat-shiqi${hasRelic('shiyu')?' relic-flame-blue':''}"${flameStyle}>${iconTag('buff/shiqi.png','')}<span class="sb-long">尸气: <b>${G.尸气}/${maxShiQiNow}</b></span><span class="sb-short">尸气 <b>${G.尸气}/${maxShiQiNow}</b></span>${preShiqiTag}</span>`;
   }
   // 如果当前角色是血祭阴差，显示血怒（整局累积资源）
   if(G.hero === 'yincha') {
     // 燃血令：血怒标识旁挂「累积读数」（每满 20 换 1 符文）
     const rageAcc=(hasRelic('ranxueling')?`<span class="stat-rageaccum" data-tip="relic:ranxueling">+${G.rageAccum||0}/20</span>`:'');
-    // 血玉在场：芯片加「紫色火焰包围」进阶态（.relic-flame-purple）
-    html += `<span class="stat stat-xuenu${hasRelic('xueyu')?' relic-flame-purple':''}">${iconTag('buff/xuenu.png','')}<span class="sb-long">血怒: <b>${G.xuenu||0}/${maxXuenuNow}</b></span><span class="sb-short">血怒 <b>${G.xuenu||0}/${maxXuenuNow}</b></span>${rageAcc}</span>`;
+    /* v1.0.19：用户口径「预血怒显示在外面，不要折叠起来」—— 与「预尸气」同一做法：
+       小标写在 `.sb-long` / `.sb-short` **之外**，手机横屏档 `.stat .sb-long{display:none}` 折不掉它。 */
+    const preXuenuTag=preXuenu>0?`<span class="stat-prexuenu" data-tip="kw:预血怒">预+${preXuenu}</span>`:'';
+    // 血玉在场：芯片加「紫色火焰包围」进阶态（.relic-flame-purple），同上一段的内联理由
+    const flameStyle = hasRelic('xueyu') ? ` style="--chip-flame:url('${fxStripURL('fx/xuenu_flame.png')}')"` : '';
+    html += `<span class="stat stat-xuenu${hasRelic('xueyu')?' relic-flame-purple':''}"${flameStyle}>${iconTag('buff/xuenu.png','')}<span class="sb-long">血怒: <b>${G.xuenu||0}/${maxXuenuNow}</b></span><span class="sb-short">血怒 <b>${G.xuenu||0}/${maxXuenuNow}</b></span>${preXuenuTag}${rageAcc}</span>`;
   }
-  html += `<button class="tb-toggle" onclick="event.stopPropagation();toggleTopbar()">${TOPBAR_OPEN?'▴ 收起详情':'▾ 详情'}</button>`;
+  html += `<button class="tb-toggle" onclick="toggleTopbar()">${TOPBAR_OPEN?'▴ 收起详情':'▾ 详情'}</button>`;
   if(TOPBAR_OPEN){
     const buffs=playerBuffHTML();
     // 遗物：详情页内带插图（图标 + 名称）——不再显示在玩家面板下方
@@ -343,7 +370,7 @@ function renderTopbar(){
     /* v1.0.3：顶栏芯片的**完整写法**。这一行只在手机横屏档显示（基档 display:none，
        选择器 `.tb-detail .stat.stat-detail-full` 是为了压过 :1262 的 `.tb-detail .stat`），
        桌面档的四个芯片本来就写着全文 ⇒ 详情里再来一行是重复的，所以基档不给看。 */
-    const statsDetail=`<span class="stat stat-detail-full">${statsFull}${G.hero==='ganshiren'?` · 尸气 ${G.尸气}/${maxShiQiNow}${preShiqi>0?`（下回合预+${preShiqi}）`:''}`:''}${G.hero==='yincha'?` · 血怒 ${G.xuenu||0}/${maxXuenuNow}${hasRelic('ranxueling')?`（累积 ${G.rageAccum||0}/20）`:''}`:''}</span>`;
+    const statsDetail=`<span class="stat stat-detail-full">${statsFull}${G.hero==='ganshiren'?` · 尸气 ${G.尸气}/${maxShiQiNow}${preShiqi>0?`（下回合预+${preShiqi}）`:''}`:''}${G.hero==='yincha'?` · 血怒 ${G.xuenu||0}/${maxXuenuNow}${preXuenu>0?`（下回合预+${preXuenu}）`:''}${hasRelic('ranxueling')?`（累积 ${G.rageAccum||0}/20）`:''}`:''}</span>`;
     html+=`<div class="tb-detail">
       ${statsDetail}
       ${potion}
@@ -406,6 +433,7 @@ function render(){
   const heroName=heroObj.name||'';
   const heroMech=heroObj.mech||'';
   const preBlock=preBlockNextTurn(); // 预格挡：下回合召唤物预计带来的格挡
+  const preHeal=preSummonHeal();     // v1.0.21 预恢复：这回合之后召唤物预计带来的总回复（全角色）
   /* v1.0.3：召唤物筹码条（贴玩家立绘右侧，只显示「短名 数值 · 剩 N」）。
      为什么不放顶栏：v0.76.1 起 vh≤560 的顶栏详情**默认收起**（TOPBAR_OPEN=false），
      详情里的 `.tb-summons` 在手机上永远看不见 —— 这是功能缺口，不是样式问题。
@@ -419,11 +447,11 @@ function render(){
   /* v1.0.13：玩家立绘右侧的极简状态芯片（只留层数；见 playerBuffChips）。基档不显示 ⇒ 桌面零改动。 */
   const pbuffs=(SCENE==='battle')?playerBuffChips():'';
   writePanel('player', 'player-panel', `
-    <div class="hero-art-box">${artImg('hero/'+G.hero+'.png', `<div class="hero-emoji">🀄</div>`, 'hero-art')}${summonFold}</div>
+    <div class="hero-art-box">${artImg('hero/'+G.hero+'.png', `<div class="hero-emoji">🀄</div>`, 'hero-art')}${summonFold}${summonBar}</div>
     <div class="pname" data-tip="hero:${G.hero}">${heroName}</div>
     ${heroMech?`<div class="pmech" data-tip="hero:${G.hero}">⚙ ${heroMech}</div>`:''}
     <span class="hpbar${hpGain?' hp-gain':''}${G.block>0?' has-block':''}${hasRelic('xuemodao')?' xuemodao':''}${(hasRelic('xuemodao')&&G.hp<G.maxHp*0.3)?' xue-active':''}">${hasRelic('xuemodao')?'<i class="hpmark" data-tip="relic:xuemodao"></i>':''}<i class="hpghost" data-w="${hpPct}" style="width:${hpPrev}%"></i><i class="hpfill" data-w="${hpPct}" style="width:${hpPrev}%"></i></span>
-    <div class="pstats"><span class="pstat-hp"><i></i>${G.hp}/${G.maxHp}</span>${(G.block>0||preBlock>0)?`<span class="pstat-block">${iconTag('buff/block.png','<i></i>')}${G.block}</span>`:''}${preBlock>0?`<span class="pstat-preblock" data-tip="kw:预格挡"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0 L10 6.5 H6.8 V12 H3.2 V6.5 H0 Z" fill="#4aa8ff"/></svg>${preBlock}</span>`:''}</div>${summonBar}${pbuffs?'<div class="pbuffs">'+pbuffs+'</div>':''}`);
+    <div class="pstats"><span class="pstat-hp">${iconTag(STAT_ICONS.hp,'<i></i>')}<span class="hpnum">${G.hp}/${G.maxHp}</span></span>${(G.block>0||preBlock>0)?`<span class="pstat-block">${iconTag('buff/block.png','<i></i>')}${G.block}</span>`:''}${preBlock>0?`<span class="pstat-preblock" data-tip="kw:预格挡"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0 L10 6.5 H6.8 V12 H3.2 V6.5 H0 Z" fill="#4aa8ff"/></svg>${preBlock}</span>`:''}${preHeal>0?`<span class="pstat-preheal" data-tip="kw:预恢复"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.6 0 H7.4 V4.6 H12 V7.4 H7.4 V12 H4.6 V7.4 H0 V4.6 H4.6 Z" fill="#5adc8c"/></svg>${preHeal}</span>`:''}</div>${pbuffs?'<div class="pbuffs">'+pbuffs+'</div>':''}`);
   renderTopbar();
   syncRuneIcon();
   const _epEl=document.getElementById('enemy-panel');
@@ -616,13 +644,31 @@ function showHeroSelect(){
   /* v0.76.1：加角色立绘 + 文案改用 brief/passiveShort（见 js/20_data.js 的 HEROES 注释）。
      ⚠️ tooltip（data-tip="hero:<id>"）仍指向全文 desc/passive —— 只挂 data-tip，**没有** hover 依赖；
         卡面上那句精简被动是触屏也读得到的。 */
-  const cards=HEROES.map(h=>`<div class="relic" onclick="pickHero('${h.id}')">`
-    + artImg('hero/'+h.id+'.png', `<div class="hero-emoji">🀄</div>`, 'hero-portrait')
-    + `<div class="cname" data-tip="hero:${h.id}">${h.name}</div>`
-    + `<div class="cdesc">${h.brief||h.desc}</div>`
-    + `<div class="cdesc" style="color:var(--gold);margin-top:6px">被动 · ${h.passiveShort||h.passive}</div>`
-    + `<div class="ctype">选择英雄</div></div>`).join('');
-  showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="reward-cards">${cards}</div>`, false, 'hero-scene');
+  /* v1.0.15：未解锁的角色**不隐藏**，置灰不可点 —— 让玩家看见还有内容可解锁，
+     并标明所需里程碑点数（`.relic.locked` 的置灰样式见 原型.html）。 */
+  /* v1.0.17（用户定稿）：卡片重做 —— 头像用 panel_nine 九宫框只框住**上半身**，
+     名字挪到 btn_primary 的按钮底上，面板底换成程序化生成的旧纸纹（见 _patch/mk_panel_bg.py）。
+     三张图的地址在文件顶部的「UI 皮肤图统一注入」里写进 :root 的 --ui-* 变量（走 assetURL）。 */
+  const cards=HEROES.map(h=>{
+    const locked=!mileOn('hero',h.id);
+    const m=locked?MILESTONES.find(x=>x.heroes && x.heroes.indexOf(h.id)>=0):null;
+    const need=m?m.need:0;
+    const portrait=artImg('hero/'+h.id+'.png', `<div class="hero-emoji">${locked?'🔒':'🀄'}</div>`, 'hero-portrait');
+    const nameBtn=locked
+      ? `<div class="hero-name"><span>${h.name}</span></div>`
+      : `<div class="hero-name" data-tip="hero:${h.id}"><span>${h.name}</span></div>`;
+    const tail=locked
+      ? `<div class="hero-note">未解锁 · 里程碑 ${need} 点</div>`
+      : `<div class="hero-note">点击选择</div>`;
+    return `<div class="hero-card${locked?' locked':''}"${locked?'':` onclick="pickHero('${h.id}')"`}>`
+      + `<div class="hero-frame">${portrait}</div>`
+      + nameBtn
+      + `<div class="hero-brief">${h.brief||h.desc}</div>`
+      + `<div class="hero-passive">被动 · ${h.passiveShort||h.passive}</div>`
+      + tail
+      + `</div>`;
+  }).join('');
+  showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="hero-cards">${cards}</div>`, false, 'hero-scene');
 }
 function pickHero(id){
   G.hero=id;
@@ -650,9 +696,10 @@ function confirmNewGame(slot){
   try {
     if(slot!=null) setRunSlot(slot);
     const d=readRun(RUN_SLOT);
-    if(d){ submitScore(d.score||0, d.act); clearRunSave(RUN_SLOT); }
+    if(d){ clearRunSave(RUN_SLOT); }   // v1.0.14：排行榜已删 ⇒ 覆盖前直接清档（不再把旧档成绩记入榜）
+    RUN_FINISHED=false;                // v1.0.17b：新局开工 ⇒ 解除「已终结」拒写（见 40_flow.js saveRun 守卫）
     G=newState(); G.mapRow=0;
-    G.startTs=Date.now();                        // v1.0.1：通关计时榜的计时起点（随存档往返）
+    G.startTs=Date.now();                        // v1.0.1：本局开局时刻（结算时算本局用时，随存档往返）
     const __sd=rngSeedNow(); seedRng(__sd);      // v0.61.06：本局种子（可用 ?seed=N 复现）
     G.mapSeed=__sd; buildActs(__sd); G.mapRow=0; // v0.61.40：按种子生成本局三幕随机地图
     track('runStart');
@@ -673,10 +720,10 @@ function slotRowHTML(i, mode){
       : '';
     return `<div style="padding:9px 0;border-bottom:1px solid var(--ink3)">${title} <span style="color:var(--dim)">— 空 —</span>${add}</div>`;
   }
-  const hero=rankHeroName(s.hero);
-  const desc=(s.endless
-    ? `镇妖塔 · 第 ${s.floor||1} 关 · 生命 ${s.hp}/${s.maxHp} · 得分 ${s.score}`
-    : `第 ${s.act} 幕 第 ${s.row} 层 · 生命 ${s.hp}/${s.maxHp} · 金币 ${s.gold} · 得分 ${s.score}`);
+  /* v1.0.14：排行榜模块（js/56_rank.js）已删，rankHeroName 不再存在 ⇒ 就地查表（不再新增全局函数）。 */
+  const _hero=HEROES.find(x=>x.id===s.hero);
+  const hero=_hero?_hero.name:'';
+  const desc=`第 ${s.act} 幕 第 ${s.row} 层 · 生命 ${s.hp}/${s.maxHp} · 金币 ${s.gold} · 得分 ${s.score}`;
   const go=(mode==='overwrite')
     ? `<button class="btn" style="margin:0;padding:4px 12px;font-size:12px" onclick="newRunInSlot(${i})">覆盖并新建</button>`
     : `<button class="btn" style="margin:0;padding:4px 12px;font-size:12px" onclick="resumeSlot(${i})">续玩</button>`;
@@ -689,10 +736,9 @@ function showSavesPanel(mode){
   const rows=RUN_SLOTS.map((k,i)=>slotRowHTML(i, overwrite?'overwrite':'manage')).join('');
   showOverlay(`<h2>${overwrite?'存 档 已 满':'存 档'}</h2>
     <p style="font-size:13px;color:var(--dim)">${overwrite
-      ? '3 个存档位都已占用，请选择要覆盖哪一位（旧成绩会先记入得分榜）。'
+      ? '3 个存档位都已占用，请选择要覆盖哪一位（旧进度将被清除）。'
       : '选择一个存档继续爬塔，或删除不需要的进度。'}</p>
     <div class="kwlist">${rows}</div>
-    <p style="font-size:12px;color:var(--dim)">无尽模式（镇妖塔）的进度同样落档，可从对应槽位续玩。</p>
     <button class="btn ghost" onclick="showStartScreen()">返回主菜单</button>`);
 }
 function resumeSlot(i){ continueRun(i); }
@@ -701,34 +747,6 @@ function deleteSlot(i){
   clearRunSave(i);
   floatMsg('已删除存档 '+(i+1));
   if(hasRunSave()) showSavesPanel('manage'); else showStartScreen();
-}
-function startEndless(){
-  ensureAudio();
-  const seed=(typeof SAVE!=='undefined' && SAVE && SAVE.endlessSeed) ? SAVE.endlessSeed : null;
-  G=newState();
-  const __sd=rngSeedNow(); seedRng(__sd);      // v0.61.06：本局种子
-  G.mapSeed=__sd;                              // v0.61.40：无尽地图按 mapSeed + 层数派生
-  G.endless=true; G.endlessFloor=0; G.act=4;
-  MAP=genEndlessMap();
-  G.mapRow=0; G.mapCol=-1; G.mapPath=[];
-  G.startTs=Date.now();
-  track('endlessStart');
-  /* v1.0.12：无尽模式**落档可续玩**（用户 2026-10-05 拍板）。存档走 saveRun 的同一条管道，
-     续档时由 mapSeed + endlessFloor 复现当关地图（见 40_flow.js continueRun）。 */
-  floatMsg('镇妖塔 · 无尽模式 · 进度已可存档续玩');
-  log('镇妖塔 · 无尽模式（进度会写入存档位，可随时离开后续玩）');
-  /* v1.0.1：无尽规则①——继承打完三幕时的牌库 / 遗物 / 灵汁（生命回满、金币清零）。
-     没有继承档（例如直接从控制台进无尽）⇒ 退回原来的选英雄开局。 */
-  if(seed && seed.hero && Array.isArray(seed.deck) && seed.deck.length){
-    G.hero=seed.hero;
-    G.deck=seed.deck.map(cardRestore);
-    G.relics=(seed.relics||[]).slice();
-    G.potions=(seed.potions||[]).map(potionRestore).filter(Boolean);
-    log(`继承通关牌库（${G.deck.length} 张牌 · ${G.relics.length} 件遗物），登上镇妖塔`);
-    showMap({entry:true});
-    return;
-  }
-  showHeroSelect();
 }
 function showOpeningChoice(){
   // 临时设置奖励层级为starter，以便使用正确的权重
@@ -785,6 +803,7 @@ function skipOpening(){
    布局权威 = 志怪塔UI重设计\主菜单demo.html：顶标题 / 左石碑列 / 右符纸行 / 全屏背景。
    入口 9 → 5：删 startEndless(无尽) / viewAchievements(成就) / viewStats(统计) / showTutorial(引导)
    —— 用户原话『真实的9个按键只要是那5个入口没提的，就默认删去』。**函数本体一律保留**，只摘入口。
+   v1.0.14：排行榜入口（is-leaderboard）连同 js/56_rank.js 一并删除 ⇒ 符纸行只剩「图鉴」「设置」。
    签到整块取消（用户：『没有实际意义』）。
    ⚠️ 版本号字符串必须留在 <h2> 里（提交.py 的 read_version() 读 原型.html，但三处保持一致是项目惯例）。
    ⚠️ 「续」不再按 hasRunSave() 条件渲染，而是**总是渲染、无存档则 disabled** —— 石碑忽隐忽现会破构图。 */
@@ -809,10 +828,10 @@ function showStartScreen(){
       <div class="menu-row-talis menu-tier is-list" style="--i:2">
         <button class="menu-hit is-collection" aria-label="志怪图鉴"
                 onclick="talisOpen(this,viewBestiary)"><span class="menu-artbox">${artImg('ui/menu/collection.png','<span class="menu-fb">图鉴</span>','menu-art')}</span></button>
-        <button class="menu-hit is-leaderboard" aria-label="排行榜"
-                onclick="talisOpen(this,viewLeaderboard)"><span class="menu-artbox">${artImg('ui/menu/leaderboard.png','<span class="menu-fb">排行</span>','menu-art')}</span></button>
         <button class="menu-hit is-setting" aria-label="设置"
                 onclick="talisOpen(this,showSettings)"><span class="menu-artbox">${artImg('ui/menu/setting.png','<span class="menu-fb">设置</span>','menu-art')}</span></button>
+        <button class="menu-hit is-mileage" aria-label="里程碑解锁进度"
+                onclick="talisOpen(this,viewMilestones)"><span class="menu-artbox">${artImg('ui/menu/leaderboard.png','<span class="menu-fb">解锁</span>','menu-art')}</span></button>
       </div>
     </div>
 
@@ -836,7 +855,8 @@ function openMenu(){
     <button class="btn ghost" onclick="viewKeywords()">关键词说明</button>
     <button class="btn ghost" onclick="viewRelics()">遗物图鉴</button>
     <button class="btn ghost" onclick="viewBestiary()">志怪图鉴</button>
-    <button class="btn ghost" onclick="viewAchievements()">成就 · 收藏</button>`);
+    <button class="btn ghost" onclick="viewAchievements()">成就 · 收藏</button>
+    <button class="btn ghost" onclick="viewMilestones()">里程碑 · 解锁</button>`);
 }
 function manualSave(){
   saveRun(); sfx('gold'); floatMsg('已存档');
@@ -921,10 +941,103 @@ function showSettings(){
     <button class="btn ghost" onclick="numSelfTest()">浮字自检（四档各放一次）</button>
     <p style="margin-top:16px">结束回合软提示：<b style="color:${SETTINGS.endTurnHint!==false?'var(--green)':'var(--red)'}">${SETTINGS.endTurnHint!==false?'开':'关'}</b></p>
     <button class="btn ghost" onclick="toggleEndTurnHint()">${SETTINGS.endTurnHint!==false?'关闭软提示':'开启软提示'}</button>
+    <button class="btn ghost" onclick="showClearTimes()">榜 单</button>
     <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
     <button class="btn ghost" onclick="showCloudPanel()">云存档</button>
-    <button class="btn ghost" onclick="openMenu()">返回菜单</button>`, undefined, 'scroll-scene');
+    <button class="btn ghost" onclick="menuBack()">返回菜单</button>`, undefined, 'scroll-scene');
 }
+/* 榜 单（v1.0.19）—— 6 个榜：通关计时总榜 + 4 个角色分榜 + 整局总分榜。
+   入口只在设置里（用户口径「现在把榜单放在设置里」）。
+   本机数据在 40_flow.js（readClearTimes / readScores），全平台在 55_cloud.js（rankFetch / rankSubmit）。 */
+let RANK_VIEW='clear_total';
+function showClearTimes(view){
+  if(view) RANK_VIEW=view;
+  const b=(typeof rankBoardById==='function')?rankBoardById(RANK_VIEW)
+        :{id:'clear_total', name:'通关计时 · 总榜', kind:'clear', hero:''};
+  const tabs=(typeof RANK_BOARDS!=='undefined'?RANK_BOARDS:[]).map(x=>
+    `<button class="btn${x.id===b.id?'':' ghost'}" style="margin:2px 3px;padding:4px 9px;font-size:12px" onclick="showClearTimes('${x.id}')">${x.name}</button>`
+  ).join('');
+  const rows=(b.kind==='score')?scoreBoardRows():clearBoardRows(b);
+  showOverlay(`<h2>榜 单</h2>
+    <div style="margin:2px 0 8px">${tabs}</div>
+    <p style="font-size:12px;color:var(--dim)">${b.kind==='score'?'整局总得分（通关/失败/放弃都记录），越高越靠前':'通关用时（只记通关），越短越靠前'} · 只留前 ${CLEAR_MAX} 条</p>
+    <div id="rank-online" style="margin:6px 0 8px;font-size:12px"></div>
+    <p style="font-size:12px;color:var(--gold);margin:6px 0 2px">本机记录</p>
+    ${rows}
+    <button class="btn ghost" onclick="showSettings()">返回设置</button>`, undefined, 'scroll-scene');
+  rankFillOnline(b);
+}
+function rankMedal(i){ return (i===0?'🥇':i===1?'🥈':i===2?'🥉':'') || ('# '+(i+1)); }
+function heroName(id){ return (HEROES.find(x=>x.id===id)||{}).name||id||'—'; }
+function clearBoardRows(b){
+  const list=readClearTimes().filter(r=>!b.hero||r.hero===b.hero).slice(0, CLEAR_MAX);
+  if(!list.length) return `<p style="color:var(--dim)">${b.hero?'这个角色还没有通关记录。':'还没有通关记录。'}<br>打上塔顶，用时就会记在这里。</p>`;
+  return list.map((r,i)=>{
+    const d=new Date(r.ts||0);
+    return `<p style="margin:6px 0">${rankMedal(i)} <b style="color:var(--gold)">${fmtMMSS(r.ms)}</b> · ${heroName(r.hero)} · 得分 ${r.score||0} <small style="color:var(--dim)">(${(d.getMonth()+1)}/${d.getDate()})</small></p>`;
+  }).join('');
+}
+function scoreBoardRows(){
+  const list=readScores().slice(0, CLEAR_MAX);
+  if(!list.length) return `<p style="color:var(--dim)">还没有整局记录。<br>打完一局（通关或失败）就会记在这里。</p>`;
+  return list.map((r,i)=>{
+    const d=new Date(r.ts||0);
+    return `<p style="margin:6px 0">${rankMedal(i)} <b style="color:var(--gold)">${r.score||0}</b> 分 · ${heroName(r.hero)}${r.win?' · 通关':' · 第'+(r.act||1)+'幕止步'} <small style="color:var(--dim)">(${(d.getMonth()+1)}/${d.getDate()})</small></p>`;
+  }).join('');
+}
+/* 当前榜的「本机最好成绩」：clear 榜按角色过滤取最快；score 榜取最高分。 */
+function rankLocalBest(b){
+  if(b.kind==='score') return readScores()[0]||null;
+  return readClearTimes().filter(r=>!b.hero||r.hero===b.hero)[0]||null;
+}
+/* 全平台榜那一块：有接口 ⇒ 拉前排；没接口 ⇒ 把探测到的真实方法名亮出来（真机回报一次就能定接口）。
+   ⚠️ 需要加载在后面还没轮到，所以这里只读 DOM、不做布局假设。v1.0.19：6 个榜各拉各的 boardId。 */
+function rankFillOnline(b){
+  b=b||rankBoardById(RANK_VIEW);
+  const box=document.getElementById('rank-online');
+  if(!box) return;
+  const best=rankLocalBest(b);
+  const upBtn=best?` <button class="btn ghost" style="margin:0;padding:2px 10px;font-size:12px" onclick="rankUploadBest('${b.id}')">上传本机最好成绩</button>`:'';
+  /* v1.0.19：官方还给了 `openLeaderboard`（TapTap 自带榜单 UI）—— 自绘列表若因权限/分页拿不到数据，
+     这个按钮是稳定的兜底展示位，永远只认排行榜 ID。 */
+  const openBtn=rankAvailable()?` <button class="btn ghost" style="margin:0;padding:2px 10px;font-size:12px" onclick="rankOpenThis('${b.id}')">在 TapTap 打开榜单</button>`:'';
+  if(!rankAvailable()){
+    box.innerHTML=`<span style="color:var(--dim)">全平台榜：未接入 —— ${rankDiag()}</span>${upBtn}`;
+    return;
+  }
+  box.innerHTML='<span style="color:var(--dim)">全平台榜：读取中…</span>';
+  rankFetch(CLEAR_MAX, b.id).then(res=>{
+    const raw=res&&(res.scores||res.data||res.list||res.ranks||res.results);
+    const arr=Array.isArray(raw)?raw:(Array.isArray(res)?res:null);
+    if(!arr){
+      box.innerHTML=`<span style="color:var(--dim)">全平台榜：返回格式待确认（${JSON.stringify(res).slice(0,120)}）</span>${upBtn}${openBtn}`;
+      return;
+    }
+    const fmt=v=>(b.kind==='score')?(Math.round(v)+' 分'):fmtMMSS(v);   // v1.0.20：时间榜返回的就是毫秒，直接格式化（旧版按秒×1000 是错的）
+    box.innerHTML=(arr.length?arr.map((r,i)=>{
+      /* 接口返回的字段是 { rank, score, nickname, avatar }（见 LeaderboardManager.loadLeaderboardScores） */
+      const nm=(r&&(r.nickname||r.name||r.userName||r.rankName))||'玩家';
+      const v=(r&&(r.score!=null?r.score:r.statisticValue!=null?r.statisticValue:r.value))||0;
+      return `<p style="margin:3px 0">${rankMedal((r&&r.rank?r.rank-1:i))} <b style="color:var(--gold)">${fmt(v)}</b> · ${nm}</p>`;
+    }).join(''):'<span style="color:var(--dim)">全平台榜暂无记录</span>')+upBtn+openBtn;
+  }, e=>{
+    box.innerHTML=`<span style="color:var(--red)">全平台榜读取失败：${(e&&e.message)||e}</span>${upBtn}${openBtn}`;
+  });
+}
+/* 打开 TapTap 自带的排行榜页面（官方 UI）。失败只浮字提示，不影响本机榜。 */
+function rankOpenThis(boardId){
+  const b=rankBoardById(boardId||RANK_VIEW);
+  rankOpenBoard(b.id).then(()=>{}, e=>floatMsg(String((e&&e.message)||e)));
+}
+function rankUploadBest(boardId){
+  const b=rankBoardById(boardId||RANK_VIEW);
+  const best=rankLocalBest(b);
+  if(!best){ floatMsg('本机还没有记录'); return; }
+  const value=(b.kind==='score')?(best.score||0):Math.max(0, Math.round(best.ms||0));   // v1.0.20：clear 榜提交毫秒（与 recordClearTime 同口径）
+  rankSubmit(value, b.id).then(()=>{ floatMsg('已上传到全平台榜'); rankFillOnline(b); },
+    e=>floatMsg(String((e&&e.message)||e)));
+}
+/* 清空本机记录的入口已按用户要求移除（不再提供「删除本地数据」按钮）。 */
 function setMusicVol(v){
   SETTINGS.musicVol=+v/100; persistSettings();
   if(BGM){ try{ BGM.volume=SETTINGS.musicVol; }catch(e){} }
@@ -991,10 +1104,12 @@ function showTutorial(i){
   const s=TUTORIAL_STEPS[i-1];
   const last = i===TUTORIAL_STEPS.length;
   const btn = last
-    ? `<button class="btn" onclick="markTutorialSeen(); hideOverlay();">完成</button>`
+    ? `<button class="btn" onclick="markTutorialSeen(); closeOverlay();">完成</button>`
     : `<button class="btn" onclick="showTutorial(${i+1})">下一步</button>`;
   const back = i>1 ? `<button class="btn ghost" onclick="showTutorial(${i-1})">上一步</button>` : '';
-  const skip = `<button class="btn ghost" onclick="markTutorialSeen(); hideOverlay();">跳过引导</button>`;
+  /* v1.0.20：**必须走 closeOverlay() 而不是 hideOverlay()** —— 引导可以从「主菜单 → 设置」里打开，
+     那一刻 body.at-menu 还在，只 hideOverlay 会把 #app 留在隐藏态 ⇒ 全黑卡死（用户 2026-10-08 报）。 */
+  const skip = `<button class="btn ghost" onclick="markTutorialSeen(); closeOverlay();">跳过引导</button>`;
   showOverlay(`<h2>入门引导 · ${i}/${TUTORIAL_STEPS.length} · ${s.t}</h2><p style="text-align:left;line-height:2">${s.html}</p>${btn}${back}${skip}`);
 }
 function resumeGame(){
@@ -1003,7 +1118,7 @@ function resumeGame(){
   else showMap({entry:true});
 }
 function confirmRestart(){
-  showOverlay(`<h2>重新开始？</h2><p>重新开始本局，当前进度将记入排行榜（若有存档）。</p>
+  showOverlay(`<h2>重新开始？</h2><p>重新开始本局，当前进度将被覆盖。</p>
     <button class="btn" onclick="confirmNewGame()">确定 · 重新开始</button>
     <button class="btn ghost" onclick="openMenu()">返回</button>`);
 }
@@ -1012,7 +1127,7 @@ function confirmQuit(){
     <button class="btn" onclick="quitToMenu()">确定 · 退出</button>
     <button class="btn ghost" onclick="openMenu()">返回</button>`);
 }
-function quitToMenu(){ rankNoteEndlessRun(); saveRun(); showStartScreen(); }   // v1.0.1：无尽退出也记一次关卡榜
+function quitToMenu(){ saveRun(); showStartScreen(); }
 document.getElementById('endTurn').addEventListener('click', endTurn);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
 document.getElementById('viewDeck').addEventListener('click', viewDeck);

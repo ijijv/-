@@ -38,11 +38,10 @@ function mapNodeStyle(node){
   return 'left:'+left.toFixed(2)+'%;top:'+top+'px;';
 }
 const NODE_TIP   = { fight:'普通战斗', elite:'精英战：更强的敌人，更好的奖励', unknown:'未知事件', camp:'篝火：休整或锻造', shop:'鬼市：买卖与删牌', boss:'守关 Boss' };
-/* ⚠ endless 必须显式给，否则 act4 会 404 丢背景图。
-   v0.61.41：地图背景改用用户给的 素材/bg/bg_map.jpg（setBg 已支持带扩展名的名字），
+/* v0.61.41：地图背景改用用户给的 素材/bg/bg_map.jpg（setBg 已支持带扩展名的名字），
    全部幕共用这一张；战斗场景仍走 act1/act2/act3，两者互不影响。 */
-const MAP_BG = { 1:'map.jpg', 2:'map.jpg', 3:'map.jpg', endless:'map.jpg' };
-function mapBgName(){ return G.endless ? MAP_BG.endless : (MAP_BG[G.act]||MAP_BG[1]); }
+const MAP_BG = { 1:'map.jpg', 2:'map.jpg', 3:'map.jpg' };
+function mapBgName(){ return MAP_BG[G.act]||MAP_BG[1]; }
 function nodeLabel(node){ return node ? (NODE_LABEL[node.t] || NODE_LABEL.fight) : ''; }
 /* extra：附加到 .node-ico 上的类（v0.62.0 的锁破裂过渡要挂 .o-reveal 把真实图标先藏起来） */
 function nodeIconHTML(file, extra){ return artImg(MAP_ICON_DIR + file, '', 'node-ico' + (extra ? (' ' + extra) : '')); }
@@ -458,6 +457,7 @@ function menuBusy(on){
 function steleBreak(btn, fn){
   if(MENU_BUSY || !btn || btn.disabled) return;
   menuBusy(true);
+  sfx('ui_stele');   // v1.0.23：用户口径「入塔 / 续要有击碎石头的音效」，与碎片动画同时起
   if(btn.classList) btn.classList.add('is-breaking');
   const off=menuFxOff();
   const tFlash=off?0:800, tGo=off?60:930;   // off 时闪被 CSS 关掉 ⇒ 不留 800ms 干等，直接 60ms 切
@@ -473,6 +473,7 @@ function steleBreak(btn, fn){
 function talisOpen(btn, fn){
   if(MENU_BUSY) return;
   menuBusy(true);
+  sfx('ui_curtain');   // v1.0.23：用户口径「其他 3 张符纸要有拖拽窗帘般的音效」
   if(btn && btn.classList) btn.classList.add('tug');
   const off=menuFxOff();
   /* v0.68.1：150ms → 420ms。符纸按下从「下沉 3px 一闪」改成「向下拉然后回弹」（用户原话），
@@ -751,9 +752,8 @@ function chooseNode(c){
   else if(node.t==='shop') showShop();
   else if(node.t==='unknown') showUnknown();
   else if(node.t==='boss'){
-    // v0.61.40：Boss 在**生成期**就定死在 node.e（同一存档续档后不再变）；下面两行只是兜底
+    // v0.61.40：Boss 在**生成期**就定死在 node.e（同一存档续档后不再变）；下面一行只是兜底
     if(node.e && node.e.length) startBattle(node.e);
-    else if(G.endless) startBattle([ENDLESS_BOSSES[Math.floor(rng()*ENDLESS_BOSSES.length)]]);
     else { const pool=BOSS_POOL[G.act]||['yewang']; startBattle([pool[Math.floor(rng()*pool.length)]]); }
   }
 }
@@ -873,9 +873,13 @@ function unknownEmpty(){
 
 /* ===================== 奖励与篝火 ===================== */
 function weightedCard(){
-  /* duanren_leifu 与 shi_wang 同理：**只能由遗物/卡牌自身生成，不进任何奖励池**，
-     否则玩家会在三选一里白嫖到断刃专属卡。 */
-  const eligible=CARDS.filter(c=> (c.id!=='shi_wang' || G.hero==='ganshiren') && c.id!=='duanren_leifu' && (!c.needs || deckHasMechanic(c.needs)));
+  /* duanren_leifu / yinbing 与 shi_wang 同理：**只能由遗物/卡牌自身生成，不进任何奖励池**，
+     否则玩家会在三选一里白嫖到断刃/引魂灯的专属卡。 */
+  /* v1.0.15：门禁过滤（紫/金卡需里程碑；白/蓝恒开）—— 这是三选一/商店/黑商/古庙等
+     所有「卡牌奖励池」的**唯一**出口。兜底：门禁把池子筛空时退回「只过滤专属卡」的旧口径，绝不留空池。 */
+  const _baseOK=c=> (c.id!=='shi_wang' || G.hero==='ganshiren') && c.id!=='duanren_leifu' && c.id!=='yinbing' && (!c.needs || deckHasMechanic(c.needs));
+  let eligible=CARDS.filter(c=> _baseOK(c) && mileOn('card',c));
+  if(!eligible.length) eligible=CARDS.filter(_baseOK);
   const poolAll=eligible.length? eligible : CARDS;
   const tier=G.rewardTier||'normal';
 
@@ -1013,9 +1017,21 @@ function showReward(){
   G.lastRewardHadGold = hasGoldInReward;
 
   const _TYPE_ORD={attack:0,defense:1,skill:2,spirit:3,junk:4};
+  /* v1.0.14（P3-15）：三选一改「翻牌」——卡背自下升起（加速→急停），点一下翻面看内容，再点一次选走。
+     · 排序与取牌语义不变：pickReward(i) 仍按**原始下标**取牌（i 同时写进 data-ri 与 onclick 闭包）。
+     · `.flip-cards` 让翻面与选牌**永远生效**；只有「升起」动画要 fx() 为真才挂 `.reward-flip`
+       ⇒ 流畅模式只是不播动画，翻开 / 选走的交互一字不少。 */
   const cards=picks.map((c,i)=>({c,i})).sort((a,b)=>(_TYPE_ORD[a.c.type]??9)-(_TYPE_ORD[b.c.type]??9)||a.i-b.i)
-    .map(({c,i})=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickReward(${i})">${cardBody(c)}</div>`).join('');
-  showOverlay(`<h2>战斗胜利 · 三选一</h2><p>点击一张卡牌加入你的牌组（或跳过）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="skipReward()">跳过</button>`);
+    .map(({c,i},k)=>`<div class="rcard" data-ri="${i}" style="--rd:${k}" onclick="flipReward(this,${i})"><div class="rcard-inner"><div class="rcard-face rcard-front"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div><div class="rcard-face rcard-back"></div></div></div>`).join('');
+  const cls='reward-cards flip-cards'+(fx()?' reward-flip':'');
+  showOverlay(`<h2>战斗胜利 · 三选一</h2><p>点击卡牌翻开查看，再点一次加入牌组（或跳过）</p><div class="${cls}">${cards}</div><button class="btn ghost" onclick="skipReward()">跳过</button>`);
+}
+/* v1.0.14（P3-15）：翻牌交互 —— 第一次点=翻开看内容（不改动 G.rewardPicks），第二次点=选中带进牌组。
+   v1.0.17：翻开走**专用音** ui_flip（素材/sfx/ui_flip.mp3），与选走的 ui_reward 分开。 */
+function flipReward(el, i){
+  if(!el || !el.classList) return;
+  if(!el.classList.contains('revealed')){ el.classList.add('revealed'); sfx('ui_flip'); return; }
+  pickReward(i);
 }
 function pickReward(i){
   sfx('ui_reward');   // v0.61.25：三选一翻牌音
@@ -1049,8 +1065,11 @@ function afterReward(){
 function weightedRelic(){
   /* 专属遗物过滤：带 hero 的只进该英雄池；通用（无 hero）四人共用。
      本函数是 Boss 战利品（40_flow.js）与古井许愿（doWellOffer）的入口 ⇒ 只改这一处即可覆盖两处。 */
-  const avail=RELICS.filter(r=>(!r.hero || r.hero===G.hero) && !hasRelic(r.id));
-  const pool=avail.length? avail : RELICS.filter(r=>!r.hero || r.hero===G.hero);
+  /* v1.0.15：门禁过滤（紫/金遗物需里程碑；白/蓝恒开）。兜底：门禁筛空则退回「专属过滤」的旧口径。 */
+  const _heroOK=r=>(!r.hero || r.hero===G.hero);
+  let avail=RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id) && mileOn('relic',r));
+  if(!avail.length) avail=RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id));
+  const pool=avail.length? avail : RELICS.filter(_heroOK);
   for(let attempt=0; attempt<6; attempt++){
     const r=rng()*100; const rarity=r<55?'white':r<85?'blue':r<97?'purple':'gold';
     const p=pool.filter(x=>x.rarity===rarity);
@@ -1060,7 +1079,10 @@ function weightedRelic(){
 }
 function showRelicReward(){
   /* 同上：精英三选一也要过专属过滤 */
-  const unowned = RELICS.filter(r=>(!r.hero || r.hero===G.hero) && !hasRelic(r.id));
+  /* v1.0.15：同上过门禁；门禁筛空则退回旧口径，两者都空才跳过。 */
+  const _heroOK=r=>(!r.hero || r.hero===G.hero);
+  let unowned = RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id) && mileOn('relic',r));
+  if(!unowned.length) unowned = RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id));
   if(!unowned.length){ goNext(); return; }
   const picks = shuffle([...unowned]).slice(0,3);
   G.relicPicks=picks;
@@ -1208,6 +1230,13 @@ function doRemove(i){
 /* ===================== 志怪图鉴（收集 + 局外存档） ===================== */
 const KIND_LABEL = { ghost:'鬼', yao:'妖', jiangshi:'僵尸' };
 const KIND_ICON = { ghost:'👻', yao:'🦊', jiangshi:'🧟' };
+/* v1.0.16：iconTag 里**运行时拼串**取用的素材路径（唯一真相源）。
+   intent / kind / 词缀这几族的路径是拼出来的，打包闸按 id 规则扫不到 ⇒ 在这里显式列全，
+   verify_dist 取它进 want，免得这些「真在用」的图被误报成「从未被游戏请求 / 可考虑删掉」。 */
+const TAG_ICON_PATHS = []
+  .concat(['attack','heal','multi','discard','summon','qingsuan','wangyou','aoe','dormant'].map(n=>'ui/intent_'+n+'.png'))
+  .concat(Object.keys(KIND_ICON).map(k=>'ui/kind_'+k+'.png'))
+  .concat(AFFIXES.map(a=>'buff/'+a.id+'.png'));
 const BESTIARY_ORDER = [
   'youhun','zhizharen','huyao','jiangshi','shanxiao','shuigui','mengpo',
   'baiwuchang','heiwuchang','huapigui','yecha',
@@ -1255,12 +1284,300 @@ const STORIES = {
 const SAVE_KEY = 'zhiguaitower_save_v1';
 let SAVE = { unlocked:[] };
 function loadSave(){
-  try{ const d=Store.getJSON(SAVE_KEY); if(d && Array.isArray(d.unlocked)) SAVE=d; }
-  catch(e){ SAVE={unlocked:[]}; }
+  /* v1.0.15：在**读取处一次性归一化** —— 老档没有 progress / mile 字段时补默认值，
+     此后全仓读 SAVE.progress.pts / SAVE.mile 都不必再到处判空（沿用旧版「无 unlocked 视为新档」的宽口径）。 */
+  try{
+    const d=Store.getJSON(SAVE_KEY);
+    SAVE = (d && typeof d==='object' && !Array.isArray(d)) ? d : {};
+    if(!Array.isArray(SAVE.unlocked)) SAVE.unlocked=[];
+    if(!SAVE.progress || typeof SAVE.progress!=='object') SAVE.progress={};
+    const p=SAVE.progress;
+    p.pts=p.pts|0; p.runs=p.runs|0; p.wins=p.wins|0; p.bestAct=p.bestAct|0; p.kills=p.kills|0;
+    /* v1.0.24：里程**按角色分账**（用户口径「每角色肯定独立累积」）—— p.heroes[heroId]={pts,runs,wins}。
+       老档没有 heroes 且已有全局点数 ⇒ 全部归给初始角色天师（此前只有天师可玩，语义等价）。 */
+    if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
+    const hs=p.heroes;
+    Object.keys(hs).forEach(k=>{
+      const h=hs[k];
+      if(!h || typeof h!=='object'){ hs[k]={pts:0,runs:0,wins:0}; return; }
+      h.pts=h.pts|0; h.runs=h.runs|0; h.wins=h.wins|0;
+    });
+    if(!Object.keys(hs).length && (p.pts|0)>0) hs.tianshi={ pts:p.pts|0, runs:p.runs|0, wins:p.wins|0 };
+    if(!Array.isArray(SAVE.mile)) SAVE.mile=[];
+  }
+  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[]}; }
 }
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
   if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }   // v0.76.2 云存档：同上
+}
+/* ===================== 里程碑判定（渐进门禁制 · v1.0.15） =====================
+   真相源表在 js/20_data.js 的 MILESTONES；点数公式在 20_data.js 的 milePointsFor()。
+   本段与 SAVE 同侧（同文件、紧挨存档读写），四类内容入口统一调 mileOn() 过滤。 */
+/* 里程点数。**v1.0.24 起按角色分账**：milePts(heroId) 取该角色自己累积的里程；
+   不传参 = 全局累计 p.pts（老档 / 结算面板沿用，语义不变）。 */
+function milePts(heroId){
+  const p=(SAVE && SAVE.progress) || {};
+  if(heroId){
+    const h=(p.heroes||{})[heroId];
+    return (h && (h.pts|0)) || 0;
+  }
+  return p.pts|0;
+}
+/* 某里程碑是否已永久解锁 */
+function mileDone(id){ return !!(SAVE && SAVE.mile && SAVE.mile.indexOf(id) >= 0); }
+/* 依稀有度取卡/遗物的对象（key 可以是 id 字符串，也可以是对象本身） */
+function _mileObj(kind,key){
+  const list = kind==='card' ? CARDS : RELICS;
+  if(key && typeof key==='object') return key;
+  return list.find(x=>x.id===key) || null;
+}
+/* 门禁核心：kind ∈ hero|card|relic|potion，返回该内容当前是否**可用**。
+   查不到条目 ⇒ 一律放行（绝不允许把内容静默蒸发）；老 4 瓶灵汁 / tianshi / 白·蓝卡遗物恒开。 */
+function mileOn(kind,key){
+  if(!MILE_GATE_ON) return true;                            // v1.0.16：总开关关掉 ⇒ 一律放行（测试期，见 20_data.js）
+  if(kind==='hero'){
+    if(key==='tianshi') return true;                        // 初始角色恒开
+    const m=MILESTONES.find(x=>x.heroes && x.heroes.indexOf(key)>=0);
+    return !m || mileDone(m.id);
+  }
+  if(kind==='card' || kind==='relic'){
+    const o=_mileObj(kind,key);
+    if(!o) return true;
+    if(o.rarity==='white' || o.rarity==='blue') return true;  // 基础内容恒开
+    const m=MILESTONES.find(x=> kind==='card' ? x.advCards : x.advRelics);   // 紫/金看进阶里程碑
+    return !m || mileDone(m.id);
+  }
+  if(kind==='potion'){
+    if(MILE_BASE_POTIONS.indexOf(key)>=0) return true;          // 老 4 瓶恒开
+    const m=MILESTONES.find(x=>x.potions && x.potions.indexOf(key)>=0);
+    return !m || mileDone(m.id);
+  }
+  return true;
+}
+const MILE_BASE_POTIONS=['huanyanglu','huangquanjiu','zhenhunshui','mengpotang'];
+/* 一局结束结算：把 milePointsFor(G) 累加进 SAVE.progress，并按阈值解锁新里程碑。
+   返回**本次新解锁的里程碑数组**。幂等：一局只发一次（G._mileGiven；newState 里重置）。 */
+function grantRunMilestones(){
+  if(!G) return [];
+  if(G._mileGiven) return [];                               // 一局只给一次（loseGame/showVictory 都会调）
+  G._mileGiven=true;
+  if(!SAVE.progress || typeof SAVE.progress!=='object') SAVE.progress={};
+  const p=SAVE.progress;
+  const pts=milePointsFor(G);
+  G._mileGain=pts;                                          // 记录**实际发放额**：结算面板读它，别重算（幂等返回时重算会显示一个没真发的数）
+  p.pts=(p.pts|0)+pts;
+  p.runs=(p.runs|0)+1;
+  const won=!!G.finalBoss;                                  // finalBoss 只在打穿最后一幕幕主时置真 ⇒ 通关
+  if(won) p.wins=(p.wins|0)+1;
+  p.bestAct=Math.max(p.bestAct|0, G.act|0);
+  p.kills=(p.kills|0)+(G.totalKills|0);
+  /* v1.0.24：里程**按角色分账** —— 同一局同时累加全局 p.pts（结算面板 / 老口径）与该角色自己的 p.heroes[id]。
+     v1.0.25：达标判定改由**该角色自己的 6 档轨**（MILE_TRACKS）驱动 —— 新体系取代旧的全局 MILESTONES 进度。 */
+  const heroId=(G.hero && typeof HEROES!=='undefined' && HEROES.some(h=>h.id===G.hero)) ? G.hero : 'tianshi';
+  if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
+  const hp=p.heroes[heroId] || (p.heroes[heroId]={pts:0,runs:0,wins:0});
+  hp.pts=(hp.pts|0)+pts; hp.runs=(hp.runs|0)+1; if(won) hp.wins=(hp.wins|0)+1;
+  const fresh=[];
+  if(!SAVE.mile) SAVE.mile=[];
+  mileNodesFor(heroId).forEach(n=>{                         // 只判**这个角色**的轨
+    if(n.need!=null && (hp.pts|0)>=n.need && SAVE.mile.indexOf(n.id)<0){
+      SAVE.mile.push(n.id); fresh.push(n);
+    }
+  });
+  persistSave();
+  if(fresh.length) unlockSfx();                             // 新里程碑解锁音（与图鉴/成就同款）
+  return fresh;
+}
+/* 结算面板里的里程碑区块：本局 +N 点 · 累计 M 点，并列出本次新解锁条目；
+   全部解锁后加一句「全部里程碑已解锁」。 */
+function mileSettleHTML(gain, just){
+  const pts=milePts();
+  /* v1.0.25：结算面板的「全部达成」按**本局角色的那条轨**判定（新体系；不再看全局 MILESTONES）。 */
+  const heroId=(G && G.hero) ? G.hero : 'tianshi';
+  const tierTotal=(typeof MILE_TRACKS!=='undefined' && MILE_TRACKS[heroId])
+    ? MILE_TRACKS[heroId].nodes.length : MILE_TIER_COUNT;
+  const gone=(SAVE.mile||[]).filter(id=>id.indexOf(heroId+'_t')===0).length >= tierTotal;
+  const rows=(just&&just.length)
+    ? just.map(m=>`<div style="margin-top:4px"><b style="color:var(--gold)">${m.name}</b><br><span style="color:var(--dim);font-size:13px">${m.desc}</span></div>`).join('')
+    : '';
+  const tail=gone ? ` · <span style="color:var(--green)">全部里程碑已解锁</span>` : '';
+  return `<div style="margin:10px 0;padding:10px 12px;border:1px solid var(--ink3);border-radius:8px;background:rgba(0,0,0,.25);text-align:left;font-size:14px">`
+    + `<div>本局里程碑 <b style="color:var(--gold)">+${gain}</b> 点 · 累计 <b style="color:var(--gold)">${pts}</b> 点${tail}</div>`
+    + rows + `</div>`;
+}
+/* ===================== 独立的「解锁」界面（v1.0.16） =====================
+   主菜单的「解锁」入口调它。展示全部里程碑：阈值 / 累计点数 / 进度条 / 已解锁态。
+   ⚠️ 这是**独立的解锁 UI**（用户口径），不是只靠在选角页置灰——以后要加卡牌 / 遗物 /
+      成就等更多可解锁奖励，直接往 MILESTONES 表加行，这里自动多一条，不用改。 */
+/* v1.0.23（用户草图 · 整屏重做）/ v1.0.24（用户定稿口径）：
+   左列 = **4 张角色海报 + 1 张「神秘人」海报**（`素材/hero/<id>_poster.jpg`，3:1）：未选中只露
+   **左边 2/3**（右缘压一道暗渐变暗示还剩 1/3），点中展开全幅 + 厚边立体框；每张海报**下面挂一行
+   该角色自己的里程**（`.ml-hinfo`）—— 用户口径「里程可以显示在海报下面」，顶栏那块整块撤掉。
+   右侧 = **该角色自己的**横向里程轨：**6 档 + 1 个「敬请期待」尾节点**，节点**等距分布**，
+   里程数只作节点下方标注。轨可横向拖动（鼠标拖 / 触屏滑，拖动中响布料摩擦音）。
+   音效：点海报 ui_poster / 领奖励 ui_reward / 拖轨 ui_drag（进界面那一层由 talisOpen 的 ui_curtain 负责）。
+   ⚠️ 6 档里**前 5 档的真实奖励内容与里程数、以及里程增长规则**都**待与用户定稿**（用户口径：
+      「先设计里程获得的全新规则和数值后计算平均每把的里程数后才能制定」）⇒ 现在渲染成**虚线待定框**，
+     「领取」是**占位交互、不落盘**。定稿后填 20_data.js 的 MILE_TRACKS 即可，这里一行都不用动。 */
+let MILE_HERO='';                       // 当前查看的角色（模块级：切换重渲染不丢）
+let MILE_NODES=[];                      // 当前轨上渲染的节点（给 mileClaim 用）
+const MILE_CLAIMED={};                  // 占位领取记录（key = hero:node）。奖励定稿前**不落盘**。
+/* 节点定位：**等距槽位**百分比。i = 槽位序号，slots = 总槽数（6 档 + 尾节点 = 7）。
+   ⚠️ 旧版按 `need/总里程` 线性映射 ⇒ 前几档挤成一团、白框互相重叠（用户报的 bug），故改等距。 */
+function mileSlotPct(i, slots){ return slots>0 ? ((i + .5) / slots * 100) : 0; }
+/* 该角色的档位骨架（定稿前的兜底）：
+   · 神秘人 ⇒ 6 个「未知」节点（黑色系 ? 图标盖住，不透露任何内容）
+   · 其余角色 ⇒ 6 档：前 5 档「奖励待定」（内容与里程数待定稿），第 6 档【入门符纸】（任选一名角色解锁） */
+function mileNodesFor(heroId){
+  const t=(typeof MILE_TRACKS!=='undefined') ? MILE_TRACKS[heroId] : null;
+  if(t && t.nodes && t.nodes.length) return t.nodes.slice();
+  const mystery=(typeof MILE_MYSTERY!=='undefined') && heroId===MILE_MYSTERY.id;
+  const out=[];
+  for(let i=0;i<MILE_TIER_COUNT;i++){
+    const tier=i+1, last=(tier===MILE_TIER_COUNT);
+    if(mystery){
+      out.push({ id:heroId+'_t'+tier, tier:tier, need:null, unknown:true,
+        name:'?', desc:'新角色的里程碑将在后续版本揭晓。' });
+    }else{
+      out.push({ id:heroId+'_t'+tier, tier:tier, need:null, pending:true, ticket:last,
+        name: last ? '入门符纸' : '奖励待定',
+        desc: last ? '可任选一名角色解锁。' : '档位奖励与里程数待定稿。' });
+    }
+  }
+  return out;
+}
+/* 填充进度：走到**最后一个已达标**的真实档位（need 未定的档位不参与）。 */
+function mileFillPct(nodes, pts){
+  const slots=nodes.length+1;
+  let idx=-1;
+  nodes.forEach((n,i)=>{ if(n.need!=null && pts>=n.need) idx=i; });
+  return idx<0 ? 0 : mileSlotPct(idx, slots);
+}
+/* 点奖励白框 = 领取。到点（pts>=need）且未领 ⇒ 记一次 + 领取音；未到点 ⇒ 报错音。
+   待定 / 未知 / 尾节点一律不可领（还没定稿，也没有里程数可比）。
+   ⚠️ 真奖励（牌 / 遗物 / 被动 / 新角色）等定稿后再在这里发放，现在只演示交互。 */
+function mileClaim(nodeId){
+  const n=MILE_NODES.filter(x=>x.id===nodeId)[0];
+  if(!n || n.pending || n.unknown || n.tail) return;
+  const pts=milePts(MILE_HERO);
+  if(pts<n.need){ sfx('error'); floatMsg('里程不足：还差 '+(n.need-pts)+' 点'); return; }
+  const k=MILE_HERO+':'+nodeId;
+  if(MILE_CLAIMED[k]) return;
+  MILE_CLAIMED[k]=1;
+  sfx('ui_reward');
+  floatMsg('已领取 · '+(n.name||'里程奖励'));
+  const el=document.querySelector('.ml-node[data-mid="'+nodeId+'"]');
+  if(el&&el.classList){ el.classList.remove('can'); el.classList.add('claimed'); }
+}
+/* 里程轨横向拖动（鼠标；触屏走原生 overflow 滚动）。拖动中节流响「布面摩擦」。 */
+const _mlDrag={on:false,x:0,sl:0,el:null,last:0};
+function mileDragStart(e){
+  if(e&&e.pointerType&&e.pointerType!=='mouse') return;      // 触屏交给原生滚动，别抢手势
+  const sc=e&&e.currentTarget; if(!sc) return;
+  if(e.target&&e.target.closest&&e.target.closest('.ml-box')) return;   // 点奖励白框不算拖动
+  _mlDrag.on=true; _mlDrag.x=e.clientX; _mlDrag.sl=sc.scrollLeft; _mlDrag.el=sc;
+  if(sc.classList) sc.classList.add('grabbing');
+  try{ if(sc.setPointerCapture) sc.setPointerCapture(e.pointerId); }catch(err){}
+}
+function mileDragSfx(){
+  const now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+  if(now-_mlDrag.last<110) return; _mlDrag.last=now; sfx('ui_drag');
+}
+function mileDragMove(e){
+  if(!_mlDrag.on||!_mlDrag.el) return;
+  const dx=e.clientX-_mlDrag.x;
+  _mlDrag.el.scrollLeft=_mlDrag.sl-dx;
+  if(Math.abs(dx)>4) mileDragSfx();
+  if(e.preventDefault) e.preventDefault();
+}
+function mileDragEnd(){
+  if(_mlDrag.el&&_mlDrag.el.classList) _mlDrag.el.classList.remove('grabbing');
+  _mlDrag.on=false; _mlDrag.el=null;
+}
+function viewMilestones(heroId){
+  const heroes=(typeof HEROES!=='undefined'?HEROES:[]).filter(h=>h&&h.id);
+  const cards=heroes.slice();
+  if(typeof MILE_MYSTERY!=='undefined') cards.push(MILE_MYSTERY);   // 第 5 张：神秘人 · 敬请期待
+  /* 用户口径「点击右上角符纸进入该界面默认海报展示天师」⇒ 不带参数进入时一律回到首位角色。 */
+  MILE_HERO=(heroId && cards.some(h=>h.id===heroId)) ? heroId : (heroes[0]?heroes[0].id:'');
+  const cur=MILE_HERO;
+  const myst=(typeof MILE_MYSTERY!=='undefined') && cur===MILE_MYSTERY.id;
+  const nodes=mileNodesFor(cur);
+  MILE_NODES=nodes;
+  const pts=milePts(cur);
+  const slots=nodes.length+1;                                // +1 = 轨尾「敬请期待」占位节点
+  const rail=cards.map(h=>{
+    const on=h.id===cur;
+    const isM=!!h.teaser;
+    const nm=h.name||h.id;
+    const hp=milePts(h.id);
+    const hn=mileNodesFor(h.id);
+    const hGot=hn.filter(n=>n.need!=null && hp>=n.need).length;
+    const label=isM ? '? ? ?' : nm;
+    const info=isM
+      ? `<span class="ml-hinfo"><b>???</b><em>敬请期待</em></span>`
+      : `<span class="ml-hinfo">里程<b>${hp}</b><em>${hGot}/${hn.length} 档</em></span>`;
+    const fall=`<span class="ml-em">${isM?'?':nm.slice(0,1)}</span>`;
+    return `<button class="ml-hcard${on?' on':''}${isM?' is-mystery':''}" aria-pressed="${on?'true':'false'}"`
+      + ` aria-label="${isM?'敬请期待的新角色':nm}的里程碑"`
+      + ` onclick="sfx('ui_poster');viewMilestones('${h.id}')">`
+      + `<span class="ml-shotwrap">`
+      + artImg('hero/'+h.id+'_poster.jpg', fall, 'ml-shot')
+      + `<span class="ml-badge">${h.mech||''}</span><span class="ml-hnm">${label}</span></span>`
+      + info + `</button>`;
+  }).join('');
+  const marks=nodes.map((n,i)=>{
+    const pct=mileSlotPct(i, slots);
+    const done=(n.need!=null && pts>=n.need);
+    const got=!!MILE_CLAIMED[cur+':'+n.id];
+    let cls='ml-node';
+    if(n.unknown) cls+=' unknown'; else if(n.pending) cls+=' pending';
+    if(done) cls+=' done';
+    if(!n.unknown && !n.pending) cls+= got?' claimed':(done?' can':'');
+    const needTxt=(n.need!=null) ? n.need : '?';
+    const state=n.unknown ? '未来角色'
+      : n.pending ? (n.ticket ? '解锁角色' : '待定稿')
+      : (got ? '已领取' : (done ? '点击领取' : '未达成'));
+    const click=(n.unknown||n.pending) ? '' : ` onclick="mileClaim('${n.id}')"`;
+    return `<div class="${cls}" data-mid="${n.id}" style="left:${pct}%">`
+      + `<div class="ml-box"${click}><b>${n.name}</b><span>${n.desc||''}</span>`
+      + `<em class="ml-state">${state}</em></div>`
+      + `<div class="ml-stem"></div><div class="ml-dot"></div>`
+      + `<div class="ml-need">${needTxt}</div></div>`;
+  }).join('');
+  /* 轨尾「敬请期待」：里程不设上限（用户口径），后续版本继续加档 ⇒ 虚线占位、不可领。 */
+  const tailMark=`<div class="ml-node ml-end" style="left:${mileSlotPct(nodes.length, slots)}%">`
+    + `<div class="ml-box"><b>敬请期待</b><span>里程不设上限，后续版本继续加档。</span></div>`
+    + `<div class="ml-stem"></div><div class="ml-dot"></div>`
+    + `<div class="ml-need">∞</div></div>`;
+  const fillPct=mileFillPct(nodes, pts);
+  /* 轨宽 = 槽数 × 间距（桌面 200 / 窄屏 158），**比白框宽**（130）⇒ 相邻档位不再重叠；
+     又比旧值（235/185）紧一些，让一屏里能多看一档（用户口径「占比整齐均衡」）。 */
+  const narrow=((window.innerWidth||0)<=520 || (window.innerHeight||0)<=560);
+  const spacing=narrow?158:200;
+  const trackW=Math.max(560, Math.round(slots*spacing));
+  const hint=MILE_GATE_ON
+    ? '每局结束按此角色的战绩累积里程，达标即<b>永久解锁</b>。'
+    : '<span style="color:var(--green)">测试期：门禁已关闭，全部内容可直接取用；里程仍会正常累积。</span>';
+  showOverlay(`<div class="ml-root">
+    <div class="ml-top">
+      <span class="ml-title">里 程 碑</span>
+      <span class="ml-sub">${myst?'敬请期待的新角色':heroName(cur)} · ${hint}</span>
+    </div>
+    <div class="ml-main">
+      <div class="ml-heroes">${rail}</div>
+      <div class="ml-stage">
+        <div class="ml-scroll" onpointerdown="mileDragStart(event)" onpointermove="mileDragMove(event)"
+             onpointerup="mileDragEnd()" onpointercancel="mileDragEnd()" onscroll="mileDragSfx()">
+          <div class="ml-track" style="min-width:${trackW}px">
+            <div class="ml-line"><i style="width:${fillPct}%"></i></div>
+            ${marks}${tailMark}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`, true, 'mile-scene');
 }
 /* v0.61.32：解锁音单独成函数 —— 冒烟里 unlockBestiary/unlockAchievement 都被换成空函数，
    写在它们体内验不到（同 overlaySfx 的理由）。两个调用点各一行转发。 */
@@ -1280,10 +1597,13 @@ function viewBestiary(){
     const e=ENEMIES[k];
     const have=SAVE.unlocked.includes(k);
     const tag=e.boss?'👹 Boss':(e.elite?'☠ 精英':'');
+    /* v1.0.19：用户口径「图鉴要有敌人立绘，你自己布局好」—— 复用战斗里那张 `素材/enemy/<key>.png`
+       （34 张立绘的命名与敌人 key 完全一致）。未收录的用同一张图压暗成剪影，留白预告而不剧透。 */
+    const art=artImg('enemy/'+k+'.png','','bportrait');
     if(!have){
-      return `<div class="bcard locked"><div class="bname">？？？</div><div class="bmeta">${tag||'未收录'}</div><div class="bstory">尚未收录——在战斗中击败它，即可解锁它的志怪故事。</div></div>`;
+      return `<div class="bcard locked">${art}<div class="bbody"><div class="bname">？？？</div><div class="bmeta">${tag||'未收录'}</div><div class="bstory">尚未收录——在战斗中击败它，即可解锁它的志怪故事。</div></div></div>`;
     }
-    return `<div class="bcard"><div class="bname">${e.name}${tag?` <span style="font-size:12px;color:var(--red)">${tag}</span>`:''}</div><div class="bmeta">${e.kind&&KIND_ICON[e.kind]?iconTag('ui/kind_'+e.kind+'.png', KIND_ICON[e.kind]):''}${KIND_LABEL[e.kind]||'怪'} · 生命 ${e.hp}</div><div class="bstory">${STORIES[k]||''}</div></div>`;
+    return `<div class="bcard">${art}<div class="bbody"><div class="bname">${e.name}${tag?` <span style="font-size:12px;color:var(--red)">${tag}</span>`:''}</div><div class="bmeta">${e.kind&&KIND_ICON[e.kind]?iconTag('ui/kind_'+e.kind+'.png', KIND_ICON[e.kind]):''}${KIND_LABEL[e.kind]||'怪'} · 生命 ${e.hp}</div><div class="bstory">${STORIES[k]||''}</div></div></div>`;
   }).join('');
   showOverlay(`<h2>志 怪 图 鉴</h2><p style="font-size:13px;color:var(--dim)">已收录 <b style="color:var(--gold)">${got}</b> / ${total} · 击败妖怪，把它们的志怪故事收进你的百鬼谱。</p><div id="bestiary-grid">${cards}</div>`, true, 'scroll-scene');
 }
@@ -1524,7 +1844,8 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   // v0.76.0：+ result-scene（胜负结算面板「自下升起」的那一套 keyframe）。
   //   三条结算路径（showBattleResult / loseGame / showVictory）**都必须显式传第三实参**；
   //   漏传不会报错，只会让面板退回通用的 overlayIn（10px 下滑），而这一条没有任何闸看得见。
-  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','result-scene'];
+  // v1.0.23：+ mile-scene（里程碑「里程轨」整屏界面：4 张角色海报 + 蓝色里程轨）。
+  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','result-scene','mile-scene'];
   const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
   // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
   // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
@@ -1533,7 +1854,8 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   // 再回战斗，奖励面板也会带着卷轴动画从顶上掉下来。
   if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
     ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene');
-    ov.classList.remove('forge-scene'); ov.classList.remove('pile-scene'); ov.classList.remove('result-scene'); }
+    ov.classList.remove('forge-scene'); ov.classList.remove('pile-scene'); ov.classList.remove('result-scene');
+    ov.classList.remove('mile-scene'); }
   ov.classList.remove('hidden');
   // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
   // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。
@@ -1568,7 +1890,26 @@ function ovMarkCornerBtns(){
 }
 function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
   document.getElementById('overlay').classList.add('hidden'); }
-function closeOverlay(){ hideOverlay(); if(!G) showStartScreen(); }
+/* v1.0.20（用户 2026-10-08：「有时候从图鉴或者排行榜等界面回到主界面会卡住」）——
+   旧判据只有 `if(!G)`，但 G 退局后**并不清空**（quitToMenu / showVictory / loseGame 都只调
+   showStartScreen，没把 G 置空）。于是「本会话玩过一局 → 回主菜单 → 开图鉴/榜单/引导 → 返回」时
+   `!G` 为假 ⇒ 只摘掉 #overlay，而 `body.at-menu` 仍把 `#app{display:none}` ⇒ 整屏全黑，表现为卡死。
+   正确判据是「屏幕背后不是战局」，该状态由 setBg 挂的 `body.at-menu` 唯一 owning。
+   ⚠️ 不要再加「场景类必须是 menu-scene/scroll-scene」之类的守卫：新手引导、卡牌详情等面板
+      **不带场景类**（showOverlay 不传第三参），加了守卫它们就漏网（用户 2026-10-08 报的
+      「查看新手引导后返回卡住」正是这条漏网路径）。at-menu 本身就足以判定。 */
+function closeOverlay(){
+  const atMenu=!!(document.body && document.body.classList && document.body.classList.contains('at-menu'));
+  hideOverlay();
+  if(atMenu || !G) showStartScreen();
+}
+/* v1.0.20：设置/榜单等卷轴页的「返回菜单」不能写死 openMenu()（那是**局内**菜单）——
+   从主菜单进来的话会被绕进局内菜单（继续游戏/退出到主菜单），玩家以为卡住了。
+   按 at-menu 判定来处：在主菜单体系内就回主菜单，否则回局内菜单。 */
+function menuBack(){
+  const atMenu=!!(document.body && document.body.classList && document.body.classList.contains('at-menu'));
+  if(atMenu) showStartScreen(); else openMenu();
+}
 
 /* ===================== 渲染 ===================== */
 /* 消耗牌判定：牌自带 exhaust，或 heroExhaust 指定的英雄专属消耗 */
@@ -1602,7 +1943,7 @@ function cardBody(c){
      手机横屏档把 `.ct-type/.ct-sep` 藏掉之后，手牌左下角有「攻击／防御」可辨，
      面板里却什么都没有 ⇒ 玩家没法靠类型筛牌（用户 2026-10-05 报障）。
      三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 桌面逐像素不变。 */
-  return `${cardFrame()}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${c.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span>`;
+  return `${cardFrame()}<div class="cname">${c.name}${c.up?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${c.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span>`;
 }
 function forgeCardHTML(c,i){
   /* v0.75.0：锻造卡面从「一张卡 + 卡内一行红字预览」改成**一组两列对照** ——
@@ -1623,7 +1964,7 @@ function forgeCardHTML(c,i){
   const lock = !c.up && !canUpgrade(c);   // 升级无变化的牌：置灰、不可锻造
   /* 一张卡面。cls / badge / descCls 三个都是给「左」「右」两张卡分身的差异入口。 */
   const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" onclick="forgeCard(${i})">
-    ${cardFrame()}<div class="cname">${cc.name}${cc.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}${badge}</div>
+    ${cardFrame()}<div class="cname">${cc.name}${cc.up?'<span class="up-mark" title="已升级">↑</span>':''}${badge}</div>
     ${cardArt(cc)}${exhaustMark(cc)}
     <div class="cost"${cc.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(cc)}</div>
     <div class="cplate" data-cardid="${cc.id}" data-cardup="${cc.up?1:0}">
@@ -1677,13 +2018,18 @@ function handCardHTML(c, disabled, i, n){
      ⚠️ 首抽那一刻本集合还是空的（play 在 render 尾部才登记），所以**首抽不靠这行**隐身 ——
         那一路仍是动画层自己写 opacity，与今天完全一致。无头下集合恒空 ⇒ 输出**逐字节相同**。 */
   const flying = (typeof FLYING_CARDS!=='undefined') && FLYING_CARDS.has(c);
+  /* v1.0.14（P3-7）：血魔刀·攻击牌火环 —— 阴差持有血魔刀且生命低于 30%（= +25% 真正生效中）时，
+     手牌里的攻击牌边框挂 .xue-fire（CSS 画一圈渐变橙红火线，微微波动）。
+     摆在 handCardHTML（手牌）而不是 cardBody（全站共用）：这一圈是「该牌此刻吃加成」的战斗信号，
+     只对手里要打出去的牌有意义。门槛带 fx()：流畅模式不挂 ⇒ 无头冒烟里恒为空串，输出逐字节不变。 */
+  const xueFire = (fx() && G && G.hero==='yincha' && hasRelic('xuemodao') && G.hp < G.maxHp*0.3 && c.type==='attack') ? ' xue-fire' : '';
   /* sealTag 与 ctype 都在 .cplate **之后**（两者都是相对 .card 绝对定位的）——
      .exhaust-tag 改绝对定位后不再吃 ~16px 行高，这才是「被封印的牌描述看不全」的根因。 */
   /* v1.0.3：铭牌窗那条木带的文字拆成三个 span（type / 分隔符 / rarity）。
      桌面档三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 逐像素不变；
      手机横屏档（原型.html 的 ⑦ 块）藏掉 type 与分隔符、只留稀有度，
      类型改由卡片左下角的 `.ct-corner` 小墨牌显示（同样是 TNAME[c.type]）。 */
-  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}"${newAttr} style="--rot:${rot}deg${flying?';opacity:0':''}" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}<div class="cname">${c.name}${c.up?' <span style="color:var(--green)" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div>${sealTag}<div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span></div>`;
+  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}${xueFire}"${newAttr} style="--rot:${rot}deg${flying?';opacity:0':''}" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}<div class="cname">${c.name}${c.up?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cdesc">${wrapKw(cardText(c,c.up))}</div></div>${sealTag}<div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span></div>`;
 }
 function intentText(e){
   const st=(e.strength||0); // v0.61 C2：力量每点 +1
@@ -1708,6 +2054,40 @@ function intentText(e){
     case 'wangyou': return '🍵 忘忧（两回合各饮 1 张或受 8 伤）';
     case 'aoe': return `💥 群体攻击 ${atk}（驱散召唤）`;
     case 'dormant': return '💤 休眠（观望）';
+    default: return '…';
+  }
+}
+/* v1.0.14：敌人意图改「图标 + 数字」。
+   原来立绘下那一行是整句中文（`⚠ 意图：攻击 12 · 施加虚弱`），窄屏会折行、占地大；
+   现在只留一枚图标 + 必要的数字，完整释义挪进 `.intent` 的 title（悬停可看）。
+   ⚠️ `intentText()` **一个字都不能改**：冒烟 :2803/:2805/:2855/:2857/:2860 按中文整句断言。
+   ⚠️ 图标走 `iconTag`：`ui/intent_*.png` 到了自动换图，没图逐字节回落成原 emoji。
+      能复用的直接借用 `buff/` 已交付的那几张（格挡/虚弱/蓄力/灼烧/勾魂/力量/记名/业火）。 */
+function intentChip(e){
+  const st=(e.strength||0);
+  const atkPlain=e.intent.v+st;
+  const atk=e.intent.v+(e.pendingDamage||0)+st;
+  const I=(n,fb)=>iconTag('ui/intent_'+n+'.png', fb);
+  const B=(n,fb)=>iconTag('buff/'+n+'.png', fb);
+  switch(e.intent.type){
+    case 'attack': return I('attack','⚔️')+atk;
+    case 'charge': return B('charge','⏳')+'+'+e.intent.v;
+    case 'block': return B('block','🛡️')+e.intent.v;
+    case 'heal': return I('heal','❤️')+e.intent.v;
+    case 'weak': return B('weak','🥀');
+    case 'gouhun': return B('gouhun','🔗');
+    case 'burn': return B('burn','🔥')+e.intent.v;
+    case 'strength': return B('strength','💪')+e.intent.v+(e.intent.weak?B('weak','🥀'):'')+(e.intent.sealHeal?I('heal','❤️'):'');
+    case 'multi': return I('multi','⚔️')+e.intent.n+'×'+atkPlain;
+    case 'discard': return I('discard','🗑️');
+    case 'attackBlock': return I('attack','⚔️')+atkPlain+B('block','🛡️')+e.intent.block;
+    case 'summon': return I('summon','👥')+e.intent.n;
+    case 'jiming': return B('ledger','📜');
+    case 'qingsuan': return I('qingsuan','⚖️');
+    case 'yehuo': return B('karmafire','🔥');
+    case 'wangyou': return I('wangyou','🍵');
+    case 'aoe': return I('aoe','💥')+atk;
+    case 'dormant': return I('dormant','💤');
     default: return '…';
   }
 }
@@ -1835,7 +2215,9 @@ function enemyPanelHTML(e, idx){
   /* v1.0.13：徽章前那枚 emoji 走 iconTag —— 图到了（素材/buff/<id>.png）自动换图，没到逐字节输出原 emoji。
      id 表见《美术设计要求.md》§4.3；词缀（AFFIXES 的 9 个 id）本来就是纯文字，图到了才多一枚图标。 */
   let badges='';
-  if(e.curse>0){ const max=e.curse>=6; badges+=`<span class="badge curse${max?' curse-max':''}" data-tip="kw:诅咒" style="cursor:help">${iconTag(max?'buff/curse_6.png':'buff/curse_1_5.png','☠️')}诅咒 ×${e.curse}</span>`; }   // v1.0.13：用户交付了 curse_1_5 / curse_6 两版图 ⇒ 满 6 层换图（原方案 A）
+  if(e.curse>0){ const max=e.curse>=6 && (hasRelic('leifaxinjue') || hasRelic('taishangzhou')); badges+=`<span class="badge curse${max?' curse-max':''}" data-tip="kw:诅咒" style="cursor:help">${iconTag(max?'buff/curse_6.png':'buff/curse_1_5.png','☠️')}诅咒 ×${e.curse}</span>`; }   // v1.0.18：用户口径 —— 【雷法心诀】或【太上咒箓】**只要有任意一个**在身，叠满 6 层就换 curse_6.png，否则一律 curse_1_5.png
+  /* v1.0.14：腐骨散施加的【腐毒】（每回合开始按层数掉血、随后 -1 层）。 */
+  if(e.poison>0) badges+=`<span class="badge affix" data-tip="kw:腐毒" style="cursor:help">${iconTag('buff/burn.png','☠️')}腐毒 ×${e.poison}</span>`;
   if(e.charm>0) badges+=`<span class="badge charm" data-tip="kw:魅惑" style="cursor:help">${iconTag('buff/charm.png','💘')}魅惑 ×${e.charm}</span>`;
   if(e.strength>0) badges+=`<span class="badge strength" data-tip="kw:力量" style="cursor:help">${iconTag('buff/strength.png','💪')}力量 ×${e.strength}</span>`;
   if(e.pendingDamage>0) badges+=`<span class="badge strength" data-tip="kw:蓄力" style="cursor:help">${iconTag('buff/charge.png','⚡')}蓄力 +${e.pendingDamage}</span>`;
@@ -1846,17 +2228,20 @@ function enemyPanelHTML(e, idx){
   if(G.hero==='tianshi' && G.ybTarget===e.uid && G.summons.some(x=>x.type==='yinbing' && x.dur>0)) badges+=`<span class="badge ybtarget" data-tip="kw:阴兵目标" style="cursor:help">${iconTag('buff/ybtarget.png','🎯')}阴兵目标</span>`;
   return `<div class="enemy ${eSize} ${ey>0?'edepth':''} ${e.dying?'dying':''} ${HITFX.enemies.has(e)?'hit':''}" data-uid="${e.uid}" style="z-index:${2000-ey}; --ex:${ex}px; --ey:${-ey}px">
     ${artImg('enemy/'+e.key+'.png', '', 'eportrait '+eSize)}
-    <div class="ename" data-tip="enemy:${e.key}">${e.kind&&KIND_ICON[e.kind]?iconTag('ui/kind_'+e.kind+'.png', KIND_ICON[e.kind]):''}${e.name} ${e.boss?'👹':e.elite?'☠':''}</div>
+    <div class="ename" data-tip="enemy:${e.key}">${e.kind&&KIND_ICON[e.kind]?iconTag('ui/kind_'+e.kind+'.png', KIND_ICON[e.kind]):''}${e.name}${e.boss?iconTag('ui/tier_boss.png','👹'):e.elite?iconTag('ui/tier_elite.png','☠'):''}</div>
     <span class="stat">生命 <b>${Math.max(0,e.hp)}</b>/${e.maxHp}</span>
     <span class="enemyhpbar${ehGain?' hp-gain':''}"><i class="hpghost" data-w="${ehp}" style="width:${ehPrev}%"></i><i class="hpfill" data-w="${ehp}" style="width:${ehPrev}%"></i></span>
     ${e.block>0?`<span class="stat">${iconTag('buff/block.png','')}格挡 <b>${e.block}</b></span>`:''}
     <div class="badges">${badges}</div>
-    <div class="intent">${intentText(e)}</div>
+    <div class="intent" title="${intentText(e)}">${intentChip(e)}</div>
   </div>`;
 }
 function summonHTML(s){
   // 尸王在场时其他召唤单位伤害 +1（与 summonAct 结算一致：尸王自身不吃、无尸王不加）
-  const v = s.v + ((s.type!=='shi_wang' && G.summons.some(x=>x.type==='shi_wang' && x.dur>0)) ? 1 : 0);
+  // v1.0.21：补上群鬼乱舞[阴差]的「本回合每失 2 血 +N」增伤 —— 此前总伤提示变了、每个召唤物的显示却没跟着变（用户报）。
+  const sw = (s.type!=='shi_wang' && G.summons.some(x=>x.type==='shi_wang' && x.dur>0)) ? 1 : 0;
+  const bleed = G.bleedSummons ? Math.floor((G.hpLostTurn||0)/2)*(G.bleedSummonsBonus||1) : 0;
+  const v = s.v + sw + (s.type!=='shi_wang' ? bleed : 0);   // 尸王走 s.v 原值（不吃尸王加成/失血增伤，同 summonAct）
   const label = s.type==='zhiren'?(G.hero==='ganshiren'?`纸人：每回合末对随机敌人造成 ${v} 点伤害`
       :G.hero==='wuseng'?`纸人：每回合末造成 ${v} 点伤害；存活时每回合开始 +${s.up?3:2} 格挡`
       :G.hero==='yincha'?`纸人：每回合末造成 ${v} 点伤害；攻击时为你恢复 ${s.healV||2} 点生命`
@@ -1874,7 +2259,9 @@ function summonHTML(s){
         冒烟 :506-513 / :1021-1023 / :2076-2078 都是按 indexOf 断言标签全文仍在 ⇒ 必须保留。
      短名从 label 的「X：…」前半段取（下面每个分支的格式统一是「类型名：描述」）⇒ 不需要新名字表。 */
   const name = label.slice(0, label.indexOf('：')) || label;
-  return `<span class="summon" title="${label}"><span class="sb-long">${label} · 剩 ${s.dur} 回合</span><span class="sb-short">${name} ${v} · 剩 ${s.dur}</span></span>`;
+  /* v1.0.21：名字前加一枚对应召唤物颜色的小圆点（纸人白 / 小鬼黑 / 五通神紫 / 阴兵金 / 尸王红）。 */
+  const dot = `<i class="summon-dot" style="background:${SUMMON_DOT[s.type]||'#a06be0'}"></i>`;
+  return `<span class="summon" title="${label}"><span class="sb-long">${dot}${label} · 剩 ${s.dur} 回合</span><span class="sb-short">${dot}${name} ${v} · 剩 ${s.dur}</span></span>`;
 }
 
 /* ===================== 拖拽出牌（阶段② 骨架） ===================== */
@@ -1895,6 +2282,10 @@ function needsTarget(c){
      有对敌人施加效果却不带箭头。赶尸人（尸气）/ 武僧（格挡）/ 阴差（纯抽牌）三列
      对敌人**零作用** ⇒ 只有天师列出箭头。同 zhouyin 的「按角色条件定向」先例。 */
   if(c.id==='sheshen') return G.hero==='tianshi';
+  /* v1.0.21：群鬼乱舞按角色条件定向 —— 用户报「阴差里对敌人没有伤害，却有指向性箭头」。
+     核实 eff：赶尸人=消耗尸气触发召唤、阴差=失血+挂「召唤增伤」buff，**两列对敌人零直接作用**
+     ⇒ 拖出箭头指不到任何东西，必须去掉；只有真正打向指定敌人的天师（诅咒增伤）/ 武僧（召唤数增伤）保留箭头。 */
+  if(c.id==='qungui') return G.hero==='tianshi' || G.hero==='wuseng';
   /* v0.75.0 复查结论（用户点名要复查「应该加上指示性的卡牌」）——
      全仓把 curEnemy() / randomAlive() 逐点映射过一遍后的判定，**故意不加箭头**的四张：
        · 附灵术：天师列「每触发 1 个召唤物，对随机敌人施咒」×N。文案明写「随机」，

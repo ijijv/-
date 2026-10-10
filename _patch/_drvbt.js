@@ -85,6 +85,26 @@
       /* sum=1：灌两只召唤物（纸人 + 小鬼），验证筹码条与顶栏/详情的短写-长写切换。
          ⚠️ 必须放在 startBattle 之后 —— startBattle 会清空 G.summons。 */
       if (q.get('sum') === '1') G.summons = [{ type: 'zhiren', v: 2, dur: 2 }, { type: 'xiaogui', v: 3, dur: 1 }];
+      /* bad=1：把「徽章 / 意图 / 顶栏 / 芯片」四类图标一次性铺满，专门用来看图标尺寸。
+         不加这个分支时战斗里通常只有 0~1 个徽章，量不出放大后会不会撑爆词条区。 */
+      if (q.get('bad') === '1') {
+        G.gold = 1234;
+        G.relics.push('daoxin', 'shiyu', 'xueyu', 'duanren');
+        G.thorns = 3; G.weak = 2; G.burn = 5; G.dodge = 2; G.gouhun = 1;
+        var st = { curse: 6, poison: 3, charm: 2, strength: 4, pendingDamage: 7,
+                   seal: 1, phase2: 1, block: 12 };
+        (G.enemies || []).forEach(function (e, i) {
+          e.curse = st.curse; e.poison = st.poison; e.charm = st.charm;
+          e.strength = st.strength; e.pendingDamage = st.pendingDamage;
+          e.seal = st.seal; e.block = st.block;
+          if (i === 0) { e.phase2 = st.phase2; e.ledgerActive = true; }
+        });
+        /* 灵汁：铺多种，专门量 T-short 详情浮层里 .potion-chip 的图标尺寸与芯片间距（f6）。 */
+        G.potions = POTIONS.slice(0, 7).map(function (p) { return Object.assign({}, p); });
+        /* 意图类型逐只换开，否则三只都是 attack，只看得到一张攻击图标。 */
+        if (G.enemies[1]) G.enemies[1].intent = { type: 'multi', n: 3, v: 5 };
+        if (G.enemies[2]) G.enemies[2].intent = { type: 'attackBlock', v: 9, block: 6 };
+      }
       /* tbo=1：强制展开顶栏详情（T-short 档默认 TOPBAR_OPEN=false）——
          验证手机档点开「详情」后：芯片仍是短写、详情里出现 `.stat-detail-full` 完整信息行、
          且 `.tb-summons` 已被筹码条取代（不重复）。TOPBAR_OPEN 是 60_boot.js 的顶层 let
@@ -231,6 +251,11 @@
     var ps = document.querySelector('.psummons');
     out.push('   .psummons ' + (ps ? '存在 文案=「' + ps.textContent.replace(/\s+/g, ' ').trim() + '」' : '不存在'));
     cs('.psummons', ['display', 'left', 'top', 'maxWidth']);
+    /* v1.0.14：筹码条与折叠键**必须不重叠**（用户实拍两颗筹码叠在一起）。
+       两者是同一父盒（.hero-art-box）下的兄弟，筹码条 top:100% 恒在折叠键下方。 */
+    var rps = ps ? ps.getBoundingClientRect() : null;
+    if (rps) out.push('   .psummons 矩形 ' + Math.round(rps.width) + 'x' + Math.round(rps.height)
+      + ' @' + Math.round(rps.left) + ',' + Math.round(rps.top) + ' 底=' + Math.round(rps.bottom));
     var pf = document.querySelector('.ps-fold');
     out.push('   .ps-fold ' + (pf ? '存在 文案=「' + pf.textContent.trim() + '」' : '不存在'));
     if (pf) {
@@ -241,6 +266,12 @@
       if (rpf.bottom > vh + 1) errs.push('.ps-fold 越过视口底 ' + Math.round(rpf.bottom));
     }
     cs('.ps-fold', ['display', 'position', 'right', 'bottom', 'fontSize']);
+    if (rps && pf) {
+      var rpf2 = pf.getBoundingClientRect();
+      var ov = !(rps.right < rpf2.left || rps.left > rpf2.right || rps.bottom < rpf2.top || rps.top > rpf2.bottom);
+      out.push('   .psummons × .ps-fold 重叠？ ' + (ov ? '✗ 重叠' : '✓ 不重叠'));
+      if (ov) errs.push('.psummons 与 .ps-fold 重叠');
+    }
     var ct = document.querySelector('#hand .ct-corner');
     if (ct) { var rc = ct.getBoundingClientRect();
       out.push('   卡面分类标「' + ct.textContent + '」 ' + Math.round(rc.width) + 'x' + Math.round(rc.height)
@@ -249,6 +280,24 @@
     cs('#hand .ctype', ['display', 'fontSize']);
     cs('.stat-detail-full', ['display']);
     cs('.tb-summons', ['display']);
+    /* K 灵汁芯片（f6）：T-short 详情浮层内必须放大命中区（用户报「拥挤 + 图标小 + 误触」）。
+       ⚠️ 首帧图标常是 emoji 回落（`.bicon` 还没生成）⇒ 量芯片盒本身 + 相邻间距最可靠；
+          有 `.bicon` 时另报图标尺寸。 */
+    var _sp = document.querySelector('.tb-detail .stat-potion');
+    var pcs = document.querySelectorAll('.tb-detail .potion-chip');
+    out.push('K 灵汁芯片（详情浮层内）n=' + pcs.length
+      + ' .stat-potion flexWrap=' + (_sp ? getComputedStyle(_sp).flexWrap : '无'));
+    var __prevRight = -1;
+    for (var pi = 0; pi < pcs.length && pi < 4; pi++) {
+      var pc = pcs[pi], rp = pc.getBoundingClientRect();
+      var ip = pc.querySelector('.bicon');
+      var gap = (__prevRight >= 0) ? Math.round(rp.left - __prevRight) : -1;
+      out.push('   [' + pi + '] 芯片 ' + Math.round(rp.width) + 'x' + Math.round(rp.height)
+        + ' @' + Math.round(rp.left) + ',' + Math.round(rp.top)
+        + ' 图标 ' + (ip ? Math.round(ip.getBoundingClientRect().width) + 'px' : 'emoji回落')
+        + ' 与前一枚间距 ' + (gap < 0 ? '-' : gap + 'px'));
+      __prevRight = rp.right;
+    }
     var tb = document.getElementById('topbar');
     if (tb) out.push('   顶栏可见文本=「' + tb.innerText.replace(/\s+/g, ' ').trim() + '」');
     /* I 段：拖拽预伤 / 预格挡浮字的落点（用户报「敌人立绘放大后浮字顶出屏幕上沿」）。
@@ -335,6 +384,9 @@
       document.body.classList.remove('low-spec');
     } else out.push('   无存活敌人或 enemyAttackAnim 缺失，跳过敌人动作断言');
     out.push('J2 errs(含 J 段)=' + (errs.length ? errs.join(' | ') : 'none'));
+    /* ⚠️ 正常路径必须自己落角标。上一轮删 K 段临时探针时，把原来跟在它后面的这句
+       `badge(out.join('\n'))` 一起删掉了 ⇒ --dump 永远报「没找到 __dbg」。
+       tip 分支在 finishTip() 里自己落，故先 return。 */
     if (q.get('tip') === '1') { tipTest(); return; }
     badge(out.join('\n'));
   }

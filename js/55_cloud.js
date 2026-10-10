@@ -146,17 +146,16 @@ function cloudPrimaryRun(){
 /* ArchiveMetaData：name 必须 ASCII；summary / extra 有字节上限，超了要截 */
 function cloudMetadata(){
   const run = cloudPrimaryRun();
-  const hs = (typeof SAVE !== 'undefined' && SAVE && SAVE.highScores && SAVE.highScores[0]) ? SAVE.highScores[0].score : 0;
   const now = cloudTimeStr(Math.floor(Date.now() / 1000));
   let summary = run
     ? ('第' + run.act + '幕 第' + ((run.mapRow || 0) + 1) + '层 · 得分' + (run.score || 0) +
        ' · 生命' + (run.hp || 0) + '/' + (run.maxHp || 0) + ' · 金币' + (run.gold || 0) + ' · ' + now)
-    : ('无进行中的爬塔 · 历史最高 ' + hs + ' 分 · ' + now);
+    : ('无进行中的爬塔 · ' + now);
   if(summary.length > 400) summary = summary.slice(0, 400);   // 中文字符 ≤3 字节，留足 500 字节余量
   const extra = JSON.stringify({
     act: run ? run.act : 0, row: run ? (run.mapRow || 0) : 0, score: run ? (run.score || 0) : 0,
     hp: run ? run.hp : 0, maxHp: run ? run.maxHp : 0, gold: run ? run.gold : 0,
-    hero: run ? run.hero : null, endless: !!(run && run.endless), high: hs, ts: Math.floor(Date.now() / 1000)
+    hero: run ? run.hero : null, ts: Math.floor(Date.now() / 1000)
   });
   return { name: CLOUD_NAME, summary: summary, extra: extra.slice(0, 990), playtime: cloudPlaytime() };
 }
@@ -500,3 +499,198 @@ function cloudAcceptRestoreAfterRestore(){
    补上 tap.onHide 的那次在 cloudMarkDirty 里。非 TapTap 环境两个钩子都是死的
    （cloudFlush 开头就判环境），不会白跑请求。 */
 try{ cloudHookHide(); }catch(e){}
+
+/* ============================================================================
+ * 通关计时榜 · TapTap 全平台排行榜适配层（v1.0.17b）
+ * ----------------------------------------------------------------------------
+ * 用户口径：「通关计时榜是要连接taptap的排行榜供全平台的玩家比较」，并已在 TapTap
+ * 开发者中心建好榜（排行榜 ID = dgakiqz3gn7lb847ss；排序 ascending + 更新策略 better
+ * ⇒ 值取「通关用时**毫秒**」，越短越靠前，better 自动保留个人最好成绩）。
+ * ⚠️ v1.0.20：用时按**毫秒**提交（TapTap 的时间类型榜收毫秒并自动格式化成「X 秒/分」）。
+ *   早先按「秒」提交 ⇒ 1800 被当成 1800ms，官方榜把 30 分钟的对局显示成「1.8 秒」。
+ *
+ * ⚠️ v1.0.19 纠正（上一版这里写错了，是真机报错「未发现排行榜接口」的根源）：
+ *   当时核的是 **原生 SDK** 文档（Unity / Android / iOS 的 TapTapLeaderboard），
+ *   于是误判「H5 小游戏没有排行榜接口」。实际上小游戏/H5 **有**排行榜 API，
+ *   只是不在同一份文档里 —— 见 `developer.taptap.cn/minigameapidoc/dev/api/open-api/leaderboard/`：
+ *     tap.getLeaderboardManager()（**基础库 ≥ 1.8.0**）→ LeaderboardManager
+ *       · submitScores({ scores:[{leaderboardId, score}], callback:{onSuccess,onFailure} })
+ *       · openLeaderboard({ leaderboardId, callback })                       —— 打开 TapTap 官方榜单 UI
+ *       · loadLeaderboardScores({ leaderboardId, maxSize, nextPage, periodToken, callback })
+ *           → callback.onSuccess(res => res.scores)                          —— 自绘榜单走这条
+ *       · loadCurrentPlayerLeaderboardScore({ leaderboardId, callback })     —— 我的排名
+ *   ⚠️ 两个坑：
+ *     ① 回调形状是 `callback:{onSuccess,onFailure(code,message)}`，**不是** `{success, fail}`；
+ *     ② 管理器的方法挂在**原型**上（且非枚举）—— 老的 `rankMethodNames` 只看自身 ⇒ 收出来是空数组
+ *        ⇒ 早先一直报「未发现排行榜接口」。现已沿原型链收（见 rankMethodNames）。
+ *   ⚠️ 后台还需在「小游戏管理 → 基础配置 → 协议配置 → 小游戏隐私保护指引」勾选「好友关系」，
+ *      否则回调直接失败（错误码）。
+ *
+ * 兜底口径（保持原设计）：拿不到管理器 / 管理器上没有这套方法 ⇒ 整层降级为 no-op，
+ *   通关计时榜回落本机榜（既有逻辑一字不改）；失败时把诊断串（真实可用方法名）塞进错误信息，
+ *   真机回报一次即可定位是「权限没开」还是「基础库太低」。 */
+/* v1.0.19：**6 个榜**（1 个通关计时总榜 + 4 个角色通关计时分榜 + 1 个整局总分榜）。
+   排序口径在 TapTap 开发者中心建榜时设定，客户端只提交数值：
+     · clear_*   = ascending + better（值 = 通关用时**毫秒**，越短越前）
+     · total_score = descending + better（值 = 整局**得分**，越高越前） */
+const RANK_IDS = {
+  clear_total:     'dgakiqz3gn7lb847ss',
+  clear_tianshi:   'xc3t2r13go0t8ykcma',
+  clear_ganshiren: 'kxb793ucsscio9ol1l',
+  clear_wuseng:    'u45n8mhpyr8eyvzop2',
+  clear_yincha:    'n0uxtpk2vde3xt4mc1',
+  total_score:     'k74rffqopia2pn6tsb'
+};
+const RANK_ID = RANK_IDS.clear_total;              // 兼容旧引用（默认榜 = 通关计时总榜）
+/* 榜单元数据：UI 切换页与提交/展示共用。kind:'clear' 走用时升序；'score' 走得分降序。
+   hero 非空 ⇒ 只统计该角色的记录（本机兜底榜按 hero 过滤；全平台榜靠独立榜 ID 天然隔离）。 */
+const RANK_BOARDS = [
+  {id:'clear_total',     name:'通关计时 · 总榜',  kind:'clear', hero:''},
+  {id:'clear_tianshi',   name:'通关计时 · 天师',  kind:'clear', hero:'tianshi'},
+  {id:'clear_ganshiren', name:'通关计时 · 赶尸人',kind:'clear', hero:'ganshiren'},
+  {id:'clear_wuseng',    name:'通关计时 · 武僧',  kind:'clear', hero:'wuseng'},
+  {id:'clear_yincha',    name:'通关计时 · 阴差',  kind:'clear', hero:'yincha'},
+  {id:'total_score',     name:'整局总分榜',       kind:'score', hero:''}
+];
+function rankBoardById(id){ return RANK_BOARDS.find(b => b.id === id) || RANK_BOARDS[0]; }
+function rankBoardId(id){ return RANK_IDS[id] || RANK_ID; }
+const RANK_CAND_RE = /rank|leaderboard|score/i;    // 候选方法名的判据
+let _rankProbe = null;
+
+function rankEnv(){
+  try{
+    if(typeof tap === 'undefined' || !tap) return { ok:false, why:'非 TapTap 小游戏环境' };
+    return { ok:true, why:'' };
+  }catch(e){ return { ok:false, why:'排行榜探测失败：' + ((e && e.message) || e) }; }
+}
+/* 一个对象「连原型链一起」的函数名清单。
+   v1.0.19：**这是「未发现排行榜接口」的真根因** —— 旧实现先 `for..in`（只看可枚举，
+   包含了原型上的可枚举属性但漏掉非枚举），退化分支又只做 `Object.getOwnPropertyNames(obj)`
+   （**只看自身**，原型上的一个都收不到）。真机 `tap.getLeaderboardManager()` 返回的是一个
+   由宿主类构造的实例，方法全挂在**原型**上（且多为非枚举）⇒ 收出来是空数组 ⇒ cands 为空
+   ⇒ 整层误判「接口不存在」，用户截图那条报错就是这么来的。
+   ⇒ 改为逐级 `getPrototypeOf` 收每一层的 `getOwnPropertyNames`，跳过 constructor、去重。
+      （止步于 Object.prototype，免得把 toString/hasOwnProperty 这类通用方法混进候选。） */
+function rankMethodNames(obj){
+  const out = [], seen = Object.create(null);
+  try{
+    for(let o = obj; o && o !== Object.prototype; o = Object.getPrototypeOf(o)){
+      Object.getOwnPropertyNames(o).forEach(k => {
+        if(k === 'constructor' || seen[k]) return;
+        seen[k] = 1;
+        try{ if(typeof obj[k] === 'function') out.push(k); }catch(e){}
+      });
+    }
+  }catch(e){}
+  return out;
+}
+/* 探测（懒加载 + 缓存）：{ ok, why, names, cands } */
+function rankProbe(){
+  if(_rankProbe) return _rankProbe;
+  const env = rankEnv();
+  if(!env.ok) return (_rankProbe = { ok:false, why:env.why, names:[], cands:[] });
+  const names = rankMethodNames(tap);
+  return (_rankProbe = { ok:true, why:'', names:names, cands:names.filter(n => RANK_CAND_RE.test(n)) });
+}
+/* v1.0.19：判据改成「**真拿到了排行榜管理器、且管理器上有这套方法**」。
+   旧判据只数 tap 自身名字像排行榜的方法，既数不到管理器（原型上挂方法）里的候选，
+   也可能被 tap 上同名的无关方法误判成「有接口」⇒ 出现「说有接口、一调就报未发现」的自相矛盾。 */
+function rankAvailable(){
+  const m = rankManager();
+  if(!m || m.via !== 'manager') return false;
+  return typeof m.ctx.loadLeaderboardScores === 'function' || typeof m.ctx.submitScores === 'function';
+}
+/* 诊断串：真机回报时直接把它发出来（把真实可用方法名亮在台面上） */
+function rankDiag(){
+  const p = rankProbe();
+  if(!p.ok) return p.why;
+  let s = 'TapTap 可用方法：' + (p.names.join(' / ') || '一个都没有')
+        + '；排行榜候选：' + (p.cands.join(' / ') || '无');
+  /* v1.0.18：**把排行榜管理器自己的方法名也亮出来**。
+     v1.0.19：顺手把「管理器到底有没有拿到」也写死 —— 否则管理器在、但方法名收出来为空时
+     这段会被整段省略，真机回报里就分不清「没有管理器」和「管理器方法没收到」。
+     （方法名收不齐的根因已修在 rankMethodNames：改为沿原型链收。） */
+  const m = rankManager();
+  if(m && m.via === 'manager') s += '；排行榜管理器方法：' + (m.all.join(' / ') || '（管理器在，但方法名收不到）');
+  return s;
+}
+/* 取出「排行榜管理器」：优先 tap.getLeaderboardManager()，退回 tap 自身。都没有就 null。
+   v1.0.18：**候选为空时回退用管理器的全部方法** —— 官方没公开 H5 排行榜接口名，
+     管理器上到底叫 submitScore / getLeaderboard 还是别的，只能运行时挨个试。
+     过滤命中就用过滤后的（更精准），一个都不命中就用全量（至少有机会试出来）。 */
+function rankManager(){
+  try{
+    if(typeof tap.getLeaderboardManager === 'function'){
+      const m = tap.getLeaderboardManager();
+      if(m){
+        const all = rankMethodNames(m);
+        const hit = all.filter(n => RANK_CAND_RE.test(n));
+        return { ctx:m, cands:(hit.length ? hit : all), all:all, via:'manager' };
+      }
+    }
+  }catch(e){}
+  const p = rankProbe();
+  return p.ok ? { ctx:tap, cands:p.cands, all:p.names, via:'tap' } : null;
+}
+/* 一次排行榜管理器调用。**回调形状是 `callback:{onSuccess,onFailure(code,message)}`**——
+   v1.0.19 照真实 API 改：早先猜的 `{success, fail}` 不是这套接口的写法，所以就算方法名猜中了也永远失败
+   （TapTap 小游戏排行榜 API 见 developer.taptap.cn/minigameapidoc 的 LeaderboardManager：
+     openLeaderboard / submitScores / loadLeaderboardScores / loadCurrentPlayerLeaderboardScore，
+     全部走 `callback` 对象；基础库需 ≥ 1.8.0）。 */
+function rankCall(ctx, name, payload){
+  return new Promise((ok, no) => {
+    let done = false, timer = null;
+    const good = v => { if(!done){ done = true; if(timer) clearTimeout(timer); ok(v); } };
+    const bad  = e => { if(!done){ done = true; if(timer) clearTimeout(timer); no(e); } };
+    try{
+      const fn = ctx[name];
+      if(typeof fn !== 'function') return bad(new Error('管理器没有 ' + name + ' 方法'));
+      fn.call(ctx, Object.assign({
+        callback: {
+          onSuccess: good,
+          /* onFailure(code, message)：code 是 SDK 错误码（缺「好友关系」隐私权限时也会走这里） */
+          onFailure: (code, message) => bad(new Error((message || '排行榜调用失败') + (code != null ? ('（code ' + code + '）') : '')))
+        }
+      }, payload));
+      /* 兜底：SDK 静默不回调时别把界面永远钉在「读取中…」 */
+      if(typeof setTimeout === 'function') timer = setTimeout(() => bad(new Error('排行榜接口无响应（15 秒）')), 15000);
+    }catch(e){ bad(e); }
+  });
+}
+/* 管理器实例（真拿到 `tap.getLeaderboardManager()` 才算；回落 tap 自身的那种只用于诊断，不能当接口调） */
+function rankCtx(){
+  const m = rankManager();
+  return (m && m.via === 'manager') ? m.ctx : null;
+}
+/* 提交成绩：value = 该榜的**统计值**（clear_* 传用时**毫秒**；total_score 传**得分**）。
+   boardId 缺省 = 通关计时总榜（RANK_ID）。接口是**批量**形状 ⇒ scores 传单元素数组。 */
+function rankSubmit(value, boardId){
+  const ctx = rankCtx();
+  if(!ctx || typeof ctx.submitScores !== 'function') return Promise.reject(new Error('未发现排行榜接口。' + rankDiag()));
+  const bid = rankBoardId(boardId);
+  const v = Math.max(0, Math.round(value || 0));
+  return rankCall(ctx, 'submitScores', { scores: [{ leaderboardId: bid, score: v }] }).then(
+    () => ({ ok:true, value:v, board:bid, via:'submitScores' }),
+    e => { throw new Error('排行榜提交失败（' + ((e && e.message) || e) + '）。' + rankDiag()); }
+  );
+}
+/* 拉取前排数据：loadLeaderboardScores → res.scores（boardId 缺省 = 通关计时总榜）。
+   返回的是 { rank, score, nickname, avatar, leaderboardId } 数组。 */
+function rankFetch(limit, boardId){
+  const ctx = rankCtx();
+  if(!ctx || typeof ctx.loadLeaderboardScores !== 'function') return Promise.reject(new Error('未发现排行榜接口。' + rankDiag()));
+  const bid = rankBoardId(boardId);
+  return rankCall(ctx, 'loadLeaderboardScores', {
+    leaderboardId: bid, maxSize: limit || 10, nextPage: undefined, periodToken: undefined
+  }).then(
+    res => (res && res.scores) || res,
+    e => { throw new Error('排行榜读取失败（' + ((e && e.message) || e) + '）。' + rankDiag()); }
+  );
+}
+/* 打开 TapTap 自带的排行榜页面（官方 UI，只认排行榜 ID）。
+   这是「展示全平台榜」的另一条路：自绘列表要等 loadLeaderboardScores 权限到位，官方 UI 更稳。 */
+function rankOpenBoard(boardId){
+  const ctx = rankCtx();
+  if(!ctx || typeof ctx.openLeaderboard !== 'function') return Promise.reject(new Error('未发现排行榜接口。' + rankDiag()));
+  return rankCall(ctx, 'openLeaderboard', { leaderboardId: rankBoardId(boardId) });
+}

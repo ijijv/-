@@ -84,7 +84,7 @@ const RUNNER = `
 
       // 造一份本地进度
       Store.setJSON(RUN_KEY, { v:3, scene:'map', act:2, mapRow:3, hp:40, maxHp:80, gold:120, score:1500, hero:'tianshi' });
-      Store.setJSON(SAVE_KEY, { unlocked:['a'], highScores:[{ score:5200 }] });
+      Store.setJSON(SAVE_KEY, { unlocked:['a','b'] });
 
       // ① 自动上传：存档动作只 markDirty，由节流器放行（首次没有 lastUploadTs ⇒ 立刻传）
       cloudMarkDirty();
@@ -109,7 +109,7 @@ const RUNNER = `
       var back = Store.getJSON(RUN_KEY);
       chk(back && back.act === 2 && back.mapRow === 3, '恢复后本局进度回到云端那份（act=2 / row=3）');
       var sv = Store.getJSON(SAVE_KEY);
-      chk(sv && sv.highScores && sv.highScores[0].score === 5200, '局外元数据（排行榜）一并恢复');
+      chk(sv && sv.unlocked && sv.unlocked.length === 2 && sv.unlocked[1] === 'b', '局外元数据（unlocked）一并恢复');
       chk(back && back.score === 1500, '得分字段也在');
 
       // ③b 退出兜底：改进度 → markDirty（节流窗口内不自动传）→ 模拟切后台 → 必须补上

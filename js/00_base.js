@@ -394,7 +394,8 @@ function fxStop(key){
 }
 function fxStopAll(){ Object.keys(FX_LIVE).forEach(fxStop); }
 /* 播放。opts：{key（同名并发键，默认=name；逐敌人特效要传 'curse@uid' 才不会互相顶掉）,
-   scale（覆写表里的 scale）, rate（播放倍速）, still（钉帧模式：不排 rAF，交给 fxSeek）} */
+   scale（覆写表里的 scale）, rate（播放倍速）, still（钉帧模式：不排 rAF，交给 fxSeek）,
+   i0（v1.0.14 覆写起始帧：multi_slash 这种「一行一个方向」的图靠它选排，i0 = 方向 × 列数）} */
 function playFx(name, anchor, opts){
   if(!fx()) return null;                      // 流畅模式门禁 —— 全项目特效的既有惯例（见 10_audio.js 的 fx()）
   const S=fxSheet(name); if(!S) return null;
@@ -449,7 +450,7 @@ function playFx(name, anchor, opts){
      assetURL 会返回**整张精灵图的 base64 字串**（3840px 宽，几百 KB），而它被塞进 CSS 的
      background-image，且**每次出牌都新建一个**：浏览器要逐字解析并保存这串值，真机上就是
      「每次释放卡牌卡一下」。拆包产物（ASSET_MAP=null）本来就返回短相对路径，带不带都一样。 */
-  const i0=S.i0||0;
+  const i0=(opts.i0!=null ? opts.i0 : (S.i0||0));
   const row0=Math.floor(i0/c0);
   /* v1.0.9：**提前把下一排解好**。换排那一刻才挂上去的话，浏览器会有一两帧画不出这一排
      （background 还没解码完 ⇒ 该帧背景透明，肉眼就是「特效闪一下」）。提前一排（换排间隔
@@ -564,6 +565,81 @@ function hurtVignette(){
   let v=document.getElementById('hurt-vignette');
   if(!v){ v=document.createElement('div'); v.id='hurt-vignette'; document.body.appendChild(v); }
   v.classList.remove('flash'); void v.offsetWidth; v.classList.add('flash');
+}
+/* v1.0.14（P3-6）：道心破碎 —— 致命伤被道心挡下时，全屏放大的道心插图炸成九片虚影
+   （透明度低、快速淡出 ⇒ 底下的战斗场面始终看得见）。玩家回合与敌人回合共用 dealDamageToPlayer
+   这一处调用点，所以两边都会触发。
+   实现取舍：
+   · 只用 CSS 动画 + 一次性 setTimeout 收尾，不依赖 animationend / WAAPI onfinish
+     （安卓 WebView 在 preserve-3d / 3D 变换下会漏发 onfinish，本项目已踩过）。
+   · 门槛与其它重特效同源：fx() 为假（流畅模式）整块不建 ⇒ 无头冒烟与改版前逐字节一致。
+   · 素材未到位时**逐片回落到现有 relic/daoxin.png**（128×128），新图 fx/daoxin_full.png
+     放到素材目录后自动生效，代码零改动。 */
+/* v1.0.14：**`素材/fx/` 里不是精灵图的整张素材**（唯一真相源，python 侧只取用不镜像）。
+   现有 fx 闸（_patch/verify_dist.py 的 [2d]）默认要求 fx/ 下每张图都是
+   「8 列 × 480 单元、键名登记在 FX_SHEETS」的精灵图 —— 道心破碎用的是**一整张插图**
+   （1024×1024，靠 clip-path 切九宫），套不进那个规格，登记在这里豁免。
+   ⚠️ 以后往 fx/ 里放任何「整张插画」都必须补进这张表，否则 [2d] 会红。 */
+const FX_WHOLE = { daoxin_full: 'fx/daoxin_full.png' };
+const DAOXIN_PIECES=[
+  /* 3×3 九宫碎片：c = clip-path（inset 上右下左），tx/ty 是飞散位移（占插图边长的比例），rot 是旋转角。
+     位移按格位向外，中心格几乎不动 —— 炸开时不会互相穿插。 */
+  {c:'inset(0 66.6% 66.6% 0)',        tx:-0.34, ty:-0.34, rot:-16},
+  {c:'inset(0 33.3% 66.6% 33.3%)',    tx: 0.02, ty:-0.42, rot:  9},
+  {c:'inset(0 0 66.6% 66.6%)',        tx: 0.36, ty:-0.30, rot: 18},
+  {c:'inset(33.3% 66.6% 33.3% 0)',    tx:-0.42, ty: 0.02, rot: 11},
+  {c:'inset(33.3% 33.3% 33.3% 33.3%)',tx: 0.00, ty: 0.04, rot: -7},
+  {c:'inset(33.3% 0 33.3% 66.6%)',    tx: 0.44, ty: 0.03, rot:-13},
+  {c:'inset(66.6% 66.6% 0 0)',        tx:-0.30, ty: 0.36, rot: 14},
+  {c:'inset(66.6% 33.3% 0 33.3%)',    tx: 0.03, ty: 0.44, rot: -9},
+  {c:'inset(66.6% 0 0 66.6%)',        tx: 0.34, ty: 0.33, rot: 16}
+];
+/* fx 精灵图地址解析：单文件 / TapTap 产物里，打包.py 把每张精灵图按排切成 fx/<名>_r0..rN.png，
+   **整键不存在** ⇒ 直接 assetURL('fx/<名>.png') 会落空（404）。这里先探 _r0 排键，命中就取该排，
+   否则回落到整键（拆包产物 / 开发树里 ASSET_MAP 为空或 null，走的正是这条）。
+   ⚠️ 只服务「登记在 FX_SHEETS 的按排精灵图」；整张插画（FX_WHOLE）仍走原 assetURL。 */
+function fxStripURL(rel){
+  const r0=rel.replace(/\.png$/i,'_r0.png');
+  const hit=(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP[r0]) ? r0 : rel;
+  return assetURL(hit, true);
+}
+function daoxinBurst(){
+  /* v1.0.18：**函数自守闸**。用户报「没有遗物道心，玩家被击败的时候还会有道心破碎的动画」。
+     唯一调用点（30_engine.js 的 dealDamageToPlayer）本来就带 `hasRelic('daoxin')` 判据，
+     这里再补一道自守：不管将来谁调它，身上没有【道心】就一声不响 ——
+     图、音、战报三样一起不出现（音在下面 sfx 之前就 return，连响都不会响）。 */
+  if(typeof hasRelic !== 'function' || !hasRelic('daoxin')) return;
+  sfx('glass_break');   // v1.0.17：玻璃碎裂音（素材/sfx/glass_break.mp3）。放在 fx() 闸**之前** ——
+                        // 音效归 SETTINGS.sound 管，流畅模式下画面省掉，但「道心碎了」这件事仍该听得见。
+  if(!fx()) return;
+  try{
+    const old=document.getElementById('daoxin-burst');
+    if(old && old.parentNode) old.parentNode.removeChild(old);
+    const vw=window.innerWidth||0, vh=window.innerHeight||0;
+    const size=Math.round(Math.min(vw,vh)*0.95);   // 以**短边**为边长：横屏手机也能顶满屏幕高度
+    if(size<=0) return;
+    const el=document.createElement('div'); el.id='daoxin-burst';
+    const wrap=document.createElement('div'); wrap.className='dx-wrap';
+    wrap.style.width=size+'px'; wrap.style.height=size+'px';
+    const srcHi=assetURL(FX_WHOLE.daoxin_full, true);
+    const srcLo=assetURL('relic/daoxin.png', true);
+    DAOXIN_PIECES.forEach(function(f){
+      const p=document.createElement('div'); p.className='dx-piece';
+      p.style.clipPath=f.c; p.style.webkitClipPath=f.c;
+      p.style.setProperty('--tx', Math.round(f.tx*size)+'px');
+      p.style.setProperty('--ty', Math.round(f.ty*size)+'px');
+      p.style.setProperty('--rot', f.rot+'deg');
+      const im=document.createElement('img'); im.draggable=false; im.alt='';
+      let tried=false;
+      im.onerror=function(){ if(tried) return; tried=true; this.src=srcLo; };
+      im.src=srcHi;
+      p.appendChild(im); wrap.appendChild(p);
+    });
+    el.appendChild(wrap); document.body.appendChild(el);
+    // v1.0.17：动画从 1.15s 拉长到 1.6s；v1.0.18 再拉长到 2.1s（碎片飞散 1.95s）。
+    // 收尾的兜底定时器必须跟着往后挪，否则定时器会在动画还在播的时候就把节点摘掉（看起来像「放到一半闪没了」）。
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 2500);
+  }catch(e){}
 }
 function heroAnim(state){
   var box=document.querySelector('.hero-art-box');
@@ -697,6 +773,85 @@ function spiritFx(){
   d.style.width='190px'; d.style.height='190px';
   fxLayer().appendChild(d);
   setTimeout(()=>d.remove(), 800);
+}
+/* ===================== v1.0.17：召唤演出 =====================
+   用户口径：「召唤召唤物的时候，需要加上一个从打出的鬼怪牌上冒出一团不断翻滚的黑雾，
+   然后带有拖尾的加速来到角色右下角的召唤物位置」。
+
+   起点必须在 **doPlayCard 那一拍**量下来（`notePlayRect(i)`）：`doPlayCard` 先 splice 手牌
+   再调 eff，而 render() 远在其后 —— `#hand` 还是打出之前的旧 DOM，`animHandElAt(i)` 正是那张牌。
+   过了这一拍再量就只能量到重排后的手牌了（同 `animExchangeCast` 的理由）。
+
+   为什么自己排一串 div、不挂进 `Anim`：`Anim` 的 item 只有「飞牌 / 光晕」两种，黑雾要的是
+   「起→隆起→加速」三段位移 + 一串错峰拖尾 + 自转，塞进去得改它的内核，得不偿失。 */
+let LAST_PLAY_RECT=null;
+function notePlayRect(i){
+  try{ LAST_PLAY_RECT=animRect(animHandElAt(i) || document.getElementById('hand')); }
+  catch(e){ LAST_PLAY_RECT=null; }
+}
+/* v1.0.21：召唤黑雾按召唤物**上色**（用户口径：纸人白 / 小鬼黑 / 五通神紫 / 阴兵金 / 尸王红）。
+   每个值是三色一组＝[主体亮心, 主体暗晕, ::before 内层偏光]，写成 3 个 CSS 变量喂给 .fx-summon-mist。
+   小鬼要「黑」但深底上纯黑会看不见 ⇒ 主体压到近黑、内层留一缕灰白偏光，读成「一团灰黑阴气」。 */
+const SUMMON_MIST = {
+  zhiren:  ['rgba(255,255,255,.95)','rgba(196,203,216,.86)','rgba(255,255,255,.62)'],
+  xiaogui: ['rgba(96,94,110,.92)','rgba(10,8,14,.90)','rgba(146,146,162,.52)'],
+  wutong:  ['rgba(88,42,140,.92)','rgba(30,10,52,.88)','rgba(158,104,226,.55)'],
+  yinbing: ['rgba(224,179,65,.95)','rgba(118,84,18,.90)','rgba(255,222,140,.62)'],
+  shi_wang:['rgba(190,45,40,.95)','rgba(78,14,16,.90)','rgba(255,120,100,.62)']
+};
+/* 召唤物名前的彩色小圆点（用户口径「不同召唤物名字前要有对应颜色的小圆点」）。 */
+const SUMMON_DOT = { zhiren:'#f2f4f8', xiaogui:'#15151b', wutong:'#a06be0', yinbing:'#e0b341', shi_wang:'#d0403a' };
+/* 同一次出牌里连续召唤**同类型**多个（阴兵过境 2 只）时，第 2 团雾要「前后追着」第 1 团 ⇒ 记一个序号。
+   400ms 内同类型算同批；跨批自动归零（分两次打出的同名牌不会被误并成一批）。 */
+let MIST_SEQ={t:'', n:0, ts:0};
+function nextMistSeq(type){
+  const now=(typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now();
+  if(MIST_SEQ.t===type && (now-MIST_SEQ.ts)<400) MIST_SEQ.n++;
+  else { MIST_SEQ.t=type; MIST_SEQ.n=0; }
+  MIST_SEQ.ts=now;
+  return MIST_SEQ.n;
+}
+function summonMistFx(type, seq){
+  if(!fx() || !animLive()) return;                 // 流畅模式 / 无头沙箱直接不排
+  const layer=animLayer(); if(!layer) return;
+  const col=SUMMON_MIST[type] || SUMMON_MIST.wutong;
+  const so=seq||0;                                 // 同批第 N 只：整体晚起飞 + 落点微错开 ⇒ 一眼读出「前后追尾」
+  const boxEl=document.querySelector('#player-panel .hero-art-box') || document.getElementById('player-panel');
+  const dr=boxEl ? boxEl.getBoundingClientRect() : null;
+  const sr=LAST_PLAY_RECT;
+  const sx=sr ? sr.cx : window.innerWidth*0.5;
+  const sy=sr ? sr.cy : window.innerHeight*0.72;
+  /* 终点＝召唤物面板（.hero-art-box，折叠键就挂在它右下角）的右下角；元素缺失时退到视口右下。 */
+  const tx=(dr && dr.width) ? (dr.right-10) : (window.innerWidth-88);
+  const ty=((dr && dr.height) ? (dr.bottom-10) : (window.innerHeight*0.80)) + so*14;
+  const N=6;                                       // 6 团错峰 ⇒ 读成「带拖尾」
+  for(let k=0;k<N;k++){
+    const size=Math.round(54-k*5);                 // 头大尾小
+    const d=document.createElement('div');
+    d.className='fx-summon-mist';
+    d.style.width=size+'px'; d.style.height=size+'px'; d.style.opacity='0';
+    d.style.setProperty('--mist-1', col[0]);
+    d.style.setProperty('--mist-2', col[1]);
+    d.style.setProperty('--mist-3', col[2]);
+    layer.appendChild(d);
+    const t0=k*46 + so*170, dur=540;               // 错峰 46ms 叠出拖尾；第 N 只整体再晚 170ms（追尾）
+    const mx=sx+(tx-sx)*0.22, my=sy+(ty-sy)*0.06-30;   // 先向上「隆起」再俯冲
+    const qx=(tx+mx)/2, qy=(ty+my)/2;
+    let an=null;
+    try{
+      /* easing 取 ease-in（cubic-bezier 的后段陡）⇒ 越接近召唤位越快，就是用户要的「加速」。 */
+      an=d.animate([
+        { transform:'translate('+(sx-size/2)+'px,'+(sy-size/2)+'px) scale(.5)',    opacity:0 },
+        { transform:'translate('+(mx-size/2)+'px,'+(my-size/2)+'px) scale(1.25)',  opacity:.92, offset:.28 },
+        { transform:'translate('+(qx-size/2)+'px,'+(qy-size/2)+'px) scale(.98)',   opacity:.85, offset:.64 },
+        { transform:'translate('+(tx-size/2)+'px,'+(ty-size/2)+'px) scale(.32)',   opacity:0 }
+      ], { duration:dur, delay:t0, easing:'cubic-bezier(.5,0,.82,.35)', fill:'both' });
+    }catch(e){}
+    const kill=function(){ try{ d.remove(); }catch(e){} };
+    /* 安卓 WebView 上 WAAPI 的 finished **可能漏发**（与抽牌克隆同一坑）⇒ 必须带兜底定时器。 */
+    if(an && an.finished && an.finished.then) an.finished.then(kill).catch(kill);
+    setTimeout(kill, t0+dur+160);
+  }
 }
 function skillFx(){
   const d=document.createElement('div'); d.className='fx-skill';

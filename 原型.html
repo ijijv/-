@@ -24,6 +24,12 @@
      ⚠️ 这一条只禁掉**视口层面**的滚动，不改任何版面 ——
         各个面板自己的内部滚动（.panel / 图鉴 / 地图 / 锻造 / 战报）全部照旧。 */
   html{height:100%; background:#120e0b;}
+  /* v1.0.21：全局抹掉移动端/桌面端点击时的**蓝色高亮方框**（用户报障：短按/长按关卡图标、顶部栏等
+     UI 会出现明显蓝框）。原先只有 .menu-hit / .enemy 单独设了 -webkit-tap-highlight-color，
+     其余 button（.map-node 关卡按钮、#topbar 内按钮等）都漏网 ⇒ 统一置透明。
+     无障碍不受影响：键盘聚焦仍有 `button.btn:focus-visible` 的金色外框兜底。 */
+  *, *::before, *::after{ -webkit-tap-highlight-color:transparent; }
+  *{ -webkit-touch-callout:none; }
   body{font-family:"Microsoft YaHei","PingFang SC",sans-serif; color:var(--text); height:100%; min-height:0; overflow:hidden;
     background:
       radial-gradient(circle at 15% 12%, rgba(178,59,46,.10), transparent 40%),
@@ -69,11 +75,25 @@
   .stat-preshiqi{display:inline-block; margin-left:4px; font-size:12px; font-weight:bold; color:#b98bff; border-bottom:1px dashed rgba(185,139,255,.55); cursor:help;}
   /* 燃血令：血怒芯片旁的「累积血怒」读数（每满 20 换 1 符文） */
   .stat-rageaccum{display:inline-block; margin-left:4px; font-size:12px; font-weight:bold; color:#ff9a6b; border-bottom:1px dashed rgba(255,154,107,.55); cursor:help;}
-  /* 尸玉 / 血玉：资源芯片的「火焰包围」进阶态（CSS 版；后续可换成 fx 精灵图，见美术设计要求.md） */
-  @keyframes relicFlameBlue{0%,100%{box-shadow:0 0 5px 1px rgba(70,150,255,.5), inset 0 0 5px rgba(70,150,255,.45);} 50%{box-shadow:0 0 13px 3px rgba(130,195,255,.9), inset 0 0 9px rgba(130,195,255,.7);}}
-  @keyframes relicFlamePurple{0%,100%{box-shadow:0 0 5px 1px rgba(160,80,255,.5), inset 0 0 5px rgba(160,80,255,.45);} 50%{box-shadow:0 0 13px 3px rgba(205,140,255,.9), inset 0 0 9px rgba(205,140,255,.7);}}
-  .stat.relic-flame-blue{animation:relicFlameBlue 1.6s ease-in-out infinite; border-radius:6px;}
-  .stat.relic-flame-purple{animation:relicFlamePurple 1.6s ease-in-out infinite; border-radius:6px;}
+  /* 预血怒：紧挨「血怒: N/10」的红色小标 —— 下回合末场上小鬼将带来的血怒进账（仅阴差，0 时不渲染，同预尸气口径） */
+  .stat-prexuenu{display:inline-block; margin-left:4px; font-size:12px; font-weight:bold; color:#ff8a8a; border-bottom:1px dashed rgba(255,138,138,.55); cursor:help;}
+  /* 尸玉 / 血玉：资源芯片的「火焰包围」进阶态。
+     v1.0.17：从「CSS 脉动光晕」升级成**自绘 8 帧火焰精灵图**（由生成脚本出图），
+     在芯片身后用 steps(8) 循环播放。图是 8 列 1 排，所以 background-size 宽 = 8×显示宽，
+     keyframes 把 background-position-x 从 0 走到 -8×显示宽 —— 8 步正好落在 8 个格子上。
+     ⚠️ 素材地址**只**走 `--chip-flame` 自定义属性（由 renderTopbar 用 fxStripURL() 内联写死）：
+        伪元素吃不到内联 style，只有自定义属性能继承进 ::before。这里**不留** CSS 相对地址兜底 ——
+        单文件/TapTap 产物里整键 fx/shiqi_flame.png 已被按排切成 _r0.png，写整键必 404。 */
+  @keyframes fxChipFlame{from{background-position-x:0;} to{background-position-x:-352px;}}
+  .stat.relic-flame-blue,.stat.relic-flame-purple{position:relative; border-radius:6px;}
+  .stat.relic-flame-blue{box-shadow:0 0 8px 1px rgba(70,150,255,.45);}
+  .stat.relic-flame-purple{box-shadow:0 0 8px 1px rgba(160,80,255,.45);}
+  .stat.relic-flame-blue::before,.stat.relic-flame-purple::before{
+    content:''; position:absolute; left:50%; bottom:-12px; width:44px; height:44px; margin-left:-22px;
+    background-repeat:no-repeat; background-size:352px 44px; background-position:0 0;
+    animation:fxChipFlame .72s steps(8) infinite; opacity:.92; pointer-events:none; z-index:-1;}
+  .stat.relic-flame-blue::before{background-image:var(--chip-flame); filter:drop-shadow(0 0 4px rgba(70,150,255,.7));}
+  .stat.relic-flame-purple::before{background-image:var(--chip-flame); filter:drop-shadow(0 0 4px rgba(170,90,255,.7));}
   /* 聚宝盆：鬼市灵汁「划掉原价 / 展示新价」（用户定稿要求「生动的界面改动」） */
   .price-old{opacity:.5; font-weight:normal; text-decoration:line-through;}
   .price-new{color:#ffd97a; font-size:15px;}
@@ -100,44 +120,98 @@
   /* 血魔刀（金）：血条上 30% 处的触发竖线；血量低于该线时整条转金色（=攻击 +25% 生效中）。
      竖线用百分比定位 ⇒ 血量上限变化时临界值自动跟着走，无需改代码。 */
   /* v1.0.12：z-index 由 2 提到 5 —— 玻璃高光层（.hpbar::after）在 z-index:4，竖线要压在它上面才看得清。 */
-  .hpbar .hpmark{position:absolute; left:30%; top:0; width:2px; height:100%; background:rgba(255,215,120,.9); box-shadow:0 0 4px rgba(255,215,120,.85); z-index:5; pointer-events:none;}
-  #player-panel .hpbar.xuemodao.xue-active .hpfill{background:linear-gradient(180deg,#ffe89a,#d99a1e); box-shadow:0 0 8px rgba(255,210,90,.75);}
-  #player-panel .hpbar.xuemodao.xue-active .hpghost{background:rgba(255,210,90,.35);}
+  /* v1.0.17：30% 刻度标不再用金色（用户口径「血魔刀的血量不要金色的特效了」）——
+     改成暖白微红，压在红底上一样看得清，整条血条上不留任何金色。 */
+  .hpbar .hpmark{position:absolute; left:30%; top:0; width:2px; height:100%; background:rgba(255,238,232,.92); box-shadow:0 0 4px rgba(255,170,150,.85); z-index:5; pointer-events:none;}
+  /* v1.0.14：血魔刀激活（生命 < 30%，即 +25% 真在生效）—— 用户口径「不要金色」，改成
+     **红底 + 深红↔淡红来回循环**的渐变：渐变高 200%，background-position 在 0↔100% 之间往返，
+     于是整条血在「淡红—深红」之间平滑 ping-pong，而不是闪。
+     ⚠️ `.hpmark`（30% 刻度标）也不再用金色 —— v1.0.17 改成暖白微红（见上面的 .hpmark 规则）。 */
+  #player-panel .hpbar.xuemodao.xue-active .hpfill{background:linear-gradient(180deg,#ff8a72,#e0392b,#7d1208); background-size:100% 200%; animation:xueHpLoop 1.9s ease-in-out infinite; box-shadow:0 0 8px rgba(214,54,40,.6);}
+  #player-panel .hpbar.xuemodao.xue-active .hpghost{background:rgba(255,120,110,.35);}
+  @keyframes xueHpLoop{0%,100%{background-position:0 0;} 50%{background-position:0 100%;}}
+  /* 流畅模式 / 系统减弱动效：与其它重特效同口径只关动画，静态红渐变留着（特效不消失）。 */
+  .low-spec #player-panel .hpbar.xuemodao.xue-active .hpfill{animation:none; background-position:0 50%;}
   /* v1.0.12：z-index 由 1 提到 5 —— 玻璃高光层（.hpbar::after，z-index:4）不再压住血量数字。 */
   .hp-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.7); z-index:5; pointer-events:none;}
   /* 血条下方数值（血量+格挡） */
   .pstats{display:flex; gap:10px; justify-content:center; margin-top:3px; font-size:13px; font-weight:bold;}
   .pstat-hp,.pstat-block{display:inline-flex; align-items:center; gap:3px;}
-  .pstat-hp i,.pstat-block i{display:inline-block; width:9px; height:9px; border-radius:50%;}
+  /* v1.0.14：血量图标尺寸调大（用户口径「太小、不协调」）—— 9px → 16px。图到位后 <img> 同规格。 */
+  /* v1.0.17：用户口径「所有图标大小都要调大使用，不然迷你好不清，至少要放大为原来的 2 倍」
+     —— 下面这一整组图标尺寸（玩家面板 / 顶栏 / 敌人徽章 / 意图 / 档位徽章）全部按 2× 改写。
+     ⚠️ 图标一律用 px 或 em 明确写死，不靠父级字号推 —— 父级字号在手机档会被媒体查询缩小，
+        跟着走会让「2×」在手机上打折。 */
+  .pstat-block i{display:inline-block; width:18px; height:18px; border-radius:50%;}
+  .pstat-hp i{display:inline-block; width:19px; height:19px; border-radius:50%; vertical-align:-3px;}
   .pstat-hp{color:#e8d9c4;} .pstat-hp i{background:var(--red);}
   .pstat-block{color:#bfe6f5;} .pstat-block i{background:repeating-linear-gradient(45deg,#7fd0e8 0 2px,#2f7f9c 2px 4px); border-radius:2px;}
   /* v1.0.13：图标换皮（iconTag）到图之后的那枚 <img>。
-     尺寸一律跟字号走（1em），所以徽章 / 芯片 / 顶栏三种字号下都自动对齐，不必逐处写尺寸。
-     没图时 iconTag 根本不输出 <img> ⇒ 这条规则在图上齐之前是死的，两端观感零改动。 */
-  .bicon{width:1em; height:1em; object-fit:contain; display:inline-block; vertical-align:-.14em;}
-  .pstat-block .bicon,.pstat-hp .bicon{width:11px; height:11px; vertical-align:0;}
-  .pbuff .bicon{width:9px; height:9px; vertical-align:-1px; margin-right:1px;}
-  .stat .bicon{width:12px; height:12px; vertical-align:-2px; margin-right:2px;}
-  /* 预格挡：紧挨格挡标记的蓝色向上箭头，箭头 9×11px（与格挡圆点 9px 同宽，不抢视线） */
+     v1.0.17：先按用户口径「所有图标至少 2 倍」全量放大；
+     v1.0.17b（用户 2026-10-07 复审「buff 的图标才要放大 1 倍，金币、血量以及血怒和尸气
+     的图标缩小至现在的 5 分之 3」）：**非 buff 的那几枚回缩到 3/5** ——
+       血量（玩家面板 .pstat-hp）、顶栏金币（.stat-gold）由 32px → 19px；
+       顶栏尸气 / 血怒（.stat-shiqi / .stat-xuenu）原本吃 `.bicon{2em}`（.stat 字 14px ⇒ 28px）
+       → 显式写死 17px。buff 徽章（.badge .bicon 24px / .pbuff .bicon 18px）维持 2× 不动。
+     vertical-align 是按同一比例（0.6）跟着收的，不收会让整排图标往上飘。
+     ⚠️ 徽章 / 意图 / 名牌三种上下文各自还有显式尺寸（见下），这里只是兜底。 */
+  .bicon{width:2em; height:2em; object-fit:contain; display:inline-block; vertical-align:-.6em;}
+  .pstat-block .bicon{width:22px; height:22px; vertical-align:0;}
+  /* v1.0.14：血量图标调大后，<img> 也要同规格跟上（图到位才生效，缺图仍是上面的圆点）。 */
+  .pstat-hp .bicon{width:19px; height:19px; vertical-align:-3px;}
+  .pbuff .bicon{width:18px; height:18px; vertical-align:-2px; margin-right:1px;}
+  .stat .bicon{width:24px; height:24px; vertical-align:-4px; margin-right:2px;}
+  /* v1.0.17b：顶栏尸气（buff/shiqi.png）/ 血怒（buff/xuenu.png）—— 原先没有专属尺寸，
+     吃的是兜底 `.bicon{2em}`（28px）。用户口径「缩小至现在的 5 分之 3」⇒ 28×0.6 ≈ 17px。 */
+  .stat-shiqi .bicon,.stat-xuenu .bicon{width:17px; height:17px; vertical-align:-3px; margin-right:2px;}
+  /* v1.0.17：敌人名牌（.ename，字号 19px）里的分类图标与 Boss/精英档位徽章。
+     原来是跟着字号走的 1em（19px）；现在写死 26px —— 是原来 19px 的约 1.4 倍，
+     **不是 2 倍**：这一行左边还有 19px 的敌人名，38px 的徽章会把名字挤掉行。
+     名牌是纯装饰，用户要的「看不清」主要在大徽章/顶栏那几处，这处取一个不撑爆的上限。 */
+  .ename .bicon{width:26px; height:26px; vertical-align:-6px;}
+  /* v1.0.17：敌人意图行（.intent）—— 图标原本 1em（14px），现在 2× = 28px。 */
+  .intent .bicon{width:28px; height:28px; vertical-align:-7px; margin-right:2px;}
+  /* v1.0.17：状态徽章（.badge）—— 图标原本 1em（12px，手机档 9~10px），现在 2× 。 */
+  .badge .bicon{width:24px; height:24px; vertical-align:-6px; margin-right:2px;}
+  /* v1.0.14：顶栏灵汁芯片 —— 「图标 + 数量」，可点击直接用（替换了原来的「🧪灵汁：名字×n」）。 */
+  .potion-chip{display:inline-flex; align-items:center; gap:1px; margin-right:5px; cursor:pointer;}
+  .potion-chip b{font-size:11px; font-weight:700;}
+  /* 预格挡：紧挨格挡标记的蓝色向上箭头（v1.0.17：9×11 → 18×22，与格挡圆点一起 2×） */
   .pstat-preblock{display:inline-flex; align-items:center; gap:2px; color:#8ed0ff; font-size:11px; line-height:1;}
-  .pstat-preblock svg{display:block; width:9px; height:11px; filter:drop-shadow(0 0 3px rgba(74,168,255,.6));}
+  .pstat-preblock svg{display:block; width:18px; height:22px; filter:drop-shadow(0 0 3px rgba(74,168,255,.6));}
+  /* v1.0.21 预恢复：紧挨血量标记的绿色向上十字（＝这回合之后召唤物将带来的预计总回复量）。全角色显示。 */
+  .pstat-preheal{display:inline-flex; align-items:center; gap:2px; color:#6fdc92; font-size:11px; line-height:1;}
+  .pstat-preheal svg{display:block; width:18px; height:22px; filter:drop-shadow(0 0 3px rgba(90,220,140,.6));}
   /* 玩家面板遗物 */
   .player-relics{display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
   .prelic-chip{display:inline-flex; align-items:center; gap:3px; background:rgba(224,179,65,.08); border:1px solid var(--ink3); border-radius:6px; padding:2px 6px 2px 2px; cursor:default;}
-  .prelic-chip .ricon{width:24px; height:24px; margin:0; border-radius:4px;}
+  /* v1.0.17：遗物芯片图标 24px → 48px（2×）。 */
+  .prelic-chip .ricon{width:48px; height:48px; margin:0; border-radius:4px;}
   .prelic-chip .prelic-name{font-size:10px; color:var(--gold); white-space:nowrap;}
   /* 锻造页：升级无变化的牌置灰、不可锻造 */
   .card.locked{filter:grayscale(1) brightness(.88); opacity:.55; cursor:not-allowed;}
   .card.locked:hover{transform:none;}
   .card.locked .cost{background:var(--ink3);}
+  /* v1.0.15：选英雄页里「里程碑未解锁」的角色卡置灰不可点（与 .card.locked 同款观感） */
+  .relic.locked{filter:grayscale(1) brightness(.88); opacity:.55; cursor:not-allowed;}
+  .relic.locked:hover{border-color:var(--ink3);}
   .noup{font-size:9px; color:var(--dim); border:1px solid var(--ink3); border-radius:6px; padding:0 4px; margin-left:4px; vertical-align:middle; white-space:nowrap;}
   .tb-summons{display:flex; flex-wrap:wrap; gap:6px; flex-basis:100%;}
   /* 顶栏 stat 图标替换 */
-  .stat-hp i,.stat-block i,.stat-gold i{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:2px; vertical-align:middle;}
+  /* v1.0.17：顶栏三枚状态图标（血/格挡/金币）全部 2×：圆点 10px → 20px。 */
+  .stat-hp i,.stat-block i,.stat-gold i{display:inline-block; width:20px; height:20px; border-radius:50%; margin-right:2px; vertical-align:middle;}
   .stat-hp i{background:var(--red);}
   /* v0.61.20(P9)：色弱可辨 —— 格挡用「斜纹 + 方角」，血条用「纯色 + 圆点」。灰度打印/色弱下靠纹理与形状也能分开 */
   .stat-block i{background:repeating-linear-gradient(45deg,#7fd0e8 0 2px,#2f7f9c 2px 4px); border-radius:2px;}
   .stat-gold i{background:var(--gold);}
+  /* v1.0.14：顶栏金币图标调大（用户口径「太小、不协调」）—— 与玩家面板血量图标同规格 16px。
+     缺图时是 `.stat-gold i` 那枚金圆点；图到位后换成 `<img class="bicon">`，一并跟上尺寸。
+     ⚠️ 必须写在上面 `.stat .bicon{12px}` 之后才压得住（同特异度靠顺序）。 */
+  /* v1.0.17：顶栏金币图标 16px → 32px（2×），连同缺图时的金圆点一起。
+     v1.0.17b：用户复审「金币图标缩小至现在的 5 分之 3」⇒ 32 × 0.6 ≈ 19px
+     （与玩家面板血量图标同规格，两者原本就是一对）。vertical-align 同比收到 -3px。
+     ⚠️ 必须写在上面 `.stat .bicon{24px}` 之后才压得住（同特异度靠顺序）。 */
+  .stat-gold i,.stat-gold .bicon{width:19px; height:19px; vertical-align:-3px;}
   .stat-level{color:var(--dim);}
   .stat-deck{color:var(--dim);}
   .stat-deck b{color:var(--dim);}
@@ -287,8 +361,14 @@
   .badge.curse.curse-max{color:#ffd76a; border-color:rgba(255,215,106,.85); background:rgba(255,215,106,.14);
     box-shadow:0 0 8px rgba(255,215,106,.55); transform:scale(1.06);}
   .intent{margin-top:8px; font-size:14px; color:var(--gold);}
-  .intent::before{content:"⚠ 意图："; color:var(--dim);}
+  /* v1.0.14：意图改「图标 + 数字」，不再有「⚠ 意图：」前缀（正文见 50_ui.js intentChip，
+     完整释义在 .intent 的 title 上）。两条 ::before 一并停用。 */
+  .intent::before{content:none;}
   .summon{font-size:12px; padding:3px 10px; border-radius:16px; border:1px solid var(--gold); color:var(--gold); background:rgba(224,179,65,.08);}
+  /* v1.0.21：召唤物名前的彩色小圆点（纸人白/小鬼黑/五通神紫/阴兵金/尸王红）。
+     统一加一圈细白描边，保证「小鬼黑点」在深色筹码条上也看得见。 */
+  .summon-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:1px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.4), 0 0 4px rgba(0,0,0,.55);}
   /* v0.61.41：节点不再是「带边框的按钮」，而是「图标 + 小字」—— 原边框/底色/圆角/内边距全部去掉。
      三档线的语义不变：暗线=可选→下一层可见格、金虚线=上一步→现在能走、已走=淡黄色浅光边。
      注：v0.61.41 那一版把路径换成了用户给的道路贴图，v0.61.42 已按用户要求改回代码自绘。 */
@@ -623,6 +703,15 @@
      `<span class="noup">不可升级</span>` 也放进 .cname，不排除掉它会被一起缩小。
      手机横屏档（文件末尾 v1.0.8 覆写块）压得更狠：0.6em。 */
   .card.has-frame .cname span:not(.noup){font-size:0.78em;}
+  /* v1.0.19：已升级标 `↑` 仍钉在**名字左侧、且让名字保持居中**（绝对定位摘出文档流），
+     但位置必须避开左上角的费用币 —— 原先写 `left:3px`，手机横屏档手牌卡只有 ~89px 宽，
+     费用币（base 23px 压在 `left:3.6%`）会把箭头**整块盖住**（同 z-index、币的 DOM 在后），
+     用户报「升级的箭头在手牌看不到」正是这条。
+     ⇒ 改为压在**内容盒左沿**（= .cname 的 padding-left：桌面 20px / 手机横屏档 17px），
+        刚好落在费用币右侧、居中牌名左侧的空隙里；字号与字重沿用上面的规则**逐格不变**。
+     ⚠️ `left` 必须跟着各档的 padding-left 走：手机横屏档在文件末尾把它覆写成 17px。 */
+  .card.has-frame .cname .up-mark{position:absolute; left:20px; top:0; bottom:0; display:flex;
+    align-items:center; font-weight:900; color:var(--green);}
   /* 描述独占铭牌窗（卡名的行不再从这里扣） ⇒ 高度上限自己长到 4 行；
      字号从 9 提到 9.5（132x200 实拍：9.5 档 10 张样例仍 0 溢出，见 _drvcard G 段），
      旧版 9px 是为「卡名也占一行」的窄窗选的，现在没必要再省。 */
@@ -840,7 +929,14 @@
   @keyframes turnBannerIn{0%{opacity:0; transform:translate(-50%,-50%) scale(.9)}15%{opacity:1; transform:translate(-50%,-50%) scale(1)}70%{opacity:1}100%{opacity:0; transform:translate(-50%,-50%) translateY(-18px)}}
 
   #bestiary-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; text-align:left;}
-  .bcard{background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:12px;}
+  .bcard{background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:12px;
+    display:flex; gap:12px; align-items:flex-start;}
+  /* v1.0.19：图鉴立绘（复用 `素材/enemy/<key>.png`，与战斗同一张图）。左立绘右文字，两端同改。
+     未收录的压成暗剪影 —— 留白预告但不剧透长相。 */
+  .bcard .bbody{flex:1 1 auto; min-width:0;}
+  .bcard .bportrait{flex:0 0 auto; width:92px; height:92px; object-fit:contain;
+    border-radius:8px; background:rgba(0,0,0,.28); border:1px solid var(--ink3);}
+  .bcard.locked .bportrait{filter:grayscale(1) brightness(.35);}
   .bcard.locked{opacity:.55;}
   .bcard .bname{font-family:var(--font-kai); font-size:17px; color:var(--gold); letter-spacing:2px;}
   .bcard.locked .bname{color:var(--dim);}
@@ -965,11 +1061,11 @@
        · 飘动交给 menuSway 的新曲线（幅度收到 1deg 内 + 叠垂直起伏 + 7s 一圈），
          错峰改用**负延迟** —— 正延迟会让第 2、3 张先呆立 2.3s / 4.6s 才动，负延迟一上来就在动。 */
   .menu-hit.is-collection .menu-art,
-  .menu-hit.is-leaderboard .menu-art,
-  .menu-hit.is-setting .menu-art{height:clamp(58px, 15vh, 170px);      /* 57~64×224~238 ⇒ ~0.26:1 */
+  .menu-hit.is-setting .menu-art,
+  .menu-hit.is-mileage .menu-art{height:clamp(58px, 15vh, 170px);      /* 57~64×224~238 ⇒ ~0.26:1 */
     transform-origin:top center; animation:menuSway 7s ease-in-out infinite;}
-  .menu-hit.is-leaderboard .menu-art{animation-delay:-2.3s;}
   .menu-hit.is-setting .menu-art{animation-delay:-4.6s;}
+  .menu-hit.is-mileage .menu-art{animation-delay:-2.3s;}   /* v1.0.16：三张符纸错峰，免得两张同步摆 */
   .menu-hit:active{transform:scale(.96);}
   .menu-hit:disabled{cursor:not-allowed; filter:grayscale(1) opacity(.45);}
   .menu-hit:focus-visible{outline:2px solid var(--gold); outline-offset:4px;}
@@ -1019,8 +1115,8 @@
   .menu-hit.is-start .menu-fb{color:#ff5040; font-size:22px; letter-spacing:10px;}
   .menu-hit.is-continue .menu-fb{font-size:20px;}
   .menu-hit.is-collection .menu-fb,
-  .menu-hit.is-leaderboard .menu-fb,
-  .menu-hit.is-setting .menu-fb{font-size:13px; letter-spacing:3px; min-height:120px;}
+  .menu-hit.is-setting .menu-fb,
+  .menu-hit.is-mileage .menu-fb{font-size:13px; letter-spacing:3px; min-height:120px;}
   .menu-title .menu-fb{writing-mode:horizontal-tb; font-size:30px; letter-spacing:10px;
     background:none; border:0; min-width:0; min-height:0; padding:0;}
   /* —— 以下 5 条是 v0.64.2 及更早的「居中一列按钮」样式，现已无元素宿主 ——
@@ -1209,7 +1305,9 @@
   .mt-xuenu b{color:var(--red);}
   .mt-relics{display:flex; flex-wrap:wrap; gap:4px; align-items:center;}
   .map-topbar .prelic-chip{padding:1px 5px 1px 1px;}
-  .map-topbar .prelic-chip .ricon{width:18px; height:18px; margin:0;}
+  /* v1.0.17：地图顶栏这排遗物芯片图标 18px → 36px（2×）。顶栏因此会变高一点，
+     这是用户口径「所有图标至少 2 倍」的必然结果（.map-topbar 不设固定高，靠 padding 撑着）。 */
+  .map-topbar .prelic-chip .ricon{width:36px; height:36px; margin:0;}
   .mt-menu{flex:0 0 auto; width:36px; height:36px; border-radius:50%; border:1px solid var(--ink3);
     background:rgba(255,255,255,.04); color:var(--gold); font-size:16px; line-height:1; cursor:pointer;}
   .mt-menu:hover{border-color:var(--gold);}
@@ -1299,6 +1397,59 @@
   #hurt-vignette{position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at center, transparent 45%, rgba(178,59,46,.5) 100%); opacity:0; z-index:4;}
   #hurt-vignette.flash{animation:vignette .5s ease-out;}
   @keyframes vignette{0%{opacity:1}100%{opacity:0}}
+  /* ===== v1.0.14（P3）三件事的样式 ===== */
+  /* ① 道心破碎：致命伤被道心挡下时，全屏放大的道心插图炸成九片虚影。
+     透明度压低（v1.0.18 起峰值 .88）并淡出 ⇒ 底下的战斗场面始终看得见；pointer-events:none 不吃点击。 */
+  #daoxin-burst{position:fixed; inset:0; pointer-events:none; z-index:6; overflow:hidden; display:flex; align-items:center; justify-content:center;}
+  #daoxin-burst .dx-wrap{position:relative; animation:dxZoom 2.1s ease-out forwards;}
+  #daoxin-burst .dx-piece{position:absolute; inset:0; animation:dxFly 1.95s cubic-bezier(.25,.6,.3,1) .2s both;}
+  #daoxin-burst .dx-piece img{width:100%; height:100%; display:block; pointer-events:none;}
+  /* v1.0.17：用户反馈「太淡、一闪就没了」⇒ 峰值透明度 .45/.42 → .72/.66，时长 1.15s → 1.6s。
+     v1.0.18：用户再反馈「不够明显、时长再长一点」⇒ 峰值 .72/.66 → .88/.80，时长 1.6s → 2.1s（碎片 1.95s）。
+     配套：`js/00_base.js` daoxinBurst 的收尾兜底定时器同步 1900ms → 2500ms（不然动画没播完就被摘掉）。
+     ⚠️ 这里动的是**显影**（越高越清楚）。若再往上加，注意它压在战斗画面上、别盖住底部血条与手牌。 */
+  @keyframes dxZoom{0%{opacity:0; transform:scale(.78);} 12%{opacity:.88; transform:scale(1);} 40%{opacity:.80;} 100%{opacity:0; transform:scale(1.16);}}
+  @keyframes dxFly{0%{opacity:1; transform:translate(0,0) rotate(0deg);} 100%{opacity:0; transform:translate(var(--tx,0px),var(--ty,0px)) rotate(var(--rot,0deg));}}
+  /* ② 血魔刀·攻击牌火环：仅「阴差 + 持有血魔刀 + 生命<30%」时，手牌攻击牌边框浮一圈渐变橙红火线。
+     ⚠️ 环必须画在卡**内沿**（.card 是 overflow:hidden，负 inset 的外环会被裁掉）——用 mask 抠出 2px 环带；
+        只动 opacity / scale（合成属性），节拍不规则但幅度很小，不抢卡面。 */
+  .card.xue-fire::after{content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:4; padding:2px;
+    background:linear-gradient(118deg,#c81e00 0%,#ff5a00 18%,#ff9a2e 36%,#ffd68a 50%,#ff6a00 66%,#e03000 84%,#c81e00 100%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;
+            mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask-composite:exclude;
+    animation:xueCardFire 3.1s ease-in-out infinite;}
+  @keyframes xueCardFire{0%{opacity:.5; transform:scale(1);} 17%{opacity:.82; transform:scale(1.007);} 33%{opacity:.55; transform:scale(1.002);} 52%{opacity:.78; transform:scale(1.006);} 71%{opacity:.48; transform:scale(1);} 86%{opacity:.72; transform:scale(1.005);} 100%{opacity:.5; transform:scale(1);}}
+  /* 老 WebView 不支持 mask 合成 ⇒ 上面那圈会被整块渐变**糊住卡面**（比没特效更糟）。
+     这里退回 inset 阴影画的实心橙红环：一样贴边、一样只动透明度，但绝不遮卡面。 */
+  @supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)){
+    .card.xue-fire::after{-webkit-mask:none; mask:none; background:none; padding:0;
+      box-shadow:inset 0 0 0 2px #ff6a00, inset 0 0 9px rgba(255,80,10,.5);}
+  }
+  /* ③ 战后三选一翻牌：卡背自下升起（加速→急停），点一下翻面看内容，再点一次选走。
+     翻面（.revealed）与选牌逻辑**永远生效**（不随流畅模式关），只有「升起」动画挂 .reward-flip 时才播。 */
+  .reward-cards.flip-cards{align-items:flex-start;}
+  .reward-cards.flip-cards .rcard{position:relative; perspective:900px;}
+  /* ⚠️ 默认就是 rotateY(180deg)（= 卡背朝前、内容藏起来），点开（.revealed）才转回 0 露出正面。
+     反过来的话卡片一上来就把内容亮着，看起来「跟以前一样、根本没有翻牌」—— 这是最容易写反的一处。 */
+  .reward-cards.flip-cards .rcard-inner{position:relative; transform-style:preserve-3d; transform:rotateY(180deg); transition:transform .42s cubic-bezier(.35,.1,.25,1);}
+  .reward-cards.flip-cards .rcard.revealed .rcard-inner{transform:rotateY(0deg);}
+  .reward-cards.flip-cards .rcard-face{backface-visibility:hidden; -webkit-backface-visibility:hidden;}
+  .reward-cards.flip-cards .rcard-back{position:absolute; inset:0; transform:rotateY(180deg); background-color:#2a2119;
+    background-image:var(--pile-back-img,none); background-repeat:no-repeat; background-size:100% 100%; border-radius:6px;
+    box-shadow:0 3px 8px rgba(0,0,0,.45);}
+  .reward-cards.reward-flip .rcard{animation:rcardRise .5s cubic-bezier(.5,0,1,1) both; animation-delay:calc(var(--rd,0) * 75ms);}
+  @keyframes rcardRise{from{opacity:0; transform:translateY(74px);} to{opacity:1; transform:translateY(0);}}
+  /* 不支持 3D 变换的老引擎：卡背是绝对定位压在最上层，会把正面**盖死**（翻不了、内容也看不见）
+     ⇒ 这里直接不画卡背，退回「一上来就亮正面」，至少内容永远可读、点一下照样能选走。 */
+  @supports not (transform-style: preserve-3d){
+    .reward-cards.flip-cards .rcard-back{display:none;}
+  }
+  /* 流畅模式 / 系统减弱动效：三处新动画一律关掉（翻面与选牌逻辑不受影响） */
+  .low-spec .card.xue-fire::after{animation:none; opacity:.62;}
+  .low-spec .reward-cards.reward-flip .rcard{animation:none;}
+  .low-spec .reward-cards.flip-cards .rcard-inner{transition-duration:.15s;}
   .enemy.dying{animation:enemyDie .45s ease-out forwards; pointer-events:none;}
   @keyframes enemyDie{0%{opacity:1; transform:translate(var(--ex,0px),var(--ey,0px)) scale(1)}100%{opacity:0; transform:translate(var(--ex,0px),var(--ey,0px)) scale(.55)}}
   /* —— v0.72.0：卡牌动画层（抽 / 弃 / 洗 + 易物） ——
@@ -1373,7 +1524,9 @@
   .kw{color:var(--gold); cursor:help; border-bottom:1px dotted rgba(201,168,106,.55);}
 
   /* —— 顶栏折叠 / 底部操作区 / 触控容错 / 流畅模式 —— */
-  #topbar{cursor:pointer; user-select:none;}
+  /* v1.0.21：去除整条顶栏的 pointer 手势 —— 折叠只由「▾ 详情」按钮触发。
+     原先 #topbar 既挂 cursor:pointer 又整条 onclick，导致「按顶部别处也折叠、按按钮反而不灵」。 */
+  #topbar{user-select:none;}
   .tb-toggle{background:transparent; border:1px solid var(--ink3); color:var(--dim); border-radius:6px; font-size:12px; padding:4px 12px; cursor:pointer; letter-spacing:1px; min-height:28px;}
   .tb-toggle:hover{color:var(--text); border-color:var(--dim);}
   /* v0.71.0：`flex-basis:100%` → `auto`。原先详情条**不管有没有内容都独占一整行**
@@ -1461,6 +1614,19 @@
   @keyframes fxHalo{0%{opacity:.9; transform:translate(-50%,-50%) scale(.45)}100%{opacity:0; transform:translate(-50%,-50%) scale(1.9)}}
   .fx-mist{position:absolute; left:0; top:0; border-radius:50%; background:radial-gradient(circle, rgba(52,36,64,.92), rgba(16,10,18,0) 70%); filter:blur(5px); transform:translate(-50%,-50%); animation:fxMist .75s ease-out forwards; pointer-events:none;}
   @keyframes fxMist{0%{opacity:0; transform:translate(-50%,-50%) scale(.3)}45%{opacity:.85; transform:translate(-50%,-50%) scale(1.25)}100%{opacity:0; transform:translate(-50%,-50%) scale(2.1)}}
+  /* —— v1.0.17：召唤演出「从打出的鬼怪牌冒出一团翻滚黑雾 → 拖尾加速飞到右下角召唤位」——
+     位移/缩放由 JS 的 WAAPI 逐段写（三段：起→隆起→加速到召唤位），这里只管**长相**与自转。
+     黑雾在深色底上要看得见，所以不是纯黑：主体是深紫黑，内层再压一团偏亮的紫气。
+     `::before` 用**偏心**的径向渐变 —— 正圆渐变自转是看不出来的，偏心才有「翻滚」的读感。
+     v1.0.21：三色改由 CSS 变量 --mist-1/2/3 喂（JS 按召唤物上色：纸人白/小鬼黑/五通神紫/阴兵金/尸王红），
+     变量缺省值 = 原紫色，故任何未上色的调用与改动前逐像素一致。 */
+  .fx-summon-mist{position:fixed; left:0; top:0; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle at 44% 42%, var(--mist-1, rgba(88,42,140,.92)), var(--mist-2, rgba(30,10,52,.88)) 46%, rgba(8,3,16,0) 74%);
+    filter:blur(5px); will-change:transform,opacity;}
+  .fx-summon-mist::before{content:''; position:absolute; inset:12%; border-radius:50%;
+    background:radial-gradient(circle at 68% 64%, var(--mist-3, rgba(158,104,226,.55)), rgba(24,8,42,0) 62%);
+    animation:fxMistRoll .8s linear infinite;}
+  @keyframes fxMistRoll{to{transform:rotate(360deg);}}
   .fx-skill{position:absolute; left:0; top:0; border-radius:50%; border:2px solid var(--blue); transform:translate(-50%,-50%); animation:fxHalo .45s ease-out forwards; pointer-events:none;}
   /* —— 受击分层：精英屏幕微震 / Boss 全屏墨晕 —— */
   #app.micro-shake{animation:microShake .18s ease;}
@@ -1697,7 +1863,8 @@
     .pile-n{font-size:9px;}
     .player-relics{gap:4px;}
     .prelic-chip{padding:1px 4px 1px 1px;}
-    .prelic-chip .ricon{width:20px; height:20px;}
+    /* v1.0.17：本档图标同样 2×（遗物芯片 20px → 40px）。 */
+    .prelic-chip .ricon{width:40px; height:40px;}
     .prelic-chip .prelic-name{font-size:9px;}
     .hp-label{font-size:9px;}
   }
@@ -1845,7 +2012,8 @@
     /* v0.71.0：顶栏那枚遗物 chip 在矮屏档一字未改（只有 ≤520 **宽**档收过，横屏拿不到）
        ⇒ 图标 24px + padding 在 390 高的屏上偏胖。与地图顶栏同口径收一档。 */
     .prelic-chip{padding:1px 5px 1px 1px;}
-    .prelic-chip .ricon{width:18px; height:18px;}
+    /* v1.0.17：本档图标同样 2×（遗物芯片 18px → 36px）。 */
+    .prelic-chip .ricon{width:36px; height:36px;}
     /* v0.71.0：成就吐司从视口上方掉下来，`top:14px` + `min-width:240px` 正好**盖住
        顶部那三枚按钮**（战报/牌库/菜单）。矮屏压小一圈并往边上去，减少遮挡。 */
     #achieve-toast{top:6px; min-width:180px; padding:7px 12px;}
@@ -1927,6 +2095,10 @@
     .intent{font-size:11px; margin-top:3px;}
     .badges{margin-top:3px; gap:4px;}
     .badge{font-size:10px; padding:1px 6px;}
+    /* v1.0.17：本档字号缩小后，图标**仍保持「相对本档字号 2×」**（10px 字 → 20px 图）——
+       写死桌面档的 24/28px 会把窄屏徽章撑成大方块。 */
+    .badge .bicon{width:20px; height:20px; vertical-align:-5px;}
+    .intent .bicon{width:22px; height:22px; vertical-align:-5.5px;}
 
     /* 手牌：卡宽当唯一旋钮，重叠量按比例跟着走。
        不能留 -62px 死值 —— 矮屏卡宽会掉到 76~118，固定 -62 只剩 14px 露出，
@@ -2096,14 +2268,240 @@
   #log .log-close:hover{border-color:var(--gold); background:rgba(224,179,65,.12);}
   #log .log-close:active{background:var(--gold); color:#241a10;}
 
-  /* —— ③ 选英雄卡的立绘 ——
-     卡片是 .relic（150px 宽），加一张横构图立绘压在顶部，标题与被动压在其下。
-     object-position 取 22% —— 四张立绘都是「人物在画面上半」的构图，取中会把脸切掉。 */
-  .hero-portrait{display:block; width:100%; height:92px; object-fit:cover; object-position:center 22%;
-    border-radius:6px; margin-bottom:7px; background:rgba(0,0,0,.25);}
-  /* 矮屏档：立绘与文字各让一档，保证四张卡仍是一排且不撑破面板（沿用 1828 行那套降档口径）。 */
+  /* —— ③ 选英雄卡（v1.0.17 用户定稿重做）——
+     头像用 panel_nine 做九宫框（border-image），只框住角色**上半身**（object-position 16%）；
+     名字用 btn_primary 做按钮底；面板底换成程序化旧纸纹（由生成脚本出图）。
+     三张图的真地址由 showHeroSelect 注入 `--hero-*` 变量（走 assetURL）；
+     这里保留相对路径兜底，仅服务开发树（产物里由变量覆盖）。 */
+  .hero-cards{display:flex; gap:12px; justify-content:center; margin:16px 0 6px; flex-wrap:wrap;}
+  .hero-card{width:148px; display:flex; flex-direction:column; align-items:center; cursor:pointer;
+    padding:10px 8px 8px; border-radius:10px; background:rgba(0,0,0,.22);
+    border:2px solid var(--ink3); transition:border-color .12s, transform .12s, background .12s;}
+  .hero-card:hover{border-color:var(--gold); background:rgba(224,179,65,.08); transform:translateY(-3px);}
+  .hero-card.locked{filter:grayscale(1) brightness(.85); opacity:.55; cursor:not-allowed;}
+  .hero-card.locked:hover{border-color:var(--ink3); background:rgba(0,0,0,.22); transform:none;}
+  .hero-frame{width:100%; height:112px; box-sizing:border-box; border:15px solid transparent;
+    border-image-source:var(--ui-hero-frame,url(素材/ui/panel_nine.png));
+    border-image-slice:74 fill; border-image-width:15px; border-image-repeat:stretch;}
+  .hero-frame .hero-portrait{display:block; width:100%; height:100%; object-fit:cover;
+    object-position:center 16%; border-radius:4px; background:rgba(0,0,0,.3);}
+  .hero-frame .hero-emoji{font-size:52px; opacity:.4; text-align:center; line-height:82px;}
+  .hero-name{width:100%; height:30px; margin-top:7px; display:flex; align-items:center; justify-content:center;
+    background:var(--ui-hero-name,url(素材/ui/btn_primary.png)) center/100% 100% no-repeat;
+    font-family:var(--font-kai); font-size:15px; font-weight:bold; letter-spacing:2px;
+    color:#ffe7b8; text-shadow:0 1px 2px rgba(0,0,0,.75);}
+  .hero-card:hover .hero-name{background-image:var(--ui-hero-name-on,url(素材/ui/btn_primary_press.png));}
+  .hero-brief{font-size:11px; line-height:1.45; color:var(--dim); margin-top:7px; text-align:center;}
+  .hero-passive{font-size:11px; line-height:1.45; color:var(--gold); margin-top:5px; text-align:center;}
+  .hero-note{font-size:10px; letter-spacing:1px; color:var(--dim); margin-top:6px;}
+  /* v1.0.17：面板底换成旧纸纹（选英雄 + 卷轴族：里程碑/图鉴/设置/成就）。
+     真地址由 js/60_boot.js 顶部统一注入 --ui-panel-bg，这里的相对路径只服务开发树。 */
+  #overlay.hero-scene .panel, #overlay.scroll-scene .panel{
+    background-image:var(--ui-panel-bg,url(素材/ui/hero_panel_bg.png));
+    background-size:100% 100%; background-repeat:no-repeat;}
+  /* 矮屏档：整体降一档，四张卡仍是一排且不撑破面板（沿用下方那套降档口径）。 */
   @media (max-height:560px){
-    .hero-portrait{height:64px; margin-bottom:4px;}
+    .hero-card{width:132px; padding:7px 6px 6px;}
+    .hero-frame{height:82px; border-width:12px; border-image-width:12px;}
+    .hero-frame .hero-emoji{font-size:40px; line-height:58px;}
+    .hero-name{height:25px; font-size:13px; margin-top:5px;}
+    .hero-brief,.hero-passive{font-size:10px; line-height:1.3; margin-top:4px;}
+    .hero-cards{gap:9px; margin:8px 0 4px;}
+  }
+
+  /* —— ④ 里程碑「里程轨」界面（v1.0.23 · 用户草图，整屏重做）——
+     左列：4 张角色横屏海报（素材/hero/<id>_poster.jpg，3:1）。**未选中只露左边 2/3**
+     （露出的右缘压一道暗渐变，暗示还剩 1/3）；点中后展开到全幅，右 1/3 露出该角色机制名，
+     并给海报加**厚边立体框**（多层描边 + 内侧高光 + 投影）—— 与其余海报一眼分开。
+     右侧：一条蓝色里程轨，节点上方挂奖励白框、下方标里程数；轨可横向拖动（鼠标拖 / 触屏滑）。
+     蓝线 = 冷色，与全局金/红分开。⚠️ 奖励内容 / 里程数 / 增长规则待定稿，
+     当前渲染既有 MILESTONES 兜底内容，领取仅为占位交互。 */
+  #overlay.mile-scene{background:#0b0a09;}
+  #overlay.mile-scene #overlayWrap{width:100%; height:100%; max-width:none;}
+  #overlay.mile-scene .panel{background:none; border:0; border-radius:0; padding:0;
+    height:100%; max-height:none; overflow:hidden; text-align:left;}
+  #overlay.mile-scene.ov-enter #overlayWrap{animation:mileIn .42s cubic-bezier(.2,.8,.2,1) both;}
+  @keyframes mileIn{from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:none;}}
+  .ml-root{position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden;
+    font-family:var(--font-kai);
+    /* v1.0.25：海报列宽（--pw）与里程轨纵向落点（--rail-y）由这里统一下发 ——
+       .ml-track 要用同一个 --pw 把节点整体右移出海报列，故不能只挂在 .ml-heroes 上。
+       --rail-y 用 px 表达式**咬住「第 2 张与第 3 张海报之间的缝」**：卡片高 = --pw/3 + 22(信息条)，
+       缝心 = 10(padding-top) + 2×卡片高 + 14(gap) + 7(half gap) = 2×--pw/3 + 75。这样无论视口多高，
+       那条蓝线都正好从海报的缝里透出来（用户口径「间隙可以透露一点底部那层里程」）。 */
+    --pw:clamp(150px, calc((100vh - 300px) * .6), 460px);
+    --rail-y:calc(var(--pw) * 2 / 3 + 75px);}
+  .ml-top{flex:0 0 auto; display:flex; align-items:baseline; gap:14px; padding:8px 62px 7px 18px;
+    border-bottom:1px solid rgba(224,179,65,.22);
+    background:linear-gradient(180deg,rgba(26,20,14,.94),rgba(16,12,9,.55));}
+  .ml-title{font-size:20px; letter-spacing:8px; color:#ffe7b8; text-shadow:0 2px 8px #000; white-space:nowrap;}
+  .ml-sub{font-size:12px; line-height:1.5; color:var(--dim); min-width:0;}
+  .ml-sub b{color:var(--gold);}
+  /* v1.0.24：顶栏那块「当前里程」整块撤掉 —— 里程改为**每张海报下面各显示自己的**（用户口径）。 */
+  /* v1.0.25（用户纠偏）：**两层浮叠、撤掉分栏硬边界** ——
+     底层 .ml-stage = 整屏铺满的里程轨（无边框 / 无圆角 / 无底板）；上层 .ml-heroes = 左列海报浮层
+     （透明背景，卡片之间的缝露出底下的里程层）。桌面海报列竖向可滚，手机横屏档改横排左右滑。 */
+  .ml-main{position:relative; flex:1 1 auto; min-height:0; overflow:hidden;}
+  /* 海报列浮层：宽 = --pw + 左右内边距（**必须把选中卡的外发光算进去** —— 旧版 padding-right:3px
+     把 pw 宽的选中卡裁掉约 3px，就是用户报的「海报右边一点被截断」）。 */
+  .ml-heroes{position:absolute; left:0; top:0; bottom:0; z-index:2;
+    width:calc(var(--pw) + 26px); box-sizing:border-box; padding:10px 12px 10px 14px;
+    display:flex; flex-direction:column; gap:14px;
+    overflow-y:auto; overflow-x:hidden; scrollbar-width:none; background:none;
+    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%);
+            mask-image:linear-gradient(180deg,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%);}
+  .ml-heroes::-webkit-scrollbar{display:none;}
+  .ml-hcard{position:relative; flex:0 0 auto; display:flex; flex-direction:column;
+    width:calc(var(--pw) * .667);
+    padding:0; border:0; border-radius:7px; background:#140f0b; cursor:pointer; overflow:hidden;
+    box-shadow:0 2px 8px rgba(0,0,0,.6), 0 0 0 1px rgba(224,179,65,.18), inset 0 0 0 1px rgba(255,230,180,.07);
+    transition:width .34s cubic-bezier(.2,.8,.2,1), box-shadow .3s, filter .3s;}
+  /* 海报框：固定 pw 宽（未选中时被卡片裁到左边 2/3）+ 斜向高光/内阴影做「起伏感」 */
+  .ml-shotwrap{position:relative; display:block; width:var(--pw); height:calc(var(--pw) / 3); overflow:hidden;}
+  .ml-shot{position:absolute; left:0; top:0; width:var(--pw); height:calc(var(--pw) / 3); display:block;
+    object-fit:cover; filter:saturate(.7) brightness(.68); transition:filter .34s;}
+  .ml-em{position:absolute; left:0; top:0; width:var(--pw); height:calc(var(--pw) / 3);
+    line-height:calc(var(--pw) / 3); text-align:center; font-size:34px; color:var(--dim);}
+  .ml-shotwrap::after{content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(118deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,0) 24%,
+      rgba(0,0,0,0) 66%,rgba(0,0,0,.36) 100%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.22), inset 0 -3px 8px rgba(0,0,0,.5);}
+  /* 未选中：右缘一道暗渐变 —— 暗示「右边还有 1/3 没露出来」 */
+  .ml-hcard:not(.on) .ml-shotwrap::before{content:""; position:absolute; right:0; top:0; bottom:0; width:18px; z-index:3;
+    background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.62)); pointer-events:none;}
+  .ml-hcard.on{width:var(--pw);
+    box-shadow:0 0 0 3px #6b4a24, 0 0 0 7px #241a10, 0 14px 28px rgba(0,0,0,.75),
+      inset 0 0 0 2px rgba(255,222,150,.5), inset 0 0 24px rgba(224,179,65,.16);}
+  .ml-hcard.on .ml-shot{filter:saturate(1.06) brightness(1);}
+  .ml-hcard:focus-visible{outline:2px solid var(--gold); outline-offset:3px;}
+  /* 展开后露出的右 1/3：角色机制名（将来的 logo 位） */
+  .ml-badge{position:absolute; right:6px; top:50%; transform:translateY(-50%); z-index:4;
+    width:calc(var(--pw) / 3 - 14px); text-align:center; font-size:14px; letter-spacing:3px;
+    color:#ffe7b8; text-shadow:0 2px 8px #000,0 0 12px #000; opacity:0; transition:opacity .3s .12s;}
+  .ml-hcard.on .ml-badge{opacity:1;}
+  .ml-hnm{position:absolute; left:9px; bottom:6px; z-index:4; font-size:13px; letter-spacing:3px;
+    color:#e9dcbb; text-shadow:0 2px 6px #000,0 0 10px #000;}
+  .ml-hcard.on .ml-hnm{color:var(--gold);}
+  /* 海报下方一行：该角色**自己的**里程 + 已达成档数 */
+  .ml-hinfo{display:flex; align-items:baseline; gap:5px; height:22px; padding:0 8px; box-sizing:border-box;
+    background:linear-gradient(180deg,#1c1510,#100c08); border-top:1px solid rgba(224,179,65,.16);
+    font-size:10px; color:var(--dim); white-space:nowrap; overflow:hidden;}
+  .ml-hinfo b{font-size:14px; color:#ffd77a; letter-spacing:.5px;}
+  .ml-hinfo s{text-decoration:none; opacity:.72;}
+  .ml-hinfo em{margin-left:auto; font-style:normal; opacity:.85;}
+  .ml-hcard.on .ml-hinfo{background:linear-gradient(180deg,#2b1e12,#150e08);}
+  .ml-hcard.on .ml-hinfo b{color:var(--gold);}
+  /* 神秘人（敬请期待的新角色）：整张压成黑调，信息条只报「???」 */
+  .ml-hcard.is-mystery .ml-shot{filter:grayscale(.4) brightness(.52) contrast(1.12);}
+  .ml-hcard.is-mystery.on .ml-shot{filter:grayscale(.28) brightness(.8) contrast(1.16);}
+  .ml-hcard.is-mystery .ml-hnm{color:#c9c4bb; letter-spacing:5px;}
+  .ml-hcard.is-mystery.on .ml-hnm{color:#dfe4ec;}
+  .ml-hcard.is-mystery .ml-badge{color:#c6cede; letter-spacing:5px;}
+  .ml-hcard.is-mystery .ml-hinfo b{color:#9a9aa8;}
+  .ml-hcard.is-mystery.on .ml-hinfo b{color:#cfd3dd;}
+  /* 底层里程层：整屏铺满，**无边框、无圆角、无底板**（用户口径「不要明显的布局界限」）。 */
+  .ml-stage{position:absolute; inset:0; z-index:1; display:flex; overflow:hidden;}
+  /* 一层很淡的冷色晕染 —— 海报的缝隙里透出来的就是这一层（不是死黑，看得出「底下有东西」）。 */
+  .ml-stage::before{content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(130% 96% at 76% 50%,rgba(46,84,126,.26),rgba(10,10,14,0) 64%),
+      radial-gradient(80% 60% at 16% 120%,rgba(92,62,30,.18),rgba(10,10,14,0) 70%);}
+  .ml-scroll{position:relative; flex:1 1 auto; min-width:0; overflow-x:auto; overflow-y:hidden;
+    padding:0 68px 0 0; cursor:grab; touch-action:pan-x; scrollbar-width:none;}
+  .ml-scroll::-webkit-scrollbar{display:none;}
+  .ml-scroll.grabbing{cursor:grabbing;}
+  /* 节点整体右移到海报列之外（那条线仍从 x=0 起，穿过海报的缝隙）。 */
+  .ml-track{position:relative; width:100%; min-height:100%; margin-left:calc(var(--pw) + 30px);}
+  .ml-line{position:absolute; left:calc(-1 * (var(--pw) + 30px)); right:0; top:var(--rail-y);
+    height:6px; margin-top:-3px; border-radius:3px;
+    background:repeating-linear-gradient(90deg,rgba(140,165,190,.24) 0 12px,rgba(140,165,190,.06) 12px 24px);}
+  .ml-line i{display:block; height:100%; border-radius:3px; transition:width .5s cubic-bezier(.2,.8,.2,1);
+    background:linear-gradient(90deg,#2f6ba8,#6fc4ff); box-shadow:0 0 10px rgba(111,196,255,.55);}
+  .ml-node{position:absolute; top:0; bottom:0; width:0;}
+  .ml-dot{position:absolute; left:-8px; top:var(--rail-y); margin-top:-8px; width:16px; height:16px; border-radius:50%;
+    background:#16222e; border:2px solid #2f5c8a; box-sizing:border-box;}
+  .ml-node.done .ml-dot{background:radial-gradient(circle at 40% 35%,#cdeeff,#5aa7e0 60%,#1b4a76);
+    border-color:#8fd4ff; box-shadow:0 0 12px rgba(127,208,255,.7);}
+  .ml-stem{position:absolute; left:-1px; bottom:calc(100% - var(--rail-y)); width:2px; height:30px;
+    background:linear-gradient(0deg,rgba(127,208,255,.6),rgba(127,208,255,.08));}
+  .ml-need{position:absolute; left:-44px; top:calc(var(--rail-y) + 16px); width:88px; text-align:center;
+    font-size:11px; letter-spacing:1px; color:#8d8478;}
+  .ml-node.done .ml-need{color:#ffd77a;}
+  .ml-box{position:absolute; left:-65px; bottom:calc(100% - var(--rail-y) + 34px); width:130px; max-height:96px;
+    padding:5px 7px; box-sizing:border-box; border:1px solid #b9a887; border-radius:7px;
+    background:#f4efe2; color:#2b241c; text-align:center;
+    box-shadow:0 3px 10px rgba(0,0,0,.5), inset 0 1px 0 #fff;}
+  .ml-box b{display:block; font-size:12px; letter-spacing:1px; line-height:1.15;}
+  .ml-box span{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+    font-size:10px; color:#5c5245; line-height:1.25; margin-top:2px;}
+  .ml-state{display:block; margin-top:3px; font-size:10px; font-style:normal; color:#9a8b73;}
+  .ml-node.done .ml-box{border-color:var(--gold);}
+  .ml-node.can .ml-box{border-color:#d9a83c; cursor:pointer;
+    box-shadow:0 0 0 2px rgba(224,179,65,.35), 0 4px 14px rgba(224,179,65,.35), inset 0 1px 0 #fff;
+    animation:mlPulse 1.7s ease-in-out infinite;}
+  .ml-node.can .ml-state{color:#8a6a1f; font-weight:bold;}
+  .ml-node.claimed .ml-box{filter:grayscale(.5) brightness(.94);}
+  .ml-node.claimed .ml-state{color:#7a705f;}
+  /* —— 阈值待定（定稿前 5 档真实奖励还没定里程数）：只报「?」，仍可点（按当前 pts 判定不可能达标） —— */
+  .ml-node.pending .ml-need{color:#6f675c;}
+  .ml-node.pending .ml-box{border-style:dashed; border-color:#a89a80; background:#efe9db;}
+  .ml-node.pending .ml-state{color:#8a7a5f;}
+  /* —— 尾节点「敬请期待」：里程不上限的尽头占位，不承载奖励、不可领 —— */
+  .ml-node.ml-end{pointer-events:none;}
+  .ml-node.ml-end .ml-dot{width:14px; height:14px; margin-top:-7px; left:-7px;
+    background:transparent; border:2px dashed rgba(150,170,196,.55);}
+  .ml-node.ml-end .ml-stem{background:linear-gradient(0deg,rgba(150,170,196,.4),rgba(150,170,196,.05));}
+  .ml-node.ml-end .ml-need{color:#7d8794; letter-spacing:2px;}
+  .ml-node.ml-end .ml-box{left:-72px; width:144px; border:1px dashed rgba(150,170,196,.5);
+    background:rgba(22,26,32,.86); color:#aab4c2; box-shadow:none;}
+  .ml-node.ml-end .ml-box b{color:#c6cede; letter-spacing:3px; font-size:13px;}
+  .ml-node.ml-end .ml-box span{color:#7d8794;}
+  /* —— 神秘人未知档：黑色系「?」图标盖住，不透露任何内容 —— */
+  .ml-node.unknown .ml-dot{background:#0d0d11; border-color:#3a3a46; box-shadow:0 0 8px rgba(0,0,0,.8);}
+  .ml-node.unknown .ml-stem{background:linear-gradient(0deg,rgba(120,120,140,.3),rgba(120,120,140,.04));}
+  .ml-node.unknown .ml-need{color:#5a5a68;}
+  .ml-node.unknown .ml-box{left:-65px; width:130px; border:1px solid #3a3a46; background:#0d0d11;
+    color:#8b8b9b; box-shadow:0 3px 10px rgba(0,0,0,.7);}
+  .ml-node.unknown .ml-box b{font-size:22px; letter-spacing:0; color:#6a6a7a; line-height:1;}
+  .ml-node.unknown .ml-box span{color:#5f5f6d;}
+  .ml-node.unknown .ml-state{color:#55555f;}
+  @keyframes mlPulse{0%,100%{transform:translateY(0);} 50%{transform:translateY(-3px);}}
+  /* 低配 / 减弱动态：这一屏的入场与白框呼吸一并关掉（特异度必须 >= 上面两条） */
+  .low-spec #overlay.mile-scene.ov-enter #overlayWrap{animation:none;}
+  .low-spec .ml-node.can .ml-box{animation:none;}
+  @media (prefers-reduced-motion: reduce){
+    #overlay.mile-scene.ov-enter #overlayWrap{animation:none;}
+    .ml-node.can .ml-box{animation:none;}
+  }
+  /* 矮屏 / 窄屏（手机横屏档）：海报改**顶部横排浮层**（窄了/以后加了新角色就左右滑），
+     里程轨仍**整屏铺在底层**（同款设计：没有分栏硬边界，海报的缝里露出底下的轨）。 */
+  @media (max-width:520px), (max-height:560px){
+    .ml-root{--pw:clamp(120px, 19vw, 210px); --rail-y:56%;}
+    .ml-top{padding:6px 60px 5px 12px; gap:8px;}
+    .ml-title{font-size:16px; letter-spacing:4px;}
+    .ml-sub{font-size:10px;}
+    .ml-heroes{left:0; right:0; top:0; bottom:auto; height:auto; width:auto;
+      padding:8px 10px 10px; flex-direction:row; align-items:flex-start; gap:10px;
+      overflow-x:auto; overflow-y:hidden;
+      -webkit-mask-image:none; mask-image:none;}
+    .ml-hcard{width:calc(var(--pw) * .667); height:auto;}
+    .ml-hinfo{height:19px; font-size:9px; gap:4px; padding:0 6px;}
+    .ml-hinfo b{font-size:12px;}
+    /* 横排档节点不再右移（海报在顶上，轨在下面整屏铺开）。 */
+    .ml-track{margin-left:0;}
+    .ml-line{left:0;}
+    .ml-scroll{padding:0 56px;}
+    .ml-box{left:-54px; width:108px; max-height:70px; padding:4px 5px;
+      bottom:calc(100% - var(--rail-y) + 26px);}
+    .ml-box b{font-size:11px;}
+    .ml-box span{font-size:9px; -webkit-line-clamp:2;}
+    .ml-state{font-size:9px;}
+    .ml-stem{height:20px;}
+    .ml-need{top:calc(var(--rail-y) + 12px); font-size:10px;}
+    .ml-badge{font-size:11px; letter-spacing:1px;}
+    .ml-hnm{font-size:11px; letter-spacing:1px;}
+    .ml-node.unknown .ml-box b{font-size:18px;}
+    .ml-node.ml-end .ml-box{left:-54px; width:108px;}
+    .ml-node.ml-end .ml-box b{font-size:11px; letter-spacing:2px;}
   }
 
   /* —— ⑥ 顶栏详情自适应高度 ——
@@ -2169,6 +2567,10 @@
     .badges{margin-top:2px; gap:3px;}
     .badge{font-size:9px; padding:1px 5px;}
     .intent{font-size:10px; margin-top:2px;}
+    /* v1.0.17：同上一档 —— 图标保持「相对本档字号 2×」（9px 字 → 18px 图）。 */
+    .badge .bicon{width:18px; height:18px; vertical-align:-4px;}
+    .intent .bicon{width:20px; height:20px; vertical-align:-5px;}
+    .enemy .ename .bicon{width:22px; height:22px; vertical-align:-5px;}
     .enemy .enemyhpbar{height:8px;}
 
     /* ⑧ 角色向右挪，别压左边缘（该档原值 0px）。窄屏（≤520）那一档是上下排布、
@@ -2235,7 +2637,8 @@
         `margin-top:-17px` 提上来同排。h1 与 #topbar 在这档都是**静态**（h1 把基档的
         `position:relative` 归零），于是 #topbar 的背景先画（层叠第 1 步）、h1 的字后画
         （第 3 步）⇒ 标题字稳定压在顶栏背景**之上**；再给 #topbar 一个左内边距把芯片让开，
-        两者互不遮盖。h1 走 `pointer-events:none`，底下的顶栏照样可点（#topbar 有 onclick）。
+        两者互不遮盖。h1 走 `pointer-events:none`，避免标题字抢走顶栏按钮的点击
+        （v1.0.21：折叠只由「▾ 详情」按钮触发，顶栏整条不再挂 onclick）。
      ⚠️ h1 归零 `position:relative` 还有第二个作用：`.title-actions` 是 `position:absolute`，
         它的包含块因此从 h1 **上移到 #app**（基档就是 position:relative）⇒ 左竖栏可以直接
         挂在 #app 上：既不吃 .battle 的宽度、`left:2px` 在**任何视口宽度**下都对得齐。
@@ -2330,8 +2733,13 @@
           （1024 档：玩家右沿 169、最左敌盒 448 ⇒ 有 279px）。筹码条按 min(96px,20vw) 收窄，
           640 档三只并排时会与最左敌盒轻微重叠 —— 玩家面板 z-index:2100 高于敌盒 2000，
           筹码盖在敌人之上（可读性优先，矮屏本来就放不下三敌）。 */
-    .psummons{display:flex; position:absolute; left:calc(100% + 12px); top:50%; transform:translateY(-50%);
-              flex-wrap:wrap; align-content:center; gap:2px; max-width:min(96px,20vw); z-index:2;}
+    /* v1.0.14【筹码条不再与折叠键打架】：原先筹码条挂 #player-panel 的 `top:50%`，
+       而折叠键（.ps-fold）挂 .hero-art-box 的 `bottom:0` —— 两者是**同一条右侧竖带**，
+       竖屏/矮屏下玩家面板变矮，50% 就正好落进折叠键那一行 ⇒ 实拍两颗筹码叠在一起。
+       改成把筹码条也挂进 .hero-art-box（见 60_boot.js，与折叠键同一父盒），
+       `top:100%` = 紧贴立绘底边 ⇒ 恒在折叠键下方，任何高度都不会重合。 */
+    .psummons{display:flex; position:absolute; left:100%; top:100%; margin-left:2px; margin-top:2px;
+              flex-wrap:wrap; align-content:flex-start; gap:2px; max-width:min(96px,20vw); z-index:2;}
     .psummons .summon{font-size:10px; line-height:1.25; padding:1px 6px; border-radius:10px; white-space:nowrap;}
     .tb-summons{display:none;}
 
@@ -2340,6 +2748,29 @@
     .stat .sb-short{display:inline;}
     .summon .sb-long{display:none;}
     .summon .sb-short{display:inline;}
+
+    /* ⑦ 手牌区**钉死在 #col-main 底部**（用户 2026-10-07 真机报障：
+       「手牌区一直在往下移，导致超出现在的屏幕，抽牌堆和弃牌堆以及符文数和手牌都看不到」）。
+       成因：`.battle` 是 `flex:0 0 auto`（:207 那条注释明令不许改成可缩），
+       而它的**流内高度会随内容长**——敌人的 `.badges`（诅咒/力量/蓄力/记名/词缀…）
+       每多一行 +18px，`#turn-summary` 有内容时再 +13px（折行能到 26px）。
+       这些高度全部把 `.hand-area` 往下推，一旦越过视口底就被 `#app{overflow:hidden}` 裁掉，
+       而且**连点都点不到**（出牌靠 elementFromPoint）。实测夹具没灌敌人徽章 ⇒ 正好卡在
+       「余 ~11px」的临界，任何一枚徽章都会让手牌出屏。
+       做法：把手牌区从纵向流里摘出来，钉在 #col-main 的底边 ⇒ 无论上面长多高，
+       手牌 / 两个牌堆 / 符文数恒在屏内。`#col-main` 补 `position:relative` 当包含块，
+       `height:100%` 是**必须**的：`#field` 是 `align-items:flex-start` 的行 flex，
+       不给高度时 #col-main 会被内容撑成「只剩 .battle+summary 那么高」，手牌就浮到屏幕中间了。
+       ⚠️ 只用 position，**绝不加 transform/filter**（红线：`.hand-area` / `#hand`
+          一旦有那两个属性就成了 position:fixed 后代的包含块，会摧毁 #fx-layer 的视口坐标系）。 */
+    #col-main{position:relative; height:100%;}
+    .hand-area{position:absolute; left:0; right:0; bottom:0;}
+
+    /* ⑧ 「回合回顾」条在这档直接不渲染 —— 本档纵向预算已经被吃干净（见上一条），
+       而同一段文字 `js/30_engine.js` 已经逐字写进战报，左侧竖栏「战报」一键可达
+       （与 :401 那条「不需要这么大的版位」是同一口径）。去掉它让出 13px 给战场，
+       敌人的徽章行才有余量，不至于把手牌/意图顶到屏幕外。 */
+    #turn-summary{display:none;}
   }
 
   /* ③ 「还有 N 张可打」不再出现在手机横屏战斗版面 —— 它与结束回合按钮同排挤在右下角，
@@ -2462,11 +2893,12 @@
     #enemy-panel.ep-grid .enemy.e-summon .enemyhpbar{height:6px;}
     #enemy-panel.ep-grid .enemy.e-summon .badges{margin-top:0; gap:2px;}
     #enemy-panel.ep-grid .enemy.e-summon .badge{font-size:8px; padding:0 4px;}
-    /* 意图压到 9px + 前缀缩成「⚠ 」是为了**不折行**：84px 宽里「⚠ 意图：⚔️ 攻击 6」放不下（实测 9px 时
-       仍是 21px = 两行），把「意图：」三个字去掉省下 ~30px 才收成一行（10.35 → 一行 ~11px，省 10px）。
-       ⚠️ 只减前缀，intentText() 的正文一个字没动（⚔️/🛡️/❤️ 这些图标本身就是意图标识）。 */
-    #enemy-panel.ep-grid .enemy.e-summon .intent{font-size:9px; line-height:1.15; margin-top:1px;}
-    #enemy-panel.ep-grid .enemy.e-summon .intent::before{content:"⚠ ";}
+    /* v1.0.17：召唤物网格是全场最挤的一处（84px 宽），图标同样保持「相对本档字号 2×」= 16px。 */
+    #enemy-panel.ep-grid .enemy.e-summon .badge .bicon{width:16px; height:16px; vertical-align:-3.5px;}
+    #enemy-panel.ep-grid .enemy.e-summon .intent .bicon{width:22px; height:22px; vertical-align:-5.5px;}
+    /* v1.0.14：意图已是「图标 + 数字」（intentChip），84px 宽里一行放得下 ⇒ 字号从 9px 回到 11px。 */
+    #enemy-panel.ep-grid .enemy.e-summon .intent{font-size:11px; line-height:1.15; margin-top:1px;}
+    #enemy-panel.ep-grid .enemy.e-summon .intent::before{content:none;}
     /* 热区：网格里两行只隔 8px，基档 ±18px 的伪元素会让上下两行**互相抢点击** ⇒ 收到 ±2px
        （T-short 那条写的是 width:max(100%,84px)，这里只收纵向，横向不动）。 */
     #enemy-panel.ep-grid .enemy::after{top:-2px; bottom:-2px;}
@@ -2493,6 +2925,19 @@
       background:var(--ink2); border:1px solid var(--ink3); border-top:0;
       border-radius:0 0 8px 8px; padding:4px 8px; box-shadow:0 6px 14px rgba(0,0,0,.55);}
 
+    /* ④ v1.0.17b：浮层里的灵汁芯片防误触（用户口径「详情打开后，灵汁布局有点拥挤，
+       而且图标有点小，容易导致误触」）。原状：芯片只有 1px 内缝 + 5px 右距、图标走
+       基档 `.stat .bicon` 的 24px，相邻两枚的命中区只差 6px ⇒ 想点一枚常打中旁边那枚。
+       ⇒ 只在本档浮层内放大：图标 24 → 30px、芯片加内边距 + 圆角底色（把命中区画出来）、
+         右距拉到 10px；`.stat-potion` 自身再允许换行，灵汁一多也不会挤成一条溢出。
+       ⚠️ 选择器 `.tb-detail .potion-chip .bicon`（0,3,0）压得住基档 `.stat .bicon`（0,2,0），
+          不需要 !important；只覆盖 T-short 档，桌面档逐像素不变。 */
+    .tb-detail .stat-potion{flex-wrap:wrap; row-gap:4px;}
+    .tb-detail .potion-chip{gap:3px; margin-right:10px; padding:2px 7px; border-radius:7px;
+      background:rgba(200,107,216,.13);}
+    .tb-detail .potion-chip .bicon{width:30px; height:30px; vertical-align:-7px; margin-right:0;}
+    .tb-detail .potion-chip b{font-size:14px;}
+
     /* ② 卡名压成一行：这档手牌卡宽只有 clamp(74px,19vh,118px)（471 高时 ≈89px、
        360 高时被 74px 下限咬住），「图窗上沿标题带」宽 75.32% ⇒ 640×360 时只剩 ≈56px，
        而 base 的左右内边距 14+20=34px 只剩 22px 可用 ⇒ 四字牌名必然折行、第二行被
@@ -2511,6 +2956,9 @@
     .card.has-frame .cname{font-size:clamp(8px, calc(var(--card-w, 96px) * 0.105), 10.5px);
       padding:0 0 0 17px; word-spacing:-0.15em;}
     .card.has-frame .cname span:not(.noup){font-size:0.6em;}
+    /* v1.0.19：本档 padding-left 覆写成 17px ⇒ 升级标箭头左沿跟着挪到 17px
+       （见基档 `.card.has-frame .cname .up-mark` 的推导：必须避开费用币、又不能压到居中牌名）。 */
+    .card.has-frame .cname .up-mark{left:17px;}
   }
 
   @media (max-height:560px) and (min-width:521px){
@@ -2548,7 +2996,7 @@
 <img id="bg" alt="" style="display:none">
 <div id="app">
   <h1 class="title">志 怪 塔 <small>· 玩法原型</small><span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button></span></h1>
-  <div id="topbar" onclick="toggleTopbar()"></div>
+  <div id="topbar"></div>
   <div id="field">
     <div id="log"></div>
     <div id="col-main">
@@ -2601,7 +3049,6 @@
 <script src="js/40_flow.js"></script>
 <script src="js/50_ui.js"></script>
 <script src="js/55_cloud.js"></script>
-<script src="js/56_rank.js"></script>
 <script src="js/60_boot.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 /* ============================================================================
  * 志怪塔 · js/20_data.js —— 数据层
- * 关键词 / CARDS / HEROES / 资源·召唤·状态助手 / RELICS / POTIONS / ENEMIES / 词缀 / 地图表 / 无尽 / 稀有度概率
+ * 关键词 / CARDS / HEROES / 资源·召唤·状态助手 / RELICS / POTIONS / ENEMIES / 词缀 / 地图表 / 稀有度概率
  * ----------------------------------------------------------------------------
  * 由 原型.html 的整段内联脚本按原顺序切分而来（v0.61.05 三层重构，纯搬移）。
  * 拼接校验：本文件组去掉各自横幅后，应与切分前的内联脚本正文逐字节一致。
@@ -10,7 +10,9 @@
 const KEYWORDS = [
   ['格挡','抵消伤害的临时护盾：敌人攻击时先扣格挡，扣完才掉血。默认回合结束清零；苦行武僧未用完的保留最多 3 点，【卸甲】期间不清零。'],
   ['预格挡','下一回合开始时，场上召唤单位将为你带来的预计格挡值（格挡旁蓝色 ↑）。仅苦行武僧显示，用于提前规划攻防。'],
+  ['预恢复','在这回合之后，场上召唤单位将为你带来的预计生命回复总量（＝召唤物攻击吸血 ＋ 五通神的回合开始回血 ＋ 小鬼消散回血 ＋ 骨铃按持续回合返魂 ＋ 渡魂归己的伤害转化；多个来源重叠时一并累加）。玩家面板血量旁绿色 ＋ 显示。'],
   ['预尸气','下一回合开始时，场上召唤物将为你带来的预计【尸气】总量（＝本回合末消散的召唤物的死亡返还 ＋ 下回合开始的「每个存活召唤物 +1」）。仅茅山赶尸人显示，用于提前规划召唤节奏。'],
+  ['预血怒','下一回合末，场上存活的小鬼将为你带来的预计【血怒】层数（每个能撑过下回合末的小鬼 +1）。仅血祭阴差显示，用于提前规划召唤与爆发节奏。'],
   ['诅咒','叠加在敌人身上的资源标记（上限 6 层，每回合末 -2）。本身不增伤，而是被「斩妖剑」「噬魂术」等引爆换取伤害。'],
   ['诅咒牌','可施加诅咒的牌（9 张）：火符、万剑归宗、桃木符、蚀魂咒、舍身、焚符、咒印、咒雨、纸人。'],
   /* v0.63.0：用户指出「在天师牌库里，噬魂咒不适合消耗」—— 核实后：噬魂术**从来**不是消耗牌
@@ -18,6 +20,7 @@ const KEYWORDS = [
      读起来像游戏的【消耗】机制；而它自己的战斗日志写的正是「引爆 N 层」。
      所以这里立一个关键词把两者的差别说清，卡面文案随后统一改成「引爆」。 */
   ['引爆','把目标身上累积的【诅咒】（或【尸气】等印记）一次性转成伤害。引爆**不是【消耗】**：引爆牌不会离场，本场战斗可以反复打出。'],
+  ['腐毒','玩家对敌人施加的持续伤害。你的回合开始时，每只带毒敌人按层数掉血（1 层 = 1 点），随后层数 -1。'],
   ['魅惑','敌人下回合造成的伤害 -50%。'],
   ['镇魂','敌人下回合无法行动（跳过一回合）。'],
   ['虚弱','你造成的伤害 -25%，持续 2 回合。'],
@@ -86,15 +89,15 @@ const CARDS = [
       if(G.hero==='yincha') return; // C 列：只造成伤害并失去生命，不弃牌
       discardRandomHand(); }},
   {id:'jianfu', name:'剑符', type:'attack', rarity:'white', cost:2,
-    t:(u)=>G.hero==='ganshiren'?`造成 ${u?14:10} 伤害。消耗 3 点【尸气】，伤害翻倍`
-      :G.hero==='wuseng'?`造成 ${u?10:6} 伤害。消耗全部格挡，每消耗 2 点格挡此牌伤害 +1（无上限）`
-      :G.hero==='yincha'?`造成 10 伤害。本回合每失去 1 点生命，此牌伤害 +${u?2:1}`
-      :`造成 ${u?15:10} 伤害。若目标【诅咒】≥3 层，消耗 3 层并使伤害翻倍`,
+    t:(u)=>G.hero==='ganshiren'?`造成 ${u?16:12} 伤害。消耗 3 点【尸气】，伤害翻倍`
+      :G.hero==='wuseng'?`造成 ${u?12:8} 伤害。消耗全部格挡，每消耗 2 点格挡此牌伤害 +1（无上限）`
+      :G.hero==='yincha'?`造成 12 伤害。本回合每失去 1 点生命，此牌伤害 +${u?2:1}`
+      :`造成 ${u?17:12} 伤害。若目标【诅咒】≥3 层，消耗 3 层并使伤害翻倍`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return; let d;
-      if(G.hero==='wuseng'){ d=(u?10:6)+Math.floor(G.block/2); G.block=0; }
-      else if(G.hero==='yincha'){ d=10+(G.hpLostTurn||0)*(u?2:1); }
-      else if(G.hero==='tianshi'){ d=(u?15:10); if(t.curse>=3){ d*=2; log('剑符：消耗 3 层【诅咒】，伤害翻倍'); } }   // v0.61.35 天师列：9/14 → 10/15
-      else { d=(u?14:10); if(hasShiqi(3)){ spendShiqi(3); d*=2; log('剑符：消耗 3 点【尸气】，伤害翻倍'); } }
+      if(G.hero==='wuseng'){ d=(u?12:8)+Math.floor(G.block/2); G.block=0; }
+      else if(G.hero==='yincha'){ d=12+(G.hpLostTurn||0)*(u?2:1); }
+      else if(G.hero==='tianshi'){ d=(u?17:12); if(t.curse>=3){ d*=2; log('剑符：消耗 3 层【诅咒】，伤害翻倍'); } }   // v1.0.18 全列 +2
+      else { d=(u?16:12); if(hasShiqi(3)){ spendShiqi(3); d*=2; log('剑符：消耗 3 点【尸气】，伤害翻倍'); } }
       dealDamageTo(t,d);   // v1.0.13：诅咒消耗挪到结算之后（同雷符，见上面那条注释）
       if(G.hero==='tianshi' && (t.curse||0)>=3) t.curse-=3; }},
   {id:'zhanyaojian', name:'斩妖剑', type:'attack', rarity:'purple', cost:2,
@@ -170,9 +173,9 @@ const CARDS = [
       :`引爆目标全部【诅咒】，每层造成 ${u?6:5} 伤害`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
       if(G.hero==='ganshiren'){ const __sc=u?2:4; if(!hasShiqi(__sc)){ floatMsg('尸气不足'); return false; } spendShiqi(__sc); dealDamageTo(t,u?18:14); return; }
-      if(G.hero==='wuseng'){ const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } sfx('kw_curse'); burstShow(enemyEl(t), c, 90, 'shihun@'+t.uid); dealDamageTo(t,c*(u?3:2)); t.curse=0; const bb=c*(u?2:1); gainBlock(bb); log(`噬魂术：引爆 ${c} 层【诅咒】，获得 ${bb} 点格挡`); return; }   // v0.61.32 / v1.0.12 分段演出 / v1.0.13 引爆挪到结算之后
+      if(G.hero==='wuseng'){ const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } sfx('kw_curse'); burstShow(enemyEl(t), c, 110, 'shihun@'+t.uid); dealDamageTo(t,c*(u?3:2),false,0,false,false,{segs:c,step:110}); t.curse=0; const bb=c*(u?2:1); gainBlock(bb); log(`噬魂术：引爆 ${c} 层【诅咒】，获得 ${bb} 点格挡`); return; }   // v0.61.32 / v1.0.12 分段演出 / v1.0.13 引爆挪到结算之后 / v1.0.14 伤害逐层单独结算
       if(G.hero==='yincha'){ dealDamageTo(t,(u?16:10)+(u?3:2)*rageSpend(u?3:2,u?18:12)); return; }
-      const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } sfx('kw_curse'); burstShow(enemyEl(t), c, 90, 'shihun@'+t.uid); dealDamageTo(t,c*(u?6:5)); t.curse=0; }},   // v0.61.32 / v1.0.12 分段演出 / v1.0.13 引爆挪到结算之后
+      const c=t.curse||0; if(c<=0){ log('噬魂术：目标没有诅咒，落空'); return false; } sfx('kw_curse'); burstShow(enemyEl(t), c, 110, 'shihun@'+t.uid); dealDamageTo(t,c*(u?6:5),false,0,false,false,{segs:c,step:110}); t.curse=0; }},   // v0.61.32 / v1.0.12 分段演出 / v1.0.13 引爆挪到结算之后 / v1.0.14 伤害逐层单独结算
   {id:'qungui', name:'群鬼乱舞', type:'attack', rarity:'blue', cost:1, hpCost:(u)=>G.hero==='yincha'?2:0,
     t:(u)=>G.hero==='ganshiren'?`消耗 ${u?2:4} 点【尸气】，所有召唤单位本回合立刻作用 1 次`
       :G.hero==='wuseng'?`造成 4 伤害。场上每有 1 个召唤单位，此牌伤害 +${u?2:1}`
@@ -520,16 +523,15 @@ const CARDS = [
       wutongTick(s);
       floatMsg('五通神 · 现形'); }},
   {id:'zhouyu', name:'咒雨', type:'spirit', rarity:'purple', cost:{ganshiren:3, wuseng:0, default:2}, exhaust:true,   // v0.61.37 赶尸人列 2 → 3
-    t:(u)=>G.hero==='ganshiren'?`引爆当前所有【尸气】：清零尸气，每层尸气转化为 ${u?6:5} 点伤害，随机分配给所有敌人（最多按 12 层计）。消耗（一次性）`
+    t:(u)=>G.hero==='ganshiren'?`引爆当前所有【尸气】：清零尸气，每层尸气转化为 ${u?6:5} 点伤害，随机分配给所有敌人。消耗（一次性）`
       :G.hero==='wuseng'?`将当前全部格挡转化为等量伤害，每 1 点随机打在一个敌人身上（逐点结算）。消耗牌（一次性）`
       :G.hero==='yincha'?`将 ${u?6:4} 层【诅咒】随机施加在敌人身上。每施加 1 层，恢复 2 点生命`
       :`对所有敌人施加 1 层【诅咒】。所有敌人每有 1 层【诅咒】，此牌费用 -1（最低 ${u?0:1}）`,
     eff:(u)=>{ if(G.hero==='ganshiren'){ const q=G.尸气||0; if(q<=0){ floatMsg('没有尸气可引爆'); log('咒雨：没有尸气可引爆'); return; }
-        /* v1.0.12【伤害上限】尸玉[蓝·赶尸人]把尸气上限 12→15 ⇒ 若照原式「全部尸气 × 5/6」一次引爆，
-           本卡上限会从 72 抬到 90。这里把**参与转化的层数封在 12**（= 尸玉出现前的原上限）⇒
-           本卡上限与改版前逐字持平；多出来的尸气照旧清零（"清零"文案不变），只是不再转成伤害。
-           与 噬魂术/群鬼乱舞/蚀血/桃木符 的「min(上限, 层数)」是同一套口径。 */
-        const qConv=Math.min(q, 12);
+        /* v1.0.13【上限口径改为「跟随尸气上限」】原先死封 12 层（= 尸玉出现前的原上限），
+           用户口径：不封顶，**跟着上限走** ⇒ 改成 min(当前尸气, relicMaxShiqi())：
+           无尸玉 = 12 层（上限 72），有尸玉 = 15 层（上限 90）。 */
+        const qConv=Math.min(q, relicMaxShiqi());
         G.尸气=0; if(q>0){ heal(q); log(`咒雨：引爆 ${q} 点【尸气】，回复 ${q} 点生命`); }   // v0.61.37：清零＝消耗，按新被动等量回血
         const total=qConv*(u?6:5); const al=aliveEnemies(); if(!al.length) return;
         const dist=al.map(()=>0);
@@ -539,7 +541,7 @@ const CARDS = [
            看得见是一阵乱雨砸下来，而不是一拍全掉。 */
         const __bStep=SETTINGS.lowSpec?0:120;
         al.forEach((e,i)=>{ if(dist[i]>0) dealDamageTo(e,dist[i],false,i*__bStep); });
-        log(`咒雨：引爆 ${q} 点【尸气】（转化上限 12 层），造成 ${total} 点伤害随机分配`); floatMsg(`咒雨 · 引爆 ${q} 尸气`); return; }
+        log(`咒雨：引爆 ${q} 点【尸气】，造成 ${total} 点伤害随机分配`); floatMsg(`咒雨 · 引爆 ${q} 尸气`); return; }
       if(G.hero==='tianshi'){ aliveEnemies().forEach(e=>applyCurse(e,1)); return; }
       /* v0.61.10(P3)：咒雨·武僧 —— 格挡全转伤害，**真·逐点结算**：每 1 点＝独立一击，
          每击随机挑一个「当前存活」的敌人（某只被打死后，后面的点数重新随机，不会打在尸体上）。
@@ -590,13 +592,31 @@ const CARDS = [
       floatMsg('尸王 · 苏醒');
       log('尸王：消耗 10 点【尸气】，召唤尸王（持续 5 回合）'); }},
   /* 断刃[金·通用] 的附加卡：**不进任何卡池**（weightedCard 里按 id 排除），
-     只在获得【断刃】遗物时由 grantRelic() 塞进牌库。0 费、稳定 5 伤、不吃增伤与弱化、不可升级。
-     ⚠️ `point=true` 是**唯一**能跳过攻击力/桃木剑/铜钱剑/虚弱/业火的口径（见 30_engine.dealDamageTo），
-        别改成普通 dealDamageTo(t,5) —— 那样「不吃增伤与弱化」的承诺就废了。 */
+     只在获得【断刃】遗物时由 grantRelic() 塞进牌库。
+     v1.0.17（用户口径）：「和普通雷符一样的数值和属性，可以受到增益」⇒ 不再走
+     `dealDamageTo(t,5,false,0,true,true)` 那条「不吃增伤与弱化」的稳定伤，
+     改为逐字段对齐【雷符】本体 —— 具体对齐在下面的 CARDS 数组之后（那时才取得到 leifu）。 */
   {id:'duanren_leifu', name:'断刃雷符', type:'attack', rarity:'gold', cost:0,
-    t:()=>'造成 5 点稳定伤害（不吃增伤与弱化），不可升级',
-    eff:()=>{ const t=curEnemy(); if(!t) return; dealDamageTo(t,5,false,0,true,true); }},   // v1.0.13：第 6 参 true ⇒ 打击音按伤害分级（与普通雷符同听感），而非连击段的短促音
+    t:()=>'造成伤害（与【雷符】同数值、同属性，可受增益）',
+    eff:()=>{ const t=curEnemy(); if(t) dealDamageTo(t,0); }},
+  /* 引魂灯[金·赶尸人] 的附加卡（v1.0.20）：**不进任何卡池**（weightedCard 里按 id 排除），
+     只在获得【引魂灯】遗物时由 grantRelic() 塞进牌库（与【断刃雷符】同一套机制）。
+     数值＝原「开战自带阴兵」的口径：基础 4 伤 / 持续 3 回合；升级后 +1 伤、+1 回合。
+     0 费 ⇒ 可与其他增益/卡牌配合；死亡照走 onSummonDeath ⇒ 骨铃按其「持续回合数」回血。 */
+  {id:'yinbing', name:'阴兵', type:'spirit', rarity:'gold', cost:0,
+    t:(u)=>`召唤 1 只阴兵。每回合末造成 ${u?5:4} 伤害（持续 ${u?4:3} 回合）`,
+    eff:(u)=>{ addSummon({type:'yinbing', v:u?5:4, dur:u?4:3, healV:2, up:!!u}); floatMsg('阴兵 · 听令而来'); }},
 ];
+/* v1.0.17：把【断刃雷符】对齐到【雷符】本体 —— 只换 id 与名字，rarity / t / eff
+   跟着雷符走，但 **cost 固定为 0**（用户口径：断刃雷符是 0 费）。
+   为什么要「先建后对齐」：卡表是数组字面量，此刻按 id 还取不到 leifu。
+   好处：以后改雷符数值，这张附加卡自动同步，不会两处各漂各的（也就不会再出现
+   「雷符吃增伤、断刃雷符不吃」这种半截口径）。 */
+(function(){
+  const lf=CARDS.find(c=>c.id==='leifu'), dr=CARDS.find(c=>c.id==='duanren_leifu');
+  if(!lf || !dr) return;
+  dr.cost=0; dr.rarity=lf.rarity; dr.t=lf.t; dr.eff=lf.eff;
+})();
 /* ===================== 卡面短文案（v0.69.0） =====================
    背景：牌框换成真美术后，铭牌窗只占卡高 28%，132x200 的卡上 .cdesc 实测**只装得下 3 行**
    （用 _patch/_drvfit.js 实拍标定：30 个纯汉字 = 正好 3 行，32 个 = 4 行开始截断）。
@@ -711,7 +731,7 @@ const SHORT_TEXT = {
           ? `伤 ${u ? 21 : 16}，失 5。本场每失 1 生命伤+${u ? 2 : 1}（上限+${u ? 26 : 20}）`
           : `伤${u ? 32 : 22}。目标每2层【诅咒】费-1（最低0），结算失减免×2层`,
   zhouyu:(u)=>G.hero === 'ganshiren'
-      ? `引爆全部【尸气】：每层转 ${u ? 6 : 5} 伤随机分给敌人（≤12层）。消耗`
+      ? `引爆全部【尸气】：每层转 ${u ? 6 : 5} 伤随机分给敌人。消耗`
       : G.hero === 'wuseng'
         ? `全部格挡转为等量伤，每 1 点随机打一个敌人。消耗`
         : G.hero === 'yincha'
@@ -833,12 +853,12 @@ const SHORT_TEXT = {
           ? `格挡 ${u ? 13 : 9}。本回合每受 1 击回 ${u ? 4 : 3}`
           : `格挡 ${u ? 14 : 9}。本回合每受 1 击对攻击者【诅咒】1`,
   jianfu:(u)=>G.hero === 'ganshiren'
-      ? `伤 ${u ? 14 : 10}。耗 3【尸气】，伤翻倍`
+      ? `伤 ${u ? 16 : 12}。耗 3【尸气】，伤翻倍`
       : G.hero === 'wuseng'
-        ? `伤 ${u ? 10 : 6}。耗全部格挡，每 2 点伤+1（无上限）`
+        ? `伤 ${u ? 12 : 8}。耗全部格挡，每 2 点伤+1（无上限）`
         : G.hero === 'yincha'
-          ? `伤 10。本回合每失 1 生命伤+${u ? 2 : 1}`
-          : `伤 ${u ? 15 : 10}。目标【诅咒】≥3 则耗 3 层，伤翻倍`,
+          ? `伤 12。本回合每失 1 生命伤+${u ? 2 : 1}`
+          : `伤 ${u ? 17 : 12}。目标【诅咒】≥3 则耗 3 层，伤翻倍`,
   yinshen:(u)=>G.hero === 'ganshiren'
       ? `格挡 ${u ? 6 : 3}，抽 1。抽到【鬼怪牌】则得【尸气】${u ? 2 : 1}`
       : G.hero === 'wuseng'
@@ -880,7 +900,12 @@ const SHORT_TEXT = {
           ? `本回合每受 1 击得 ${u ? 2 : 1} 层【血怒】并对攻击者伤 ${u ? 5 : 4}`
           : `本回合每受 1 击反伤 ${u ? 4 : 3} 并对攻击者【诅咒】${u ? 2 : 1}`,
 };
-CARDS.forEach(c=>{ if(SHORT_TEXT[c.id]) c.ts=SHORT_TEXT[c.id]; });
+/* v1.0.17：断刃雷符的 t() 与【雷符】逐字相同（见上面 CARDS 之后的 sync），
+   所以它的牌面短版也直接共用雷符那一份 —— 不必再抄一遍，也就不会漏改。 */
+CARDS.forEach(c=>{
+  if(c.id==='duanren_leifu') c.ts=SHORT_TEXT.leifu;
+  else if(SHORT_TEXT[c.id]) c.ts=SHORT_TEXT[c.id];
+});
 
 const RCOLOR={white:'r-white',blue:'r-blue',purple:'r-purple',gold:'r-gold'};
 const RNAME={white:'白',blue:'蓝',purple:'紫',gold:'金'};
@@ -896,7 +921,7 @@ function deckHasMechanic(mech){ return GRANTS[mech].some(id=>G.deck.some(c=>c.id
       两段长文撑成一面字墙（用户报「文字冗长枯燥，面板单调」）。
    ⚠️ 卡上**必须**留一句被动（本仓红线：任何信息都不能只存在于 hover 里，触屏一律靠 :active 兜底）。 */
 const HEROES = [
-  {id:'tianshi', name:'符箓天师', desc:'精通符咒，用诅咒削弱并连锁击杀敌人。', mech:'咒印道体', passive:'【咒印道体】每回合开始对【诅咒】层数最高的敌人施加 1 层【诅咒】；施加产生的溢出（超过上限 6 层）每层转化为 1 点格挡。',
+  {id:'tianshi', name:'符箓天师', desc:'精通符咒，用诅咒削弱并连锁击杀敌人。', mech:'咒印道体', passive:'【咒印道体】每回合开始对【诅咒】层数最高的敌人施加 1 层【诅咒】；施加产生的溢出（超过上限 6 层）每层转化为 2 点格挡。',
    brief:'诅咒连锁 · 以咒杀敌', passiveShort:'回合开始给诅咒最高的敌人 +1 诅咒，溢出转格挡',
    deck:[['leifu',3],['jingang',2],['juling',1],['duhunguiji',1],['zhouyin',1],['zhiren',1],['shouyi',1]]},  // v0.61.35 天师初始卡池：雷符×3 金刚符×2 聚灵×1 渡魂归己×1 咒印×1 纸人×1 守一×1（共 10 张；去掉佛渡/画皮、加纸人）
   {id:'ganshiren', name:'茅山赶尸人', desc:'役使尸骸，靠尸气与召唤物持续输出。', mech:'尸气', passive:'每回合开始时，场上每有 1 个召唤单位，获得 1 点【尸气】。召唤单位死亡时，获得 2 点【尸气】。每消耗 1 点【尸气】，回复 1 点生命。【尸气】可用于加强召唤系卡牌效果。',
@@ -954,7 +979,7 @@ const YINCHA_NO_CURSE_TAG = ['leifu','huofu','jianfu','tianlei','shihun','shixue
 const TIANSHI_DYN_DMG = ['leifu','jianfu','zhanyaojian','tiebushan','shihun','qungui','taomufu','baigui','zhongkui','zhiren','xiaogui']; // v0.61.35：小鬼改为「目标带诅咒则 +2/3」，伤害随目标状态浮动
 /* ===================== 全卡重做：流派 / 资源 / 召唤 / 状态 助手 ===================== */
 const COL_A='ganshiren', COL_B='wuseng', COL_C='yincha', COL_D='tianshi';
-const GHOST_IDS = ['zhiren','xiaogui','wutong','yinbingguo','zhongkui','shi_wang'];      // 【鬼怪牌】白名单（6 张）
+const GHOST_IDS = ['zhiren','xiaogui','wutong','yinbingguo','zhongkui','shi_wang','yinbing'];   // 【鬼怪牌】白名单（v1.0.20 补引魂灯附加卡【阴兵】）
 const CAN_CURSE_IDS = ['huofu','wanjian','taomufu','shihunzhou','sheshen','fenfu','zhouyin','zhouyu','zhiren']; // 无条件可施加诅咒的牌（9 张；v0.61.35 加入纸人——天师列纸人每回合末施咒）
 const isGhostCard = c => !!(c && c.type==='spirit' && GHOST_IDS.includes(c.id));
 const isCanCurse  = c => !!(c && CAN_CURSE_IDS.includes(c.id));
@@ -993,6 +1018,19 @@ const FX_SHEETS = {
   curse:       { c:8, f:35, f0:43, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },   // 诅咒　素材 43 帧，两端看不见的 8 帧不播
   fodu:        { c:8, f:38, f0:41, rows:6, i0:1, scale:1.75, ox:0, oy:0.17 },   // 佛渡（净化）　素材 41 帧，两端看不见的 3 帧不播
   gouhun:      { c:8, f:30, f0:39, rows:5, i0:4, scale:1.02, ox:0, oy:0.14 },   // 勾魂　素材 39 帧，两端看不见的 9 帧不播
+  /* v1.0.17 新增（程序绘制，`_patch/mk_flame_sheets.py`）：下面 4 张都是自绘精灵图、
+     每一格都有内容（不存在「两端空帧」）⇒ **不写 f0**（f0 是「素材原帧数 − 裁掉的两端空帧」的记账字段，
+     只在 `_patch/fx_tune.py` 扫外部素材时才有意义；自绘图 f0 == f，写进去只会让冒烟那条
+     「f0 ≥ i0+f 且 f0 > f」的自洽断言误报）。i0 也一律 0。**帧数分两档**：
+       · guling_suck / relic_proc —— 一次性演出，48 帧 6 行（f = 48）；
+       · shiqi_flame / xuenu_flame —— 芯片上的**无限循环**，只出 8 帧 1 行（f = 8）。
+         为什么火焰不是 48 帧：循环只要一个周期；48 帧＝3840×2880（3.4MB），而 `打包.py` 会**按排**
+         切成 `fx/<名>_r0..r5.png`，多出来的 5 排永远没人请求（CSS 只循环第 0 排），
+         还会被 verify_dist 的「从未被请求的素材」咬一口。8 帧 1 排 = 拆出来正好 `_r0.png` 一张。
+         ⚠️ 正因如此，芯片火焰的地址**不能**按整键取 —— 见 `fxStripURL()`（js/00_base.js）。
+      `scale` 冒烟断言要求每条都 > 0：guling_suck / relic_proc 是 playFx 挂在玩家身上的大特效，
+      取与 heal/shiqi 同族的 2.47；两张火焰不进 playFx（尺寸由 CSS 的 background-size 定），scale 只是占位。 */
+  guling_suck: { c:8, f:48, rows:6, i0:0, scale:2.47 },   // 骨铃吸血：绿色魂气向内收束
   heal:        { c:8, f:34, f0:43, rows:6, i0:3, scale:2.47, ox:0, oy:0.23 },   // 治疗回血　素材 43 帧，两端看不见的 9 帧不播
   huo:         { c:8, f:18, f0:21, rows:4, scale:1.75, ox:0, oy:0.18 },   // 火符　素材 21 帧，两端看不见的 3 帧不播
   hurt:        { c:8, f:16, f0:17, rows:4, scale:2.15, ox:0, oy:0.23 },   // 玩家受击（帧数最短，17）　素材 17 帧，两端看不见的 1 帧不播
@@ -1001,7 +1039,15 @@ const FX_SHEETS = {
   jinzhong:    { c:8, f:41, f0:43, rows:6, i0:1, scale:1.82, ox:0, oy:0.2 },   // 金光罩 / 金钟罩　素材 43 帧，两端看不见的 2 帧不播
   lei:         { c:8, f:11, f0:19, rows:5, scale:1.05 },   // 雷符　素材 19 帧，两端看不见的 8 帧不播
   lifesteal:   { c:8, f:34, f0:37, rows:5, i0:1, scale:1.43, ox:0.15, oy:0.17 },   // 吸血 / 渡魂归己　素材 37 帧，两端看不见的 3 帧不播
+  /* v1.0.14 多段斩击：**一行 = 一个方向**（8 帧一记斩痕），6 行 = 6 个方向。
+     播哪一行由 `opts.i0` 现定（`burstShow` 按斩击段数轮流取方向，i0 = 方向 × 8），
+     所以这里的 i0:0 只是「不动 opts 时的默认方向」。
+     ⚠️ 不能跑 `_patch/fx_tune.py` 重算这一条：它按「整张图两端裁空帧」的口径量，
+     对这种「每行一个方向、每行都从第 0 格起播」的图会把 f 写成 48（跨 6 行）。已在那个脚本里跳过它。 */
+  multi_slash: { c:8, f:8, rows:6, i0:0, scale:1.09 },
+  relic_proc:  { c:8, f:48, rows:6, i0:0, scale:2.47 },   // v1.0.17 自绘：遗物触发通用金光（金符纹扩散 + 上浮光点）
   shiqi:       { c:8, f:40, f0:46, rows:7, i0:5, scale:2.47, ox:0, oy:0.23 },   // 尸气　素材 46 帧，两端看不见的 6 帧不播
+  shiqi_flame: { c:8, f:8, rows:1, i0:0, scale:1 },   // v1.0.17 自绘：尸玉在场时尸气芯片的幽蓝火焰（8 帧 1 行，循环；scale 占位，不进 playFx）
   shiwang:     { c:8, f:46, f0:51, rows:7, i0:4, scale:1.98, ox:0, oy:0.28 },   // 尸王召唤　素材 51 帧，两端看不见的 5 帧不播
   thorns:      { c:8, f:19, f0:24, rows:5, i0:4, scale:1.98, ox:0, oy:0.18 },   // 荆棘符 / 反震　素材 24 帧，两端看不见的 5 帧不播
   tianlei:     { c:8, f:14, f0:21, rows:5, scale:1.00 },   // 天雷正法　素材 21 帧，两端看不见的 7 帧不播
@@ -1010,6 +1056,7 @@ const FX_SHEETS = {
   weak:        { c:8, f:38, f0:44, rows:6, i0:5, scale:2.54, ox:0, oy:0.23 },   // 虚弱　素材 44 帧，两端看不见的 6 帧不播
   xiaogui:     { c:8, f:35, f0:42, rows:6, i0:5, scale:2.51, ox:0, oy:0.23 },   // 小鬼召唤　素材 42 帧，两端看不见的 7 帧不播
   xuenu:       { c:8, f:32, f0:41, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },   // 血怒　素材 41 帧，两端看不见的 9 帧不播
+  xuenu_flame: { c:8, f:8, rows:1, i0:0, scale:1 },   // v1.0.17 自绘：血玉在场时血怒芯片的紫焰 + 暗红余烬（8 帧 1 行，循环；scale 占位，不进 playFx）
   yehuo:       { c:8, f:45, f0:47, rows:6, scale:2.47, ox:0, oy:0.23 },   // 业火（修罗王）　素材 47 帧，两端看不见的 2 帧不播
   yinbing:     { c:8, f:44, f0:51, rows:7, i0:4, scale:1.00, ox:0, oy:0.27 },   // 阴兵过境　素材 51 帧，两端看不见的 7 帧不播
   zhenyaoling: { c:8, f:41, f0:43, rows:6, i0:1, scale:1.28, ox:0, oy:0.09 },   // 镇妖铃　素材 43 帧，两端看不见的 2 帧不播
@@ -1096,14 +1143,15 @@ function rageSpend(per, cap){ const layers=Math.floor(cap/per); const use=Math.m
    （落在 spendShiqi）。寿命偏移的唯一来源没了，A 列召唤物 dur 从此与卡面完全一致
    （纸人 2 / 小鬼 2 / 五通神 2-3 / 阴兵 3）。 */
 function addSummon(o){ G.summonsMadeTurn=(G.summonsMadeTurn||0)+1;
+  /* v1.0.20：记下**创建时的持续回合数**（dur0）—— 骨铃[紫·赶尸人] 按其回血的口径。
+     必须在这里落定：之后每回合的 dur-- 会把 dur 磨到 0，光看 dur 已经读不出「原本持续几回合」。
+     （五通神那张牌是 addSummon 之后才调 wutongTick 扣当回合寿命 ⇒ dur0 仍是卡面 dur，不受影响。） */
+  o.dur0 = o.dur;
   tipOnce('summon', '<b>召唤物</b>不算「敌人」—— 它站在你这边，每回合结束自动结算一次自己的效果（打人 / 给你格挡 / 回血），寿命归零就消散。敌人血条下面那排小字就是它们的剩余回合数。');
   sfx('card_summon');   // v0.61.32：所有己方召唤的**唯一**入口（含尸王与附灵术）
+  summonMistFx(o.type, nextMistSeq(o.type));   // v1.0.17：从刚打出的鬼怪牌冒一团翻滚黑雾飞到召唤物位；v1.0.21：按类型上色 + 同批多只错峰追尾
   G.summons.push(o); return o; }
 /* 五通神「回合开始」效果（现形当回合立即结算一次，之后每个回合开始再触发；寿命 -1） */
-/* 召唤单位的「费用」（骨铃[紫·赶尸人] 死亡回血按此口径）——
-   召唤物对象本身不带 cost 字段 ⇒ 这里按「产出它的牌的基础费用」给一个稳定口径：
-   纸人 1 / 小鬼 1 / 阴兵 1（阴兵过境 3 费召 2~3 只，摊到每只取 1）/ 五通神 2 / 尸王 0（消耗尸气而非符文）。 */
-const SUMMON_COST = { zhiren:{c:1,n:'纸人'}, xiaogui:{c:1,n:'小鬼'}, yinbing:{c:1,n:'阴兵'}, wutong:{c:2,n:'五通神'}, shi_wang:{c:0,n:'尸王'} };
 function wutongTick(s, noDecay){   // v0.61.39：noDecay=true 时只结算效果、不扣寿命（附灵术/群鬼乱舞用）
   const b=s.v||3;
   if(G.hero==='yincha'){ heal(b); log(`五通神：恢复 ${b} 点生命`); }
@@ -1151,6 +1199,30 @@ function preSummonDamage(){
   }
   return n;
 }
+/* 预恢复（v1.0.21 用户口径「每个角色都要」）：**这回合之后**，场上召唤单位将为你带来的预计回复总量。
+   逐条对齐真实结算，多个来源重叠时一并累加（用户明确要求「重叠也要显示总额」）：
+     ① 阴差：纸人 / 阴兵的**攻击吸血**（summonAct 里 s.healV —— 需有存活敌人，打空则不回）；
+     ② 阴差：五通神「回合开始」回血（wutongTick 的 s.v）；
+     ③ 骨铃：本回合末 / 下回合开始将消散的召唤物，按创建时的 dur0 返魂（onSummonDeath）；
+     ④ 阴差：小鬼消散回血（onSummonDeath 的 up?4:2）；
+     ⑤ 渡魂归己：本回合召唤物真实伤害 × ratio（duhunFlush 的 floor 口径）。
+   ⚠️ 与 summonAct 一致：尸王既不吸血也不吃这些来源，故只由 ③ 覆盖。 */
+function preSummonHeal(){
+  if(!G || !G.summons) return 0;
+  let n=0;
+  const hasEnemy=aliveEnemies().length>0;
+  for(const s of G.summons){
+    const dur=s.dur||0;
+    if(dur<=0 && !s.indefinite) continue;
+    if(G.hero==='yincha' && hasEnemy && (s.type==='zhiren'||s.type==='yinbing')) n += (s.healV||2);   // ①
+    if(G.hero==='yincha' && s.type==='wutong') n += (s.v||3);                                        // ②
+    const willDie = !s.indefinite && dur<=1;
+    if(willDie && hasRelic('guling')) n += (s.dur0!=null ? s.dur0 : dur);                            // ③
+    if(willDie && G.hero==='yincha' && s.type==='xiaogui') n += (s.up?4:2);                          // ④
+  }
+  if(duhunActive()){ const h=Math.floor(preSummonDamage()*(G.duhun.ratio||0)); if(h>0) n+=h; }        // ⑤
+  return n;
+}
 /* 预尸气：下一回合开始时，场上召唤物将带来的【尸气】合计（仅茅山赶尸人，供顶栏显示）。
    ＝ ①本回合末会消散的召唤物的死亡返还（纸人 2 / 小鬼 2 或 3 / 阴兵 1）
      ＋ ②下回合开始仍在场的召唤物，每个 +1（＝「养尸为用」被动）。
@@ -1169,6 +1241,18 @@ function preShiqiNextTurn(){
       /* 尸王消散不给尸气 → 不计 */
     } else n+=1;   // 下回合开始仍在场 → 每个 +1
   }
+  return n;
+}
+/* 预血怒：下一回合末场上存活的小鬼将带来的【血怒】合计（仅血祭阴差，供顶栏显示）。
+   血怒的可预测来源只有小鬼这一条（summonAct 里 `if(G.hero==='yincha') gainRage(1)`）：
+   小鬼每**行动一次** +1，行动完自己的 `dur--`。
+   ⚠ 能活到下回合末的只有 `dur>=2` 的那批：`dur<=1` 的这次行动后就消散了（它那 1 层算**本回合**的进账，
+   已进 G.xuenu，不算「预」）。其余来源（以血引怒按失血、反震/业火/闪避的回怒）由玩家操作决定，
+   不是「到账」的固定收入，故不计入。 */
+function preXuenuNextTurn(){
+  if(G.hero!=='yincha') return 0;
+  let n=0;
+  for(const s of G.summons){ if(s.type==='xiaogui' && (s.dur||0)>=2) n+=1; }
   return n;
 }
 function summonTarget(preferCursed){
@@ -1230,17 +1314,17 @@ const RELICS = [
   /* —— 新增 · 通用（四英雄共享池） —— */
   {id:'tongling',    name:'铜铃',   rarity:'white', desc:'战斗开始时额外抽 2 张牌'},
   {id:'yinyangyu',   name:'阴阳鱼', rarity:'blue',  desc:'受到负面效果时，恢复 2 点生命'},
-  {id:'duanren',     name:'断刃',   rarity:'gold',  desc:'牌库中生成一张【断刃雷符】：0 费、5 点稳定伤害，不可升级'},
+  {id:'duanren',     name:'断刃',   rarity:'gold',  desc:'牌库中生成一张【断刃雷符】：数值与属性同【雷符】，可受增益与升级'},
 
   /* —— 新增 · 专属 · 符箓天师（诅咒流） —— */
-  {id:'zhenmoyin',    hero:'tianshi',   name:'镇魔印',     rarity:'blue',   desc:'诅咒溢出转化的格挡，每层多 1 点'},
+  {id:'zhenmoyin',    hero:'tianshi',   name:'镇魔印',     rarity:'gold',   desc:'被动强化：【咒印道体】溢出诅咒转化的格挡 +1（每层 3 点），且每回合施加的诅咒 +1 层'},
   {id:'leifaxinjue',  hero:'tianshi',   name:'雷法心诀',   rarity:'purple', desc:'敌人每次诅咒达到 6 层，受到 4 点雷击'},
   {id:'taishangzhou', hero:'tianshi',   name:'太上咒箓',   rarity:'gold',   desc:'敌人身上的诅咒达到 6 层时，其受到的伤害 +25%'},
 
   /* —— 新增 · 专属 · 茅山赶尸人（尸气流） —— */
   {id:'shiyu',       hero:'ganshiren', name:'尸玉',       rarity:'blue',   desc:'尸气上限 +3；战斗开始时获得 3 点尸气'},
-  {id:'guling',      hero:'ganshiren', name:'骨铃',       rarity:'purple', desc:'每个召唤单位死亡时，恢复等于其费用的生命'},
-  {id:'yinhundeng',  hero:'ganshiren', name:'引魂灯',     rarity:'gold',   desc:'战斗开始时，自带一只阴兵'},
+  {id:'guling',      hero:'ganshiren', name:'骨铃',       rarity:'purple', desc:'每个召唤单位死亡时，按其持续过的回合数恢复等量生命'},
+  {id:'yinhundeng',  hero:'ganshiren', name:'引魂灯',     rarity:'gold',   desc:'牌库中生成一张 0 费【阴兵】（召唤 1 只阴兵，可受增益与升级）'},
 
   /* —— 新增 · 专属 · 苦行武僧（格挡流） —— */
   {id:'luohanquan',    hero:'wuseng',   name:'罗汉拳套',   rarity:'blue',   desc:'永久自带 1 点反伤（荆棘）'},
@@ -1258,10 +1342,15 @@ const RELICS = [
    ⚠️ 图交付之后**必须把对应条目删掉** —— 删一条，闸就多守一张（名单会随交付缩短，不会烂在这）。
    ⚠️ 只登记「路径写死在 id 规则里、被闸扫到」的那两类：`relic/<id>.png` 与 `card/<id>.png`。
       符文 / buff / fx 这些走的是运行时拼串（`buff/`+id+'.png'），闸本来就扫不到，不必登记。 */
-const ART_PENDING = [
-  /* v1.0.13：15 张新遗物图 + 断刃雷符卡图**已全部交付**，名单清空 —— 闸从此守每一张图。
-     （符文 / buff / fx 走运行时拼串，闸本来就扫不到，本来也不在这里登记。） */
-];
+/* v1.0.14：顶栏 / 玩家面板的状态图标（金币 / 血量）。**图还没到** —— iconTag 在文件缺席时逐字节
+   回落成现在的 CSS 圆点（灰度/色弱下靠形状也能分），图一放进 素材/ui/ 就自动换成 <img>，代码零改动。
+   本表是唯一真相源：60_boot.js 只从它取路径，_patch/verify_dist.py 也从它取名单（python 侧不镜像）。 */
+const STAT_ICONS = { gold:'ui/stat_gold.png', hp:'ui/stat_hp.png' };
+/* v1.0.17：名单清空 —— 已交付的图都到位了：
+   · 金币 / 血量状态图标已放进 素材/ui/stat_gold.png、stat_hp.png；
+   · 主菜单「解锁」符纸**沿用 素材/ui/menu/leaderboard.png**（用户口径）⇒ 不再另出 mileage.png。
+   闸从此重新守住每一张图：新待出图必须同步登记进本表，否则会被 verify_dist 的 [2] 报成「从未被游戏请求」。 */
+const ART_PENDING = [];
 function hasRelic(id){ return G && G.relics.includes(id); }
 function relById(id){ return RELICS.find(r=>r.id===id); }
 /* —— 获得遗物的**唯一入口** ——
@@ -1271,7 +1360,12 @@ function relById(id){ return RELICS.find(r=>r.id===id); }
 function grantRelic(r){
   if(!r) return;
   if(!hasRelic(r.id)) G.relics.push(r.id);
+  /* v1.0.17：拿到遗物的那一刻，叠一道**通用金光**（fx/relic_proc，自绘：金符纹扩散 + 上浮光点）。
+     它是一张「任何遗物生效都能复用」的通用素材 —— 这里先挂在「获得遗物」这个最显眼的触点上。
+     只在战斗场景里播：菜单 / 地图场景没有 #player-panel，锚点解析不到会白跑一次。 */
+  if(typeof SCENE !== 'undefined' && SCENE === 'battle'){ try{ playFx('relic_proc', 'player'); }catch(e){} }
   if(r.id==='duanren'){ G.deck.push(cardById('duanren_leifu')); log('断刃：牌库中生成一张【断刃雷符】'); }
+  if(r.id==='yinhundeng'){ G.deck.push(cardById('yinbing')); log('引魂灯：牌库中生成一张【阴兵】'); }
 }
 
 /* —— 遗物对「上限类 / 被动数值」的加成：统一走函数 ——
@@ -1282,7 +1376,10 @@ function relicMaxShiqi(){ return 12 + (hasRelic('shiyu') ? 3 : 0); }        // �
 function relicMaxXuenu(){ return 10 + (hasRelic('xueyu') ? 4 : 0); }        // 血玉：血怒上限 +4
 function relicBlockKeep(){ return hasRelic('jingangjing') ? 6 : 3; }        // 金刚经残页：保留上限 3→6
 function relicThorns(){ return hasRelic('luohanquan') ? 1 : 0; }            // 罗汉拳套：反伤基线 1
-function relicCurseOverflowBlock(){ return 1 + (hasRelic('zhenmoyin') ? 1 : 0); }   // 镇魔印：溢出转格挡 +1
+function relicCurseOverflowBlock(){ return 2 + (hasRelic('zhenmoyin') ? 1 : 0); }   // v1.0.18 用户口径：天师被动基线 1 → 2；镇魔印再 +1（每层 3 点）
+/* 镇魔印[金·天师]：「随机释放的诅咒增加 1」—— 经与用户确认，指的是**被动【咒印道体】每回合施加的
+   诅咒层数 1 → 2**（该项本就不是随机目标，用户口径按「加强被动本身」理解）。 */
+function relicPassiveCursePerTurn(){ return 1 + (hasRelic('zhenmoyin') ? 1 : 0); }
 /* 道心：本场战斗已触发过 ⇒ 遗物图标要变灰（用户定稿要求「本场战斗使用后，要变成灰色的图」）。
    三个遗物展示点都拼上这个类：60_boot.js 顶栏详情、50_ui.js runStatusHTML / mapTopbarHTML。 */
 function relicUsedCls(id){ return (id==='daoxin' && G && G.daoxinUsed) ? ' relic-used' : ''; }
@@ -1293,13 +1390,13 @@ function relicUsedCls(id){ return (id==='daoxin' && G && G.daoxinUsed) ? ' relic
 function relicPassiveExtra(heroId){
   const rows=[];
   if(heroId==='tianshi'){
-    if(hasRelic('zhenmoyin'))   rows.push(`诅咒溢出转格挡 ${relicCurseOverflowBlock()} 点/层`);
+    if(hasRelic('zhenmoyin'))   rows.push(`诅咒溢出转格挡 ${relicCurseOverflowBlock()} 点/层，每回合施加诅咒 ${relicPassiveCursePerTurn()} 层`);
     if(hasRelic('leifaxinjue')) rows.push('敌人诅咒满 6 层时额外受 4 点雷击');
     if(hasRelic('taishangzhou'))rows.push('敌人诅咒满 6 层时其受到的伤害 +25%');
   } else if(heroId==='ganshiren'){
     if(hasRelic('shiyu'))       rows.push(`尸气上限 ${relicMaxShiqi()} 点`);
-    if(hasRelic('guling'))      rows.push('召唤物死亡时按其费用回血');
-    if(hasRelic('yinhundeng'))  rows.push('战斗开始自带一只阴兵');
+    if(hasRelic('guling'))      rows.push('召唤物消散时按其持续回合数回血');
+    if(hasRelic('yinhundeng'))  rows.push('牌库中生成一张 0 费【阴兵】');
   } else if(heroId==='wuseng'){
     if(hasRelic('jingangjing')) rows.push(`回合结束保留格挡 ${relicBlockKeep()} 点`);
     if(hasRelic('luohanquan'))  rows.push(`自带反伤 ${relicThorns()}`);
@@ -1313,17 +1410,37 @@ function relicPassiveExtra(heroId){
 }
 
 /* ===================== 灵汁（战斗消耗品，类药水） ===================== */
+/* v1.0.14：4 瓶 → 8 瓶（治疗 / 资源 / 防御 / 过牌 四系各补一瓶，补到 8）。
+   `ic` 是**顶栏芯片的回落 emoji**（顶栏只出图标+数量，不出名字）——
+   真图（`素材/lingshi/lingshi_<id>.png`）登记进 LINGSHI_FILE 后自动换图，没图就用这枚 emoji。 */
 const POTIONS = [
-  {id:'huanyanglu', name:'还阳露', desc:'恢复 10 点生命', eff:()=>heal(10)},
-  {id:'huangquanjiu', name:'黄泉酒', desc:'获得 2 点符文', eff:()=>{ G.energy+=2; floatMsg('符文 +2'); }},
-  {id:'zhenhunshui', name:'镇魂水', desc:'获得 10 点格挡', eff:()=>gainBlock(10)},
-  {id:'mengpotang', name:'孟婆汤', desc:'抽 2 张牌', eff:()=>drawCards(2)},
+  {id:'huanyanglu', name:'还阳露', ic:'💧', desc:'恢复 10 点生命', eff:()=>heal(10)},
+  {id:'huangquanjiu', name:'黄泉酒', ic:'🍶', desc:'获得 2 点符文', eff:()=>{ G.energy+=2; floatMsg('符文 +2'); }},
+  {id:'zhenhunshui', name:'镇魂水', ic:'🛡️', desc:'获得 10 点格挡', eff:()=>gainBlock(10)},
+  {id:'mengpotang', name:'孟婆汤', ic:'🃏', desc:'抽 2 张牌', eff:()=>drawCards(2)},
+  {id:'jingangjiu', name:'金刚酒', ic:'👊', desc:'本回合攻击牌 +4 伤害', eff:()=>{ G.turnAtkBuff=(G.turnAtkBuff||0)+4; floatMsg('攻击 +4'); }},
+  /* v1.0.19：用户口径「清心露效果跟佛渡一样，除清负面外还清废牌，只是只能在该回合生效」——逐条对齐 佛渡(fodu) 的清场三件套。 */
+  {id:'qingxinlu', name:'清心露', ic:'✨', desc:'清除自身全部负面状态与废牌，本回合免疫负面效果', eff:()=>{ clearJunk(); clearPlayerDebuffs(); G.debuffImmune=1; floatMsg('本回合免疫负面效果'); }},
+  {id:'fugusan', name:'腐骨散', ic:'☠️', desc:'对全体敌人施加 2 层【腐毒】（每回合开始逐层掉血）', eff:()=>applyPoisonAll(2)},
+  {id:'tongyoucha', name:'通幽茶', ic:'🍵', desc:'抽 3 张牌', eff:()=>drawCards(3)},
 ];
+/* 腐毒：玩家对敌人的持续伤害（每层每回合 1 点，回合开始结算一次后减 1 层）。
+   ⚠️ 与敌人的【诅咒】无关 —— 诅咒是「印记」，本身不掉血；腐毒是真正的 DoT。 */
+function applyPoisonAll(n){
+  const list=aliveEnemies();
+  if(!list.length) return;
+  list.forEach(e=>{ e.poison=(e.poison||0)+n; });
+  sfx('card_curse');
+  floatMsg('腐毒 +'+n);
+  log(`腐骨散：全体敌人获得 ${n} 层【腐毒】`);
+}
 /* ===================== 灵石图标（道具 / 灵汁的贴图） =====================
-   7 张，两类混装：
+   11 张，两类混装：
      · 3 张补给**已有遗物**（朱砂笔 / 护身符 / 返魂香）
-     · 4 张是**灵汁的头一次图标**（黄泉酒 / 镇魂水 / 还阳露 / 孟婆汤）
-   灵汁此前一直是无图的纯文字卡（走 potionIcon 的 .ricon-fb 字牌占位），v0.69.0 补齐。
+     · 8 张是**灵汁的头一次图标**（还阳露 / 黄泉酒 / 镇魂水 / 孟婆汤 /
+       金刚酒 / 清心露 / 腐骨散 / 通幽茶）
+   灵汁此前一直是无图的纯文字卡（走 potionIcon 的 .ricon-fb 字牌占位），v0.69.0 补齐 4 张，
+   v1.0.14 扩到 8 瓶灵汁时又补齐 4 张。
 
    ⚠️ **本表的键是「物品 id」，值是「磁盘上的文件名」，两者不保证同形** —— 表存在的意义
    就是让它们解耦，所以别拿 id 去硬拼路径。历史教训：`huangquanjiu` 的文件曾经少个 an
@@ -1339,13 +1456,24 @@ const LINGSHI_FILE = {
   huangquanjiu: 'lingshi/lingshi_huangquanjiu.png',
   zhenhunshui:  'lingshi/lingshi_zhenhunshui.png',
   huanyanglu:   'lingshi/lingshi_huanyanglu.png',
-  mengpotang:   'lingshi/lingshi_mengpotang.png'
+  mengpotang:   'lingshi/lingshi_mengpotang.png',
+  jingangjiu:   'lingshi/lingshi_jingangjiu.png',
+  qingxinlu:    'lingshi/lingshi_qingxinlu.png',
+  fugusan:      'lingshi/lingshi_fugusan.png',
+  tongyoucha:   'lingshi/lingshi_tongyoucha.png'
 };
 /* typeof 兜底：本表在 20_data.js，而 relicIcon 定义在更早加载的 10_audio.js ——
    只在运行时被调用，顺序没问题；但冒烟/降级场景下若本表缺位，也不该抛 ReferenceError。 */
 function lingshiSrc(id){ return (typeof LINGSHI_FILE !== 'undefined' && LINGSHI_FILE[id]) || ''; }
 
-function randomPotion(){ const p=POTIONS[Math.floor(rng()*POTIONS.length)]; return {...p}; }
+function randomPotion(){
+  /* v1.0.15：唯一入口 —— 只从**已解锁**的灵汁里抽（老 4 瓶恒开、新 4 瓶看里程碑）。
+     兜底：门禁把池子抽空时放开门禁（理论上不会，但绝不允许出现空奖励/死循环）。 */
+  let pool=POTIONS.filter(p=>mileOn('potion',p.id));
+  if(!pool.length) pool=POTIONS;
+  const p=pool[Math.floor(rng()*pool.length)];
+  return {...p};
+}
 function potionSummary(){
   const m={};
   G.potions.forEach(p=>{ m[p.name]=(m[p.name]||0)+1; });
@@ -1362,16 +1490,24 @@ function showPotionSelect(){
   showOverlay(`<h2>使 用 灵 汁</h2><p>点击一瓶灵汁使用（战斗消耗，本局保留直到使用）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="hideOverlay()">返回</button>`);
 }
 function usePotion(i){
+  if(G.enemyPhase) return;   // v1.0.14：敌人/召唤物行动演出期间不可使用灵汁
   const p=G.potions[i]; if(!p) return;
   p.eff(); G.potions.splice(i,1); sfx('heal');
   log(`使用灵汁【${p.name}】`); hideOverlay(); render();
 }
+/* v1.0.14：顶栏灵汁改「图标 + 数量」，不再写名字（用户口径）——
+   名字与效果都在 data-tip（`potionname:`）里，点一下即可使用。 */
 function potionBagHTML(){
   if(!G.potions.length) return '';
   const m={}; const order=[];
   G.potions.forEach(p=>{ if(!m[p.name]){ m[p.name]=1; order.push(p.name); } else m[p.name]++; });
-  const items=order.map(name=>`<span style="cursor:pointer;white-space:nowrap" data-tip="potionname:${name}" onclick="event.stopPropagation();usePotionByName('${name}')">${name}${m[name]>1?`×${m[name]}`:''}</span>`).join('　');
-  return `<span class="stat" style="color:#c86bd8">🧪灵汁：${items}</span>`;
+  const items=order.map(name=>{
+    const p=G.potions.find(x=>x.name===name);
+    const src=p?lingshiSrc(p.id):'';
+    const ic=src?iconTag(src,'🧪'):((p&&p.ic)||'🧪');
+    return `<span class="potion-chip" data-tip="potionname:${name}" onclick="event.stopPropagation();usePotionByName('${name}')">${ic}${m[name]>1?`<b>${m[name]}</b>`:''}</span>`;
+  }).join('');
+  return `<span class="stat stat-potion" style="color:#c86bd8" data-tip="potionbag">${items}</span>`;
 }
 function usePotionByName(name){
   const i=G.potions.findIndex(p=>p.name===name);
@@ -1560,7 +1696,8 @@ function effectiveCost(c){
   // 天雷正法(#5) A 赶尸人：每 2 点【尸气】-1 费（最低 0）；D 天师：目标每 2 层【诅咒】-1 费（最低 0）   // v0.61.37 A：每 3 点 → 每 2 点
   if(c.id==='tianlei'){
     if(G.hero==='ganshiren'){ cost=Math.max(0, cost - Math.floor((G.尸气||0)/2)); }
-    else if(G.hero==='tianshi'){ const t=curEnemy(); if(t) cost=Math.max(0, cost - Math.floor((t.curse||0)/2)); }
+    /* v1.0.19：用户口径——天师列按**全场最高**诅咒数减费（原按当前/最右目标，牌面费用会随选中目标跳变）。 */
+    else if(G.hero==='tianshi'){ const mx=aliveEnemies().reduce((s,e)=>Math.max(s,e.curse||0),0); cost=Math.max(0, cost - Math.floor(mx/2)); }
   }
   // 噬魂术(#8) A 赶尸人：本回合召唤过单位则 -1 费
   if(c.id==='shihun' && G.hero==='ganshiren' && (G.summonsMadeTurn||0)>0){ cost=Math.max(0,cost-1); }
@@ -1589,7 +1726,7 @@ function effectiveCost(c){
       不进 `cardSnap`、不影响 `makeEnemy` 的数值计算 ⇒ 可单独回滚。 */
 const ENEMIES = {
   youhun:{name:'游魂', hp:24, kind:'ghost', intents:[{type:'attack',v:6},{type:'charge',v:4}]},
-  zhizharen:{name:'纸扎人', hp:28, kind:'ghost', intents:[{type:'attack',v:8},{type:'block',v:6}]},
+  zhizharen:{name:'纸扎人', hp:28, kind:'yao', intents:[{type:'attack',v:8},{type:'block',v:6}]},
   huyao:{name:'狐妖', hp:26, kind:'yao', intents:[{type:'attack',v:7},{type:'weak'}]},
   jiangshi:{name:'僵尸', hp:34, kind:'jiangshi', intents:[{type:'attack',v:9},{type:'heal',v:5}]},
   shanxiao:{name:'山魈', hp:30, kind:'yao', aggressive:true, intents:[{type:'attack',v:6},{type:'multi',n:3,v:3}]},
@@ -1603,11 +1740,11 @@ const ENEMIES = {
     sayIn:'天下太平？我不信。', sayHit:'唔——好重的煞气。',
     sayLow:'太平…怕要到头了。', sayOut:'太平…倒也好。',
     intents:[{type:'attack',v:12},{type:'strength',v:2}]},
-  huapigui:{name:'画皮鬼', hp:46, kind:'ghost', elite:true, aggressive:true,
+  huapigui:{name:'画皮鬼', hp:46, kind:'yao', elite:true, aggressive:true,
     sayIn:'这张脸，你可喜欢？', sayHit:'别打脸！别打脸…',
     sayLow:'皮…要掉了…', sayOut:'别揭…别揭我…',
     intents:[{type:'attackBlock',v:8,block:6},{type:'attack',v:12}]},
-  yecha:{name:'夜叉', hp:55, kind:'ghost', elite:true, aggressive:true,
+  yecha:{name:'夜叉', hp:55, kind:'yao', elite:true, aggressive:true,
     sayIn:'血食，来。', sayHit:'咯——有点嚼头。',
     sayLow:'饿……更饿了……', sayOut:'饿……',
     intents:[{type:'charge',v:8},{type:'attack',v:14}]},
@@ -1626,7 +1763,7 @@ const ENEMIES = {
     sayIn:'我二人，同去同归。', sayHit:'分身…也知痛。',
     sayLow:'兄长…我先走一步。', sayOut:'兄长…等我…',
     intents:[{type:'multi',n:2,v:4},{type:'gouhun'},{type:'multi',n:2,v:4}]},
-  yewang:{name:'夜王', hp:220, kind:'ghost', boss:true, aggressive:true,
+  yewang:{name:'夜王', hp:220, kind:'yao', boss:true, aggressive:true,
     sayIn:'长夜由我执掌。', sayHit:'夜…也会疼么。',
     sayLow:'天黑…怎么还不黑。', sayOut:'天…要亮了么…',
     intents:[{type:'multi',n:2,v:9},{type:'strength',v:3,weak:true}]},
@@ -1670,7 +1807,7 @@ const ENEMIES = {
     intents:[{type:'attack',v:12},{type:'strength',v:3},{type:'multi',n:2,v:9}]},
   xiuluo:{name:'修罗', hp:48, kind:'yao', aggressive:true, intents:[{type:'attack',v:13},{type:'strength',v:2}]},
   luosha:{name:'罗刹', hp:52, kind:'yao', intents:[{type:'attack',v:12},{type:'attack',v:12},{type:'heal',v:8}]},
-  mingwei:{name:'幽冥守卫', hp:50, kind:'ghost', intents:[{type:'block',v:8},{type:'attack',v:11}]},
+  mingwei:{name:'幽冥守卫', hp:50, kind:'yao', intents:[{type:'block',v:8},{type:'attack',v:11}]},
   yanluo:{name:'阎罗', hp:58, kind:'ghost', aggressive:true, intents:[{type:'attack',v:15},{type:'gouhun'},{type:'attack',v:13}]},
   xiuluojiang:{name:'修罗将', hp:80, kind:'yao', elite:true, aggressive:true,
     sayIn:'修罗道上，无人生还。', sayHit:'好！再来！',
@@ -1720,13 +1857,11 @@ function makeEnemy(def, key){
   const summon = !!def.summon;
   const hpMul = summon ? 1 : (def.boss ? 1.6 : def.elite ? 1.4 : 1.25);
   const atkMul = summon ? 1 : (def.boss ? 1.4 : def.elite ? 1.3 : 1.25);
-  // 无尽：随层数线性成长（召唤物除外）
-  const endMul = (!summon && G && G.endless) ? endlessGrowMul(G.endlessFloor) : 1;   // v1.0.1：分段加速
-  const hp = Math.round(def.hp * hpMul * endMul);
-  const scaleAtk = it => { const c={...it}; if(c.v && (c.type==='attack'||c.type==='multi'||c.type==='attackBlock')) c.v=Math.round(c.v*atkMul*endMul); return c; };
+  const hp = Math.round(def.hp * hpMul);
+  const scaleAtk = it => { const c={...it}; if(c.v && (c.type==='attack'||c.type==='multi'||c.type==='attackBlock')) c.v=Math.round(c.v*atkMul); return c; };
   const intents = def.intents.map(scaleAtk);
   const intents2 = def.intents2 ? def.intents2.map(scaleAtk) : null;
-  const e = {key:key, name:def.name, hp, maxHp:hp, block:0, pingbi:0, intents, intentIndex:0, intent:{type:'dormant'}, pendingDamage:0, curse:0, charm:0, charmPct:0.5, charmUsed:false, sealedEver:false, seal:false, strength:0, kind:def.kind, elite:!!def.elite, boss:!!def.boss, aggressive:!!def.aggressive, lifesteal:def.lifesteal||0, phase:!!def.phase, phase2:false, intents2, ledgerActive:false, ledgerDmg:0, ledgerAffix:null, split:!!def.split, splitDone:false, sealedCost:0, uid:UID++,
+  const e = {key:key, name:def.name, hp, maxHp:hp, block:0, pingbi:0, intents, intentIndex:0, intent:{type:'dormant'}, pendingDamage:0, curse:0, charm:0, charmPct:0.5, charmUsed:false, sealedEver:false, seal:false, strength:0, kind:def.kind, elite:!!def.elite, boss:!!def.boss, aggressive:!!def.aggressive, lifesteal:def.lifesteal||0, phase:!!def.phase, phase2:false, intents2, ledgerActive:false, ledgerDmg:0, ledgerAffix:null, split:!!def.split, splitDone:false, sealedCost:0, poison:0, uid:UID++,
     /* v0.76.0：四档台词透传。**这一行是显式构造，漏了就是「字段写了、气泡永远不出现」
        的静默失效** —— 上面 `ENEMIES` 里那四档全都白写，而冒烟的四档齐全闸照样绿
        （它查的是 `ENEMIES`，不是 `makeEnemy` 的产物）⇒ 另有一条断言专门查
@@ -1745,14 +1880,9 @@ function makeEnemy(def, key){
 function rollAffixes(def){
   if(!G || def.boss) return [];
   let count;
-  if(G.endless){
-    // 无尽：词缀随层数叠加（每 2 层 +1，精英 +1，上限 6 条）
-    count = Math.min(6, 1 + Math.floor((G.endlessFloor||0)/2) + (def.elite?1:0));
-  } else {
-    const act = G.act||1;
-    // 难度靠「词缀叠加」而非数值翻倍：第三幕敌人携带更多（不同）词缀
-    count = act===1 ? (def.elite ? 1 : 0) : act===2 ? (def.elite ? 2 : 1) : (def.elite ? 3 : 2);
-  }
+  const act = G.act||1;
+  // 难度靠「词缀叠加」而非数值翻倍：第三幕敌人携带更多（不同）词缀
+  count = act===1 ? (def.elite ? 1 : 0) : act===2 ? (def.elite ? 2 : 1) : (def.elite ? 3 : 2);
   return shuffle(AFFIXES.slice()).slice(0,count).map(a=>({id:a.id, tier:1}));
 }
 /* 节点化 Run：三幕地图（v0.61.40 起为「每次生成」的随机树状图，参考杀戮尖塔）
@@ -1806,12 +1936,16 @@ function actMinionPool(act){
    第 9 层起「3 只」的概率从老的 0.65 抬到 0.85（后期加压）；中间层维持老口径。
    下标 = MAP 的层号 r（0 起算）；越界一律回落 0.65。 */
 const ENEMY3_P3 = [0, 0, 0, 0, 0.55, 0.6, 0.6, 0.65, 0.65, 0.85, 0.85, 0.85, 0.85, 0.85];
-function enemy3Chance(r){
+function enemy3Chance(r, act){
   if(typeof r!=='number' || r<0 || r>=ENEMY3_P3.length) return 0.65;
-  return ENEMY3_P3[r];
+  const p=ENEMY3_P3[r];
+  /* v1.0.21：第一幕「3 只」概率再压一档（用户反馈第一幕难度偏高）——**只对 act===1 生效**：
+     其余两幕与越界回落（单参调用，如冒烟断言）逐字节不变 ⇒ ENEMY3_P3 的数值断言不受影响。 */
+  if(act===1) return p*0.6;
+  return p;
 }
-function pickFightFrom(pool, R, row){
-  const p3=enemy3Chance(row);
+function pickFightFrom(pool, R, row, act){
+  const p3=enemy3Chance(row, act);
   return mkShuffle(R)(pool.slice()).slice(0, R()<p3?3:2);
 }
 
@@ -1883,7 +2017,7 @@ function assignTypes(act, R, rows, minionPool, elitePool, bossPool, quotaOverrid
     if(node.t==='elite'){ node.e=pickElite(); continue; }
     if(node.t!=='fight') continue;
     if(r>0 && R()<0.06){ node.t='elite'; node.e=pickElite(); }   // 少量野生精英，保持稀有
-    else node.e=pickFightFrom(minionPool, R, r);   // v0.61.41：把层号传进去 —— 前几层最多 2 只、后期 3 只概率抬高
+    else node.e=pickFightFrom(minionPool, R, r, act);   // v0.61.41：把层号传进去；v1.0.21：再传幕号（第一幕 3 敌概率下调）
   }
   return q;
 }
@@ -2050,7 +2184,7 @@ function genAct(act, seed, opts){
   return rows;
 }
 let ACTS = [genAct(1,101), genAct(2,202), genAct(3,303)];   // 加载即有一张合法地图；ACTS.length **必须恒为 3**（40_flow 用它判通关）
-const ACT_NAMES = ['第一幕 · 乱葬岗', '第二幕 · 黄泉路', '第三幕 · 幽冥塔', '镇妖塔 · 无尽'];
+const ACT_NAMES = ['第一幕 · 乱葬岗', '第二幕 · 黄泉路', '第三幕 · 幽冥塔'];
 let MAP = ACTS[0];
 /* 开新局 / 续档 都走它：一个种子 → 三幕地图，MAP 同步指向当前幕 */
 function buildActs(seed){
@@ -2058,37 +2192,6 @@ function buildActs(seed){
   ACTS=[genAct(1,deriveSeed(sd,1)), genAct(2,deriveSeed(sd,2)), genAct(3,deriveSeed(sd,3))];
   MAP=ACTS[((G&&G.act)||1)-1] || ACTS[0];
   return ACTS;
-}
-
-/* ===================== 镇妖塔 · 无尽模式 ===================== */
-const ENDLESS_MINIONS = ['youhun','zhizharen','huyao','jiangshi','shanxiao','shuigui','mengpo','niutou','mamian','wangchuan','panguan','xiuluo','luosha','mingwei','yanluo'];
-const ENDLESS_ELITES = ['baiwuchang','heiwuchang','huapigui','yecha','juhunshi','niumamian','xiuluojiang'];
-const ENDLESS_BOSSES = ['jiangwang','hanba','xueshi','xiebian','panguanwang','mengpowang','yewang','xiuluowang','yanluotianzi'];
-const ENDLESS_GROWTH = 0.06; // 每爬 1 层，敌人生命/攻击 +6%
-/* v1.0.1：无尽难度**分段缓慢加速** —— 前 10 层每层 +6%；过 10 层起每层再叠 +2%；
-   过 20 层起再叠 +2%。纯直线到高层会「同一套数值磨很久」，分段让后期压力真上来，
-   但仍是多项式增长（非指数爆炸），不会一刀砍死。词缀叠加仍走 rollAffixes 的「每 2 层 +1（上限 6）」。 */
-function endlessGrowMul(floor){
-  const f = Math.max(0, floor|0);
-  let m = 1 + f*ENDLESS_GROWTH;
-  if(f>10) m += (f-10)*0.02;
-  if(f>20) m += (f-20)*0.02;
-  return m;
-}
-function randEndlessFight(){
-  // 15% 概率刷精英（单个），否则 2~3 个小怪；词缀由 rollAffixes 按层数叠加
-  if(rng()<0.15) return [ENDLESS_ELITES[Math.floor(rng()*ENDLESS_ELITES.length)]];
-  const n = rng()<0.5 ? 2 : 3;
-  return shuffle(ENDLESS_MINIONS.slice()).slice(0,n);
-}
-function genEndlessMap(){
-  // v0.61.40：每 lap 都是**新结构**（不再复用 ACT1 骨架）。种子由 mapSeed+层数派生 → 同一层可复现，
-  // 不至于每次进无尽都是同一张图。敌人仍走无尽专用池，难度靠 endlessFloor 成长。
-  const sd=deriveSeed((G&&G.mapSeed)||1, 97+((G&&G.endlessFloor)||0));
-  return genAct(1, sd, {
-    minions: ENDLESS_MINIONS, elites: ENDLESS_ELITES, bosses: ENDLESS_BOSSES,
-    quota: {camp:2, shop:2, elite:3, unknown:4}
-  });
 }
 
 /* ===================== 金卡补偿值系统 ===================== */
@@ -2182,4 +2285,86 @@ function rollCardRarity(tier) {
     return 'gold';
   }
 }
+
+/* ===================== 里程碑（渐进门禁制 · v1.0.15） =====================
+   设计口径（用户拍板）：**只解锁内容，不给任何数值加成**。
+   初始只开 1 个角色（tianshi 符箓天师）+ 基础内容（白/蓝卡牌、白/蓝遗物、老 4 瓶灵汁）；
+   每局结束（通关或失败都算）累积「里程碑点数」，达到 need 即**永久解锁**对应内容。
+   进度并入主存档 SAVE（SAVE.progress / SAVE.mile），与图鉴、成就同一份云存档。
+
+   ⚠️ 本表是**唯一真相源**：判定走 js/50_ui.js 的 mileOn()，接线散在 4 个内容入口。
+   ⚠️ 阈值标定（按下面的公式实测）：
+     · 开局未推进 ≈ 0；第 2 幕中段失败 ≈ 250~350；第 3 幕失败 ≈ 430~600；
+     · **一次普通通关 ≈ 950~1050**（3 幕 240 + 层 195 + 通关 500 + 击杀约 30×3）。
+     所以设计成「首次通关能一次点亮前 4 条」，最后两条（法器通灵 / 血祭成煞）刻意抬到 700 / 1250
+     —— 让**首次通关也吃不完**，血祭阴差是跨局的收尾解锁，保留「渐进」手感。 */
+/* ⚠️ v1.0.16：**门禁总开关**。测试期先关掉（用户口径「里程碑的设定最后装上」）：
+   关掉时 mileOn() 一律放行 —— 全部角色 / 卡牌 / 遗物 / 灵汁都可正常取用，方便试玩；
+   但进度记录（SAVE.progress / SAVE.mile）与独立的「解锁」界面**照常工作**，
+   等正式上线把这里改回 true 即可，其余一行都不用动。 */
+let MILE_GATE_ON = false;
+/* ⚠️ v1.0.25：这是一张**遗留的内容门禁表**，只供 mileOn() 判断「某类内容现在开不开」。
+   它**不再是进度来源** —— 里程的累积与达标已全面由下面的**每角色 6 档 MILE_TRACKS** 驱动
+   （见 grantRunMilestones）。等第 1~5 档的真实奖励内容定稿后，把奖励与档位对上，
+   这张表就彻底退休（连同 MILE_GATE_ON 一起撤）。 */
+const MILESTONES = [
+  { id:'hero_ganshiren', need:120,  name:'尸影初现', desc:'解锁角色【茅山赶尸人】',   heroes:['ganshiren'] },
+  { id:'adv_card',       need:220,  name:'符箓精进', desc:'紫/金进阶卡牌进入奖励池',   advCards:true },
+  { id:'potion_new',     need:300,  name:'丹炉重开', desc:'解锁 4 瓶新灵汁',           potions:['jingangjiu','qingxinlu','fugusan','tongyoucha'] },
+  { id:'hero_wuseng',    need:380,  name:'禅心初定', desc:'解锁角色【苦行武僧】',       heroes:['wuseng'] },
+  { id:'adv_relic',      need:700,  name:'法器通灵', desc:'紫/金遗物进入掉落池',       advRelics:true },
+  { id:'hero_yincha',    need:1250, name:'血祭成煞', desc:'解锁角色【血祭阴差】',       heroes:['yincha'] },
+];
+/* 一局结束时的里程碑点数 —— **独立函数**，便于冒烟直接断言。
+   v1.0.25（用户定稿口径）：公式改为 —— 每推进一幕 200 点（act 从 1 起，故 act-1）·
+     每爬一层 15 点 · 每击杀 1 个 5 点 · 通关（打穿最后一幕幕主）额外 600 点；结果不小于 0。
+   取这套权重的依据：按真实地图结构做 20 万局蒙特卡洛，平均每把 ≈ 572 点，
+   正好落在下面 6 档阈值「550 / 1400 / 2900 / 4500 / 7500 / 11000」（≈ 1.0 / 2.4 / 5.1 / 7.9 / 13.1 / 19.2 把）上。
+   传入 s 可指定状态（不传则读全局 G），对老档/空值一律安全回落。 */
+function milePointsFor(s){
+  const g = s || (typeof G!=='undefined' ? G : null);
+  if(!g) return 0;
+  const act = Math.max(0,(g.act|0)) - 1;                 // act=1 ⇒ 0
+  const pts = act*200 + Math.max(0,(g.mapRow|0))*15 + Math.max(0,(g.totalKills|0))*5 + (g.finalBoss?600:0);
+  return Math.max(0, pts);
+}
+/* —— 里程碑「里程轨」（v1.0.21，用户草图）：左侧 4 个角色开关（横屏立绘 + 名字），
+   右侧一条**横向蓝色里程线**向左固定、向右随里程延长；线上一串节点，节点上方是白框奖励，
+   节点下方标里程数。每条轨属于**一个角色**，切角色看各自的轨。
+   ⚠️ 待定稿：各角色的**专属奖励内容 / 对应里程数 / 里程增长规则**要等与用户讨论后再填。
+     定稿前 MILE_TRACKS[hero] 留空，UI 按下面的骨架兜底渲染（见 50_ui.js 的 mileNodesFor），
+     保证界面可看可点；定稿后只需在 MILE_TRACKS 里按 {nodes:[{id,need,name,desc}, ...]} 补数据，
+     UI / CSS 一行都不用改。
+   v1.0.24（用户定稿口径）：每条角色轨**暂时 6 档**，第 1~5 档 = 真实奖励（卡牌 / 机制 / 遗物等，
+     内容与里程数**待与用户一起设计**），第 6 档 = 一张【入门符纸】（解开一名角色）；
+     **里程数不设上限**，轨的尽头放一个「敬请期待」占位节点（后续版本继续加奖励）。 */
+const MILE_TIER_COUNT = 6;
+/* 神秘人：**尚未实装的新角色**的海报位（黑调 · 敬请期待）。刻意**不进 HEROES**——
+   一旦进去就会被选角页 / 牌组 / 存档当成真角色。它的轨用「未知」节点盖住，不透露任何内容。 */
+const MILE_MYSTERY = { id:'mystery', name:'???', mech:'敬请期待', teaser:true };
+/* v1.0.25（用户拍板）：**新体系取代旧的全局 MILESTONES 进度** —— 每个角色一条各自的 6 档轨，
+   阈值按「平均每把 ≈ 572 点」折算：
+     · 通用角色（赶尸人 / 武僧 / 阴差）：550 / 1400 / 2900 / 4500 / 7500 / 11000
+     · 天师（初始角色）**刻意压低** —— 350 / 700 / 1000 / 1400 / 1850 / 2400，
+       让刚入坑的玩家尽快看到「下一档」、尽早拿到下一个角色，把正反馈前置。
+   ⚠️ 第 1~5 档的**奖励内容**仍待与用户一起设计（里程数已定稿）⇒ 标 pending，先按「待定稿」渲染；
+      第 6 档 = 一张【入门符纸】（可任选一名角色解锁）。定稿后只改这里的 name/desc 即可。
+   神秘人不在此表 ⇒ mileNodesFor 走「未知」骨架。 */
+const MILE_TIER_NEED = {
+  tianshi:   [350, 700, 1000, 1400, 1850, 2400],
+  ganshiren: [550, 1400, 2900, 4500, 7500, 11000],
+  wuseng:    [550, 1400, 2900, 4500, 7500, 11000],
+  yincha:    [550, 1400, 2900, 4500, 7500, 11000],
+};
+const MILE_TRACKS = {};
+Object.keys(MILE_TIER_NEED).forEach(function(hid){
+  MILE_TRACKS[hid] = { nodes: MILE_TIER_NEED[hid].map(function(need,i){
+    const last = (i === MILE_TIER_COUNT - 1);
+    /* 全部标 pending：**里程数已定稿，但 6 档的奖励内容（含第 6 档符纸的解锁动作）尚未实装**，
+       先按「待定稿」渲染，避免点了白框出现「已领取」却不发奖励的假交互。 */
+    return { id:hid+'_t'+(i+1), tier:i+1, need:need, pending:true, ticket:last,
+      name: last ? '入门符纸' : '奖励待定',
+      desc: last ? '可任选一名角色解锁（符纸发放待实装）。' : '档位奖励待定稿（里程数已定）。' };
+  })};
+});
 

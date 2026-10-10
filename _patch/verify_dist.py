@@ -89,6 +89,15 @@ def dump_ids():
           # 这些是「设计已定稿、图还没到」的路径，[1] 必须把它们从 want 里摘掉，
           # 否则每加一件新遗物/新卡就先红一次，逼人塞占位图或直接关闸。
           "artPending:ART_PENDING,"
+          # v1.0.14：金币 / 血量状态图标（唯一真相源在 20_data.js 的 STAT_ICONS）。
+          # 与 artPending 同一套机制：图没到时先登记进 ART_PENDING 豁免，交付后从名单删掉即被闸守住。
+          "statIcons:Object.keys(STAT_ICONS).map(function(k){return STAT_ICONS[k];}),"
+          # v1.0.14：fx/ 里的**非精灵图**整张素材（键名，唯一真相源在 00_base.js 的 FX_WHOLE）。
+          # [2d] 的精灵图几何闸按这张表豁免它 —— 别在 python 侧硬编码名字。
+          "fxWhole:Object.keys(FX_WHOLE),"
+          # v1.0.16：iconTag 里**拼串**取用的素材（ui/intent_* / ui/kind_* / 词缀 buff/<id>.png）。
+          # 唯一真相源在 js/50_ui.js 的 TAG_ICON_PATHS，python 侧不镜像这三族的名字。
+          "tagIcons:TAG_ICON_PATHS,"
           "kw:KEYWORDS.map(function(k){return k[0];})})")
     env = dict(os.environ, SMOKE_DUMP=js)
     r = subprocess.run(['node', HOST], capture_output=True, text=True, cwd=ROOT, env=env)
@@ -124,6 +133,7 @@ def main():
     check(len(_relic_switched) == 3,
           '恰好 3 个遗物改用灵石图（%s）' % ','.join(_relic_switched))
     want += [(_lm.get(i) or ('relic/%s.png' % i)) for i in ids['relics']]
+    want += ids['statIcons']   # v1.0.14：顶栏金币 / 玩家面板血量两个状态图标（见 20_data.js 的 STAT_ICONS）
     # v0.67.0：灵汁图标 —— 只有表里有图的才请求。
     # v0.69.0：4 瓶灵汁**全部有图**了（还阳露/孟婆汤由用户 2026-09-28 补齐，此前走字牌占位）。
     # 原断言写死「恰好 2 瓶」＝ v0.67.0 的交付状态，补齐图之后必然假红；改成断「全部有图」，
@@ -196,10 +206,12 @@ def main():
     # v0.66.0：主菜单真美术。**不加这两条，[2] 会把它们报成「从未被游戏请求 / 可考虑删掉」**
     # ——照那句删了主菜单就整屏空了，正是 _css_want 当初被加进来的同一个坑。
     #   · 三张轮换背景：MENU_BGS 从**游戏作用域**取（路径规则不在 python 侧镜像，与 bgRel 同理）
-    #   · 六张 UI 图：showStartScreen 的模板串里以 artImg('ui/menu/…') 字面量出现，从源码反推
+    #   · 五张 UI 图：showStartScreen 的模板串里以 artImg('ui/menu/…') 字面量出现，从源码反推
+    #     （v1.0.14：排行榜入口连同 56_rank.js 已删 ⇒ leaderboard.png 不再出现在模板里，6 → 5）
     want += list(ids.get('menuBgs') or [])
     _boot = io.open(os.path.join(ROOT, 'js', '60_boot.js'), 'r', encoding='utf-8').read()
     _ui_menu = sorted(set(re.findall(r"artImg\(\s*'(ui/menu/[^']+)'", _boot)))
+    # v1.0.16：符纸行加了第三张「解锁」（is-mileage ⇒ ui/menu/mileage.png），5 → 6 张主菜单 UI 图
     check(len(_ui_menu) == 6, '从 60_boot.js 反推出 6 张主菜单 UI 图（%s）' % ','.join(_ui_menu))
     want += _ui_menu
     # 石碑碎片的 5 片必须复用**同一张**石碑图（clip-path 切 5 块、同一个 src ⇒ 浏览器复用解码
@@ -274,6 +286,25 @@ def main():
     check('ui/card/front.png' in _ui_card,
           '从 10_audio.js 反推出牌框正视图（%s）' % ','.join(_ui_card))
     want += _ui_card
+    # v1.0.16：iconTag() 取用的素材（buff / tier_boss / tier_elite 等）。
+    #   · 字面量：直接从 js 源码扫 `iconTag('…png'`（玩家面板 buff、敌人徽章、tier 徽章都在里面）。
+    #   · 拼串三族（ui/intent_* / ui/kind_* / 词缀 buff/<affixId>）：路径是拼出来的、扫不到，
+    #     从**游戏作用域**的 TAG_ICON_PATHS 取（唯一真相源在 js/50_ui.js）。
+    #   ⚠️ 不加这两条，这 40+ 张「真在用」的图会被 [2] 误报成「从未被游戏请求 / 可考虑删掉」——
+    #      照着删掉就有状态图标/敌人意图/档位徽章静默变回 emoji（不报错、只是少图）。
+    _tag_lit = set()
+    for _f in sorted(os.listdir(os.path.join(ROOT, 'js'))):
+        if _f.endswith('.js'):
+            _src = io.open(os.path.join(ROOT, 'js', _f), encoding='utf-8').read()
+            # 取每个 iconTag(...) 实参串里的**所有**相对路径字面量 ——
+            # 三元写法（`iconTag(max?'buff/curse_6.png':'buff/curse_1_5.png','☠️')`）也要捞到。
+            # ⚠️ 字符类必须是 `[a-z0-9_/]+`（真实路径的全部字符），**不能用 `[^']*`**：
+            #   拼串写法 `iconTag('buff/'+icon+'.png','')` 里那段 `'.png'` 会被 `[^']*` 捞成
+            #   一个裸 `.png`，它永远命不中 ASSET_MAP ⇒ [1] 假红（真路径全在，只多个幽灵条目）。
+            for _call in re.findall(r'iconTag\(([^)]*)\)', _src):
+                _tag_lit |= set(re.findall(r"'([a-z0-9_/]+\.png)'", _call))
+    want += sorted(_tag_lit)
+    want += list(ids.get('tagIcons') or [])
     want = list(dict.fromkeys(want))   # MAP_BG 四档同名 map.jpg，去重后再报数
     # v1.0.x：待交付美术（ART_PENDING，见 js/20_data.js）按名单豁免。
     # 名单里的路径不再要求命中，但会单独打印一行「还欠 N 张」——
@@ -432,7 +463,18 @@ def main():
     # 两条都只能在产物侧拦（冒烟用的是 DOM 桩，没有布局也没有位图）。
     print('\n[2d] 素材/fx/ 精灵图命名与像素几何')
     _fxset = set(ids.get('fxSheets') or [])
-    diskfx = sorted(d for d in disk if d.startswith('fx/'))
+    _fxwhole = set(ids.get('fxWhole') or [])      # v1.0.14：非精灵图整张素材（00_base.js 的 FX_WHOLE）
+    diskfx_all = sorted(d for d in disk if d.startswith('fx/'))
+    # 整张素材**不进精灵图闸**（键名/几何那几条），但要单独钉「它在产物里」+「不许拼错键名」。
+    _fxwhole_disk = [d for d in diskfx_all if os.path.splitext(os.path.basename(d))[0] in _fxwhole]
+    diskfx = [d for d in diskfx_all if os.path.splitext(os.path.basename(d))[0] not in _fxwhole]
+    check(sorted(_fxwhole) == sorted(os.path.splitext(os.path.basename(d))[0] for d in _fxwhole_disk),
+          'FX_WHOLE 声明的非精灵图素材与磁盘一一对应（声明 %d、命中 %d）'
+          % (len(_fxwhole), len(_fxwhole_disk)))
+    for d in _fxwhole_disk:
+        base, ext = os.path.splitext(os.path.basename(d))
+        if ext.lower() != '.png' or not re.match(r'^[a-z][a-z0-9_]*$', base):
+            check(False, '非精灵图 fx 素材也要 <小写键名>.png（%s）' % d)
     badfxname, badfxkey, badfxpng, badfxgeom = [], [], [], []
     FX_COLS, FX_CELL = 8, 480          # 与 _patch/mk_fx_sheets.py 的 COLS/CELL 一致；要改两边一起改
     # 精灵图**只收 PNG**（要 alpha 合成；jpg 没有透明通道，压过一遍就是黑底方块），
@@ -440,6 +482,14 @@ def main():
     _pkimg = re.search(r'IMG_EXT\s*=\s*\{([^}]*)\}', io.open(os.path.join(ROOT, '打包.py'), encoding='utf-8').read())
     _pkimg_ext = set(re.findall(r"'([^']+)'", _pkimg.group(1))) if _pkimg else set()
     check('.png' in _pkimg_ext, '打包.py 的 IMG_EXT 含 .png（%s）' % ','.join(sorted(_pkimg_ext)))
+    # v1.0.14：打包.py 的「整图不拆」豁免表必须与 js 的 FX_WHOLE 同口径 —— 两边一漂，
+    # 单文件产物就会把整张 fx 素材（daoxin_full）误按排切，运行时请求的整图键随之消失 ⇒ 动画静默 404。
+    _pksrc = io.open(os.path.join(ROOT, '打包.py'), encoding='utf-8').read()
+    _pkwhole = re.search(r'FX_WHOLE_SKIP\s*=\s*\{([^}]*)\}', _pksrc)
+    _pkwhole_set = set(re.findall(r"'([^']+)'", _pkwhole.group(1))) if _pkwhole else set()
+    check(_pkwhole_set == _fxwhole,
+          '打包.py FX_WHOLE_SKIP == js FX_WHOLE（%s vs %s）'
+          % (','.join(sorted(_pkwhole_set)) or '空', ','.join(sorted(_fxwhole)) or '空'))
     for d in diskfx:
         base, ext = os.path.splitext(os.path.basename(d))
         if ext.lower() != '.png':
@@ -482,6 +532,9 @@ def main():
     # v1.0.9：单文件产物里这些整图已被**按排键取代**（见 [2]）⇒ 要登记的是真正会被请求的那一批
     # 键（fx/<key>_r<i>.png），整图路径登记进去反而与产物对不上号。
     want.extend(sorted(set(diskfx) - _fx_split))
+    # v1.0.14：非精灵图整张素材（如 fx/daoxin_full.png）也要登记「游戏会请求它」，
+    # 否则 [2] 末尾会把它误报成「从未被请求 / 可考虑删掉」——照删了道心破碎就没图了。
+    want.extend(sorted(_fxwhole_disk))
     want.extend(sorted(_fx_rowkeys))
     # 正面钉：产物里的按排键**恰好**是 FX_SHEETS.rows 算出来的那批 —— 多一个（拼错行号/整图没删干净）
     # 或少一个（拆漏一排）都红。这条是 [2] 的补角：[2] 只管「别漏磁盘素材」，这里管「别造多余的键」。

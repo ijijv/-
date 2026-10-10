@@ -35,6 +35,10 @@ CELL = 480
 # 于是「多大算对」只有一条规则，不用逐个记。
 SCALE_MAX = 3.0
 
+# 多方向图（v1.0.14 的 multi_slash：**一行 = 一个方向**，每行都从第 0 格起播）不能按这里的口径重算 ——
+# 「整张图两端裁空帧」遇到这种图会算出 f = 6×8 = 48（跨 6 行），播放时直接跑到图外。这些键原样保留。
+SKIP = {'multi_slash'}
+
 
 def tuned():
     bb = measure()
@@ -76,6 +80,10 @@ def main():
     cut = 0
     for k in sorted(t):
         sc, ox, oy, fill, i0, f, n = t[k]
+        if k in SKIP:
+            print('%-14s %8s %6s %4s %4s  %-16s %6.2f %7.2f %7.2f  ← 跳过（多方向图）'
+                  % (k, '—', '—', '—', '—', '（每行一个方向）', sc, ox, oy))
+            continue
         fs = ('宽%.0f%% 高%.0f%%' % (fill[0] * 100, fill[1] * 100)) if fill else '（图缺）'
         gone = n - f
         if gone < 0:
@@ -98,6 +106,11 @@ def main():
     ks_sorted = sorted(t)
     for idx, k in enumerate(ks_sorted):
         km = re.search(r'^  %s:\s*\{[^}]*\}\s*,?\s*(//[^\n]*)?$' % re.escape(k), old, re.M)
+        if k in SKIP and km:
+            # 整行原样搬过去（含行尾注释），只把分隔逗号重排一次
+            lines.append(re.sub(r',\s*$', '', km.group(0).rstrip())
+                         + (',' if idx != len(ks_sorted) - 1 else ''))
+            continue
         # 注释尾巴要剥掉：① 逗号写在注释**之前**（`},   // 名`），带进去会越滚越脏；
         # ② 上一轮追加的注记（旧格式「原始 N 帧→…」与新格式「素材 N 帧，…」）也要先剥掉再重写，
         #    否则重跑一次就多一句。注意别误伤原有注释里的「（帧数最短，17）」——那里「帧」在数字前。

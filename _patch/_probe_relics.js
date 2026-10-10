@@ -52,7 +52,7 @@ function boot(hero, relics){ fresh(hero, relics); try{ startBattle(['youhun']); 
   fresh('wuseng', []); var h = relicThorns(); fresh('wuseng', ['luohanquan']); var i = relicThorns();
   ok('罗汉拳套 · 反伤 0→1', h === 0 && i === 1, h + '→' + i);
   fresh('tianshi', []); var j = relicCurseOverflowBlock(); fresh('tianshi', ['zhenmoyin']); var k = relicCurseOverflowBlock();
-  ok('镇魔印 · 溢出格挡系数 1→2', j === 1 && k === 2, j + '→' + k);
+  ok('镇魔印 · 溢出格挡系数 2→3（v1.0.18 基线 1→2、镇魔印再 +1）', j === 2 && k === 3, j + '→' + k);
 })();
 /* 4. 雷法心诀[紫·天师]：诅咒跃迁到 6 层 → 4 点雷击 */
 (function(){
@@ -70,17 +70,22 @@ function boot(hero, relics){ fresh(hero, relics); try{ startBattle(['youhun']); 
 (function(){
   var e = mkEnemy({ curse:5 });
   fresh('tianshi', ['zhenmoyin']); G.block = 0; applyCurse(e, 4);
-  ok('镇魔印 · 3层溢出转 6 格挡', G.block === 6, 'block=' + G.block);
+  ok('镇魔印 · 3层溢出转 9 格挡（系数 3）', G.block === 9, 'block=' + G.block);
   var e2 = mkEnemy({ curse:5 });
   fresh('tianshi', []); G.block = 0; applyCurse(e2, 4);
-  ok('镇魔印 · 无遗物 3 层溢出转 3 格挡', G.block === 3, 'block=' + G.block);
+  ok('镇魔印 · 无遗物 3 层溢出转 6 格挡（基线 2）', G.block === 6, 'block=' + G.block);
 })();
 /* 6. 开局类 */
 (function(){
   boot('ganshiren', ['shiyu']);
   ok('尸玉 · 开局得 3 尸气', (G.尸气 || 0) === 3, '尸气=' + G.尸气);
   boot('ganshiren', ['yinhundeng']);
-  ok('引魂灯 · 开局自带阴兵', (G.summons || []).some(function(x){ return x.type === 'yinbing'; }), JSON.stringify(G.summons));
+  ok('引魂灯 · 开局不再自带阴兵（v1.0.20 改为发牌进牌库）', !(G.summons || []).some(function(x){ return x.type === 'yinbing'; }), JSON.stringify(G.summons));
+  fresh('ganshiren', []);
+  var yb0 = G.deck.filter(function(c){ return c.id === 'yinbing'; }).length;
+  grantRelic(relById('yinhundeng'));
+  var yb1 = G.deck.filter(function(c){ return c.id === 'yinbing'; }).length;
+  ok('引魂灯 · 获得即发一张 0 费阴兵进牌库', yb1 === yb0 + 1 && cardById('yinbing').cost === 0, yb0 + '→' + yb1 + ' cost=' + cardById('yinbing').cost);
   boot('wuseng', ['budongmingwang']);
   ok('不动明王像 · 开局 +5 格挡', G.block >= 5, 'block=' + G.block);
   boot('yincha', ['ranxueling']);
@@ -102,16 +107,22 @@ function boot(hero, relics){ fresh(hero, relics); try{ startBattle(['youhun']); 
   var m1 = handAfter(['tongling'], 2);
   ok('铜铃 · 非第1回合不多抽', m1 === n0, '第3回合抽到 ' + m1);
 })();
-/* 8. 骨铃[紫]：召唤物死亡按其费用回血 */
+/* 8. 骨铃[紫]：召唤物死亡按其「持续过的回合数」回血（v1.0.20 口径，取 addSummon 落定的 dur0） */
 (function(){
-  var cost = (SUMMON_COST.yinbing ? SUMMON_COST.yinbing.c : 0);
-  fresh('ganshiren', []); G.hp = 40; var s1 = { type:'yinbing', v:4, dur:3, healV:2, uid:'s1' }; G.summons = [s1];
+  fresh('ganshiren', []); G.hp = 40; var s1 = { type:'yinbing', v:4, dur:0, dur0:3, healV:2, uid:'s1' }; G.summons = [s1];
   try{ onSummonDeath(s1); }catch(e){ info('onSummonDeath 抛错', e.message); }
   var no = G.hp - 40;
-  fresh('ganshiren', ['guling']); G.hp = 40; var s2 = { type:'yinbing', v:4, dur:3, healV:2, uid:'s2' }; G.summons = [s2];
+  fresh('ganshiren', ['guling']); G.hp = 40; var s2 = { type:'yinbing', v:4, dur:0, dur0:3, healV:2, uid:'s2' }; G.summons = [s2];
   try{ onSummonDeath(s2); }catch(e){}
   var yes = G.hp - 40;
-  ok('骨铃 · 召唤物死亡按其费用回血', no === 0 && yes === cost, '无遗物+' + no + ' / 有遗物+' + yes + ' / 费用=' + cost);
+  ok('骨铃 · 死亡按持续回合数回血（阴兵 dur0=3 → 3）', no === 0 && yes === 3, '无遗物+' + no + ' / 有遗物+' + yes);
+  fresh('ganshiren', ['guling']); G.hp = 40; var s3 = { type:'wutong', v:6, dur:0, dur0:2, uid:'s3' }; G.summons = [s3];
+  try{ onSummonDeath(s3); }catch(e){}
+  var w2 = G.hp - 40;
+  fresh('ganshiren', ['guling']); G.hp = 40; var s4 = { type:'shi_wang', v:10, dur:0, dur0:5, uid:'s4' }; G.summons = [s4];
+  try{ onSummonDeath(s4); }catch(e){}
+  var w5 = G.hp - 40;
+  ok('骨铃 · 五通神 dur0=2 → 2 / 尸王 dur0=5 → 5', w2 === 2 && w5 === 5, '五通神+' + w2 + ' / 尸王+' + w5);
 })();
 /* 9. 阴阳鱼[蓝]：受负面效果回 2 血 */
 (function(){

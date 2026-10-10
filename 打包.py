@@ -66,6 +66,11 @@ AUD_MIME = {'.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4
 # 拆包时**会**转成 .webp 落盘的图片格式 —— 必须与 js/10_audio.js 的 assetURL 正则 (.png|jpe?g|bmp) 同口径，
 # 否则 HTML 里换了名、JS 里却没换（或反过来）⇒ 图片整片 404。
 WEB_IMG_EXT = {'.png', '.jpg', '.jpeg', '.bmp'}
+# v1.0.14：**非精灵图**的整张 fx 素材（fx 目录里但不在 FX_SHEETS 里的），按排切会切错。
+# 与 js/00_base.js 的 FX_WHOLE 同口径（那里是唯一真相源）；verify_dist.py 会核对两边相等。
+# 例：fx/daoxin_full.png 是 1024×1024 的道心插画，恰好满足「宽 = 8 格、高为整数格」，
+# 会被 fx_row_datauris 误拆成 8 行 → 运行时请求的 fx/daoxin_full.png 整键反而消失（破碎动画 404）。
+FX_WHOLE_SKIP = {'daoxin_full'}
 
 
 def human(n):
@@ -475,7 +480,7 @@ def main():
             # 一次挂上去要解 11 Mpx（真机上出牌那一下 100~200ms）⇒ 内联时按排切成小图，
             # 运行时只挂当前那一排（见 js/00_base.js 的 playFx）。画质逐像素不变。
             _fxm = re.match(r'^fx/([a-z][a-z0-9_]*)\.png$', rel)
-            if _fxm and not args.no_webp:
+            if _fxm and not args.no_webp and _fxm.group(1) not in FX_WHOLE_SKIP:
                 _rows = fx_row_datauris(path, args.quality)
                 if _rows:
                     stat['in'] += os.path.getsize(path)
