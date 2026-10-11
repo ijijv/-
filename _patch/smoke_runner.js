@@ -85,9 +85,12 @@
 
   /* ============ 1) 静态结构 ============ */
   rep.cardsTotal = CARDS.length;
-  /* 50 = 原 48 张 + 断刃遗物的附加卡【断刃雷符】+ 引魂灯遗物的附加卡【阴兵】
-     （两张附加卡 id 都被 weightedCard 排除，不进任何奖励池）。 */
-  __ok('CARDS 恰为 50 张（48 原卡 + 断刃雷符 + 阴兵）', CARDS.length === 50, '实际 ' + CARDS.length);
+  /* 57 = 原 48 张 + 断刃遗物的附加卡【断刃雷符】+ 引魂灯遗物的附加卡【阴兵】
+     + 天师里程碑专属卡【点咒符】【雷谴符】【五雷法印】
+     + 赶尸人里程碑专属卡【赶尸令】【万尸朝宗】
+     + 武僧里程碑专属卡【罗汉伏虎】【化甲为毒】（附加卡被 weightedCard 排除；
+     里程碑专属卡未在里程界面领取前被 mileOn 硬门禁挡在一切奖励池外）。 */
+  __ok('CARDS 恰为 59 张（48 原卡 + 断刃雷符 + 阴兵 + 点咒符 + 雷谴符 + 五雷法印 + 赶尸令 + 万尸朝宗 + 罗汉伏虎 + 化甲为毒 + 饮血刃 + 焚身咒）', CARDS.length === 59, '实际 ' + CARDS.length);
   var ids = CARDS.map(function (c) { return c.id; });
   __ok('卡牌 id 无重复', new Set(ids).size === ids.length);
   var okRar = ['white', 'blue', 'purple', 'gold'];
@@ -1190,8 +1193,12 @@
       SCENE = 'battle'; G.summons = [{ type: 'wutong', v: 3, dur: 2 }];
       try { renderTopbar(); } catch (e) { __ok('v0.52 renderTopbar 不抛异常', false, e && e.message); }
       var tb = _cap ? _cap.innerHTML : '';
-      __ok('v0.52 详情页 遗物带插图 chip', tb.indexOf('prelic-chip') >= 0 && tb.indexOf('ricon') >= 0, tb.length);
-      __ok('v0.52 详情页 遗物名可见', tb.indexOf('招魂幡') >= 0);
+      /* v1.1.x：遗物 / 灵汁**已从顶栏详情撤出**，统一收进「锦囊」面板（showJinnang）。
+         这里改成反向钉：详情里不许再出现遗物 chip / 灵汁芯片，也不许出现遗物名。 */
+      __ok('v1.1.x 详情页 不再排遗物 chip（收进锦囊）', tb.indexOf('prelic-chip') < 0, tb.length);
+      __ok('v1.1.x 详情页 不出现遗物名（招魂幡）', tb.indexOf('招魂幡') < 0);
+      __ok('v1.1.x 详情页 不再排灵汁芯片（收进锦囊）',
+        tb.indexOf('potion-chip') < 0 && tb.indexOf('stat-potion') < 0);
       __ok('v0.52 详情页 含召唤物', tb.indexOf('tb-summons') >= 0, tb.length);
 
       SCENE = 'map';   // 地图场景：召唤物不显示（G.summons 到下一场战斗才清空，避免残留）
@@ -1199,8 +1206,31 @@
       try { renderTopbar(); } catch (e) { __ok('v0.52 renderTopbar(map) 不抛异常', false, e && e.message); }
       var tm = _cap ? _cap.innerHTML : '';
       __ok('v0.52 地图场景 详情页无召唤物', tm.indexOf('tb-summons') < 0, tm.length);
-      __ok('v0.52 地图场景 遗物仍在详情页', tm.indexOf('prelic-chip') >= 0);
+      __ok('v1.1.x 地图场景 详情页同样无遗物（统一收进锦囊）', tm.indexOf('prelic-chip') < 0);
       SCENE = 'battle';
+      /* 锦囊面板本体：把遗物 / 灵汁两者都渲染出来，且灵汁点击仍走 usePotionByName（既有调用链）。
+         ⚠️ 与 5801-5815 同一套路：本文件顶部把 showOverlay 顶成空桩、vm_host 的 getElementById
+            每次返回新 dummy ⇒ 必须临时换回 __realShowOverlay + 按 id 缓存的 getElementById 才读得到。 */
+      G.relics = ['zhaohunfan'];
+      var keepGEBI2 = document.getElementById, keepSO2 = showOverlay, els2 = {};
+      try {
+        document.getElementById = function (id) {
+          if (!els2[id]) {
+            var e2 = keepGEBI2.call(document, id);
+            e2.classList.add = function () {}; e2.classList.remove = function () {};
+            els2[id] = e2;
+          }
+          return els2[id];
+        };
+        showOverlay = __realShowOverlay;
+        try { showJinnang(); } catch (e) { __ok('v1.1.x showJinnang 不抛异常', false, e && e.message); }
+        var jh = (els2['overlayContent'] && els2['overlayContent'].innerHTML) || '';
+        __ok('v1.1.x 锦囊面板渲染出遗物名（招魂幡）', jh.indexOf('招魂幡') >= 0, jh.length);
+        __ok('v1.1.x 锦囊面板左右均分（.pouch-potions / .pouch-relics）',
+          jh.indexOf('pouch-potions') >= 0 && jh.indexOf('pouch-relics') >= 0);
+        __ok('v1.1.x 锦囊面板灵汁点击仍走 usePotionByName（既有调用链未断）',
+          __code(showJinnang).indexOf('usePotionByName') >= 0);
+      } finally { document.getElementById = keepGEBI2; showOverlay = keepSO2; }
     } finally { document.getElementById = _og; }
 
   })();
@@ -5032,7 +5062,7 @@
     // 现状：30_engine.js 的 playCard 只把 c.hpCost(u) 拿来做「以命相搏」弹窗、**不实扣**；
     //       真扣血在每张牌 eff 里的 loseHp(n)。两处手工同步、此前 0 断言 —— 这组把它钉死。
     var HP_CARDS = CARDS.filter(function (c) { return typeof c.hpCost === 'function'; });
-    __ok('v0.61.40 hpCost 卡恰为 18 张（新增未登记会立刻红）', HP_CARDS.length === 18, '实际 ' + HP_CARDS.length);
+    __ok('v0.61.40 hpCost 卡恰为 20 张（新增未登记会立刻红；v1.1.5 加饮血刃/焚身咒）', HP_CARDS.length === 20, '实际 ' + HP_CARDS.length);
     var noLose = HP_CARDS.filter(function (c) { return String(c.eff).indexOf('loseHp') < 0; });
     __ok('v0.61.40 hpCost 卡全部在 eff 里真的调用 loseHp（静态扫源码）', noLose.length === 0,
       noLose.map(function (c) { return c.id; }).join(','));
@@ -5057,7 +5087,7 @@
 
     // 组 1：逐张 × 逐英雄 × 两升级档，decl === 实扣（量真实 G.hp 下降 —— 连「声明 5 实际回血 5」也抓得到）
     var drift = [], safeList = [], checked = 0;
-    var NO_ENEMY_SAFE = ['huofu', 'tianlei', 'tiebushan', 'shihunzhou', 'zhongkui', 'zhenyaoling'];
+    var NO_ENEMY_SAFE = ['huofu', 'tianlei', 'tiebushan', 'shihunzhou', 'zhongkui', 'zhenyaoling', 'yinxueren'];
     __HEROES.forEach(function (hero) {
       HP_CARDS.forEach(function (card) {
         [false, true].forEach(function (u) {
@@ -5102,25 +5132,25 @@
     var heroHit = {};
     safeList.forEach(function (r) { heroHit[r.id] = 1; });
     var noHero = HP_CARDS.map(function (c) { return c.id; }).filter(function (id) { return !heroHit[id]; });
-    __ok('v0.61.40 hpCost 18 张每张至少在一个英雄列上声明 >0（防「改成恒 0」式假绿）',
+    __ok('v0.61.40 hpCost 20 张每张至少在一个英雄列上声明 >0（防「改成恒 0」式假绿）',
       noHero.length === 0, noHero.join(','));
 
-    // 组 3：无敌人白名单 —— 已知 6 张的 curEnemy() 守卫排在 loseHp 之前，空场时整段不执行
+    // 组 3：无敌人白名单 —— 已知 7 张的 curEnemy() 守卫排在 loseHp 之前，空场时整段不执行
     var whitelistHit = [], othersOff = [];
     safeList.forEach(function (r) {
       var isSafe = NO_ENEMY_SAFE.indexOf(r.id) >= 0;
       if (isSafe) { if (r.lostB !== 0) whitelistHit.push(r.id + '(' + r.hero + ')=' + r.lostB); }
       else if (r.lostB !== r.decl) othersOff.push(r.id + '(' + r.hero + ') decl=' + r.decl + ' 实扣=' + r.lostB);
     });
-    __ok('v0.61.40 空场白名单 6 张（火符/天雷/铁布衫/蚀魂咒/钟馗/镇妖铃）确实**一分不扣**',
+    __ok('v0.61.40 空场白名单 7 张（火符/天雷/铁布衫/蚀魂咒/钟馗/镇妖铃/饮血刃）确实**一分不扣**',
       whitelistHit.length === 0, whitelistHit.slice(0, 5).join(' | '));
     __ok('v0.61.40 空场 其余扣血牌**必须照扣**（未被 curEnemy 守卫拦下）',
       othersOff.length === 0, othersOff.slice(0, 5).join(' | '));
-    // 防「空集假绿」：白名单必须恰是 6 张 × 2 档 = 12 条，非白名单侧必须真的非空
+    // 防「空集假绿」：白名单必须恰是 7 张 × 2 档 = 14 条，非白名单侧必须真的非空
     var safeCnt = safeList.filter(function (r) { return NO_ENEMY_SAFE.indexOf(r.id) >= 0; }).length;
     var otherCnt = safeList.length - safeCnt;
-    __ok('v0.61.40 空场 白名单实测 12 条（6 张 × 两档）、非白名单侧非空（两条断言不是空集空转）',
-      safeCnt === 12 && otherCnt > 0, '白名单=' + safeCnt + ' 其余=' + otherCnt);
+    __ok('v0.61.40 空场 白名单实测 14 条（7 张 × 两档）、非白名单侧非空（两条断言不是空集空转）',
+      safeCnt === 14 && otherCnt > 0, '白名单=' + safeCnt + ' 其余=' + otherCnt);
     rep.v6140 = { hpChecked: checked, safe: safeCnt, others: otherCnt };
 
     /* ============ H. 反震 / 业火 补齐成 1:1 转血怒 ============ */
@@ -5301,9 +5331,8 @@
       String(showDragPreview).indexOf("el.textContent='-'+pv.d") >= 0);
     __ok('v0.61.41 浮字 开局就预加载（否则本局第一次飘字必然回落文字）',
       String(numPrewarm).indexOf('numProbe') >= 0);
-    __ok('v0.61.41 浮字 设置里有自检按钮，四档各放一次并摊开 NUM_STATE',
-      String(numSelfTest).indexOf('to-player') >= 0 && String(numSelfTest).indexOf('NUM_STATE') >= 0 &&
-      String(showSettings).indexOf('numSelfTest()') >= 0);
+    __ok('v1.1.x 设置里**不再**有开发者自检按钮（「浮字自检」随「抹除开发者痕迹」一并移除）',
+      typeof numSelfTest === 'undefined' && String(showSettings).indexOf('numSelfTest') < 0);
     __ok('v0.61.41 浮字 设置里点明「流畅模式会关掉飘字」（fx() 是飘字的总闸，不写清就会被当成素材没生效）',
       String(showSettings).indexOf('伤害飘字') >= 0 && String(fx).indexOf('lowSpec') >= 0);
 
@@ -5839,8 +5868,8 @@
             var iRem = cls.indexOf('overlay:-map-scene'), iAdd = cls.indexOf('overlay:+map-scene');
             return iRem >= 0 && iAdd > iRem;
           })(), cls.join(' '));
-        __ok('v0.62.0 场景 顶栏复用了角色专属资源（尸气/血怒分支）与遗物 chip，不是另造一套',
-          String(mapTopbarHTML).indexOf('HEROES') >= 0 && String(mapTopbarHTML).indexOf('prelic-chip') >= 0 &&
+        __ok('v0.62.0 场景 顶栏复用了角色专属资源（尸气/血怒分支）与锦囊入口，不是另造一套',
+          String(mapTopbarHTML).indexOf('HEROES') >= 0 && String(mapTopbarHTML).indexOf('mt-jinnang') >= 0 &&
           String(mapTopbarHTML).indexOf('openMenu') >= 0);
         /* 卷轴三张素材必须走 assetURL（打包.py 不重写 CSS 里的 url()，相对路径在产物里会 404）。
            ⚠️ 别断言「源码里有 '素材/'」—— 那正是会 404 的那条路。要断言的是**三条都走了 assetURL**。 */
@@ -6212,11 +6241,12 @@
        靠 `_patch/shot_fx.py` 的实拍对照图定 scale。 */
 
     /* ---------- F1. 表结构 ---------- */
-    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 35 条'
+    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 36 条'
       + '（帧数是 _patch/fx_tune.py 按每格 alpha 实扫的 —— 8 列末排常留空，拿 行×8 当帧数会播到空白格；'
       + 'v1.0.14 起的 multi_slash 是多方向图，由 _patch/mk_multi_slash.py 程序生成、不在 fx_tune 的重算范围内；'
-      + 'v1.0.17 起的 guling_suck / relic_proc / shiqi_flame / xuenu_flame 四张也是程序绘制，由 _patch/mk_flame_sheets.py 出图）',
-      Object.keys(FX_SHEETS).length === 35 &&
+      + 'v1.0.17 起的 guling_suck / relic_proc / shiqi_flame / xuenu_flame 四张、v1.1.4 起的 thorns_light 也是程序绘制，'
+      + '由 _patch/mk_flame_sheets.py 出图）',
+      Object.keys(FX_SHEETS).length === 36 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
         return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
@@ -6244,7 +6274,7 @@
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
     __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
-      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 35);
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 36);
 
     /* ---------- F2. CARD_FX 接线 ---------- */
     __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
@@ -6257,9 +6287,11 @@
         var e = CARD_FX[k];
         return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon'].indexOf(e.a) >= 0;
       }));
-    __ok('v0.64.0 CARD_FX 没有覆盖全部 50 张 —— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
-      + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；24 张是有素材的那批（v1.0.13 加断刃雷符，v1.0.20 加阴兵）',
-      Object.keys(CARD_FX).length === 24 && CARDS.length === 50);
+    __ok('v0.64.0 CARD_FX 没有覆盖全部卡（59 张）—— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
+      + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；31 张是有素材的那批（v1.0.13 加断刃雷符，v1.0.20 加阴兵，'
+      + 'v1.1.2 加天师里程碑的雷谴符/五雷法印，v1.1.3 加赶尸人里程碑的赶尸令/万尸朝宗，'
+      + 'v1.1.4 加武僧里程碑的罗汉伏虎/化甲为毒，v1.1.5 加阴差里程碑的饮血刃）',
+      Object.keys(CARD_FX).length === 31 && CARDS.length === 59);
 
     /* ---------- F3. 纯函数：盒子尺寸 ---------- */
     __ok('v0.64.0 fxBoxSize 下夹 96、上夹 min(vw,vh)×0.9（帧画布 960×960 四周留空，照锚点框贴必然偏大；'
@@ -6438,7 +6470,7 @@
         SETTINGS.lowSpec = keep;
         return got === 'lei|0';
       })());
-    __ok('v0.64.0 **全部 35 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
+    __ok('v0.64.0 **全部 36 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
       + 'v1.0.17 的 grantRelic / onSummonDeath）合起来覆盖了 FX_SHEETS 的全部键'
       + '（素材做了但没接线 = 白花钱出图，这条就是防它；两张芯片火焰走 CSS 循环、不经 playFx，按名单豁免）',
       (function () {
@@ -6989,15 +7021,13 @@
       (function () { try { return potionIcon({ id: '__nope__' }) === ''; } catch (e) { return false; } })());
     __ok('v0.67.0 遗物图标**没有**被字牌化（relicIcon 永远出 <img>，占位只管灵汁）',
       icZhu.indexOf('ricon-fb') < 0 && icZhao.indexOf('ricon-fb') < 0);
-    /* v1.0.13：15 张新遗物图 + 断刃雷符卡图**已全部交付** ⇒ 遗物类条目必须为空。
-       v1.0.14：ART_PENDING 改为「允许登记非遗物待出图」（新登记了金币/血量两个状态图标），
-       所以这条钉子收窄为「**不得**残留任何 relic/ 条目」，其余条目只允许是已知的两张状态图标。 */
-    var __pendIds = ART_PENDING.filter(function (p) { return p.indexOf('relic/') === 0; })
-      .map(function (p) { return p.slice(6, -4); });
-    __ok('v1.0.13 ART_PENDING 无 relic/ 残留（本批新遗物图已全部交付，闸从此守每一张图）',
-      __pendIds.length === 0, __pendIds.join(','));
-    __ok('v1.0.17 ART_PENDING 已清空（stat_gold/stat_hp 已交付，「解锁」符纸沿用 leaderboard.png；新待出图必须同步登记）',
-      ART_PENDING.length === 0, ART_PENDING.join(','));
+    /* v1.0.13：15 张新遗物图 + 断刃雷符卡图**已全部交付**；v1.0.17：stat_gold/stat_hp 已交付。
+       v1.0.26 起改为**白名单精确比对**：新增待出图必须同步登记，图到了删一条。
+       v1.1.1 / v1.1.3 / v1.1.4 / v1.1.5 四批里程碑待出图（天师 4 + 赶尸人 3 + 武僧 4 + 阴差 3 = 14 张）
+       **已全部交付** ⇒ ART_PENDING 清空。图到了就从名单删一条，删空即全部到位。 */
+    __ok('v1.1.5 ART_PENDING 已清空（里程碑 14 张待出图全部交付：天师 4 + 赶尸人 3 + 武僧 4 + 阴差 3）',
+      ART_PENDING.length === 0,
+      ART_PENDING.join(','));
     /* v1.0.14：金币/血量两个状态图标走 iconTag（唯一真相源 STAT_ICONS），并各钉一个调用点。
        缺图时 iconTag 出 `<i></i>` 圆点，两处观感与改动前逐字节一致 ⇒ 图上齐才现形。 */
     __ok('v1.0.14 STAT_ICONS 表登记金币/血量两张图（顶栏金币 + 玩家面板血量）',
@@ -7013,9 +7043,11 @@
     var __syncSrc = __code(syncBattleHpDom);
     __ok('v1.0.14 syncBattleHpDom 回写 .hpnum（不整块重建 pstat-hp，避免抹掉血量图标 <img>）',
       __syncSrc.indexOf('pstat-hp .hpnum') >= 0 && __syncSrc.indexOf('innerHTML') < 0);
-    __ok('v1.0.x 全部遗物图**不带**字牌兜底（ART_PENDING 之外一律没有 data-fallback）',
+    __ok('v1.0.x 遗物字牌兜底**只**给 ART_PENDING 清单里的图（清单外的遗物图一律不带 data-fallback）',
       RELICS.every(function (r) {
-        return relicIcon(r).indexOf('ricon-fb') < 0;
+        var src = lingshiSrc(r.id) || ('relic/' + r.id + '.png');
+        var want = (typeof ART_PENDING !== 'undefined' && ART_PENDING.indexOf(src) >= 0);
+        return (relicIcon(r).indexOf('ricon-fb') >= 0) === want;
       }));
 
     /* 只加函数不插调用点 = 等于没接。三个渲染点逐个断，并且断插入位置在 .cname **之前**
@@ -7200,7 +7232,217 @@
     __ok('v1.0.15 解锁 adv_card / adv_relic / potion_new 后对应内容立即可用',
       mileOn('card', 'tianlei') === true && mileOn('relic', 'jifengfu') === true && mileOn('potion', 'jingangjiu') === true);
 
-    /* 3) 奖励池过滤真的生效（加权池 + 灵汁入口） */
+    /* 2b) v1.1.1 里程碑专属内容硬门禁：未在里程界面领取该档前，即使门禁总开关为开也不放行。 */
+    SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [], mileClaimed: [] };
+    __ok('v1.1.1 里程碑专属牌/遗物：领取前被硬门禁挡在所有卡池外',
+      mileOn('card', 'dianzhoufu') === false && mileOn('card', 'leiqianfu') === false &&
+      mileOn('card', 'wuleifayin') === false && mileOn('relic', 'zhushayan') === false);
+    SAVE.mile = ['adv_card', 'adv_relic']; SAVE.mileClaimed = ['tianshi_t1', 'tianshi_t2', 'tianshi_t4', 'tianshi_t5'];
+    __ok('v1.1.1 领取对应档位后专属牌/遗物立即放行（mileClaimed 落盘生效）',
+      mileOn('card', 'dianzhoufu') === true && mileOn('card', 'leiqianfu') === true &&
+      mileOn('card', 'wuleifayin') === true && mileOn('relic', 'zhushayan') === true);
+    __ok('v1.1.1 未领取的档位仍锁（领取 t5 不等于放行他档）',
+      (function () { SAVE.mileClaimed = ['tianshi_t5'];
+        return mileOn('card', 'wuleifayin') === true && mileOn('card', 'dianzhoufu') === false &&
+          mileOn('card', 'leiqianfu') === false && mileOn('relic', 'zhushayan') === false; })());
+    __ok('v1.1.1 weightedCard 不返回未解锁的天师专属牌（点咒符/雷谴符/五雷法印；hero+mile 双过滤兜底）',
+      (function () {
+        SAVE.mileClaimed = []; SAVE.mile = []; G = __base('tianshi'); seedRng(7);
+        for (var i = 0; i < 150; i++) {
+          var c = weightedCard();
+          if (c && ['dianzhoufu', 'leiqianfu', 'wuleifayin'].indexOf(c.id) >= 0) return false;
+        }
+        return true;
+      })());
+
+    /* 2c) v1.1.1 接线闸：t5 五雷法印 + t3 天师真传的收口点必须在正确位置。 */
+    __ok('v1.1.1 五雷法印：eff 开手牌多选 / confirm 原地替换成 0 费 oneShot 雷符 / 回合末 autoPlayWulei 自动打出',
+      __code(cardById('wuleifayin').eff).indexOf('startWuleiSelect') >= 0 &&
+      __code(confirmWuleiSelect).indexOf('oneShot:true') >= 0 &&
+      __code(finishEndTurn).indexOf('autoPlayWulei()') >= 0 &&
+      __code(autoPlayWulei).indexOf('lowestHpEnemy') >= 0);
+    __ok('v1.1.1 天师真传(t3)：开局抉择在领取 tianshi_t3 后改「本角色全部牌库自由选」池',
+      __code(showOpeningChoice).indexOf('tianshi_t3') >= 0 && __code(showOpeningChoice).indexOf('free-pool') >= 0);
+
+    /* 2d) v1.1.3 赶尸人里程碑（t1 赶尸令 / t2 尸气回流 / t3 万尸朝宗 / t4 尸王真传 / t5 阴司牒） */
+    SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [], mileClaimed: [] };
+    __ok('v1.1.3 赶尸人里程碑专属牌/遗物：领取前被硬门禁挡在所有卡池外',
+      mileOn('card', 'ganzhiling') === false && mileOn('card', 'wanshichaozong') === false &&
+      mileOn('relic', 'yinsidie') === false);
+    SAVE.mile = ['adv_card', 'adv_relic']; SAVE.mileClaimed = ['ganshiren_t1', 'ganshiren_t3', 'ganshiren_t5'];
+    __ok('v1.1.3 领取对应档位后赶尸人专属牌/遗物立即放行（mileClaimed 落盘生效）',
+      mileOn('card', 'ganzhiling') === true && mileOn('card', 'wanshichaozong') === true &&
+      mileOn('relic', 'yinsidie') === true);
+    __ok('v1.1.3 里程轨：赶尸人前 5 档节点 id / 名称正确且非 pending',
+      MILE_TRACKS.ganshiren.nodes.slice(0, 5).every(function (n, i) {
+        return n.id === 'ganshiren_t' + (i + 1) && n.pending === false;
+      }) &&
+      MILE_TRACKS.ganshiren.nodes[0].name === '赶尸令' &&
+      MILE_TRACKS.ganshiren.nodes[1].name === '尸气回流' &&
+      MILE_TRACKS.ganshiren.nodes[2].name === '万尸朝宗' &&
+      MILE_TRACKS.ganshiren.nodes[3].name === '尸王真传' &&
+      MILE_TRACKS.ganshiren.nodes[4].name === '阴司牒');
+    __ok('v1.1.3 尸王在一切奖励池恒被排除（weightedCard 不再按英雄放行尸王）',
+      (function () {
+        SAVE.mileClaimed = ['ganshiren_t1', 'ganshiren_t3', 'ganshiren_t5']; SAVE.mile = []; G = __base('ganshiren'); seedRng(11);
+        for (var i = 0; i < 200; i++) { var c = weightedCard(); if (c && c.id === 'shi_wang') return false; }
+        return true;
+      })());
+    __ok('v1.1.3 尸王真传(t4)：开局抉择在领取 ganshiren_t4 后改自由选池，且恒排除尸王',
+      __code(showOpeningChoice).indexOf('ganshiren_t4') >= 0 &&
+      __code(showOpeningChoice).indexOf("c.id!=='shi_wang'") >= 0);
+    __ok('v1.1.3 尸气回流(t2)：onSummonDeath 收口 + 预恢复按「骨铃+回流」叠加',
+      __code(onSummonDeath).indexOf('ganshiren_t2') >= 0 &&
+      __code(preSummonHeal).indexOf('ganshiren_t2') >= 0);
+    __ok('v1.1.3 阴司牒(t5)：尸王攻击后走 gainBlock 收口加 5 格挡（金刚符同款音效/特效）',
+      __code(summonAct).indexOf("hasRelic('yinsidie')") >= 0 && __code(summonAct).indexOf('gainBlock(5)') >= 0);
+    __ok('v1.1.3 赶尸令/万尸朝宗：都是「花尸气召纸人」的召唤牌（纯召唤，走 addSummon 收口）',
+      __code(cardById('ganzhiling').eff).indexOf('addSummon') >= 0 && __code(cardById('ganzhiling').eff).indexOf('spendShiqi') >= 0 &&
+      __code(cardById('wanshichaozong').eff).indexOf('addSummon') >= 0 && __code(cardById('wanshichaozong').eff).indexOf('spendShiqi') >= 0);
+    __ok('v1.1.3 卡面「阴司牒强化态」只在渲染层（不动 t/ts、不破 canUpgrade）',
+      typeof shiWangBoosted === 'function' && typeof shiWangBoostTag === 'function' &&
+      canUpgrade(cardById('shi_wang')) === false &&
+      __code(cardBody).indexOf('shiWangBoosted') >= 0 && __code(handCardHTML).indexOf('shiWangBoosted') >= 0);
+
+    /* 2e) v1.1.4 武僧里程碑（t1 罗汉伏虎 / t2 铁壁 / t3 化甲为毒 / t4 金刚杵 / t5 达摩影） */
+    SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [], mileClaimed: [] };
+    __ok('v1.1.4 武僧里程碑专属牌/遗物：领取前被硬门禁挡在所有卡池外',
+      mileOn('card', 'luohanfuhu') === false && mileOn('card', 'huajiaweidu') === false &&
+      mileOn('relic', 'jingangchu') === false && mileOn('relic', 'damoying') === false);
+    SAVE.mile = ['adv_card', 'adv_relic']; SAVE.mileClaimed = ['wuseng_t1', 'wuseng_t3', 'wuseng_t4', 'wuseng_t5'];
+    __ok('v1.1.4 领取对应档位后武僧专属牌/遗物立即放行（mileClaimed 落盘生效）',
+      mileOn('card', 'luohanfuhu') === true && mileOn('card', 'huajiaweidu') === true &&
+      mileOn('relic', 'jingangchu') === true && mileOn('relic', 'damoying') === true);
+    __ok('v1.1.4 里程轨：武僧前 5 档节点 id / 名称正确且非 pending',
+      MILE_TRACKS.wuseng.nodes.slice(0, 5).every(function (n, i) {
+        return n.id === 'wuseng_t' + (i + 1) && n.pending === false;
+      }) &&
+      MILE_TRACKS.wuseng.nodes[0].name === '罗汉伏虎' &&
+      MILE_TRACKS.wuseng.nodes[1].name === '铁壁' &&
+      MILE_TRACKS.wuseng.nodes[2].name === '化甲为毒' &&
+      MILE_TRACKS.wuseng.nodes[3].name === '金刚杵' &&
+      MILE_TRACKS.wuseng.nodes[4].name === '达摩影');
+    __ok('v1.1.4 铁壁(t2)：mileThorns() 只给武僧 2 点（领取后）、未领 0；罗汉拳套 relicThorns 基线也改为 2',
+      (function () {
+        G = __base('wuseng'); SAVE.mileClaimed = [];
+        var a = mileThorns();
+        SAVE.mileClaimed = ['wuseng_t2'];
+        var b = mileThorns();
+        G = __base('tianshi'); var c = mileThorns();   // 别的角色不吃铁壁
+        return a === 0 && b === 2 && c === 0 && __code(relicThorns).indexOf('luohanquan') >= 0;
+      })());
+    __ok('v1.1.4 罗汉伏虎(t1)：额外加当前格挡一半（向下取整、Math.min 封顶 15/10）',
+      __code(cardById('luohanfuhu').eff).indexOf('Math.floor') >= 0 &&
+      __code(cardById('luohanfuhu').eff).indexOf('Math.min') >= 0 &&
+      __code(cardById('luohanfuhu').eff).indexOf('15') >= 0 &&
+      cardById('luohanfuhu').t(false).indexOf('向下取整') >= 0);
+    __ok('v1.1.4 化甲为毒(t3)：0 费技能、**非消耗牌**、格挡 <10 打不出、每次给全体敌人挂 **1 层**腐毒（本牌上限 4/5）',
+      cardById('huajiaweidu').cost === 0 && cardById('huajiaweidu').type === 'skill' &&
+      !('exhaust' in cardById('huajiaweidu')) &&
+      __code(cardById('huajiaweidu').eff).indexOf('applyPoisonAll(1, u?5:4)') >= 0 &&
+      __code(cardById('huajiaweidu').eff).indexOf('<10') >= 0);
+    __ok('v1.1.4 金刚杵(t4)：gainBlock 收口「获得即是累积」记 blockAccum，满 50 清零送 oneShot 铁布衫，startBattle 跨战斗清零',
+      __code(gainBlock).indexOf('jingangchu') >= 0 && __code(gainBlock).indexOf('blockAccum') >= 0 &&
+      __code(gainBlock).indexOf('oneShot:true') >= 0 && __code(gainBlock).indexOf('tiebushan') >= 0 &&
+      __code(startBattle).indexOf('G.blockAccum=0') >= 0);
+    __ok('v1.1.4 达摩影(t5)：受击后格挡归零则 damoyingBurst 爆破（伤害=击碎前格挡总量，逐点随机分配）',
+      __code(dealDamageToPlayer).indexOf('damoying') >= 0 &&
+      typeof damoyingBurst === 'function' &&
+      __code(damoyingBurst).indexOf('aliveEnemies') >= 0 && __code(damoyingBurst).indexOf('rng()') >= 0);
+    __ok('v1.1.4 浅显荆棘：玩家侧受击反伤与敌人侧反震都复用 sfx(\'thorns\') + playFx(\'thorns_light\') 立绘叠图',
+      __code(dealDamageToPlayer).indexOf('thorns_light') >= 0 && __code(dealDamageToPlayer).indexOf("sfx('thorns')") >= 0 &&
+      __code(applyDamageTo).indexOf('thorns_light') >= 0 && __code(applyDamageTo).indexOf("sfx('thorns')") >= 0);
+    __ok('v1.1.4 腐毒结算改为三角数（n(n+1)/2）：第 n 层掉 n(n+1)/2 点后 -1 层；applyPoisonAll 支持本牌叠加上限 cap',
+      __code(startTurn).indexOf('(p*(p+1))/2') >= 0 &&
+      __code(applyPoisonAll).indexOf('cap') >= 0);
+
+    /* 2f) v1.1.5 阴差里程碑（t1 饮血刃 / t2 血怒·涌 / t3 焚身咒 / t4 新初始牌组 / t5 酆都令） */
+    SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [], mileClaimed: [] };
+    __ok('v1.1.5 阴差里程碑专属牌/遗物：领取前被硬门禁挡在所有卡池外',
+      mileOn('card', 'yinxueren') === false && mileOn('card', 'fenshenzhou') === false &&
+      mileOn('relic', 'fengduling') === false);
+    SAVE.mile = ['adv_card', 'adv_relic']; SAVE.mileClaimed = ['yincha_t1', 'yincha_t3', 'yincha_t5'];
+    __ok('v1.1.5 领取对应档位后阴差专属牌/遗物立即放行（mileClaimed 落盘生效）',
+      mileOn('card', 'yinxueren') === true && mileOn('card', 'fenshenzhou') === true &&
+      mileOn('relic', 'fengduling') === true);
+    __ok('v1.1.5 里程轨：阴差前 5 档节点 id / 名称正确且非 pending',
+      MILE_TRACKS.yincha.nodes.slice(0, 5).every(function (n, i) {
+        return n.id === 'yincha_t' + (i + 1) && n.pending === false;
+      }) &&
+      MILE_TRACKS.yincha.nodes[0].name === '饮血刃' && MILE_TRACKS.yincha.nodes[1].name === '血怒·涌' &&
+      MILE_TRACKS.yincha.nodes[2].name === '焚身咒' && MILE_TRACKS.yincha.nodes[3].name === '新初始牌组' &&
+      MILE_TRACKS.yincha.nodes[4].name === '酆都令');
+    __ok('v1.1.5 血怒·涌(t2)：血怒上限 10→13；血玉 xueyu 由 +4 改 +3；两者叠加 16（都降 1 点）',
+      (function () {
+        G = __base('yincha'); G.relics = [];
+        var a = relicMaxXuenu();
+        G.relics = ['xueyu']; var b = relicMaxXuenu();
+        SAVE.mileClaimed = ['yincha_t2']; G.relics = []; var c = relicMaxXuenu();
+        G.relics = ['xueyu']; var d = relicMaxXuenu();
+        return a === 10 && b === 13 && c === 13 && d === 16;
+      })() &&
+      RELICS.filter(function (r) { return r.id === 'xueyu'; })[0].desc.indexOf('+3') >= 0 &&
+      __code(relicMaxXuenu).indexOf('yincha_t2') >= 0);
+    __ok('v1.1.5 饮血刃(t1)：0 费攻击，**失血在前、消耗在后**（loseHp 先于 rageSpend）⇒ 至多吃 2 层 +6；击杀再补 2 层',
+      cardById('yinxueren').cost === 0 && cardById('yinxueren').type === 'attack' &&
+      cardById('yinxueren').hero === 'yincha' && cardById('yinxueren').mile === 'yincha_t1' &&
+      __code(cardById('yinxueren').eff).indexOf('loseHp(3)') >= 0 &&
+      __code(cardById('yinxueren').eff).indexOf('loseHp(3)') < __code(cardById('yinxueren').eff).indexOf('rageSpend(3,6)') &&
+      __code(cardById('yinxueren').eff).indexOf('gainRage(2)') >= 0);
+    __ok('v1.1.5 饮血刃伤害预览：镜像「失血先 +3 层」再取 min(2) ⇒ 基础 4/8 恒 +6',
+      (function () { G = __base('yincha'); G.xuenu = 0;
+        return CARD_DMG.yinxueren(false, {}) === 10 && CARD_DMG.yinxueren(true, {}) === 14; })());
+    __ok('v1.1.5 焚身咒(t3)：0 费技能/**消耗牌**，失 3 血，本回合攻击牌 +3（升级 +5），并入 turnAtkBuff（与开天眼/灵汁叠加）',
+      cardById('fenshenzhou').cost === 0 && cardById('fenshenzhou').type === 'skill' &&
+      cardById('fenshenzhou').exhaust === true && cardById('fenshenzhou').hero === 'yincha' &&
+      cardById('fenshenzhou').mile === 'yincha_t3' &&
+      __code(cardById('fenshenzhou').eff).indexOf('loseHp(3)') >= 0 &&
+      __code(cardById('fenshenzhou').eff).indexOf('turnAtkBuff') >= 0 &&
+      cardById('fenshenzhou').t(false).indexOf('+3') >= 0 && cardById('fenshenzhou').t(true).indexOf('+5') >= 0);
+    __ok('v1.1.5 酆都令(t5)：hp 首次 ≤9（绝对）→ 充满血怒 + 本回合翻倍；挂在 loseHp 与 dealDamageToPlayer 扣血之后（道心优先）；每场重置',
+      typeof checkFengduLing === 'function' &&
+      __code(checkFengduLing).indexOf('G.hp>9') >= 0 &&
+      __code(checkFengduLing).indexOf('gainRage') >= 0 &&
+      __code(checkFengduLing).indexOf('damageDoubleTurn=1') >= 0 &&
+      __code(dealDamageToPlayer).indexOf('checkFengduLing()') >= 0 &&
+      __code(loseHp).indexOf('checkFengduLing()') >= 0 &&
+      __code(startBattle).indexOf('G.fengduUsed=false') >= 0 &&
+      __code(finishEndTurn).indexOf('G.damageDoubleTurn=0') >= 0);
+    __ok('v1.1.5 酆都令翻倍与血魔刀 +25% 走同一加法桶（calcDamageTo 与 previewDamage 镜像一致）',
+      __code(calcDamageTo).indexOf('_mul+=1') >= 0 && __code(calcDamageTo).indexOf('_mul+=0.25') >= 0 &&
+      __code(previewDamage).indexOf('damageDoubleTurn') >= 0 &&
+      RELICS.filter(function (r) { return r.id === 'fengduling'; })[0].rarity === 'gold');
+    __ok('v1.1.5 新初始牌组(t4)：选角后（首轮抽牌前）先弹「初始牌组二选一」，仅阴差且已领 t4 时',
+      __code(pickHero).indexOf("id==='yincha'") >= 0 &&
+      __code(pickHero).indexOf("mileClaimed('yincha_t4')") >= 0 &&
+      __code(pickHero).indexOf('showStarterDeckChoice()') >= 0 &&
+      __code(pickHero).indexOf('showOpeningChoice()') >= 0 &&
+      typeof showStarterDeckChoice === 'function' && typeof chooseStarterDeck === 'function');
+    __ok('v1.1.5 新初始牌组(t4)：右组「血怒流」= 饮血刃×3/金刚符×2/焚身咒×1/佛渡×1/噬魂术×1/血契×1/守一×1/渡魂归己×1（共 11），左组＝现有阴差牌组',
+      (function () {
+        var alt = starterDeckList(1);
+        if (alt.length !== 11) return false;
+        var cnt = {}; alt.forEach(function (c) { cnt[c.id] = (cnt[c.id] || 0) + 1; });
+        return cnt.yinxueren === 3 && cnt.jingang === 2 && cnt.fenshenzhou === 1 &&
+          cnt.fodu === 1 && cnt.shihun === 1 && cnt.xueqi === 1 && cnt.shouyi === 1 && cnt.duhunguiji === 1;
+      })() &&
+      starterDeckList(0).length === heroDeck('yincha').length &&
+      __code(chooseStarterDeck).indexOf('G.deck=starterDeckList(i)') >= 0 &&
+      __code(chooseStarterDeck).indexOf('showOpeningChoice()') >= 0);
+    __ok('v1.1.5 新初始牌组(t4)：缩略卡图复用 cardBody（唯一牌面渲染器）无并行渲染路径；两侧各排一行、点整组即选、**不允许跳过**',
+      __code(starterDeckThumbs).indexOf('cardBody(c)') >= 0 &&
+      __code(starterDeckThumbs).indexOf('sd-thumb') >= 0 &&
+      __code(showStarterDeckChoice).indexOf('starter-decks') >= 0 &&
+      __code(showStarterDeckChoice).indexOf('askChooseStarterDeck') >= 0 &&
+      __code(showStarterDeckChoice).indexOf('skip') < 0);
+    __ok('v1.1.5 返回上一步（三处）：选角→主菜单 / 牌组→选角 / 阴差 t4 时开局抉择→牌组（显式 rollback 清 hero/deck）',
+      __code(heroSelectToMenu).indexOf('G.hero=null') >= 0 && __code(heroSelectToMenu).indexOf('G.deck=[]') >= 0 &&
+      __code(backToHeroSelect).indexOf('showHeroSelect()') >= 0 &&
+      __code(backToStarterDeck).indexOf('showStarterDeckChoice()') >= 0 &&
+      __code(showHeroSelect).indexOf('返回主菜单') >= 0 &&
+      __code(showOpeningChoice).indexOf('返回上一步') >= 0 &&
+      __code(showOpeningChoice).indexOf("mileClaimed('yincha_t4')") >= 0 &&
+      __code(showOpeningChoice).indexOf('backToStarterDeck()') >= 0);
     SAVE.mile = [];
     G = __base('tianshi');
     var poolLock = CARDS.filter(function (c) { return mileOn('card', c); });

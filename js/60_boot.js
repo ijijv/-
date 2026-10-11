@@ -19,36 +19,6 @@ try{
   _skin.setProperty('--ui-hero-name', `url('${assetURL('ui/btn_primary.png', true)}')`);
   _skin.setProperty('--ui-hero-name-on', `url('${assetURL('ui/btn_primary_press.png', true)}')`);
 }catch(e){}
-/* ===================== 稀有度系统调试工具 ===================== */
-/**
- * 在控制台显示当前金卡补偿值
- */
-function showGoldCompensation(){
-  console.log(`当前金卡补偿值: ${(goldCompensation * 100).toFixed(2)}%`);
-  console.log(`基础金卡概率 (正常战): ${(RARITY_BASE_PROBABILITIES.normal.gold * 100).toFixed(2)}%`);
-  console.log(`基础金卡概率 (精英战): ${(RARITY_BASE_PROBABILITIES.elite.gold * 100).toFixed(2)}%`);
-  console.log(`基础金卡概率 (商店): ${(RARITY_BASE_PROBABILITIES.shop.gold * 100).toFixed(2)}%`);
-  console.log(`调整后金卡概率 (正常战): ${getAdjustedGoldProbability('normal').toFixed(4)} (${(getAdjustedGoldProbability('normal') * 100).toFixed(2)}%)`);
-  console.log(`调整后金卡概率 (精英战): ${getAdjustedGoldProbability('elite').toFixed(4)} (${(getAdjustedGoldProbability('elite') * 100).toFixed(2)}%)`);
-  console.log(`调整后金卡概率 (商店): ${getAdjustedGoldProbability('shop').toFixed(4)} (${(getAdjustedGoldProbability('shop') * 100).toFixed(2)}%)`);
-}
-
-/**
- * 重置金卡补偿值为初始值
- */
-function resetGoldCompensation(){
-  goldCompensation = -0.05;
-  console.log(`金卡补偿值已重置为 ${(goldCompensation * 100).toFixed(2)}%`);
-}
-
-/**
- * 手动设置金卡补偿值（用于测试）
- * @param {number} value - 设置的值 (-0.05 to 0.30)
- */
-function setGoldCompensation(value){
-  goldCompensation = Math.max(-0.05, Math.min(0.30, value));
-  console.log(`金卡补偿值已设置为 ${(goldCompensation * 100).toFixed(2)}%`);
-}
 function cardPointerDown(ev, i){
   const c=G.hand[i]; if(!c) return;
   if(c.sealed>0 || G.energy<effectiveCost(c)){ playCard(i); return; }
@@ -206,8 +176,8 @@ function showCardZoom(i){
   const c=G.hand[i]; if(!c) return;
   if(DRAG){ DRAG.el.classList.remove('dragging','lift','pressed'); DRAG.el.style.transform=''; DRAG.el.style.pointerEvents=''; DRAG=null; hideDragArrow(); ARROW_TIP=null; setDragTarget(null); }
   document.getElementById('overlayContent').innerHTML=`
-    <h2>${c.name}${c.up?' <span style="color:var(--green)">↑</span>':''} <small style="color:var(--dim);font-size:13px">${TNAME[c.type]} · ${RNAME[c.rarity]}</small></h2>
-    <div style="font-size:17px;line-height:1.9;text-align:left;padding:14px 20px;color:#e8dcc0;background:rgba(0,0,0,.22);border-radius:8px;margin:12px 0">${wrapKw(c.t(c.up))}${(!c.up && canUpgrade(c))?`<div class="upgrade-preview">升级后 → ${wrapKw(c.t(true))}</div>`:''}</div>
+    <h2>${c.name}${(c.up||shiWangBoosted(c))?' <span style="color:var(--green)">↑</span>':''} <small style="color:var(--dim);font-size:13px">${TNAME[c.type]} · ${RNAME[c.rarity]}</small></h2>
+    <div style="font-size:17px;line-height:1.9;text-align:left;padding:14px 20px;color:#e8dcc0;background:rgba(0,0,0,.22);border-radius:8px;margin:12px 0">${wrapKw(c.t(c.up))}${shiWangBoostTag(c)}${(!c.up && canUpgrade(c))?`<div class="upgrade-preview">升级后 → ${wrapKw(c.t(true))}</div>`:''}</div>
     ${effectiveCost(c)>0?`<p style="color:var(--gold)">符文费用：${effectiveCost(c)}</p>`:''}
     ${isOneUse(c)?`<p style="color:var(--red2);font-weight:bold">消耗 · 每场战斗限用一次，战斗结束后回到牌库</p>`:''}
     <button class="btn ghost" onclick="hideOverlay()">收起</button>`;
@@ -359,27 +329,42 @@ function renderTopbar(){
     const flameStyle = hasRelic('xueyu') ? ` style="--chip-flame:url('${fxStripURL('fx/xuenu_flame.png')}')"` : '';
     html += `<span class="stat stat-xuenu${hasRelic('xueyu')?' relic-flame-purple':''}"${flameStyle}>${iconTag('buff/xuenu.png','')}<span class="sb-long">血怒: <b>${G.xuenu||0}/${maxXuenuNow}</b></span><span class="sb-short">血怒 <b>${G.xuenu||0}/${maxXuenuNow}</b></span>${preXuenuTag}${rageAcc}</span>`;
   }
+  /* 金刚杵[紫·武僧·t4]：本场战斗累计获得过的格挡读数，照燃血令的「累积 x/20」挂在顶栏（无该遗物不显示，
+     不占桌面档版面）。数值满 50 会清零重算，见 30_engine 的 gainBlock 收口点。 */
+  if(G.hero === 'wuseng' && hasRelic('jingangchu')) {
+    html += `<span class="stat stat-blockaccum" data-tip="relic:jingangchu">${iconTag('buff/block.png','🛡️')}<span class="sb-long">格挡累积: <b>${G.blockAccum||0}/50</b></span><span class="sb-short">累 <b>${G.blockAccum||0}/50</b></span></span>`;
+  }
   html += `<button class="tb-toggle" onclick="toggleTopbar()">${TOPBAR_OPEN?'▴ 收起详情':'▾ 详情'}</button>`;
   if(TOPBAR_OPEN){
     const buffs=playerBuffHTML();
-    // 遗物：详情页内带插图（图标 + 名称）——不再显示在玩家面板下方
-    const relics=G.relics.length?`<div class="player-relics">${G.relics.map(id=>{const r=relById(id);return `<span class="prelic-chip${relicUsedCls(id)}" data-tip="relic:${id}">${relicIcon(r)}<span class="prelic-name">${r.name}</span></span>`;}).join('')}</div>`:'';
+    /* v1.1.x（用户口径「顶部栏不再显示灵汁和遗物，相关内容移入锦囊面板」）：
+       遗物与灵汁**都不再排进顶栏详情** —— 统一收进「锦囊」入口（题头右侧那枚按钮，
+       手机横屏档就在「菜单」正下方）。详情页只留状态徽章与召唤物。 */
     // 召唤物：入详情页；只在战斗中显示（召唤物在 startBattle 时清空）
     const summons=(SCENE==='battle' && G.summons && G.summons.length)?`<div class="tb-summons">${G.summons.map(s=>summonHTML(s)).join('')}</div>`:'';
-    const potion=potionBagHTML();
     /* v1.0.3：顶栏芯片的**完整写法**。这一行只在手机横屏档显示（基档 display:none，
        选择器 `.tb-detail .stat.stat-detail-full` 是为了压过 :1262 的 `.tb-detail .stat`），
        桌面档的四个芯片本来就写着全文 ⇒ 详情里再来一行是重复的，所以基档不给看。 */
-    const statsDetail=`<span class="stat stat-detail-full">${statsFull}${G.hero==='ganshiren'?` · 尸气 ${G.尸气}/${maxShiQiNow}${preShiqi>0?`（下回合预+${preShiqi}）`:''}`:''}${G.hero==='yincha'?` · 血怒 ${G.xuenu||0}/${maxXuenuNow}${preXuenu>0?`（下回合预+${preXuenu}）`:''}${hasRelic('ranxueling')?`（累积 ${G.rageAccum||0}/20）`:''}`:''}</span>`;
+    const statsDetail=`<span class="stat stat-detail-full">${statsFull}${G.hero==='ganshiren'?` · 尸气 ${G.尸气}/${maxShiQiNow}${preShiqi>0?`（下回合预+${preShiqi}）`:''}`:''}${G.hero==='yincha'?` · 血怒 ${G.xuenu||0}/${maxXuenuNow}${preXuenu>0?`（下回合预+${preXuenu}）`:''}${hasRelic('ranxueling')?`（累积 ${G.rageAccum||0}/20）`:''}`:''}${G.hero==='wuseng'&&hasRelic('jingangchu')?` · 格挡累积 ${G.blockAccum||0}/50`:''}</span>`;
     html+=`<div class="tb-detail">
       ${statsDetail}
-      ${potion}
       ${buffs?`<div class="badges">${buffs}</div>`:''}
       ${summons}
-      ${relics}
     </div>`;
   }
   el.innerHTML=html;
+  syncJinnangIcons();
+}
+/* v1.1.x：锦囊入口按钮的图标（图到了自动变 <img>，图没到回落「锦囊」两字）。
+   两枚按钮同图：题头竖栏的 #jinnangBtn（战斗）与地图顶栏的 #mtJinnangBtn。
+   ⚠️ 必须写在 renderTopbar 里逐帧核对：iconTag 的探图是**异步**的（Image.onload 才翻 yes），
+      而 #jinnangBtn 是静态 HTML、不会自己重渲染 —— 只在 renderTopbar 里对一次，探到后才会换图。 */
+function syncJinnangIcons(){
+  const h=iconTag('ui/menu/jinnang-nobg.png','锦囊');
+  ['jinnangBtn','mtJinnangBtn'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(b && b.innerHTML!==h) b.innerHTML=h;
+  });
 }
 /* —— 符文图标按英雄换皮（用户口径「每个角色的符文样式」）——
    静态 <img src="素材/rune.png"> 保留为**默认 + 兜底**：打包.py 只内联这一处静态 src，
@@ -668,19 +653,77 @@ function showHeroSelect(){
       + tail
       + `</div>`;
   }).join('');
-  showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="hero-cards">${cards}</div>`, false, 'hero-scene');
+  /* v1.1.5（用户口径）：选角/选牌组/开局抉择三处都要有「返回上一步」。
+     选角这一处是起点 ⇒ 返回主菜单（并复位半途的选角状态）。 */
+  showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="hero-cards">${cards}</div>
+    <button class="btn ghost" onclick="heroSelectToMenu()">返回主菜单</button>`, false, 'hero-scene');
 }
 function pickHero(id){
   G.hero=id;
   const h=HEROES.find(x=>x.id===id);
   G.deck=heroDeck(id);
   log(`选择英雄【${h.name}】`);
-  showOpeningChoice();
+  /* v1.1.5（血祭阴差 t4 · 新初始牌组）：领取该档后，选角之后**先**弹「初始牌组二选一」，
+     选完才进开局抉择（两步都在首轮抽牌之前）。其它角色维持旧路径，逐字节不变。 */
+  if(id==='yincha' && mileClaimed('yincha_t4')) showStarterDeckChoice();
+  else showOpeningChoice();
 }
 function heroDeck(id){
   const h=HEROES.find(x=>x.id===id);
   const d=[]; h.deck.forEach(([cid,n])=>{ for(let i=0;i<n;i++) d.push(cardById(cid)); });
   return d;
+}
+/* ===================== 初始牌组二选一（v1.1.5 · 血祭阴差 t4） =====================
+   用户口径：选角后立刻（首轮抽牌前）弹出——上「现有阴差初始牌组」、下「血怒流初始牌组」，
+   缩略卡图各**排一行、整组概览**；**不允许跳过**（必须选一组才继续）。
+   纯机制、无贴图；点整组即选（走 askConfirm「是/否」图标确认）。
+   ⚠️ 缩略卡图直接复用 cardBody（唯一牌面渲染器），靠 CSS `.sd-thumb .card{transform:scale}`
+      缩放，不新建并行渲染路径。 */
+const YINCHA_STARTER_ALT=[['yinxueren',3],['jingang',2],['fenshenzhou',1],['fodu',1],['shihun',1],['xueqi',1],['shouyi',1],['duhunguiji',1]];
+function starterDeckList(which){
+  if(which!==1) return heroDeck('yincha');
+  const d=[]; YINCHA_STARTER_ALT.forEach(([cid,n])=>{ for(let i=0;i<n;i++) d.push(cardById(cid)); });
+  return d;
+}
+function starterDeckThumbs(list){
+  return list.map(c=>`<div class="sd-thumb"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div>`).join('');
+}
+function showStarterDeckChoice(){
+  const left=starterDeckList(0), right=starterDeckList(1);
+  showOverlay(`<h2>初 始 牌 组</h2><p>血怒流开路——选择你的起手牌组（须选一组，不能跳过）。</p>
+    <div class="starter-decks">
+      <div class="starter-deck" onclick="askChooseStarterDeck(0)">
+        <div class="sd-title">现有阴差牌组<small>共 ${left.length} 张</small></div>
+        <div class="sd-row">${starterDeckThumbs(left)}</div>
+      </div>
+      <div class="starter-deck" onclick="askChooseStarterDeck(1)">
+        <div class="sd-title">血怒流牌组<small>共 ${right.length} 张</small></div>
+        <div class="sd-row">${starterDeckThumbs(right)}</div>
+      </div>
+    </div>
+    <button class="btn ghost" onclick="backToHeroSelect()">返回上一步</button>`, false, 'hero-scene');
+}
+function askChooseStarterDeck(i){
+  const name=(i===1)?'血怒流牌组':'现有阴差牌组';
+  askConfirm(`以【${name}】作为初始牌组？`, ()=>chooseStarterDeck(i));
+}
+function chooseStarterDeck(i){
+  G.deck=starterDeckList(i);
+  log(`初始牌组：${(i===1)?'血怒流':'现有阴差'}（共 ${G.deck.length} 张）`);
+  showOpeningChoice();
+}
+/* —— 「返回上一步」三处（显式 rollback，不只是重渲染）—— */
+function heroSelectToMenu(){                 // 选角 → 主菜单
+  G.hero=null; G.deck=[]; G.openingPicks=null;
+  showStartScreen();
+}
+function backToHeroSelect(){                 // 牌组 / 开局抉择 → 选角
+  G.hero=null; G.deck=[]; G.openingPicks=null;
+  showHeroSelect();
+}
+function backToStarterDeck(){                // 开局抉择 → 牌组二选一（仅阴差 t4）
+  G.deck=heroDeck('yincha');
+  showStarterDeckChoice();
 }
 /* v1.0.1：多存档。3 个槽位，1 号槽沿用旧键名（老档天然落进 1 号槽，无需迁移）。
    开始新局优先用**第一个空槽**；3 个都满了才弹「存档已满」让玩家挑一个覆盖。 */
@@ -753,10 +796,25 @@ function showOpeningChoice(){
   const originalRewardTier = G.rewardTier;
   G.rewardTier = 'starter';
 
-  const picks=[];
-  while(picks.length<3){
-    const c=weightedCard();
-    if(!picks.some(p=>p.id===c.id)) picks.push(c);
+  /* v1.1.1（t3 · 天师真传）：领取该档后，开局抉择改为**本角色全部牌库自由挑选一张**
+     （未领取前仍是 3 张 starter 权重随机三选一）。带 mile 的专属牌同样要已领取才进池。
+     v1.1.3（t4 · 尸王真传）：茅山赶尸人同一套机制（ganshiren_t4），只是**不能选【尸王】**
+     —— 尸王这张牌在游戏里既不遇也不抽（weightedCard 已恒排），此处同样排除。 */
+  const freePick = (G.hero==='tianshi' && mileClaimed('tianshi_t3')) ||
+                   (G.hero==='ganshiren' && mileClaimed('ganshiren_t4'));
+  let picks;
+  if(freePick){
+    const _ok=c=>(!c.hero || c.hero===G.hero) && (!c.mile || mileClaimed(c.mile)) &&
+      c.id!=='duanren_leifu' && c.id!=='yinbing' && c.id!=='shi_wang' &&
+      (!c.needs || deckHasMechanic(c.needs)) && mileOn('card', c);
+    picks=CARDS.filter(_ok);
+    if(!picks.length) picks=CARDS.filter(c=> !c.hero || c.hero===G.hero);
+  }else{
+    picks=[];
+    while(picks.length<3){
+      const c=weightedCard();
+      if(!picks.some(p=>p.id===c.id)) picks.push(c);
+    }
   }
   G.openingPicks=picks;
 
@@ -769,14 +827,28 @@ function showOpeningChoice(){
   // 恢复原来的奖励层级设置
   G.rewardTier = originalRewardTier;
 
-  const cards=picks.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="pickOpening(${i})">${cardBody(c)}</div>`).join('');
+  const cards=picks.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="askPickOpening(${i})">${cardBody(c)}</div>`).join('');
+  const poolCls='reward-cards'+(freePick?' free-pool':'');
+  const tip = freePick
+    ? (G.hero==='ganshiren'
+        ? '尸王真传：从本角色全部牌库中自由挑选一张加入起始牌组（不能选尸王，或跳过）。'
+        : '天师真传：从本角色全部牌库中自由挑选一张加入起始牌组（或跳过）。')
+    : '天师赠你一道符，挑一张加入起始牌组（或跳过）。';
   /* v1.0.1：广告入口隐藏 —— 摘掉「看广告 · 重随一次」。rerollOpening / adPlaceholder 本体保留。 */
-  showOverlay(`<h2>开 局 抉 择</h2><p>天师赠你一道符，挑一张加入起始牌组（或跳过）。</p><div class="reward-cards">${cards}</div>
+  /* v1.1.5（用户口径）：「返回上一步」——阴差 t4 时上一步是「初始牌组二选一」，
+     其余角色上一步是「选角」；显式 rollback（见 backToStarterDeck / backToHeroSelect）。 */
+  const backFn=(G.hero==='yincha' && mileClaimed('yincha_t4'))?'backToStarterDeck()':'backToHeroSelect()';
+  showOverlay(`<h2>开 局 抉 择</h2><p>${tip}</p><div class="${poolCls}">${cards}</div>
+    <button class="btn ghost" onclick="${backFn}">返回上一步</button>
     <button class="btn ghost" onclick="skipOpening()">跳过</button>`);
 }
 function pickOpening(i){
   const c=G.openingPicks[i];
-  G.deck.push(c);
+  /* v1.1.2（用户报「上把升级的五雷法印，下把开局抉择里也是升级的」）：
+     天师真传(freePick)的备选池是 `CARDS.filter(...)` 的**引用**，直接 push 进牌组后
+     forgeCard 写的 `c.up=true` 会落回卡表本体 ⇒ 下一局这张牌一进池就带升级态。
+     入池一律换成副本（cardById 已是浅拷贝且 up 置 false），与 weightedCard 的其它入池口同口径。 */
+  G.deck.push(c ? cardById(c.id) : c);
   log(`获得卡牌【${c.name}】`);
 
   // 根据本次奖励是否有金卡来更新补偿值
@@ -808,7 +880,11 @@ function skipOpening(){
    ⚠️ 版本号字符串必须留在 <h2> 里（提交.py 的 read_version() 读 原型.html，但三处保持一致是项目惯例）。
    ⚠️ 「续」不再按 hasRunSave() 条件渲染，而是**总是渲染、无存档则 disabled** —— 石碑忽隐忽现会破构图。 */
 function showStartScreen(){
-  setBg('menu'); setBGM('menu');
+  setBg('menu');
+  /* v1.1.x：setBGM 会真的去 new Audio()/load()/play()（真机上的音频 I/O），
+     它若抛异常会**截断整个函数** ⇒ 下面的 showOverlay 不执行 ⇒ 只剩 #bg（menu 底图）+ at-menu，
+     整屏空白（用户 2026-10-11 报的「回主界面卡住」）。背景音乐本来就不该拖垮界面渲染。 */
+  try{ setBGM('menu'); }catch(e){}
   showOverlay(`<div class="menu-root">
     <div class="menu-bgwrap"><div class="menu-bgimg a"></div><div class="menu-bgimg b"></div></div>
     <div class="menu-veil"></div>
@@ -937,8 +1013,7 @@ function showSettings(){
     <button class="btn ghost" onclick="toggleLowSpec()">${SETTINGS.lowSpec?'关闭流畅模式':'开启流畅模式'}</button>
     <p style="margin-top:16px">性能读数（诊断用）：<b style="color:${SETTINGS.perfReadout?'var(--green)':'var(--red)'}">${SETTINGS.perfReadout?'开':'关'}</b><br><small style="color:var(--dim);font-size:12px">开启后屏幕右上角显示 FPS / 最长帧 / longtask，用来查卡顿；查完记得关掉</small></p>
     <button class="btn ghost" onclick="togglePerfReadout()">${SETTINGS.perfReadout?'关闭性能读数':'开启性能读数'}</button>
-    <p style="margin-top:16px">伤害飘字：<b style="color:${fx()?'var(--green)':'var(--red)'}">${fx()?'开':'关（流畅模式）'}</b> <span id="numStateLbl" style="font-size:12px;color:var(--dim)"></span></p>
-    <button class="btn ghost" onclick="numSelfTest()">浮字自检（四档各放一次）</button>
+    <p style="margin-top:16px">伤害飘字：<b style="color:${fx()?'var(--green)':'var(--red)'}">${fx()?'开':'关（流畅模式）'}</b></p>
     <p style="margin-top:16px">结束回合软提示：<b style="color:${SETTINGS.endTurnHint!==false?'var(--green)':'var(--red)'}">${SETTINGS.endTurnHint!==false?'开':'关'}</b></p>
     <button class="btn ghost" onclick="toggleEndTurnHint()">${SETTINGS.endTurnHint!==false?'关闭软提示':'开启软提示'}</button>
     <button class="btn ghost" onclick="showClearTimes()">榜 单</button>
@@ -1055,21 +1130,6 @@ function toggleSound(){
 }
 function toggleLowSpec(){
   SETTINGS.lowSpec=!SETTINGS.lowSpec; persistSettings(); applyLowSpec(); showSettings();
-}
-/* v0.61.41：浮字自检 —— 四档各放一次，并把 NUM_STATE 摊开显示。
-   存在的理由：飘字到底是在走素材（图片）还是回落文字、以及**是不是被「流畅模式」整段关掉了**，
-   光靠肉眼在快节奏战斗里分不清（流畅模式只影响两处 CSS 动画，很不容易被察觉）。 */
-function numSelfTest(){
-  numPrewarm();
-  [['', '伤害'], ['to-player', '受伤'], ['block', '格挡'], ['heal', '治疗']].forEach(function(kv,i){
-    setTimeout(function(){ floatDamage('-12', kv[0], null, {}); }, i*260);
-  });
-  const st=['dmg','hurt','block','heal'].map(function(k){
-    const v=NUM_STATE[k];
-    return k+'='+(v===1?'图片':v===-1?'回落文字':'未探测');
-  }).join('　');
-  const lbl=document.getElementById('numStateLbl'); if(lbl) lbl.textContent=st;
-  floatMsg((fx() ? '飘字：开　' : '飘字被「流畅模式」整段关掉了　') + st);
 }
 function toggleEndTurnHint(){ // v0.61.20(P1)
   SETTINGS.endTurnHint = (SETTINGS.endTurnHint===false); persistSettings(); renderEndTurnHint(); showSettings();

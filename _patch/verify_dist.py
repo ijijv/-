@@ -219,43 +219,22 @@ def main():
     _shard_src = sorted(set(re.findall(r"menuShardsHTML\(\s*'([^']+)'", _boot)))
     check(_shard_src and set(_shard_src) <= set(_ui_menu),
           '石碑碎片复用主菜单 UI 图（%s ⊆ %s）' % (','.join(_shard_src), ','.join(_ui_menu)))
-    # v0.74.0 立「多处版本号必须同步」，v1.0.0 **把处数从三处改成两处**。
-    # v1.0.0 的改动：用户要求「把版本号重置为 V1.0.0，放在游戏左上角，要迷你字号」
-    #   ⇒ 新增 `#ver-tag`（原型.html 的 body 首行，常驻左上角，z-index 60 > #overlay 10），
-    #     并**摘掉**原来那两处 —— h1.title 里的 `<small>· 玩法原型 v…</small>` 与
-    #     60_boot.js 主菜单模板串里的 `<small>· v…</small>`。
-    #   摘掉不只是「用户没要」：那两处一个跟着居中标题、一个只在主菜单里，
-    #   都是**进游戏就看不见**的位置，本来就是这次要换掉的理由。
-    #   所以旧的两处**反向钉住**（下面的 _old）：谁再把它们加回来，
-    #   版本号就会重新分裂成三处不同步 —— v0.74.0 那条闸当初正是为此而补。
-    # ⚠️ 取值必须从**源码树**取，不能从 dist 取：主菜单那处在 60_boot.js 的模板串里，
-    #   产物里已被混淆（中文串进 base64 表，见 _patch/_diststr.py 那笔旧账）
-    #   ⇒ 在 dist 上 grep 那个串是 grep 不到的，拿 dist 当判据会**假红**。
-    #   产物侧的版本号另外单独查（title 与 #ver-tag 两条都是正文 HTML 字面量，能存活），
-    #   用来抓「改了源码忘了重打包」。
-    _vers = [
-        ('原型.html <title>', re.search(r'<title>[^<]*?v(\d+\.\d+\.\d+)</title>', src)),
-        ('原型.html #ver-tag', re.search(r'<div id="ver-tag">V(\d+\.\d+\.\d+)</div>', src)),
-    ]
-    _miss = [k for k, m in _vers if not m]
-    check(not _miss, '两处版本号都还在（缺：%s）' % ','.join(_miss))
-    _vals = sorted(set(m.group(1) for _, m in _vers if m))
-    check(len(_vals) == 1,
-          '两处版本号同步（%s）'
-          % ','.join('%s=v%s' % (k, m.group(1)) for k, m in _vers if m))
+    # v1.1.x（用户 2026-10-12：「记得把游戏中的开发者痕迹抹去」）：
+    #   原先常驻左上角的 `#ver-tag`（V1.0.0 水印）属于开发者痕迹，已连同其 CSS 一并删除。
+    #   版本号只留 `<title>` 一处 —— 它进游戏看不见，不算痕迹。
+    #   这里**反向钉住**：谁再把 #ver-tag（或旧的两处正文版本号）加回来就红。
+    _ver = re.search(r'<title>[^<]*?v(\d+\.\d+\.\d+)</title>', src)
+    check(bool(_ver), '原型.html <title> 里的版本号还在（唯一的版本号落点）')
+    _vals = [_ver.group(1)] if _ver else []
     _old = [k for k, m in (('原型.html h1', re.search(r'玩法原型 v\d', src)),
                            ('60_boot.js 主菜单', re.search(r'<small>· v\d', _boot))) if m]
-    check(not _old, 'v1.0.0 起旧的两处版本号已摘除（仍在：%s）' % ','.join(_old))
+    check(not _old, '版本号不再散落在正文（仍在：%s）' % ','.join(_old))
+    check('id="ver-tag"' not in src, '开发者痕迹 #ver-tag 已从源码移除')
+    check('ver-tag' not in html, '开发者痕迹 #ver-tag 未进入产物')
     _dv = re.search(r'<title>[^<]*?v(\d+\.\d+\.\d+)</title>', html)
     check(bool(_dv) and len(_vals) == 1 and _dv.group(1) == _vals[0],
           '产物版本号与源码一致（产物 v%s / 源码 v%s）—— 不一致说明改了源码没重新打包'
           % (_dv.group(1) if _dv else '缺失', _vals[0] if len(_vals) == 1 else '?'))
-    # 左上角那枚是**常驻 UI**（#overlay 盖上来时也看得见）⇒ 单独钉它在产物里存活。
-    # 它在正文 HTML 里、不在脚本里，混淆不动它；一旦被谁挪进脚本就会被烤成 base64 而在这里红。
-    _dvt = re.search(r'<div id="ver-tag">V(\d+\.\d+\.\d+)</div>', html)
-    check(bool(_dvt) and len(_vals) == 1 and _dvt.group(1) == _vals[0],
-          '产物左上角 #ver-tag 与源码一致（产物 V%s / 源码 V%s）'
-          % (_dvt.group(1) if _dvt else '缺失', _vals[0] if len(_vals) == 1 else '?'))
     # v0.76.0：README.txt 的「版本里程碑」**每次发版重写一份** —— 规矩立了就得有闸看着它，
     # 否则它会像主菜单那处版本号一样悄悄落后（v0.69.0 一路停到 v0.74.0 才被发现）。
     # 判据取**最高版本号**而不是「有没有出现当前版本」：README 的里程碑表里全是历史版本，
@@ -871,8 +850,8 @@ def main():
           "showOverlay 开头有 `classList.remove('pick-scene')`（少了它 = 类粘在 #overlay 上，"
           '之后每个面板都继承无底样式）')
     _pick_calls = _re.findall(r"undefined\s*,\s*'pick-scene'\s*\)", js_src)
-    check(len(_pick_calls) == 6,
-          '六处选牌小窗（忘忧 / 焚符 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一）都**显式**传了'
+    check(len(_pick_calls) == 7,
+          '七处选牌小窗（忘忧 / 焚符 / 五雷法印 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一）都**显式**传了'
           '第三实参 pick-scene（实测 %d 处）—— 漏传 = 既没有场景类，从别的弹窗进来也不再重播进场'
           % len(_pick_calls))
 
@@ -1284,7 +1263,12 @@ def main():
         check('object-fit:contain' in _rcb and 'margin:0auto6px' in _rcb,
               '.ricon 仍然 contain + 居中（.relic 是 flex 列，显式 width 后靠 margin:auto 才居中）: .ricon{%s}'
               % _rc.group(2)[:90])
-    _rf = _re.search(r'\.ricon-fb\s*\{[^}]*\}', _css)
+    # v1.1.5：正则**收紧到行首**（`^[ \t]*\.ricon-fb`）—— 锦囊面板新增了一条
+    #   `.pouch-item .ricon-fb{font-size:20px;}`（打包进同一条 <style>，且书写更靠前），
+    #   旧的 `\.ricon-fb\s*\{` 会匹配到它的**子串**，于是「第一条 .ricon-fb 规则」变成那条
+    #   只管字号的派生规则 ⇒ 真·基档规则（display:flex 居中，见 原型.html 的 `.ricon-fb{...}`）
+    #   反而没被检查到，报成假红。收紧后只认「整条规则的选择器恰是 .ricon-fb」。
+    _rf = _re.search(r'(?m)^[ \t]*\.ricon-fb\s*\{[^}]*\}', _css)
     check(_rf is not None, '产物里 .ricon-fb（无图道具的字牌占位）规则还在')
     if _rf:
         _rfb = _rf.group(0).replace(' ', '')

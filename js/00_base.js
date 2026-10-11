@@ -824,7 +824,9 @@ function summonMistFx(type, seq){
   /* 终点＝召唤物面板（.hero-art-box，折叠键就挂在它右下角）的右下角；元素缺失时退到视口右下。 */
   const tx=(dr && dr.width) ? (dr.right-10) : (window.innerWidth-88);
   const ty=((dr && dr.height) ? (dr.bottom-10) : (window.innerHeight*0.80)) + so*14;
-  const N=6;                                       // 6 团错峰 ⇒ 读成「带拖尾」
+  /* v1.1.5（性能）：同批召唤越多、每团雾的错峰拖尾越叠 ⇒ 一次召 4~5 只时 6 团雾 × N 会瞬时压在合成器上。
+     按同批序号递减：第 0 只 6 团（完整拖尾），第 1 只 4 团，第 2 只及以后 3 团（仍读得出追尾，但便宜一半）。 */
+  const N=(so<=0)?6:(so===1?4:3);                 // 6 团错峰 ⇒ 读成「带拖尾」
   for(let k=0;k<N;k++){
     const size=Math.round(54-k*5);                 // 头大尾小
     const d=document.createElement('div');

@@ -9,6 +9,12 @@
 /* ===================== 全局状态 ===================== */
 let G = null;
 function newState(){
+  /* v1.1.2：兜底复位（只在真被污染时动卡表，正常局零改动）——
+     `up`/`sealed` 这些是**每张牌实例**的字段，卡表本体 CARDS 应恒为未升级。
+     若历史上某条入池路径塞进过 CARDS 的引用、又被 forgeCard 就地写升级，卡表就被永久污染
+     （用户报「上把升级的五雷法印，下把开局抉择里也是升级的」）。主修见 60_boot.js 的 pickOpening；
+     这里再全表扫一遍，把已被污染的会话也救回来。 */
+  for(const c of CARDS){ if(c.up) c.up=false; }
   return { log:[], deck:[], drawPile:[], hand:[], discard:[],
     hp:80, maxHp:80, block:0, energy:3, weak:0, gouhun:0, thorns:0, act:1,
     pendingEnergy:0, pendingDiscard:0, summons:[], enemies:[], target:0, mapRow:0, mapCol:-1, mapPath:[], rewardPicks:[], // v0.61.20(P2)：mapPath 记走过的 (层,列)，地图连线的「已走」靠它
@@ -42,6 +48,9 @@ function curEnemy(){
   return al[0];
 }
 function randomAlive(){ const a=aliveEnemies(); return a.length? a[Math.floor(rng()*a.length)] : null; }
+/* v1.1.1：**绝对血量最少**的存活敌人（五雷法印的 0 费雷符在回合末自动打出时的默认目标）。
+   判据是当前 hp 最小（不看比例、不看格挡），平手取下标靠前者。 */
+function lowestHpEnemy(){ const a=aliveEnemies(); if(!a.length) return null; return a.reduce((x,y)=> y.hp<x.hp ? y : x); }
 /* v0.61.33：删除「点击敌人锁定目标」（原 selectTarget）。目标只由**拖拽落点**决定
    （60_boot.js 的 onDragUp 里写 G.target），点敌人不再改目标、卡面也不再有预伤徽章。
    原因：徽章与敌人高亮都按「上次锁定的那只」算，拖动改指向另一只时数字不跟着变，会显示错的伤害。
@@ -84,8 +93,14 @@ function calcDamageTo(e,n,ignoreBlock,point){
     d+=(G.attackBuff||0)+(G.turnAtkBuff||0);
     if((e.kind==='ghost'||e.kind==='jiangshi') && hasRelic('taomujian')) d=Math.floor(d*1.25);
     if(e.kind==='yao' && hasRelic('tongqianjian')) d=Math.floor(d*1.25);
-    /* 血魔刀[金·阴差]：生命低于最大生命 30% 时，攻击牌伤害 +25%（临界值随最大生命自动联动）。 */
-    if(G.hero==='yincha' && hasRelic('xuemodao') && G.hp < G.maxHp*0.3) d=Math.floor(d*1.25);
+    /* 血魔刀[金·阴差]：生命低于最大生命 30% 时，攻击牌伤害 +25%（临界值随最大生命自动联动）。
+       酆都令[金·阴差 t5]：触发当回合对敌伤害翻倍（+100%）。
+       两者与其它增伤**走同一加法桶**（用户口径「翻倍与血魔刀 +25% 是加法」）——
+       单独血魔刀时 _mul 仍为 1.25（与旧式心理等价），同场则为 2.25×。 */
+    let _mul=1;
+    if(G.hero==='yincha' && hasRelic('xuemodao') && G.hp < G.maxHp*0.3) _mul+=0.25;
+    if(G.hero==='yincha' && G.damageDoubleTurn) _mul+=1;
+    if(_mul!==1) d=Math.floor(d*_mul);
     /* 太上咒箓[金·天师]：目标身上诅咒满 6 层时，其受到的伤害 +25%。 */
     if(hasRelic('taishangzhou') && (e.curse||0)>=6) d=Math.floor(d*1.25);
     if(G.weak>0 && !ignoreBlock) d=Math.floor(d*0.75);
@@ -103,7 +118,7 @@ function applyDamageTo(e,d,ignoreBlock,point,hitNormal,floatDelay){
   if(G.stealWatch){ G.stealAccum=(G.stealAccum||0)+actual; } // 咒印(#42B)：累计这张攻击牌的实际伤害，供 100% 吸血
   e.hp-=d; G.turnStats.dealt+=d; afterEnemyDamaged(e);
   if(duhunActive() && actual>0){ DUHUN_ACC+=actual; if(!DUHUN_BATCH) duhunFlush(); } // v0.61.33：攒批，批外（如敌人自伤类）单发即结
-  if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; log(`${e.name} 反震：反弹 ${r} 点伤害`); if(G.hero==='yincha' && r>0) gainRage(r); } }
+  if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; sfx('thorns'); playFx('thorns_light', 'player'); log(`${e.name} 反震：反弹 ${r} 点伤害`); if(G.hero==='yincha' && r>0) gainRage(r); } }   // v1.1.4：敌人侧反震补上金属碰撞音效 + 玩家立绘的浅显荆棘叠图
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ sfx('kw_yehuo'); G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.hpLostTurn=(G.hpLostTurn||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); if(G.hero==='yincha') gainRage(1); }
   /* v0.61.25：打击层按「打在什么上 / 打了多少 / 有没有打死」分级；
      point=true 是连击的逐段调用，改用极短的 atk_multi_each（60ms 一发也不糊）。 */
@@ -226,6 +241,12 @@ function applyCurse(e, n){
     dealDamageTo(e, 4, false, 0, true);
     log(`雷法心诀：${e.name} 诅咒满 6 层，受到 4 点雷击`);
   }
+  /* 朱砂砚[紫·天师里程碑 tianshi_t4]：敌人**每次**诅咒达到 6 层上限时抽 1 张牌。
+     判据与雷法心诀同为「跃迁」（<6 → 6）—— 已在 6 层再施咒不重复触发。 */
+  if(hasRelic('zhushayan') && currentCurse < 6 && e.curse >= 6 && e.hp > 0){
+    drawCards(1);
+    log(`朱砂砚：${e.name} 诅咒满 6 层，抽 1 张牌`);
+  }
 
   if(e.curse>=6) unlockAchievement('zuzhou');
   // 追踪本回合实际施加的诅咒层数（符箓天师，用于血祭/金刚符/金光罩等）
@@ -246,6 +267,8 @@ function applyCurse(e, n){
 const CARD_DMG = {
   /* 手牌伤害预览 = eff 逐列"当前状态"同式抄写。重做前旧值已整体废弃，勿再单独补行。
      仅镜像结算数值，不吃副作用、不实际扣资源；四列顺序：A赶尸人/B武僧/C阴差/D天师。 */
+  /* 雷谴符[紫·天师里程碑]：裸伤按目标【诅咒】层数浮动 —— 基础 2×层；升级 1+2+…+层。 */
+  leiqianfu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; const c=t.curse||0; return u ? (c*(c+1)/2) : (c*2); },
   leifu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d=(G.hero==='tianshi'?(u?9:6):G.hero==='yincha'?(u?8:4):(u?6:4));
     if(G.hero==='ganshiren') d=(u?7:5)+G.summons.filter(s=>s.dur>0).length;   // v0.61.37 A：4 → 5
     else if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/(u?2:3)));
@@ -257,6 +280,9 @@ const CARD_DMG = {
     if(G.hero==='wuseng') d+=Math.min(6,Math.floor((G.block||0)/(u?2:3)));
     if(G.hero==='yincha') d=u?10:6; // C 固定 10/6（本回合有格挡也不加），与 eff 一致
     return d; },
+  /* 饮血刃[蓝·阴差里程碑]：失 3 血在前（被动先 +3 层）→ 再 rageSpend(3,6) 至多吃 2 层 ⇒ 恒 +6。
+     预览不实扣血、只镜像「加成用完的那 2 层」，故按 rageLayers()+3 后再取 min(2)。 */
+  yinxueren: (u,e)=>{ if(!(e||curEnemy())) return 0; return (u?8:4)+3*Math.min(2, rageLayers()+3); },
   jianfu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d;
     if(G.hero==='wuseng') d=(u?12:8)+Math.floor(G.block/2); // 耗全部格挡，每2格挡+1
     else if(G.hero==='yincha') d=12+(G.hpLostTurn||0)*(u?2:1); // C 固定 12，本回合每失 1 血 +1/+2
@@ -295,7 +321,8 @@ const CARD_DMG = {
     if(G.hero==='tianshi') return t?((u?9:6)+Math.min(u?6:4,t.curse||0)):0;         // v0.61.35 D：5/6 → 6/9
     if(G.hero==='yincha') return 0; // C 无直接伤害（增伤buff），数值以召唤面板为准
     // A：数值=全场召唤"立即作用一次"的总伤害（近似总伤），无召唤时 0→显示"无召唤"
-    return G.summons.filter(s=>s.dur>0).reduce((a,s)=>a+s.v+(s.type!=='shi_wang'&&isSummon('shi_wang')?1:0),0); },
+    // v1.1.5：只累计「有攻击力」的召唤物（纸人/小鬼/阴兵/尸王）；五通神不给伤害 ⇒ 不计入
+    return G.summons.filter(s=>s.dur>0 && s.type!=='wutong').reduce((a,s)=>a+s.v+(s.type!=='shi_wang'&&isSummon('shi_wang')?1:0),0); },
   taomufu: (u,e)=>{ const t=e||curEnemy(); if(!t) return 0; let d=G.hero==='tianshi'?(u?7:5):G.hero==='ganshiren'?(u?7:5):(G.hero==='yincha'?(u?7:4):(u?6:4));
     if(t.kind==='ghost'||t.kind==='jiangshi') d+=(u?6:4);
     if(G.hero==='wuseng' && (G.blockGainedTurn||0)>0) d+=2;
@@ -374,7 +401,8 @@ function previewDamage(c, targetEnemy){
   /* v1.0.19：用户口径「受到新遗物的增益后，很多牌的预伤害没有更改」——
      这里补齐 calcDamageTo() 已有、而预览漏掉的两条遗物加成（顺序与 calcDamageTo 逐条对齐）。 */
   const xuemodao = G.hero==='yincha' && hasRelic('xuemodao') && G.hp < G.maxHp*0.3;
-  if(xuemodao) d=Math.floor(d*1.25);
+  const dbl = G.hero==='yincha' && G.damageDoubleTurn;   // 酆都令：本回合对敌伤害翻倍
+  if(xuemodao || dbl){ let _m=1; if(xuemodao) _m+=0.25; if(dbl) _m+=1; d=Math.floor(d*_m); }
   const taishang = hasRelic('taishangzhou') && (e.curse||0)>=6;
   if(taishang) d=Math.floor(d*1.25);
   const ignoreWeak = c.id==='tianlei' && c.up;
@@ -454,11 +482,13 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
   // v0.61 C1：魅惑只标记、不按段消耗 —— 否则连击/蓄力重击只有第一段被削减（与关键词「下回合伤害 -50%」不符）
   if(attacker.charm>0){ const cpr=attacker.charmPct!=null?attacker.charmPct:0.5; d=Math.floor(d*cpr); attacker.charmUsed=true; }
   const full=d;
+  const __preBlock=G.block||0;                 // v1.1.4 达摩影：记下受击前的格挡总量（被击碎时按它结算爆破）
   const absorbed=Math.min(G.block,d); G.block-=absorbed;
   const dealt=d-absorbed;
   let loss=dealt;
   if(G.hp-dealt<=0 && hasRelic('daoxin') && !G.daoxinUsed){ loss=Math.max(0,G.hp-1); G.daoxinUsed=true; G.turnStats.daoxin=true; log('道心触发：抵挡致命伤，保留 1 点生命'); daoxinBurst(); }   // v1.0.14（P3-6）：全屏道心破碎虚影（玩家/敌人回合都走这一处）；v1.0.17：记进战报
   G.hp-=loss;
+  if(loss>0) checkFengduLing();   // v1.1.5 酆都令：扣血之后判「首次降至 ≤9」。放在【道心】之后 ⇒ 天然「道心优先」；在反伤/达摩影之前
   if(loss>0 && G.xuejiArmed) G.xuejiHurt=true;
   /* v0.61.25：连击每段改响 enemy_multi（短促），单次攻击仍响 hurt 但按伤害量变调；
      这一段的伤害被格挡吃光也出声（否则整轮连击全被挡下会一片死寂）。 */
@@ -475,9 +505,9 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
   log(`${attacker.name} 对你造成 ${loss} 点伤害${absorbed>0?`（格挡吸收 ${absorbed}）`:''}`);
   // —— 本回合“受到攻击时”触发（荆棘符/铜皮铁骨/反震/卸甲等），非闪避命中即结算 ——
   if(full>0){
-    /* 罗汉拳套[蓝·武僧]：永久自带反伤 1（与临时【荆棘】叠加，走同一条结算）。 */
-    const _th=(G.thorns||0)+relicThorns();
-    if(_th>0){ sfx('thorns'); attacker.hp-=_th; log(`荆棘/反震：反弹 ${_th} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }
+    /* 罗汉拳套[蓝·武僧]（v1.1.4：反伤 1→2）+ 铁壁[t2·武僧·纯机制]：永久自带反伤，与临时【荆棘】叠加。 */
+    const _th=(G.thorns||0)+relicThorns()+mileThorns();
+    if(_th>0){ sfx('thorns'); playFx('thorns_light', enemyEl(attacker)); attacker.hp-=_th; log(`荆棘/反震：反弹 ${_th} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }
     if((G.hitHeal||0)>0){ heal(G.hitHeal); log(`荆棘符：受击恢复 ${G.hitHeal} 点生命`); }
     if((G.hitCurse||0)>0){ applyCurse(attacker, G.hitCurse); log(`铜皮/荆棘：对 ${attacker.name} 施加 ${G.hitCurse} 层【诅咒】`); }
     if((G.hitShiqi||0)>0){ gainShiqi(G.hitShiqi); log(`反震：受击获得 ${G.hitShiqi} 点【尸气】`); }
@@ -485,6 +515,9 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
     if((G.hitBlock||0)>0){ gainBlock(G.hitBlock); log(`反震：受击获得 ${G.hitBlock} 点格挡`); }
     if((G.nextBlock||0)>0){ G.pendingBlockStart=(G.pendingBlockStart||0)+G.nextBlock; log(`反震：下回合开始额外获得 ${G.nextBlock} 点格挡`); }
   }
+  /* 达摩影[金·武僧·t5]：**这一击把格挡打光**（承伤前有格挡、承伤后归零）就爆破 —— 伤害 = 击碎前的
+     格挡总量，按咒雨那样逐点随机分配给全体敌人。可多次触发（下一次再被击碎格挡时又来一遍）。 */
+  if(__preBlock>0 && (G.block||0)<=0 && hasRelic('damoying')) damoyingBurst(__preBlock);
   if(attacker.key==='xiaojianshi' && loss>0){ G.zombieDmg=(G.zombieDmg||0)+loss; }
   if(attacker.lifesteal && loss>0){ const hl=Math.floor(loss*attacker.lifesteal); const _cap=Math.floor((attacker.maxHp||attacker.hp)*LIFESTEAL_HEAL_CAP_RATIO); const _lvB4=attacker.hp; attacker.hp=Math.min(attacker.hp+hl, _cap); const _lvGot=Math.round(attacker.hp-_lvB4); if(_lvGot>0){ const _el=enemyEl(attacker); playFx('lifesteal', _el); floatDamage('+'+_lvGot, 'heal', _el?_el.querySelector('.enemyhpbar'):null); } log(`${attacker.name} 吸血：回复 ${hl} 点生命`); }   // v1.0.13：补吸血特效/飘字
   if(attacker.affixes){
@@ -496,6 +529,27 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
      时刻变化」）。连击/多段怪会连调多次本函数，每段各自刷一次 ⇒ 格挡一格一格被吃、血一段一段地掉。
      节拍模式下才刷：同步分支本来就在结尾统一 render，不添无谓的 DOM 操作。 */
   if(enemyActBeats()) syncBattleHpDom();
+}
+/* 达摩影[金·武僧·t5]：格挡被击碎 → 爆破（设备 "浅显荆棘" 立绘叠图 + 碎裂音）。
+   生效方式照【咒雨·武僧】：amount 点＝**逐点独立一击**，每击随机挑一个「当前存活」的敌人
+   （某只被打死后后面的点数重新随机，不会打在尸体上）；飘字/受击错峰，点数多时自动压节拍。
+   逐点走 point=true（与咒雨同口径）：跳过按整张牌设计的乘加修饰，但保留所有逐击反应。 */
+function damoyingBurst(amount){
+  const total=amount|0; if(total<=0) return;
+  sfx('kw_shield_break');
+  playFx('thorns_light', 'player');
+  const smooth=!!SETTINGS.lowSpec;
+  const step=smooth?0:(total>12?60:120);
+  let hits=0, dealt=0;
+  for(let i=0;i<total;i++){
+    const al=aliveEnemies(); if(!al.length) break;
+    const e=al[Math.floor(rng()*al.length)];
+    dealt+=dealDamageTo(e,1,false,smooth?0:i*step,true);
+    hits++;
+    if(G.hp<=0) break;                     // 玩家已被打死：停止后续（同咒雨收尾惯例）
+  }
+  log(`达摩影：格挡被击碎，爆破 ${hits} 点伤害随机分配给全体敌人`);
+  floatMsg(`达摩影 · ${hits} 连击`);
 }
 function afterEnemyDamaged(e){
   if(e.hp<=0){ onEnemyDeathCheck(e); return; }
@@ -567,6 +621,17 @@ function gainBlock(n){
   /* v0.64.0：格挡精灵图。**同名重播**（不是叠加）—— 五通神每回合 tick、武僧回合格挡会被反复触发，
      若叠加会在玩家身上堆出十几个元素。*/
   if(n>0){ G.blockGainedTurn=(G.blockGainedTurn||0)+n; sfx(cardPlayWindow?'card_defense':'block'); playFx('block', 'player'); floatDamage('+'+n, 'block', document.querySelector('#player-panel .hpbar')); }
+  /* 金刚杵[紫·武僧·t4]：**本场战斗内累计获得过的格挡总量**（跨战斗清零，否则读档/换关会串）。
+     每满 50 清零、并往手牌塞 1 张**临时【铁布衫】**（oneShot ⇒ 不进牌库循环，照五雷法印的 0 费雷符口径）；
+     之后重新累积，可以多次触发。「获得即是累积」= 就在这个格挡唯一收口点累加，不做任何延迟结算。 */
+  if(n>0 && hasRelic('jingangchu')){
+    G.blockAccum=(G.blockAccum||0)+n;
+    while(G.blockAccum>=50){
+      G.blockAccum-=50;
+      G.hand.push(Object.assign({}, cardById('tiebushan'), {cost:0, costU:null, oneShot:true}));
+      sfx('relic_proc'); floatMsg('金刚杵 · 铁布衫'); log('金刚杵：累计格挡满 50，手牌获得 1 张临时【铁布衫】');
+    }
+  }
 }
 function heal(n){ if(n>0) playFx('heal', 'player'); G.hp=Math.min(G.maxHp, G.hp+n); sfx('heal'); const bar=document.querySelector('#player-panel .hpbar'); floatDamage('+'+n, 'heal', bar); }
 /* 阴阳鱼[蓝·通用]：**受到负面效果**时恢复 2 点生命。
@@ -713,6 +778,74 @@ function cancelDiscardSelect(){
   if(s.card){ handReturnFromDiscard(s.card); log('放弃【焚符】，未弃牌、未获得符文'); }
   G.discardSelect=null;
   hideOverlay(); render();
+}
+/* ===================== 五雷法印（t5 · 天师里程碑） =====================
+   v1.1.1：打出后开手牌多选（至多 5 张），选中的牌**原地替换**成一张 0 费【雷符】副本。
+   副本挂 oneShot ⇒ 本场临时、用掉即消失（既不进弃牌堆也不留到下一关）。
+   未打出的副本由 autoPlayWulei() 在本回合末依次自动打出，默认击向**绝对血量最少**的敌人。 */
+function startWuleiSelect(srcCard, up){
+  if(!G.hand.length){ log('五雷法印：没有可转化的手牌'); return; }
+  /* v1.1.2（用户报「放弃使用后 3 费符文不返回」）：与火符同一惯例 —— 记下打出时扣掉的费用，
+     取消时原额退回（见 cancelWuleiSelect）。srcCard 是五雷法印本体（doPlayCard 已把它扣完费推进弃牌堆）。 */
+  G.wuleiSelect={ up:!!up, picked:[], srcCard:srcCard||null, cost:srcCard?effectiveCost(srcCard):0 };
+  renderWuleiSelect();
+}
+function renderWuleiSelect(){
+  const s=G.wuleiSelect; if(!s) return;
+  const cards=G.hand.map((c,i)=>{
+    const sel=s.picked.includes(i);
+    return `<div class="card has-frame ${RCOLOR[c.rarity]} ${sel?'selected':''}" onclick="toggleWuleiPick(${i})">${cardBody(c)}${sel?'<div class="card-extra" style="color:var(--green)">✓ 已选</div>':''}</div>`;
+  }).join('');
+  showOverlay(`<h2>五 雷 法 印</h2><p style="color:var(--red)">选择至多 <b>5</b> 张手牌，化为 0 费${s.up?'升级':''}【雷符】（已选 <b>${s.picked.length}</b> / 5）</p>
+    <div class="reward-cards">${cards}</div>
+    <button class="btn" onclick="confirmWuleiSelect()">${s.picked.length>0?`转化 ${s.picked.length} 张`:'请选择要转化的牌'}</button>
+    <button class="btn ghost" onclick="cancelWuleiSelect()">放弃（五雷法印回手）</button>`, undefined, 'pick-scene');
+}
+function toggleWuleiPick(i){
+  const s=G.wuleiSelect; if(!s) return;
+  const idx=s.picked.indexOf(i);
+  if(idx>=0) s.picked.splice(idx,1);
+  else if(s.picked.length>=5){ floatMsg('至多 5 张'); return; }
+  else s.picked.push(i);
+  renderWuleiSelect();
+}
+function confirmWuleiSelect(){
+  const s=G.wuleiSelect; if(!s) return;
+  if(!s.picked.length){ floatMsg('至少选 1 张'); return; }
+  const lf=cardById('leifu');
+  let n=0;
+  [...s.picked].sort((a,b)=>b-a).forEach(i=>{
+    if(!G.hand[i]) return;
+    /* 原地替换：保住手牌顺序（顺序类断言都压在手牌下标上）。 */
+    G.hand[i]=Object.assign({}, lf, {cost:0, costU:null, oneShot:true, up:!!s.up});
+    n++;
+  });
+  sfx('ui_unlock'); log(`五雷法印：${n} 张手牌化为 0 费${s.up?'升级':''}【雷符】（本场临时）`);
+  G.wuleiSelect=null; hideOverlay(); render(); saveRun();
+}
+function cancelWuleiSelect(){
+  const s=G.wuleiSelect; if(!s) return;
+  if(s.srcCard && handReturnFromDiscard(s.srcCard)) log('放弃【五雷法印】，牌已回手');
+  /* v1.1.2：退回打出时扣掉的符文（照 cancelHuofuSelect 的范式）——
+     原先只回手、不退费，玩家放弃一次就白丢 3 点符文。 */
+  if(s.cost>0){ G.energy+=s.cost; log(`五雷法印取消：退回 ${s.cost} 点符文`); }
+  G.wuleiSelect=null; hideOverlay(); log('放弃【五雷法印】'); render();
+}
+/* 回合末自动打出：把手里还没打出的 0 费雷符副本依次打出（默认打血量最少者）。
+   识别判据＝`oneShot && id==='leifu'` —— 只有五雷法印产这种副本；万剑归宗的 oneShot 副本
+   id 是 wanjian，不会被误伤。存档往返后副本仍带 oneShot（cardRestore），判据不丢。 */
+function autoPlayWulei(){
+  let guard=0;
+  while(guard++<16){
+    const idx=G.hand.findIndex(c=> c && c.oneShot && c.id==='leifu');
+    if(idx<0) break;
+    const t=lowestHpEnemy();
+    if(!t) break;
+    const ti=G.enemies.indexOf(t);
+    if(ti>=0) G.target=ti;
+    doPlayCard(idx);
+    if(G.hp<=0 || G.battleOver || !aliveEnemies().length) break;
+  }
 }
 /* 火符(#2，赶尸人 A 列)：挑选弃 1 张手牌；弃到鬼怪牌额外获得尸气（其余三列仍为随机弃） */
 function startHuofuSelect(srcCard, up, target, dmg){
@@ -927,8 +1060,8 @@ function startBattle(keys){
   G._settlePlayed=false; // v0.76.0：结算墨色过场的一次性标记，随战斗一起重置（见 settleTransition）
   G.ybTarget=-1; // 阴兵索敌标记：本场战斗从头锁（-1=无目标，落到带诅咒随机）
   PLAYER_HP_PREV=null; ENEMY_HP_PREV={};
-  G.block=0; G.weak=0; G.gouhun=0; G.thorns=0; G.pendingEnergy=0; G.pendingDiscard=0; G.summons=[];
-  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=0; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.karmaFire=0; G.duhun=null; G.xiejia=0; G.zhouyuA=false; G.尸气=0; G.exhausted=[];
+  G.block=0; G.weak=0; G.gouhun=0; G.thorns=0; G.pendingEnergy=0; G.pendingDiscard=0; G.summons=[]; G.blockAccum=0;   // v1.1.4 金刚杵：累计格挡跨战斗清零
+  G.turn=0; G.turnSummary=''; G.daoxinUsed=false; G.fengduUsed=false; G.damageDoubleTurn=0; G.skillsPlayedThisTurn=0; G.attackBuff=0; G.totalHpLost=0; G.dodge=0; G.dodgeDraw=0; G.debuffImmune=0; G.xuejiBonus=0; G.xuejiArmed=false; G.xuejiHurt=false; G.burn=0; G.zombieDmg=0; G.karmaFire=0; G.duhun=null; G.xiejia=0; G.zhouyuA=false; G.尸气=0; G.exhausted=[];
   G.curseCarryNext=0;   // v1.0.18：卸甲生元的「溢出诅咒结转下回合」只在战斗内跨回合有效，开新战清零
   G.xisuiTurns=0; // v0.61.33：洗髓经是「本场战斗内接下来 N 回合」的增益，原来此处漏重置 → 上一关末尾打出会漏到下一关开头
   /* 忘忧汤是敌人施加的「战斗内」debuff（G.wangyouTurns=2，回合开始递减）。
@@ -988,15 +1121,16 @@ function startTurn(){
   [G.hand,G.drawPile,G.discard,G.deck].forEach(p=>(p||[]).forEach(c=>{ if(c&&c.tempCostCut) delete c.tempCostCut; }));
   /* v0.61.32：灼烧跳伤（旱魃招牌，每层 -2/回合） */
   if(G.burn>0){ sfx('kw_burn'); const bd=G.burn*2; G.hp=Math.max(0,G.hp-bd); G.turnStats.dmgTaken+=bd; log(`灼烧：失去 ${bd} 点生命（${G.burn} 层）`); if(G.hp<=0){ G.hp=0; loseGame(); return; } }
-  /* v1.0.14：腐毒跳伤（腐骨散）—— 与玩家侧的灼烧对称：玩家回合开始时每只带毒敌人按层数掉血，随后层数 -1。 */
+  /* v1.0.14 / v1.1.4：腐毒跳伤（腐骨散 / 化甲为毒）—— 触发时结算**三角数**：第 n 层就多打 n 点
+     （1 层 = 1、2 层 = 1+2 = 3、3 层 = 6……），随后层数 -1。与玩家侧的灼烧对称，只是算法改累进。 */
   if(G.enemies && G.enemies.some(e=>e.hp>0 && e.poison>0)){
     sfx('kw_burn');
     G.enemies.forEach(e=>{
       if(e.hp<=0 || !(e.poison>0)) return;
-      const pd=e.poison, el=enemyEl(e);
+      const p=e.poison, pd=(p*(p+1))/2, el=enemyEl(e);
       e.hp=Math.max(0, e.hp-pd);
       if(el){ playFx('burn', el); floatDamage('-'+pd, '', el, {}); }
-      log(`${e.name} 腐毒发作，失去 ${pd} 点生命（${pd} 层）`);
+      log(`${e.name} 腐毒发作，失去 ${pd} 点生命（${p} 层三角结算）`);
       e.poison=Math.max(0, e.poison-1);
       if(e.hp<=0) onEnemyDeathCheck(e);
     });
@@ -1132,6 +1266,9 @@ function summonAct(s){
   }
   else if(s.type==='shi_wang'){
     for(const e of aliveEnemies()) dealDamageTo(e, s.v);   // 尸王：每回合末对全体造成 10 点伤害
+    /* 阴司牒[金·赶尸人 里程碑 t5]：尸王每次攻击后额外获得 5 点格挡（额外附加，仍打 10 伤）。
+       走 gainBlock 收口 ⇒ 自带金刚符同款音效与格挡精灵图/飘字。 */
+    if(hasRelic('yinsidie')){ gainBlock(5); log('阴司牒：尸王攻击后获得 5 点格挡'); }
   }
   duhunBatchEnd(); // v0.61.33：批收尾→按本批真实总伤害回复一次
 }
@@ -1144,6 +1281,9 @@ function onSummonDeath(s){
      v1.0.17：另起一道**绿色生魂向内收束**的特效（fx/guling_suck，自绘）叠在 heal 的绿光上，
      因为「骨铃吸血」在视觉上要读成「魂被抽回身上」，不是普通的治疗。 */
   if(hasRelic('guling')){ const _n=(s.dur0!=null ? s.dur0 : (s.dur||0)); if(_n>0){ playFx('guling_suck', 'player'); heal(_n); log(`骨铃：召唤物消散，恢复 ${_n} 点生命`); } }
+  /* 尸气回流[里程碑·赶尸人 t2]：每个召唤单位死亡额外恢复 2 点生命（用户口径：与骨铃叠加，预恢复显示两者之和）。
+     只对赶尸人生效（该档位只挂在赶尸人轨上）；放在骨铃之后 ⇒ 同一拍两声、两条飘字自然叠。 */
+  if(G.hero==='ganshiren' && mileClaimed('ganshiren_t2')){ heal(2); log('尸气回流：召唤物消散，额外恢复 2 点生命'); }
   if(s.type==='zhiren'){
     if(G.hero==='ganshiren'){ gainShiqi(2); log('纸人死亡，获得 2 点【尸气】'); }
   } else if(s.type==='xiaogui'){
@@ -1204,6 +1344,13 @@ function showEndTurnRetain(){
 }
 function finishEndTurn(){
   G.gouhun=0; // 勾魂效果本回合已结算
+  /* v1.1.1 五雷法印：回合末把手里未打出的 0 费雷符副本**依次自动打出**（默认打血量最少者），
+     再走下面的弃牌行。必须放在这里（弃牌之前）—— 副本是 oneShot，弃牌行会把它直接丢掉。 */
+  autoPlayWulei();
+  if(G.battleOver){ return; }   // 自动打出的雷符可能已收尾（winFight/loseGame 置了 battleOver）
+  /* v1.1.5 酆都令：翻倍只吃「触发所在的那一个玩家回合」—— 放在 autoPlayWulei 之后清，
+     让回合末自动打出的雷符也能吃到翻倍；随后敌人回合不产玩家伤害，留着也无意义。 */
+  G.damageDoubleTurn=0;
   // 守一：保留被标记的手牌
   // 守一保留 + 尸王（赶尸人）：未打出的【尸王】留手，不弃（打出/死亡后才入循环）
   const kept=G.hand.filter(c=>c.retain || (G.hero==='ganshiren' && c.id==='shi_wang'));
@@ -1275,7 +1422,7 @@ function runSummonPhase(next){
       summonAct(s);
       s.dur--; if(s.dur<=0) onSummonDeath(s);          // 寿命衰减与消散结算跟着它自己那一拍
       G.summons=G.summons.filter(x=> x.type==='wutong' ? (x.indefinite || x.dur>0) : x.dur>0);
-      render();                                        // 这一拍的结果（伤害/消散）立刻可见
+      syncSummonDom();                                 // v1.1.5：轻量同步（原先整块 render()，召唤物一多就卡）
     }
     setTimeout(step, STEP);
   };
@@ -1373,6 +1520,26 @@ function syncBattleHpDom(){
       ENEMY_HP_PREV[e.uid]=pct;
     });
   }catch(err){}
+}
+/* v1.1.5（性能）：召唤物逐拍行动的**轻量同步**。原先每一拍都整块 render()，会把 #enemy-panel
+   与 #hand 一起重建 —— 敌人立绘、手牌卡图每拍重新解码一次，召唤物一多（尤其赶尸人一次召 4~5 只）
+   就明显卡顿。这里只就地更新三样：血条/数字/格挡（复用 syncBattleHpDom）、玩家立绘右下角那枚
+   折叠键的预读文案与筹码条、战报抽屉（增量）。只有「需要结构性增减」时才回落整块 render()
+   —— 即 0→N 要建折叠键、N→0 全部消散，各最多发生一次。 */
+function syncSummonDom(){
+  if(typeof syncBattleHpDom==='function') syncBattleHpDom();
+  const list=(G.summons||[]).filter(s=>(s.dur||0)>0);
+  const fold=document.querySelector('#player-panel .ps-fold');
+  const bar=document.querySelector('#player-panel .psummons');
+  if(!list.length || !fold){        // 结构性变化 ⇒ 整块重建（新建/摘除折叠键）
+    if(typeof render==='function') render();
+    else if(typeof renderLogBox==='function') renderLogBox();
+    return;
+  }
+  const lbl=summonFoldLabel(list);
+  if(fold.textContent!==lbl) fold.textContent=lbl;
+  if(bar) bar.innerHTML=list.map(s=>summonHTML(s)).join('');
+  if(typeof renderLogBox==='function') renderLogBox();
 }
 /* 单只敌人的一次行动（从 enemyAct 的循环体原样搬出）。
    返回值：'dead' 表示「生死簿清算」当场判负（调用方须立即停表，且**不再结算魅惑消耗** ——

@@ -304,6 +304,47 @@ def relic_frame(f):
 
 
 # ---------------------------------------------------------------------------
+# 四、浅显荆棘 · 立绘叠图：受到反伤（铁壁 / 罗汉拳套 / 敌人反震）时，
+#     在**立绘上**叠一道很细的荆棘尖刺 + 微光。
+#     「浅显」= 低透明度、细线、不遮挡 —— 与 `thorns`（荆棘符本体那种大特效）分开：
+#     它是「受击时叠在立绘上的轻量提示」，不是一张牌打出去的本体演出。
+# ---------------------------------------------------------------------------
+THORNS_PAL = [(0.00, (28, 46, 20)), (0.42, (104, 150, 62)), (0.78, (196, 228, 140)), (1.00, (244, 255, 224))]
+THORN_N = 9
+
+
+def thorns_frame(f):
+    """9 根细刺从中心向外刺出：快速刺出（grow）→ 短暂维持 → 末段淡出（fade）。
+    刺根带两侧小分叉 ⇒ 读成「荆棘」而不是「光芒」；低峰值强度 + 细线宽 ⇒ 「浅显」。"""
+    p = f / float(FRAMES)
+    grow = _smooth(p, 0.04, 0.34)          # 刺出：前 34% 帧迅速张开
+    fade = 1.0 - _smooth(p, 0.52, 0.97)    # 收回：后段淡出
+
+    m = np.zeros_like(U)
+    for i in range(THORN_N):
+        seed = (i * 0.6180339887) % 1.0
+        ang = seed * 2.0 * math.pi
+        L = (0.42 + 0.46 * ((seed * 7.3) % 1.0)) * grow
+        ax0, ay0 = 0.0, -0.05
+        bx, by = ax0 + L * math.cos(ang), ay0 + L * math.sin(ang)
+        w = 0.010 + 0.020 * (1.0 - grow)   # 起步稍粗、刺出后变细 ⇒ 有「生长」感
+        m = np.maximum(m, np.exp(-(_seg_dist(U, V, ax0, ay0, bx, by) / w) ** 2))
+        # 刺根两侧各一小段分叉
+        mx, my = (ax0 + bx) * 0.5, (ay0 + by) * 0.5
+        for k in (-0.6, 0.6):
+            t2 = ang + k
+            b2x = mx + 0.16 * L * math.cos(t2)
+            b2y = my + 0.16 * L * math.sin(t2)
+            m = np.maximum(m, 0.70 * np.exp(-(_seg_dist(U, V, mx, my, b2x, b2y) / 0.009) ** 2))
+
+    shimmer = np.exp(-R ** 2 / 0.30) * (0.10 + 0.10 * math.sin(2 * math.pi * p))
+    m = np.clip(m * (0.55 + 0.45 * grow) + shimmer, 0.0, 1.0)
+    m = np.clip(m + 0.20 * _blur(m, 6), 0.0, 1.0)     # 很轻的一层辉光，避免霓虹灯管感
+    m = np.clip(m * 0.86 * fade, 0.0, 1.0)            # 「浅显」：峰值 alpha 压到 ~0.86
+    return _ramp(m, 0.12, THORNS_PAL)
+
+
+# ---------------------------------------------------------------------------
 def build(name, frame_fn, frames_n, gif=False):
     """frames_n —— 帧数。行数 = ceil(frames_n / COLS)：48 帧 → 6 行（一次性演出），
     8 帧 → 1 行（芯片循环）。行数必须 ≥ `FX_SHEETS[name].rows`，否则 verify_dist [2d] 咬人。"""
@@ -334,7 +375,7 @@ def build(name, frame_fn, frames_n, gif=False):
 
 def preview(rows_in):
     """拼版对照图：每行一个特效、每行 8 列相位。列的相位按各自动画长度**等比取** ——
-    shiqi/xuenu 只有 8 帧（取 0/1/2…7），guling/relic 是 48 帧（取 0/6/12…42），
+    shiqi/xuenu 只有 8 帧（取 0/1/2…7），guling/relic/thorns 是 48 帧（取 0/6/12…42），
     这样一行一眼就能看出整段走势，不会因为帧数不同而错位。"""
     T = 150
     out = Image.new('RGB', (COLS * T, len(rows_in) * T), (18, 18, 18))
@@ -347,7 +388,7 @@ def preview(rows_in):
             rgb = im[..., :3] * a + 0.07 * (1 - a)
             out.paste(Image.fromarray((np.clip(rgb, 0, 1) * 255).astype(np.uint8), 'RGB')
                       .resize((T, T), Image.LANCZOS), (c * T, r * T))
-    p = os.path.join(HERE, '_fx4_preview.png')
+    p = os.path.join(HERE, '_fx_preview.png')
     out.save(p)
     print(u'\n拼版对照图（行序：%s，列 = 8 个等比相位）' % u' / '.join(l for l, _ in rows_in))
     print(u'  %s' % os.path.relpath(p, ROOT))
@@ -359,16 +400,18 @@ def main():
     # 前两张：芯片循环火焰 ⇒ 8 帧 1 行（见文件头 LOOP_FRAMES 的说明）
     shiqi = build('shiqi_flame', lambda f: flame_frame(f, SHIQI_PAL), LOOP_FRAMES, gif=True)
     xuenu = build('xuenu_flame', lambda f: flame_frame(f, XUENU_PAL, EMBER), LOOP_FRAMES, gif=True)
-    # 后两张：一次性演出 ⇒ 48 帧 6 行
+    # 后三张：一次性演出 ⇒ 48 帧 6 行
     guling = build('guling_suck', guling_frame, FRAMES)
     relic = build('relic_proc', relic_frame, FRAMES)
+    thorns = build('thorns_light', thorns_frame, FRAMES)
     preview([('shiqi_flame', shiqi), ('xuenu_flame', xuenu),
-             ('guling_suck', guling), ('relic_proc', relic)])
+             ('guling_suck', guling), ('relic_proc', relic), ('thorns_light', thorns)])
     print(u'\n/* 粘进 js/20_data.js 的 FX_SHEETS（按 key 排序的位置自行对齐）：*/')
     print(u"  shiqi_flame: { c:8, f:8,  f0:8,  rows:1, i0:0 },   // 芯片循环：8 帧整周期，1 行")
     print(u"  xuenu_flame: { c:8, f:8,  f0:8,  rows:1, i0:0 },   // 芯片循环：8 帧整周期，1 行")
     print(u"  guling_suck: { c:8, f:48, f0:48, rows:6, i0:0 },   // 一次性：48 帧整循环")
     print(u"  relic_proc:  { c:8, f:48, f0:48, rows:6, i0:0 },   // 一次性：48 帧整循环")
+    print(u"  thorns_light:{ c:8, f:48, f0:48, rows:6, i0:0 },   // 一次性：浅显荆棘 · 立绘叠图")
 
 
 if __name__ == '__main__':
