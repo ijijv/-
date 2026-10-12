@@ -1129,7 +1129,7 @@ function startTurn(){
       if(e.hp<=0 || !(e.poison>0)) return;
       const p=e.poison, pd=(p*(p+1))/2, el=enemyEl(e);
       e.hp=Math.max(0, e.hp-pd);
-      if(el){ playFx('burn', el); floatDamage('-'+pd, '', el, {}); }
+      if(el){ playFx('fudu_hit', el); floatDamage('-'+pd, '', el, {}); }   // v1.1.6：腐毒跳伤改用专属毒雾精灵图
       log(`${e.name} 腐毒发作，失去 ${pd} 点生命（${p} 层三角结算）`);
       e.poison=Math.max(0, e.poison-1);
       if(e.hp<=0) onEnemyDeathCheck(e);

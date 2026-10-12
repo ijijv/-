@@ -6241,12 +6241,13 @@
        靠 `_patch/shot_fx.py` 的实拍对照图定 scale。 */
 
     /* ---------- F1. 表结构 ---------- */
-    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 36 条'
+    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 37 条'
       + '（帧数是 _patch/fx_tune.py 按每格 alpha 实扫的 —— 8 列末排常留空，拿 行×8 当帧数会播到空白格；'
       + 'v1.0.14 起的 multi_slash 是多方向图，由 _patch/mk_multi_slash.py 程序生成、不在 fx_tune 的重算范围内；'
       + 'v1.0.17 起的 guling_suck / relic_proc / shiqi_flame / xuenu_flame 四张、v1.1.4 起的 thorns_light 也是程序绘制，'
-      + '由 _patch/mk_flame_sheets.py 出图）',
-      Object.keys(FX_SHEETS).length === 36 &&
+      + '由 _patch/mk_flame_sheets.py 出图；v1.1.6 起的 fudu_hit 是用户素材重排：'
+      + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480））',
+      Object.keys(FX_SHEETS).length === 37 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
         return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
@@ -6274,7 +6275,7 @@
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
     __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
-      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 36);
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 37);
 
     /* ---------- F2. CARD_FX 接线 ---------- */
     __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
@@ -6470,8 +6471,8 @@
         SETTINGS.lowSpec = keep;
         return got === 'lei|0';
       })());
-    __ok('v0.64.0 **全部 36 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
-      + 'v1.0.17 的 grantRelic / onSummonDeath）合起来覆盖了 FX_SHEETS 的全部键'
+    __ok('v0.64.0 **全部 37 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
+      + 'v1.0.17 的 grantRelic / onSummonDeath、v1.1.6 的 startTurn 腐毒跳伤）合起来覆盖了 FX_SHEETS 的全部键'
       + '（素材做了但没接线 = 白花钱出图，这条就是防它；两张芯片火焰走 CSS 循环、不经 playFx，按名单豁免）',
       (function () {
         var used = {};
@@ -6481,7 +6482,7 @@
         var CSS_ONLY_FX = { shiqi_flame: 1, xuenu_flame: 1 };
         var RE = /playFx\('([a-z_]+)'/g;
         [dealDamageToPlayer, gainBlock, heal, duhunFlush, applyCurse, gainShiqi, gainRage, __realEnemyAct,
-         enemyActOne, enemyActTail, burstShow, grantRelic, onSummonDeath].forEach(function (fn) {
+         enemyActOne, enemyActTail, burstShow, grantRelic, onSummonDeath, startTurn].forEach(function (fn) {
           var s = String(fn), m;
           RE.lastIndex = 0;
           while ((m = RE.exec(s)) !== null) { used[m[1]] = 1; }   // 取捕获组；别对整段 match 去字符（那是 'playFx('hurt'' → 'playxhurt'）
@@ -7481,9 +7482,10 @@
     var ptsBefore = SAVE.progress.pts, j3 = grantRunMilestones();
     __ok('v1.0.25 grantRunMilestones：普通通关一次点亮天师轨 ≥2 档',
       j3.length >= 2, 'unlocked=' + j3.map(function (m) { return m.id; }).join(','));
-    __ok('v1.0.25 grantRunMilestones：新解锁记为本角色轨的档位 id（<hero>_t<N>），写入 SAVE.mile',
-      j3.every(function (m) { return /^tianshi_t\d+$/.test(m.id) && mileDone(m.id) && SAVE.mile.indexOf(m.id) >= 0; }) &&
-      SAVE.mile.indexOf('hero_ganshiren') < 0);
+    __ok('v1.1.x grantRunMilestones：解锁同时含本角色轨档位 id 与旧门禁表 id，均写入 SAVE.mile',
+      j3.some(function (m) { return /^tianshi_t\d+$/.test(m.id); }) &&
+      j3.every(function (m) { return mileDone(m.id) && SAVE.mile.indexOf(m.id) >= 0; }) &&
+      SAVE.mile.indexOf('hero_ganshiren') >= 0);
     __ok('v1.0.25 grantRunMilestones：通关计入 wins / bestAct',
       SAVE.progress.wins === 1 && SAVE.progress.bestAct === 3);
     var j4 = grantRunMilestones();
@@ -7543,14 +7545,14 @@
       ['ganshiren','wuseng','yincha'].every(function(h){
         return JSON.stringify(mileNodesFor(h).map(function(n){ return n.need; })) ===
           JSON.stringify([550, 1400, 2900, 4500, 7500, 11000]); }));
-    /* 新体系取代旧体系：解锁只记本角色轨的档位 id，不再写旧 MILESTONES 的 id。 */
-    __ok('v1.0.25 里程碑：新体系取代旧体系（解锁记 <hero>_t<N>，不写 hero_ganshiren）',
+    /* v1.1.x（门禁开关打开的配套）：解锁**同时**记本角色轨档位 id 与旧门禁表 id —— 后者是 mileOn 的查询键。 */
+    __ok('v1.1.x 里程碑：解锁记 <hero>_t<N> 且同步补旧表 id（hero_ganshiren 达标即写）',
       (function(){ var bak = SAVE;
         SAVE = { unlocked:[], progress:{ pts:0, runs:0, wins:0, bestAct:0, kills:0, heroes:{} }, mile:[] };
         G = __base('tianshi'); G.act = 2; G.mapRow = 9; G.totalKills = 12;   // 200+135+60 = 395
         var j = grantRunMilestones();
-        var r = j.length >= 1 && j.every(function(n){ return /^tianshi_t\d+$/.test(n.id); }) &&
-                SAVE.mile.indexOf('hero_ganshiren') < 0 && SAVE.progress.heroes.tianshi.pts === 395;
+        var r = j.length >= 1 && j.some(function(n){ return /^tianshi_t\d+$/.test(n.id); }) &&
+                SAVE.mile.indexOf('hero_ganshiren') >= 0 && SAVE.progress.heroes.tianshi.pts === 395;
         SAVE = bak; return r; })());
     MILE_GATE_ON = __gate0;
 

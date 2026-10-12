@@ -724,6 +724,17 @@ function drawMapLinks(){
     return false;
   }
   const __dim=[], __past=[], __reach=[];
+  /* v1.1.6（用户口径「地图中往上爬的道路只要亮起玩家所走的那一条，**不是一行全亮**」）：
+     旧写法把**所有进入当前层**的边都算成 link-reach（金虚线 + 外发光，最后画、最抢眼），
+     于是玩家头顶那一整排边全部一起亮；反倒是自己真正走过的那条只有淡黄浅光边 —— 亮暗正好反了。
+     现在 link-reach 只留给**路径的最后一段**（= 刚走过的那一条），其余进入当前层的边一律降为暗线。
+     「道路不隐藏」（v1.1.5）的口径一个字不动：边照样**全画**，只是不给亮。 */
+  const __n=(__path||[]).length;
+  const __lastA=(__n>=2)?__path[__n-2]:null, __lastB=(__n>=2)?__path[__n-1]:null;
+  function isLastSeg(r0,c0,r1,c1){
+    return !!__lastA && !!__lastB &&
+           __lastA.r===r0 && __lastA.c===c0 && __lastB.r===r1 && __lastB.c===c1;
+  }
   /* v1.1.5（用户口径「地图道路要明确标注、不得隐藏」）：**整张图的路全部画出来**。
      此前门禁是「两端都 fogVisible」，于是通往未解锁格子（挂锁）的路一条都不画 ——
      玩家只看到一排排孤立的锁，读不出「这一格能连到哪」，没法判断与抉择。
@@ -739,17 +750,17 @@ function drawMapLinks(){
         if(!mapNodeAt(r1,j)) continue;
         const key=mapEdgeKey(r,c,r1,j);
         const edge={ a:nodeAt(r,c), b:nodeAt(r1,j), key:key };
-        if(walkedKey(r,c,r1,j)) __past.push(edge);
-        else if(r1===G.mapRow) __reach.push(edge);
+        if(isLastSeg(r,c,r1,j)) __reach.push(edge);
+        else if(walkedKey(r,c,r1,j)) __past.push(edge);
         else { edge.fog=!(fogVisible(r,c)||fogVisible(r1,j)); __dim.push(edge); }
       }
     }
   }
-  // 输出顺序＝叠放顺序：先远景暗线打底，再暗线，再走过的，最后金虚线压在上面
+  // 输出顺序＝叠放顺序：先远景暗线打底，再暗线，再走过的，最后「刚走过的那一条」压在上面
   let i;
   for(i=0;i<__dim.length;i++)   seg(__dim[i].a,   __dim[i].b,   __dim[i].fog?'link-fog':'link-dim',   false, __dim[i].key);
-  for(i=0;i<__past.length;i++)  seg(__past[i].a,  __past[i].b,  'link-past',  (__past[i].key===_mapGlowEdge), __past[i].key);
-  for(i=0;i<__reach.length;i++) seg(__reach[i].a, __reach[i].b, 'link-reach', false, __reach[i].key);
+  for(i=0;i<__past.length;i++)  seg(__past[i].a,  __past[i].b,  'link-past',  false, __past[i].key);
+  for(i=0;i<__reach.length;i++) seg(__reach[i].a, __reach[i].b, 'link-reach', (__reach[i].key===_mapGlowEdge), __reach[i].key);
   // 动画是**一次性**的：这一次画完就消费掉，重开地图 / resize 重画都不会再放一遍
   _mapGlowEdge=null;
   if(!_mapLinkBound && typeof window!=='undefined' && window.addEventListener){
@@ -1317,7 +1328,8 @@ function loadSave(){
     const p=SAVE.progress;
     p.pts=p.pts|0; p.runs=p.runs|0; p.wins=p.wins|0; p.bestAct=p.bestAct|0; p.kills=p.kills|0;
     /* v1.0.24：里程**按角色分账**（用户口径「每角色肯定独立累积」）—— p.heroes[heroId]={pts,runs,wins}。
-       老档没有 heroes 且已有全局点数 ⇒ 全部归给初始角色天师（此前只有天师可玩，语义等价）。 */
+       ⚠️ 本轮改动：删掉「老档全局点数归天师」的迁移 —— 用户报障旧测试期累积的 7000+ 里程
+          被并进天师轨，直接点亮 2400 全档。改为下面的一次性清零。 */
     if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
     const hs=p.heroes;
     Object.keys(hs).forEach(k=>{
@@ -1325,12 +1337,20 @@ function loadSave(){
       if(!h || typeof h!=='object'){ hs[k]={pts:0,runs:0,wins:0}; return; }
       h.pts=h.pts|0; h.runs=h.runs|0; h.wins=h.wins|0;
     });
-    if(!Object.keys(hs).length && (p.pts|0)>0) hs.tianshi={ pts:p.pts|0, runs:p.runs|0, wins:p.wins|0 };
+    /* v1.1.x（用户口径「里程重置」）：一次性旗标 —— 旧测试期里程全部作废：
+       全局点数、分角色点数、已解锁档位、已领取奖励全清，此后从 0 重新累积。
+       mileResetV2 落盘后永不再触发，新档（本来全 0）不受影响。 */
+    if(!SAVE.mileResetV2){
+      p.pts=0; p.heroes={};
+      SAVE.mile=[]; SAVE.mileClaimed=[];
+      SAVE.mileResetV2=true;
+      persistSave();
+    }
     if(!Array.isArray(SAVE.mile)) SAVE.mile=[];
     /* v1.0.26：里程碑奖励的**领取位**（永久解锁）落盘 —— 未领取前专属牌/遗物不进任何池。 */
     if(!Array.isArray(SAVE.mileClaimed)) SAVE.mileClaimed=[];
   }
-  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[]}; }
+  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], mileResetV2:true}; }
 }
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
@@ -1417,6 +1437,15 @@ function grantRunMilestones(){
   mileNodesFor(heroId).forEach(n=>{                         // 只判**这个角色**的轨
     if(n.need!=null && (hp.pts|0)>=n.need && SAVE.mile.indexOf(n.id)<0){
       SAVE.mile.push(n.id); fresh.push(n);
+    }
+  });
+  /* v1.1.x（门禁总开关打开后的配套）：mileOn() 查的仍是**旧 MILESTONES 表**的 id
+     （hero_ganshiren / adv_card / potion_new / adv_relic / hero_yincha），而新体系只推
+     每角色轨的 <hero>_t<N> ⇒ 不补这一段的话角色/紫·金内容永久锁死。
+     旧表按**全局累计 pts** 判定（与 v1.0.15 的原始语义一致）。 */
+  MILESTONES.forEach(m=>{
+    if((p.pts|0)>=m.need && SAVE.mile.indexOf(m.id)<0){
+      SAVE.mile.push(m.id); fresh.push(m);
     }
   });
   persistSave();
@@ -1819,7 +1848,14 @@ function showJinnang(){
       <div class="pouch-col pouch-potions"><h3>灵 汁</h3><div class="pouch-scroll">${potionHTML}</div></div>
       <div class="pouch-col pouch-relics"><h3>遗 物</h3><div class="pouch-scroll">${relicHTML}</div></div>
     </div>
-    <button class="btn ghost" onclick="hideOverlay()">返回</button>`, true, 'pouch-scene');
+    <button class="btn ghost" onclick="jinnangBack()">返回</button>`, true, 'pouch-scene');
+}
+/* v1.1.x（用户报障「地图进锦囊后返回，卡进战斗界面」）——
+   地图本身就渲染在 #overlay 里（showMap→showOverlay+map-scene），而锦囊返回原先写死
+   hideOverlay() ⇒ 摘掉 overlay 露出背后的 #app 战斗版面。按 SCENE 分流：在地图上就重画地图。 */
+function jinnangBack(){
+  if(SCENE==='map'){ showMap(); return; }
+  hideOverlay();
 }
 function viewDeck(){
   if(!G){ floatMsg('开局后可查看牌库'); return; } // v0.61 B11：原本静默无反应
@@ -1901,7 +1937,8 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   //   三条结算路径（showBattleResult / loseGame / showVictory）**都必须显式传第三实参**；
   //   漏传不会报错，只会让面板退回通用的 overlayIn（10px 下滑），而这一条没有任何闸看得见。
   // v1.0.23：+ mile-scene（里程碑「里程轨」整屏界面：4 张角色海报 + 蓝色里程轨）。
-  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','result-scene','mile-scene','pouch-scene'];
+  // v1.1.x：+ rank-scene（风云榜「皇榜卷轴」整屏界面：左六类导航 + 前三甲 + 十名榜单 + 我的战绩）。
+  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','result-scene','mile-scene','pouch-scene','rank-scene'];
   const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
   // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
   // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
@@ -1911,7 +1948,7 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
     ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene');
     ov.classList.remove('forge-scene'); ov.classList.remove('pile-scene'); ov.classList.remove('result-scene');
-    ov.classList.remove('mile-scene'); ov.classList.remove('pouch-scene'); }
+    ov.classList.remove('mile-scene'); ov.classList.remove('pouch-scene'); ov.classList.remove('rank-scene'); }
   ov.classList.remove('hidden');
   // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
   // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。
@@ -1932,6 +1969,8 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
    打标只加类：桌面与冒烟档 CSS 不理会 ⇒ 逐像素不变；手机横屏档由 CSS 接管（见 原型.html）。 */
 function ovMarkCornerBtns(){
   const oc=document.getElementById('overlayContent'); if(!oc || !oc.children) return;
+  /* v1.1.x：每次重判前先摘掉上一块面板留下的 padding 标记（oc 元素常驻，类会粘住）。 */
+  if(oc.classList) oc.classList.remove('ov-corner');
   const kids=oc.children; let i=kids.length-1; const run=[];
   while(i>=0 && kids[i].tagName==='BUTTON' && kids[i].classList.contains('btn')){ run.unshift(kids[i]); i--; }
   if(!run.length) return;
@@ -1939,12 +1978,16 @@ function ovMarkCornerBtns(){
     if(kids[j].tagName==='BUTTON' && kids[j].classList.contains('btn') && run.indexOf(kids[j])<0) return;
   }
   if(document.body && document.body.classList && document.body.classList.contains('at-menu')) return;
+  /* v1.1.x：真的钉了角按钮 ⇒ 给 #overlayContent 打 ov-corner，矮屏档靠它补顶部留白
+     （取代旧的逐场景字面量规则，见 原型.html 的 @media(max-height:560px)）。 */
+  if(oc.classList) oc.classList.add('ov-corner');
   run.forEach(b=>{
     const t=(b.textContent||'').trim();
     b.classList.add(/^(返回|放弃|跳过)/.test(t) ? 'ov-act-l' : 'ov-act-r');
   });
 }
 function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
+  if(typeof settleVidDrop==='function') settleVidDrop();   // v1.1.x：结局视频停在末帧，收面板时一并摘掉
   document.getElementById('overlay').classList.add('hidden'); }
 /* v1.0.20（用户 2026-10-08：「有时候从图鉴或者排行榜等界面回到主界面会卡住」）——
    旧判据只有 `if(!G)`，但 G 退局后**并不清空**（quitToMenu / showVictory / loseGame 都只调
@@ -1962,8 +2005,13 @@ function closeOverlay(){
      —— 整屏只剩 #bg 底图，正是用户截图里那一屏。showOverlay 自己会 remove('hidden')，
      所以回主菜单这一支**直接交给 showStartScreen 收口**：异常时最坏也只是留着上一块面板，
      不会掉进全空状态。 */
-  if(atMenu || !G) showStartScreen();
-  else hideOverlay();
+  if(atMenu || !G){ showStartScreen(); return; }
+  /* 地图本身渲染在 #overlay 里 ⇒ SCENE==='map' 时摘掉 #overlay 会露出背后的 #app 战斗版面，必须重画地图。
+     ⚠️ 这一支**必须**排在 atMenu 判定**之后**：showStartScreen 不复位 SCENE，打完一局回主菜单后 SCENE 仍是 'map'，
+        若先判 SCENE，点里程碑的 ✕ 就会拿一局已废的存档 showMap() 直接进地图
+        （用户 2026-10-12 报的「里程碑 ✕ 返回 → 直接进地图、没角色、没手牌」正是这条顺序错误）。 */
+  if(SCENE==='map'){ showMap(); return; }
+  hideOverlay();
 }
 /* v1.0.20：设置/榜单等卷轴页的「返回菜单」不能写死 openMenu()（那是**局内**菜单）——
    从主菜单进来的话会被绕进局内菜单（继续游戏/退出到主菜单），玩家以为卡住了。

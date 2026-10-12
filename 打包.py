@@ -63,6 +63,9 @@ NODE_MODULES = os.path.join(ROOT, '_build', 'node_modules')
 SKIP_DIRS = {'enemy_backup'}          # 抠图前备份原图，游戏从不加载
 IMG_EXT = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}
 AUD_MIME = {'.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4'}
+# v1.1.x：结局结算视频（素材/bg/*.mp4）。刻意**不进 AUD_MIME** —— 那个集合与 js/10_audio.js 的
+# AUD_EXTS 有 [1b] 一致性闸（音效探测共用），把 .mp4 塞进去会让每个 sfx 多探一轮 .mp4 空请求。
+VID_MIME = {'.mp4': 'video/mp4'}
 # 拆包时**会**转成 .webp 落盘的图片格式 —— 必须与 js/10_audio.js 的 assetURL 正则 (.png|jpe?g|bmp) 同口径，
 # 否则 HTML 里换了名、JS 里却没换（或反过来）⇒ 图片整片 404。
 WEB_IMG_EXT = {'.png', '.jpg', '.jpeg', '.bmp'}
@@ -132,7 +135,8 @@ def fx_row_datauris(path, quality, cols=8):
 def file_datauri(path):
     ext = os.path.splitext(path)[1].lower()
     raw = open(path, 'rb').read()
-    return 'data:%s;base64,%s' % (AUD_MIME[ext], base64.b64encode(raw).decode('ascii')), len(raw)
+    mime = AUD_MIME.get(ext) or VID_MIME.get(ext)
+    return 'data:%s;base64,%s' % (mime, base64.b64encode(raw).decode('ascii')), len(raw)
 
 
 def top_level_names(js):
@@ -305,7 +309,7 @@ def build_split(args):
     st = {'in': 0, 'out': 0, 'n_img': 0, 'n_aud': 0}
     for rel, path in files:
         ext = os.path.splitext(path)[1].lower()
-        if ext not in WEB_IMG_EXT and ext not in AUD_MIME:
+        if ext not in WEB_IMG_EXT and ext not in AUD_MIME and ext not in VID_MIME:
             if ext in IMG_EXT:
                 print('FAIL: 图片格式 %s 不在 WEB_IMG_EXT 里（assetURL 不会换名成 .webp）: %s' % (ext, rel))
                 sys.exit(1)
@@ -499,7 +503,7 @@ def main():
                 uri, got, _ = img_datauri(path, args.quality, args.max_dim or None)
             amap[rel] = uri
             stat['in'] += os.path.getsize(path); stat['out'] += got; stat['n_img'] += 1
-        elif ext in AUD_MIME:
+        elif ext in AUD_MIME or ext in VID_MIME:
             uri, got = file_datauri(path)
             amap[rel] = uri
             stat['in'] += os.path.getsize(path); stat['out'] += got; stat['n_aud'] += 1

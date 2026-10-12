@@ -214,6 +214,13 @@ def main():
     # v1.0.16：符纸行加了第三张「解锁」（is-mileage ⇒ ui/menu/mileage.png），5 → 6 张主菜单 UI 图
     check(len(_ui_menu) == 6, '从 60_boot.js 反推出 6 张主菜单 UI 图（%s）' % ','.join(_ui_menu))
     want += _ui_menu
+    # v1.1.x（风云榜）：主界面右下角入口改用一张**皇榜卷轴**（素材/ui/huangbang.png），
+    # 由 artImg('ui/huangbang.png') 取用。它不在 dump_ids 的任何清单里（走 assetURL 字面量），
+    # 不显式加进 want ⇒ 会被下面那句「从未被游戏请求 / 可考虑删掉」**错报**成孤儿（删了入口就没了）。
+    _ui_rank = sorted(set(re.findall(r"artImg\(\s*'(ui/[^']*huangbang\.png)'", _boot)))
+    check(_ui_rank == ['ui/huangbang.png'],
+          '风云榜入口的皇榜图从 60_boot.js 反推出 1 张（%s）' % ','.join(_ui_rank))
+    want += _ui_rank
     # 石碑碎片的 5 片必须复用**同一张**石碑图（clip-path 切 5 块、同一个 src ⇒ 浏览器复用解码
     # 结果，零额外体积）。碎片要是指向别的/不存在的文件，演出时就是 5 块空白。
     _shard_src = sorted(set(re.findall(r"menuShardsHTML\(\s*'([^']+)'", _boot)))
@@ -351,7 +358,7 @@ def main():
         dns[:] = [d for d in dns if d not in SKIP_DIRS]
         for fn in fns:
             ext = os.path.splitext(fn)[1].lower()
-            if ext in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.mp3', '.ogg', '.wav', '.m4a'):
+            if ext in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.mp3', '.ogg', '.wav', '.m4a', '.mp4'):
                 disk.add(os.path.relpath(os.path.join(dp, fn), ASSD).replace('\\', '/'))
     # v1.0.9（手机端性能）：单文件产物把 fx 精灵图**按排拆开**了（打包.py 的 fx_row_datauris）——
     # 磁盘上的整图 fx/<key>.png 因此不再有自己的键，改由 fx/<key>_r0..r(rows-1).png 取代（像素不变）。
@@ -1105,10 +1112,16 @@ def main():
           '`G._settlePlayed=false` 出现在 **startBattle 与 revive 两处**（实测 %d 处）—— '
           'revive 那次漏了，表现是「看了败局墨幕、复活、再打赢 Boss，胜利结算静默地不铺墨」，'
           '而没有任何闸会响（用户看不出少了什么）' % _sp)
-    check("settleTransition(tier, 'win'" in js_src and "settleTransition('heavy', 'lose'" in js_src
-          and "settleTransition('heavy', 'win'" in js_src,
-          '三条出口都接了 settleTransition：showBattleResult（按 tier 分级）/ loseGame（lose 墨）/ '
-          'showVictory（win 墨）—— giveUp 刻意不接（它不是结算，是结算面板上的次级出口）')
+    # v1.1.x（结局结算视频）：三条出口的接线在改造后分成两路 ——
+    #   · showBattleResult（普通战斗结算）仍走 settleTransition(tier,'win') 墨过场（每场都放片会淹死玩家）
+    #   · loseGame（'lose'）/ showVictory（'win'）改走 settleVideo（素材/bg/<角色>-win|lose.mp4）
+    #     ⇒ 视频素材缺失 / 无头 / 关特效时**回落** settleTransition('heavy', mode, openFn)
+    # 所以这条断言钉的是「两路都在」：少一路就是结算面板不再出场（静默白屏）。
+    check("settleTransition(tier, 'win'" in js_src and "settleTransition('heavy', mode, openFn)" in js_src
+          and "settleVideo('lose'" in js_src and "settleVideo('win'" in js_src,
+          '三条出口都接了结算演出：showBattleResult（按 tier 走 settleTransition 墨过场）/ '
+          'loseGame（settleVideo lose，素材缺时回落墨）/ showVictory（settleVideo win，同上）'
+          '—— giveUp 刻意不接（它不是结算，是结算面板上的次级出口）')
 
     # ---- v0.69.0 §D5：KEYWORDS 的零引用词条不能变多 ----
     # 背景：卡面上的 `【X】` 是**唯一**能把玩家引到词条解释的入口（wrapKw 只认方括号，
@@ -1378,6 +1391,15 @@ def main():
     # 写进 CSS 变量（见上面 _ui_card 那段），它们现在进 want。照 v0.68.0 那条自我提醒
     # 把 _reserved 清空：豁免留着就会把「这两张真丢了」的信号静默吃掉。
     _reserved = []
+    # v1.1.x：结局结算视频（素材/bg/<角色>-win/lose.mp4）由 settleVideo **拼串**取用
+    # （'bg/'+key+'-'+mode+'.mp4'），dump_ids 捞不到 ⇒ 不进 want。它们是真素材，不是孤儿，
+    # 落进下面的「从未被游戏请求」会是**错的建议**（删了结局就没动画）。逐条钉进 _reserved。
+    for _hk in ('tianshi', 'ganshiren', 'kuseng', 'yincha'):
+        for _md in ('win', 'lose'):
+            _vp = 'bg/%s-%s.mp4' % (_hk, _md)
+            _reserved.append(_vp)
+            check(_vp in keys and os.path.exists(os.path.join(ASSD, _vp.replace('/', os.sep))),
+                  '结局结算视频已打进产物且仍在磁盘: %s' % _vp)
     for _p in ('ui/card/side.png', 'ui/card/back.png'):
         check(_p in want and os.path.exists(os.path.join(ASSD, _p)),
               '卡牌侧视图/背视图已接线且仍在磁盘: %s' % _p)

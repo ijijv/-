@@ -63,6 +63,58 @@ function settleTransition(tier, mode, openFn){
   later(1300, ()=>{ open(); if(veil) veil.classList.add('parting'); });
   later(1850, finish);
 }
+/* ===================== v1.1.x 结局结算视频（用户提供素材 素材/bg/<角色>-win/lose.mp4） =====================
+   只在**整局终幕**两处接入：showVictory（通关）与 loseGame（被击败且不再复活）。
+   普通战斗结算（showBattleResult）**不接** —— 保留原墨过场，否则每场战斗都放片会淹死玩家。
+   形态：全屏视频播完**停在末帧**，结算面板（#overlay z-index:10）浮在画面上；
+   视频 pointer-events:none 不吃点击；hideOverlay 收面板时一并摘掉（见 50_ui.js）。
+   ⚠️ 武僧的 hero id 是 `wuseng`，素材文件名是 `kuseng` ⇒ 表里映射。
+   ⚠️ 无头/关特效/素材缺失 ⇒ 一律回落 settleTransition 墨过场，**同刻或按时开面板**，
+      冒烟断言（loseGame/showVictory 之后立刻读 DOM）不受影响：无头下 animLive() 为假，直接 openFn()。 */
+var _settleVid=null;
+const SETTLE_VID_HERO={ wuseng:'kuseng' };   // hero id → 素材名（其余同名）
+function settleVideo(mode, openFn){
+  if(!animLive() || menuFxOff()){ openFn(); return; }
+  /* v1.1.x（用户 2026-10-12）：「不论是战败还是战胜，都要顿时终止背景音乐」 ——
+     结局视频一开场就把 BGM 掐掉，别让塔顶/战场的循环音乐盖过片子的声音。 */
+  if(typeof stopBGM==='function'){ try{ stopBGM(); }catch(e){} }
+  const hero=(G && G.hero) || 'tianshi';
+  const key=SETTLE_VID_HERO[hero]||hero;
+  const rel='bg/'+key+'-'+(mode==='lose'?'lose':'win')+'.mp4';
+  /* 单文件产物：ASSET_MAP 是唯一真相源，键不在 ⇒ 素材没进包，直接走墨过场。
+     拆包/开发树：ASSET_MAP=null 探不了 ⇒ 试播，onerror 再回落。 */
+  if(ASSET_MAP && !ASSET_MAP[rel]){ settleTransition('heavy', mode, openFn); return; }
+  const v=document.createElement('video');
+  v.src=assetURL(rel, true); v.autoplay=true; v.playsInline=true; v.preload='auto';
+  v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline','');
+  v.style.cssText='position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;background:#000;pointer-events:none';
+  let fin=false;
+  const done=()=>{ if(fin) return; fin=true; openFn(); };
+  const drop=()=>{ try{ v.parentNode&&v.parentNode.removeChild(v); }catch(e){} if(_settleVid===v) _settleVid=null; try{ document.body.classList.remove('settle-vid'); }catch(e){} };
+  const fallback=()=>{ if(fin) return; fin=true; drop(); settleTransition('heavy', mode, openFn); };
+  v.addEventListener('ended', done);          // 播完**不摘**：停在末帧当结算面板的背景
+  v.addEventListener('error', fallback);
+  _settleVid=v;
+  try{ document.body.classList.add('settle-vid'); }catch(e){}   // 把 #overlay 的 88% 黑幕压到 50%，末帧才透得出来
+  document.body.appendChild(v);
+  const p=v.play&&v.play();
+  if(p&&p.catch) p.catch(()=>{
+    /* 自动播放被拦（带声）⇒ 静音重试一次；再失败才回落墨过场。 */
+    v.muted=true; const p2=v.play&&v.play();
+    if(p2&&p2.catch) p2.catch(fallback);
+  });
+  /* 看门狗：12 秒还没播完（素材损坏 / 解码卡死）⇒ 直接开面板，视频留在末帧也无妨。 */
+  setTimeout(()=>{ if(!fin){ try{ v.currentTime=v.duration||0; }catch(e){} done(); } }, 12000);
+}
+/* 摘掉结局视频（若挂着）。结算面板关闭的出口都要调：
+   hideOverlay（复活 / 继续）与 showStartScreen（回主菜单 / 再打一局）。 */
+function settleVidDrop(){
+  if(!_settleVid) return;
+  const v=_settleVid; _settleVid=null;
+  try{ document.body.classList.remove('settle-vid'); }catch(e){}
+  try{ v.pause&&v.pause(); }catch(e){}
+  try{ v.parentNode&&v.parentNode.removeChild(v); }catch(e){}
+}
 function winFight(){
   if(G.battleOver) return; // v0.61 B4：重入守卫 —— 一场战斗只结算一次胜利
   G.battleOver=true;
@@ -172,9 +224,107 @@ function advanceAct(){
   G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
   showOverlay(`<h2>第 ${G.act} 幕 · ${ACT_NAMES[G.act-1]}</h2><p>更凶的妖魔盘踞在更高层。<br>敌人的生命与攻击都变强了。</p><button class="btn" onclick="hideOverlay(); showMap({entry:true});">开始攀登</button>`);
 }
-function calcScore(){
-  const kills=G.totalKills||0;
-  return G.act*1000 + G.mapRow*50 + Math.max(0,G.hp)*20 + kills*8 + G.gold*10 + G.potions.length*100;
+/* ===================== v1.1.x：结算分数 / 里程的分项与动画（用户 2026-10-12 重做） =====================
+   用户口径：左上「总分计算过程」逐条弹出、右侧累计，**不从 0 慢滚**；停稳后大号 num 浮字
+   从右到左依次弹出组成总分；右上「里程分数」同法、与分数计算同时进行；只要纯文字数字 + 透明背景。
+   角色的 num 配色（用户指定）：block=苦僧(武僧) / dmg=天师 / heal=赶尸人 / hurt=阴差。 */
+const SETTLE_KIND={ tianshi:'', ganshiren:'heal', wuseng:'block', yincha:'to-player' };
+const SETTLE_NUMCLS={ '':'dmg', 'to-player':'hurt', 'block':'block', 'heal':'heal' };
+function settleKind(){ return SETTLE_KIND[(G && G.hero) || 'tianshi'] || ''; }
+/* 本局用时（毫秒）。起点 startTs 由 confirmNewGame / continueRun 落定并随存档往返。 */
+function runElapsedMs(s){ const g=s||G; return Math.max(0, Date.now() - ((g && g.startTs) || Date.now())); }
+/* 总分分项（用户口径：分数规则要包含剩余击杀 / 剩余金币 / 用时等）：
+     层数推进 = 幕数×1000 + 层数×50 · 击败敌人 = 击杀×8 · 剩余金币 = 金币×10 ·
+     剩余生命 = 生命×20 · 灵汁收获 = 瓶数×100 · 用时 = 每快 1 秒 +2（以 30 分钟为基准）；
+     通关额外 +5000（并入分项，不再由 showVictory 手动加）。 */
+function scoreParts(s){
+  const g=s||G; if(!g) return [];
+  const sec=Math.floor(runElapsedMs(g)/1000);
+  const parts=[
+    { lab:'层数推进', val:(g.act|0)*1000 + Math.max(0,g.mapRow|0)*50 },
+    { lab:'击败敌人', val:Math.max(0,g.totalKills|0)*8 },
+    { lab:'剩余金币', val:(g.gold|0)*10 },
+    { lab:'剩余生命', val:Math.max(0,g.hp|0)*20 },
+    { lab:'灵汁收获', val:(g.potions?g.potions.length:0)*100 },
+    { lab:'用时', val:Math.max(0,1800-sec)*2 },
+  ];
+  if(g.finalBoss) parts.push({ lab:'通关加成', val:5000 });
+  return parts;
+}
+function calcScore(){ let t=0; scoreParts().forEach(function(p){ t+=p.val; }); return t; }
+/* 结算面板正文（纯文字数字 + 透明背景、无纯色底板）。返回 { html, kind, sp, mp, sTot, mTot } 交给 settleAnim。 */
+function settleResultHTML(mode){
+  const kind=settleKind();
+  const sp=scoreParts(G), mp=mileParts(G);
+  const sTot=sp.reduce(function(a,p){ return a+p.val; },0);
+  const mTot=mp.reduce(function(a,p){ return a+p.val; },0);
+  const rows=function(arr){ return arr.map(function(p){
+    return '<div class="settle-row"><span class="settle-lab">'+p.lab+'</span><span class="settle-val">0</span></div>';
+  }).join(''); };
+  let btns='';
+  if(mode==='win'){
+    btns='<button class="btn" onclick="startGame()">再打一局</button>'
+        +'<button class="btn ghost" onclick="showStartScreen()">返回主菜单</button>';
+  }else{
+    btns=(G.revivedFree?'':'<button class="btn" onclick="reviveFree()">免费复活</button>')
+        +'<button class="btn ghost" onclick="giveUp()">放弃 · 结束本局</button>';
+  }
+  const html='<div class="settle-wrap">'
+    +'<div class="settle-block settle-score"><div class="settle-cap">总分计算过程</div>'
+    +'<div class="settle-rows" id="settle-score-rows">'+rows(sp)
+    +'<div class="settle-row settle-sum"><span class="settle-lab">总分</span><span class="settle-val">0</span></div></div>'
+    +'<div class="settle-big" id="settle-big"></div></div>'
+    +'<div class="settle-block settle-mile"><div class="settle-cap">里程分数</div>'
+    +'<div class="settle-rows" id="settle-mile-rows">'+rows(mp)
+    +'<div class="settle-row settle-sum"><span class="settle-lab">里程</span><span class="settle-val">0</span></div></div>'
+    +'<div class="settle-big" id="settle-bigm"></div></div>'
+    +'<div class="settle-actions">'+btns+'</div>'
+    +'</div>';
+  return { html:html, kind:kind, sp:sp, mp:mp, sTot:sTot, mTot:mTot };
+}
+/* 结算动画：① 逐条弹出分项 + 累计（分数/里程同一拍）② 停稳后大号 num 浮字从右到左弹出。
+   ⚠️ 无头 / 关特效 ⇒ 直接落终态、**不排任何 setTimeout**（冒烟与低配档零影响）。 */
+function settleAnim(R){
+  const q=function(sel){ return document.querySelector(sel); };
+  const qa=function(sel){ return Array.prototype.slice.call(document.querySelectorAll(sel)); };
+  const sRows=qa('#settle-score-rows .settle-row:not(.settle-sum)');
+  const mRows=qa('#settle-mile-rows .settle-row:not(.settle-sum)');
+  const sSum=q('#settle-score-rows .settle-sum .settle-val');
+  const mSum=q('#settle-mile-rows .settle-sum .settle-val');
+  const putBig=function(sel, val){
+    const el=q(sel); if(!el) return [];
+    const txt=String(val);
+    const h=(typeof numHTML==='function') ? numHTML(R.kind, txt) : null;
+    el.innerHTML = h || ('<span class="settle-numfall '+SETTLE_NUMCLS[R.kind]+'">'+txt+'</span>');
+    return Array.prototype.slice.call(el.querySelectorAll('.fx-num, .settle-numfall'));
+  };
+  const dS=putBig('#settle-big', R.sTot), dM=putBig('#settle-bigm', R.mTot);   // 先占位（CSS opacity:0），布局不跳
+  if(!animLive() || menuFxOff()){
+    sRows.forEach(function(r,i){ r.classList.add('on'); const v=r.querySelector('.settle-val'); if(v) v.textContent='+'+R.sp[i].val; });
+    mRows.forEach(function(r,i){ r.classList.add('on'); const v=r.querySelector('.settle-val'); if(v) v.textContent='+'+R.mp[i].val; });
+    if(sSum) sSum.textContent=String(R.sTot);
+    if(mSum) mSum.textContent=String(R.mTot);
+    dS.forEach(function(d){ d.classList.add('on'); });
+    dM.forEach(function(d){ d.classList.add('on'); });
+    return;
+  }
+  const N=Math.max(sRows.length, mRows.length);
+  let aS=0, aM=0;
+  for(let i=0;i<N;i++){ (function(i){
+    setTimeout(function(){
+      const sr=sRows[i];
+      if(sr){ sr.classList.add('on'); const v=sr.querySelector('.settle-val'); if(v) v.textContent='+'+R.sp[i].val; aS+=R.sp[i].val; if(sSum) sSum.textContent=String(aS); }
+      const mr=mRows[i];
+      if(mr){ mr.classList.add('on'); const v=mr.querySelector('.settle-val'); if(v) v.textContent='+'+R.mp[i].val; aM+=R.mp[i].val; if(mSum) mSum.textContent=String(aM); }
+    }, i*150);
+  })(i); }
+  const dl=dS.length, dm=dM.length, n=Math.max(dl, dm);
+  setTimeout(function(){
+    for(let k=0;k<n;k++){ (function(k){
+      const idx=n-1-k;                      // 右到左：最末位先出
+      setTimeout(function(){ if(dS[idx]) dS[idx].classList.add('on'); if(dM[idx]) dM[idx].classList.add('on'); }, k*95);
+    })(k); }
+  }, N*150+280);
 }
 function loseGame(){
   if(G.dead) return; // 防止重复结算（多张怨气/连续判定）
@@ -189,27 +339,18 @@ function loseGame(){
      （**它原先根本不调 setBg，这一句是本次必须补的**，否则复活后背后仍是那张败局图）；
      giveUp() 保留这张图（「本局结束」本来就还是败局，观感一致）；showStartScreen() 走 setBg('menu')。 */
   setBg('defeat.jpg');
-  const where = `第 ${G.act} 幕 · 第 ${G.mapRow+1} 层`;
-  /* v1.0.1：广告入口隐藏 —— 只保留**首次免费复活**；用过之后不再出现「看广告复活」的入口。
-     reviveAd / adPlaceholder 本体保留，接广告后还原这一行即可。 */
-  const reviveBtn = G.revivedFree
-    ? ''
-    : `<button class="btn" onclick="reviveFree()">免费复活 · 回满血继续</button>`;
-  /* v1.0.15：失败也累计里程碑（幂等 —— 复活后再败/再胜不会重复发）。 */
-  const __mileJust=grantRunMilestones();
-  const __mileGain=G._mileGain||0;   // 读**实际发放额**（grantRunMilestones 里落的），别重算 —— 幂等返回时重算会显示一个没真发的数
-  const html=`<h2>妖气侵蚀了你</h2><p>你被击败了。<br>运气和牌组都还差一点。</p>
-    <p style="color:var(--gold)">当前得分 <b>${G.score}</b>　（${where} · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
-    ${mileSettleHTML(__mileGain, __mileJust)}
-    ${reviveBtn}
-    <button class="btn ghost" onclick="giveUp()">放弃 · 结束本局</button>`;
-  /* 败局走**重档**、`mode='lose'`（暗红墨自上压）。
-     ⚠️ `setBg('defeat.jpg')` 留在上面**同步**执行，不挪进过场里：这一句是状态的一部分
-        （revive 要靠它被换回来），延迟 1.3 秒换底图只会让「败局」晚一拍才被看见。
-        墨幕盖上去的正是**已经换好的**那张底图。 */
-  settleTransition('heavy', 'lose', ()=>showOverlay(html, undefined, 'result-scene'));
+  /* v1.0.15：失败也累计里程碑（幂等 —— 复活后再败/再胜不会重复发）。
+     v1.1.x：结算画面重做 —— 透明浮层 + 左上「总分计算过程」+ 右上「里程分数」+ 右下按键，
+     不再有 <h2> 标题、得分行、里程碑框等赘述；大号 num 浮字从右到左弹出组成总分。 */
+  grantRunMilestones();
+  const R=settleResultHTML('lose');
+  /* ⚠️ `setBg('defeat.jpg')` 留在上面**同步**执行，不挪进过场里：这一句是状态的一部分
+        （revive 要靠它被换回来）。
+     v1.1.x：结局接**角色败局视频**（settleVideo 内部无头/缺素材回落墨过场）。 */
+  settleVideo('lose', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); });
 }
 function giveUp(){
+  if(typeof settleVidDrop==='function') settleVidDrop();   // v1.1.x：败局面板点「放弃」也要摘掉结局视频
   const sc=G.score||calcScore();
   G.score=sc;                 // v1.0.19：落定分数，供整局总分榜记录（放弃也算一整局）
   clearRunSave();
@@ -246,7 +387,8 @@ function reviveAd(){
 function showVictory(){
   sfx('win');
   track('runWin');
-  G.score=calcScore()+5000;
+  G.finalBoss=true;                 // 通关即终局：结算画面的「通关加成 +5000」分项靠它（scoreParts）
+  G.score=calcScore();
   /* v0.74.0：通关专用整屏背景。出口 startGame() 经 showHeroSelect()→setBg('hero_select.jpg')，
      中途回主菜单则由 setBg('menu') 接管，恢复不用单独写。 */
   setBg('victory.jpg');
@@ -257,25 +399,20 @@ function showVictory(){
      根因就是通关后还有路径能把这一局写回存档位（只删一次是治不住的，必须拒写）。 */
   destroyRunSave();
   /* 用时起点 startTs 由 confirmNewGame / continueRun 落定（并随存档往返）。 */
-  const __elapsed=Math.max(0, Date.now()-(G.startTs||Date.now()));
-  const __mmss=(function(ms){ const t=Math.max(0,Math.floor(ms/1000));
-    const m=Math.floor(t/60), s=t%60; return m+':'+(s<10?'0':'')+s; })(__elapsed);
-  /* v1.0.15：通关同样累计里程碑（幂等；结算面板把新解锁条目列清楚）。 */
-  const __mileJust=grantRunMilestones();
-  const __mileGain=G._mileGain||0;   // 同上：读实际发放额
+  const __elapsed=runElapsedMs();
+  /* v1.0.15：通关同样累计里程碑（幂等）。 */
+  grantRunMilestones();
   /* v1.0.17：记一笔**通关计时**（用户口径「之前的排行榜你全删了，我要保留通关计时榜，
      现在把榜单放在设置里」）。只在通关这一处写入；失败/放弃不入榜。 */
   recordClearTime(__elapsed);
   recordScoreRun(true);   // v1.0.19：整局总分榜（通关，含 +5000 加成）
-  const html=`<h2>通 关 ！</h2><p>你一路打上了塔顶，镇服了百鬼。<br>剩余生命 ${G.hp} / ${G.maxHp}。</p>
-    <p style="color:var(--gold)">本局用时 <b>${__mmss}</b> · 得分 <b>${G.score}</b>（含通关加成 +5000）　（第 ${G.act} 幕 · 击杀 ${G.totalKills||0} · 金币 ${G.gold}）</p>
-    ${mileSettleHTML(__mileGain, __mileJust)}
-    <button class="btn" onclick="startGame()">再打一局</button>
-    <button class="btn ghost" onclick="showClearTimes()">通关计时榜</button>
-    <button class="btn ghost" onclick="showStartScreen()">返回主菜单</button>`;
+  /* v1.1.x：结算画面重做 —— 透明浮层 + 左上「总分计算过程」+ 右上「里程分数」+ 右下按键
+     （战胜保留「再打一局 / 返回主菜单」）。排行榜入口已移到主界面右下，故不再在结算页放榜单按钮。 */
+  const R=settleResultHTML('win');
   /* 通关是**最重**的一档（金墨自下升）。`giveUp()` 刻意**不接** —— 它不是结算，
-     是结算面板上的一个次级出口，给它铺一场墨幕会显得「又赢了一次」。 */
-  settleTransition('heavy', 'win', ()=>showOverlay(html, undefined, 'result-scene'));
+     是结算面板上的一个次级出口，给它铺一场墨幕会显得「又赢了一次」。
+     v1.1.x：结局接**角色通关视频**（settleVideo 内部无头/缺素材回落墨过场）。 */
+  settleVideo('win', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); });
 }
 
 /* ===================== 通关计时榜（v1.0.17） =====================

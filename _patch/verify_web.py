@@ -26,7 +26,7 @@ SKIP_DIRS = {'enemy_backup'}
 
 IMG_EXT = {'.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif'}
 WEB_IMG = {'.png', '.jpg', '.jpeg', '.bmp'}            # 拆包时**会**转成 .webp 的
-AUD_EXT = {'.mp3', '.ogg', '.wav', '.m4a'}
+AUD_EXT = {'.mp3', '.ogg', '.wav', '.m4a', '.mp4'}   # v1.1.x：.mp4 = 结局结算视频（拆包原样拷）
 # 从 dump_ids() 的字符串值里捞「像素材路径」的那些（游戏作用域算好的，不镜像规则）
 PATH_RE = re.compile(r'^[\w\u4e00-\u9fff/\-.]+\.(?:png|jpe?g|webp|bmp|mp3|ogg|wav|m4a)$', re.I)
 

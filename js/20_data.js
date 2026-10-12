@@ -1133,6 +1133,12 @@ const FX_SHEETS = {
   charm:       { c:8, f:35, f0:45, rows:6, i0:4, scale:1.76, ox:0, oy:0.15 },   // 魅惑　素材 45 帧，两端看不见的 10 帧不播
   curse:       { c:8, f:35, f0:43, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },   // 诅咒　素材 43 帧，两端看不见的 8 帧不播
   fodu:        { c:8, f:38, f0:41, rows:6, i0:1, scale:1.75, ox:0, oy:0.17 },   // 佛渡（净化）　素材 41 帧，两端看不见的 3 帧不播
+  /* v1.1.6 腐毒发作（腐骨散 / 化甲为毒）：用户提供的素材原始排布是 5 列 × 4 行、单元 768×720、
+     实际 16 帧（末行只有 1 格），**不是**工程的 8 列 × 480 约定 —— 已按排重排成 8 列 × 2 行、
+     单元 480×480（`_patch` 外的临时脚本重采样，逐帧 LANCZOS 缩放、原样保留在格内位置）。
+     ox/oy 由重采样后逐帧 alpha 并集实量（cell-local 内容框中心 − 格中心）：0.01 / 0.06。
+     与 burn（同为 DoT 跳伤、同锚点敌人）取同一 scale，观感才连得上。 */
+  fudu_hit:    { c:8, f:16, rows:2, i0:0, scale:2.47, ox:0.01, oy:0.06 },
   gouhun:      { c:8, f:30, f0:39, rows:5, i0:4, scale:1.02, ox:0, oy:0.14 },   // 勾魂　素材 39 帧，两端看不见的 9 帧不播
   /* v1.0.17 新增（程序绘制，`_patch/mk_flame_sheets.py`）：下面 4 张都是自绘精灵图、
      每一格都有内容（不存在「两端空帧」）⇒ **不写 f0**（f0 是「素材原帧数 − 裁掉的两端空帧」的记账字段，
@@ -2490,8 +2496,11 @@ function rollCardRarity(tier) {
 /* ⚠️ v1.0.16：**门禁总开关**。测试期先关掉（用户口径「里程碑的设定最后装上」）：
    关掉时 mileOn() 一律放行 —— 全部角色 / 卡牌 / 遗物 / 灵汁都可正常取用，方便试玩；
    但进度记录（SAVE.progress / SAVE.mile）与独立的「解锁」界面**照常工作**，
-   等正式上线把这里改回 true 即可，其余一行都不用动。 */
-let MILE_GATE_ON = false;
+   等正式上线把这里改回 true 即可，其余一行都不用动。
+   ⚠️ v1.1.x（用户报障「未解锁角色仍可使用角色特权」）：**开关已按原口径正式打开** ⇒
+      角色/紫·金卡/紫·金遗物/新灵汁全部走 MILESTONES 门禁。配套改动：grantRunMilestones
+      除推每角色轨档位外，同步按**全局累计 pts** 推旧表 id 进 SAVE.mile（否则 mileOn 查不到）。 */
+let MILE_GATE_ON = true;
 /* ⚠️ v1.0.25：这是一张**遗留的内容门禁表**，只供 mileOn() 判断「某类内容现在开不开」。
    它**不再是进度来源** —— 里程的累积与达标已全面由下面的**每角色 6 档 MILE_TRACKS** 驱动
    （见 grantRunMilestones）。等第 1~5 档的真实奖励内容定稿后，把奖励与档位对上，
@@ -2513,9 +2522,21 @@ const MILESTONES = [
 function milePointsFor(s){
   const g = s || (typeof G!=='undefined' ? G : null);
   if(!g) return 0;
+  return Math.max(0, mileParts(g).reduce(function(a,p){ return a + p.val; }, 0));
+}
+/* v1.1.x（用户 2026-10-12）：结算画面右上「里程分数」要**逐条弹出**地展示里程怎么来的 ⇒
+   把 milePointsFor 的加数拆成可读分项（标签 + 分值）。milePointsFor 反过来调它，杜绝两处漂。 */
+function mileParts(s){
+  const g = s || (typeof G!=='undefined' ? G : null);
+  if(!g) return [];
   const act = Math.max(0,(g.act|0)) - 1;                 // act=1 ⇒ 0
-  const pts = act*200 + Math.max(0,(g.mapRow|0))*15 + Math.max(0,(g.totalKills|0))*5 + (g.finalBoss?600:0);
-  return Math.max(0, pts);
+  const parts = [
+    { lab:'幕数推进', val: act*200 },
+    { lab:'爬塔层数', val: Math.max(0,(g.mapRow|0))*15 },
+    { lab:'击败敌人', val: Math.max(0,(g.totalKills|0))*5 },
+  ];
+  if(g.finalBoss) parts.push({ lab:'通关加成', val: 600 });
+  return parts;
 }
 /* —— 里程碑「里程轨」（v1.0.21，用户草图）：左侧 4 个角色开关（横屏立绘 + 名字），
    右侧一条**横向蓝色里程线**向左固定、向右随里程延长；线上一串节点，节点上方是白框奖励，
