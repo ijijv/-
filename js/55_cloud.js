@@ -694,3 +694,53 @@ function rankOpenBoard(boardId){
   if(!ctx || typeof ctx.openLeaderboard !== 'function') return Promise.reject(new Error('未发现排行榜接口。' + rankDiag()));
   return rankCall(ctx, 'openLeaderboard', { leaderboardId: rankBoardId(boardId) });
 }
+/* v1.1.x：取「当前玩家」的 TapTap **真实昵称 / 头像**（自绘榜不再写「道友」「无名道人」）。
+   ⚠️ H5 小游戏没有公开统一的「取用户信息」接口名，故做 best-effort 多点探测：
+     ① 依次试 tap 上常见的取用户信息方法名（见 RANK_SELF_METHODS）；
+     ② 兼容两种返回形态 —— 同步 return（值 / Promise）、或走 `callback:{onSuccess,onFailure}`；
+     ③ 3 秒兜底：都没拿到就落空（调用方回落「我」），绝不把界面钉死。
+   结果 **缓存一次**（_rankSelf），同一局里后续调用直接复用。 */
+const RANK_SELF_METHODS = ['getUserInfo','getUserProfile','getUser','getPlayerInfo','getAccountInfo','getLoginInfo','getMyInfo'];
+let _rankSelf = null;
+function rankSelfShape(o){
+  if(!o || typeof o !== 'object') return null;
+  const name = o.nickname || o.nickName || o.name || o.userName || o.displayName || o.screenName;
+  const avatar = o.avatar || o.avatarUrl || o.headImg || o.headUrl || o.icon || o.portrait;
+  if(!name && !avatar) return null;
+  return { name: name ? String(name).slice(0,12) : '', avatar: avatar ? String(avatar) : '' };
+}
+function rankSelf(){
+  if(_rankSelf) return Promise.resolve(_rankSelf);
+  return new Promise(ok => {
+    let settled = false;
+    const done = o => { if(!settled){ settled = true; _rankSelf = rankSelfShape(o) || {}; ok(_rankSelf); } };
+    const tryCtx = ctx => {
+      if(!ctx) return;
+      for(let i=0; i<RANK_SELF_METHODS.length; i++){
+        const nm = RANK_SELF_METHODS[i], fn = ctx[nm];
+        if(typeof fn !== 'function') continue;
+        try{
+          const r = fn.call(ctx, { callback: {
+            onSuccess: o => done(o), onFailure: () => {}
+          }});
+          if(r && typeof r.then === 'function') r.then(done, () => {});
+          else { const s = rankSelfShape(r); if(s) done(s); }
+        }catch(e){}
+        if(settled) return;
+      }
+    };
+    try{ if(typeof tap !== 'undefined' && tap) tryCtx(tap); }catch(e){}
+    if(!settled){ try{ tryCtx(rankCtx()); }catch(e){} }
+    if(settled) return;
+    if(typeof setTimeout === 'function') setTimeout(() => done(null), 3000); else done(null);
+  });
+}
+/* v1.1.x：取「我在某榜的当前名次」（官方 loadCurrentPlayerLeaderboardScore）——
+   返回 { rank, score, nickname, avatar }。既用来给自绘榜标出「本账号」那一行，
+   也是 rankSelf 拿不到昵称时的备用真名来源。没接口就 reject（调用方 catch 掉即可）。 */
+function rankSelfScore(boardId){
+  const ctx = rankCtx();
+  if(!ctx || typeof ctx.loadCurrentPlayerLeaderboardScore !== 'function')
+    return Promise.reject(new Error('未发现 loadCurrentPlayerLeaderboardScore 接口'));
+  return rankCall(ctx, 'loadCurrentPlayerLeaderboardScore', { leaderboardId: rankBoardId(boardId) });
+}

@@ -473,7 +473,7 @@ function menuBusy(on){
 function steleBreak(btn, fn){
   if(MENU_BUSY || !btn || btn.disabled) return;
   menuBusy(true);
-  sfx('ui_stele');   // v1.0.23：用户口径「入塔 / 续要有击碎石头的音效」，与碎片动画同时起
+  sfx('stone_broken');   // v1.1.x：用户交付真采样「击碎石头」，与碎片动画同时起（素材缺则走合成兜底）
   if(btn.classList) btn.classList.add('is-breaking');
   const off=menuFxOff();
   const tFlash=off?0:800, tGo=off?60:930;   // off 时闪被 CSS 关掉 ⇒ 不留 800ms 干等，直接 60ms 切
@@ -2101,6 +2101,16 @@ function exhaustChip(c){
       卡面短文案硬闸、canUpgrade、存档口径全不受影响；无阴司牒时输出与改前逐字节相同。 */
 function shiWangBoosted(c){ return !!(c && c.id==='shi_wang' && typeof hasRelic==='function' && hasRelic('yinsidie')); }
 function shiWangBoostTag(c){ return shiWangBoosted(c) ? '<div style="color:var(--green);margin-top:2px">阴司牒 · 每次尸王攻击后获得 5 点格挡</div>' : ''; }
+/* v1.1.x（用户交付 4 张属性图标 素材/ui/ct_*.png）：卡面左下角的分类标
+   （`.ct-corner`，手机横屏档显示）由「攻击／防御／技能／鬼怪」文字改成对应图标。
+   ⚠️ 走 iconTag：图没到时回落串仍是 TNAME[c.type]（与改动前逐字节相同），
+      探到图才变 <img>，每个路径只探一次（不每帧刷 404）。四个属主的图标是白色线稿、
+      透明底 ⇒ 正好压在 `.ct-corner` 那块深色小墨牌上（见 原型.html 的 .ct-corner .ct-icon）。 */
+const CT_ICON={ attack:'ui/ct_attack.png', defense:'ui/ct_defense.png', skill:'ui/ct_skill.png', spirit:'ui/ct_spirit.png' };
+function ctCorner(type){
+  const rel=CT_ICON[type];
+  return rel ? iconTag(rel, TNAME[type], 'ct-icon') : (TNAME[type]||'');
+}
 function cardBody(c){
   /* v0.69.0：`.ctype` 从 `.cplate` **里面**移到闭标签**之后**。
      原因见 原型.html 里 .card.has-frame .ctype 的注释：它现在是相对 .card 绝对定位的，
@@ -2116,7 +2126,7 @@ function cardBody(c){
      手机横屏档把 `.ct-type/.ct-sep` 藏掉之后，手牌左下角有「攻击／防御」可辨，
      面板里却什么都没有 ⇒ 玩家没法靠类型筛牌（用户 2026-10-05 报障）。
      三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 桌面逐像素不变。 */
-  return `${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${c.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span>`;
+  return `${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${c.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${ctCorner(c.type)}</span>`;
 }
 function forgeCardHTML(c,i){
   /* v0.75.0：锻造卡面从「一张卡 + 卡内一行红字预览」改成**一组两列对照** ——
@@ -2142,7 +2152,7 @@ function forgeCardHTML(c,i){
     <div class="cost"${cc.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(cc)}</div>
     <div class="cplate" data-cardid="${cc.id}" data-cardup="${cc.up?1:0}">
     <div class="cdesc${descCls}">${wrapKw(cardText(cc,cc.up))}</div>
-    </div><div class="ctype"><span class="ct-type">${TNAME[cc.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[cc.rarity]}</span></div><span class="ct-corner">${TNAME[cc.type]}</span>
+    </div><div class="ctype"><span class="ct-type">${TNAME[cc.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[cc.rarity]}</span></div><span class="ct-corner">${ctCorner(cc.type)}</span>
   </div>`;
   /* 已升级 / 不可升级：本来就**没有「升级后」可看**（前者已经是终态、后者升了也不变），
      维持单张卡的原样，不配箭头也不配右卡。 */
@@ -2202,7 +2212,7 @@ function handCardHTML(c, disabled, i, n){
      桌面档三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 逐像素不变；
      手机横屏档（原型.html 的 ⑦ 块）藏掉 type 与分隔符、只留稀有度，
      类型改由卡片左下角的 `.ct-corner` 小墨牌显示（同样是 TNAME[c.type]）。 */
-  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}${xueFire}"${newAttr} style="--rot:${rot}deg${flying?';opacity:0':''}" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div>${sealTag}<div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${TNAME[c.type]}</span></div>`;
+  return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}${xueFire}"${newAttr} style="--rot:${rot}deg${flying?';opacity:0':''}" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div>${sealTag}<div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${ctCorner(c.type)}</span></div>`;
 }
 function intentText(e){
   const st=(e.strength||0); // v0.61 C2：力量每点 +1

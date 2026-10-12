@@ -3475,8 +3475,8 @@
     (function () {
       var i, j, k, s, ok, got, missing, bad, steps;
 
-      /* ① 分发表完整性：75 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 75 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键）', SFX_KEYS.length === 75, 'n=' + SFX_KEYS.length);
+      /* ① 分发表完整性：80 键，每步参数都齐 */
+      __ok('v0.61.25 音效表 83 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键）', SFX_KEYS.length === 83, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];
@@ -3618,7 +3618,7 @@
 
       /* 反伤 / 受击 / 格挡吃满的连击段 */
       got = __rec(function () { G = __base('wuseng'); G.thorns = 3; G.enemies[0].hp = 99; dealDamageToPlayer(5, G.enemies[0]); });
-      __ok('v0.61.25 接线·反震 → thorns', got.indexOf('thorns') >= 0, got.join(','));
+      __ok('v0.61.25 接线·反震 → spark', got.indexOf('spark') >= 0, got.join(','));
       __ok('v0.61.25 接线·玩家受击 → hurt', got.indexOf('hurt') >= 0, got.join(','));
       got = __rec(function () { G = __base('wuseng'); G.hp = 60; G.block = 99; dealDamageToPlayer(4, G.enemies[0], 0, { multi: true }); });
       __ok('v0.61.25 接线·格挡吃满的连击段仍出 enemy_multi', got.indexOf('enemy_multi') >= 0, got.join(','));
@@ -6241,13 +6241,15 @@
        靠 `_patch/shot_fx.py` 的实拍对照图定 scale。 */
 
     /* ---------- F1. 表结构 ---------- */
-    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 37 条'
+    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 39 条'
       + '（帧数是 _patch/fx_tune.py 按每格 alpha 实扫的 —— 8 列末排常留空，拿 行×8 当帧数会播到空白格；'
       + 'v1.0.14 起的 multi_slash 是多方向图，由 _patch/mk_multi_slash.py 程序生成、不在 fx_tune 的重算范围内；'
       + 'v1.0.17 起的 guling_suck / relic_proc / shiqi_flame / xuenu_flame 四张、v1.1.4 起的 thorns_light 也是程序绘制，'
       + '由 _patch/mk_flame_sheets.py 出图；v1.1.6 起的 fudu_hit 是用户素材重排：'
-      + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480））',
-      Object.keys(FX_SHEETS).length === 37 &&
+      + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480）；'
+      + 'v1.1.x 起的 lightning 是用户素材：8 列 × 6 行、单元 480×480、48 帧；'
+      + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 6 行、单元 480×480、48 帧）',
+      Object.keys(FX_SHEETS).length === 39 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
         return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
@@ -6275,7 +6277,7 @@
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
     __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
-      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 37);
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 39);
 
     /* ---------- F2. CARD_FX 接线 ---------- */
     __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
@@ -6289,10 +6291,10 @@
         return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon'].indexOf(e.a) >= 0;
       }));
     __ok('v0.64.0 CARD_FX 没有覆盖全部卡（59 张）—— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
-      + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；31 张是有素材的那批（v1.0.13 加断刃雷符，v1.0.20 加阴兵，'
+      + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；32 张是有素材的那批（v1.0.13 加断刃雷符，v1.0.20 加阴兵过境，'
       + 'v1.1.2 加天师里程碑的雷谴符/五雷法印，v1.1.3 加赶尸人里程碑的赶尸令/万尸朝宗，'
-      + 'v1.1.4 加武僧里程碑的罗汉伏虎/化甲为毒，v1.1.5 加阴差里程碑的饮血刃）',
-      Object.keys(CARD_FX).length === 31 && CARDS.length === 59);
+      + 'v1.1.4 加武僧里程碑的罗汉伏虎/化甲为毒，v1.1.5 加阴差里程碑的饮血刃，v1.1.x 加 0 费【阴兵】本体）',
+      Object.keys(CARD_FX).length === 32 && CARDS.length === 59);
 
     /* ---------- F3. 纯函数：盒子尺寸 ---------- */
     __ok('v0.64.0 fxBoxSize 下夹 96、上夹 min(vw,vh)×0.9（帧画布 960×960 四周留空，照锚点框贴必然偏大；'
@@ -6471,7 +6473,7 @@
         SETTINGS.lowSpec = keep;
         return got === 'lei|0';
       })());
-    __ok('v0.64.0 **全部 37 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
+    __ok('v0.64.0 **全部 39 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
       + 'v1.0.17 的 grantRelic / onSummonDeath、v1.1.6 的 startTurn 腐毒跳伤）合起来覆盖了 FX_SHEETS 的全部键'
       + '（素材做了但没接线 = 白花钱出图，这条就是防它；两张芯片火焰走 CSS 循环、不经 playFx，按名单豁免）',
       (function () {
@@ -6482,7 +6484,7 @@
         var CSS_ONLY_FX = { shiqi_flame: 1, xuenu_flame: 1 };
         var RE = /playFx\('([a-z_]+)'/g;
         [dealDamageToPlayer, gainBlock, heal, duhunFlush, applyCurse, gainShiqi, gainRage, __realEnemyAct,
-         enemyActOne, enemyActTail, burstShow, grantRelic, onSummonDeath, startTurn].forEach(function (fn) {
+         enemyActOne, enemyActTail, burstShow, grantRelic, onSummonDeath, damoyingBurst, startTurn].forEach(function (fn) {
           var s = String(fn), m;
           RE.lastIndex = 0;
           while ((m = RE.exec(s)) !== null) { used[m[1]] = 1; }   // 取捕获组；别对整段 match 去字符（那是 'playFx('hurt'' → 'playxhurt'）
@@ -6848,10 +6850,10 @@
         var s = __code(__realSetBg);
         return /classList\.toggle\(\s*'evt-bg'\s*,\s*\/\^evt_\/\.test\(\s*_bgName\s*\)\s*\|\|\s*!!SCENE_BG\[\s*_bgName\s*\]\s*\)/.test(s);
       })());
-    __ok('v0.74.0 六张背景真的接上了各自的屏（逐函数查 setBg 实参，写错了名字这条会红）',
+    __ok('v0.74.0 四张背景真的接上了各自的屏（逐函数查 setBg 实参，写错了名字这条会红；'
+      + 'victory/defeat 两张整屏底已按"结算画面简化"撤掉）',
       (function () {
         var want = [[renderCampfire, 'campfire.jpg'], [renderShop, 'shop.jpg'],
-                    [showVictory, 'victory.jpg'], [loseGame, 'defeat.jpg'],
                     [showHeroSelect, 'hero_select.jpg'], [showReward, 'victory_reward.jpg']];
         return want.every(function (w) { return __code(w[0]).indexOf("setBg('" + w[1] + "')") >= 0; });
       })());
@@ -7350,9 +7352,9 @@
       __code(dealDamageToPlayer).indexOf('damoying') >= 0 &&
       typeof damoyingBurst === 'function' &&
       __code(damoyingBurst).indexOf('aliveEnemies') >= 0 && __code(damoyingBurst).indexOf('rng()') >= 0);
-    __ok('v1.1.4 浅显荆棘：玩家侧受击反伤与敌人侧反震都复用 sfx(\'thorns\') + playFx(\'thorns_light\') 立绘叠图',
-      __code(dealDamageToPlayer).indexOf('thorns_light') >= 0 && __code(dealDamageToPlayer).indexOf("sfx('thorns')") >= 0 &&
-      __code(applyDamageTo).indexOf('thorns_light') >= 0 && __code(applyDamageTo).indexOf("sfx('thorns')") >= 0);
+    __ok('v1.1.4 浅显荆棘：玩家侧受击反伤与敌人侧反震都复用 sfx(\'spark\') + playFx(\'damage_reflect\') 立绘叠图',
+      __code(dealDamageToPlayer).indexOf('damage_reflect') >= 0 && __code(dealDamageToPlayer).indexOf("sfx('spark')") >= 0 &&
+      __code(applyDamageTo).indexOf('damage_reflect') >= 0 && __code(applyDamageTo).indexOf("sfx('spark')") >= 0);
     __ok('v1.1.4 腐毒结算改为三角数（n(n+1)/2）：第 n 层掉 n(n+1)/2 点后 -1 层；applyPoisonAll 支持本牌叠加上限 cap',
       __code(startTurn).indexOf('(p*(p+1))/2') >= 0 &&
       __code(applyPoisonAll).indexOf('cap') >= 0);

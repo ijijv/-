@@ -231,24 +231,42 @@ function advanceAct(){
 const SETTLE_KIND={ tianshi:'', ganshiren:'heal', wuseng:'block', yincha:'to-player' };
 const SETTLE_NUMCLS={ '':'dmg', 'to-player':'hurt', 'block':'block', 'heal':'heal' };
 function settleKind(){ return SETTLE_KIND[(G && G.hero) || 'tianshi'] || ''; }
-/* 本局用时（毫秒）。起点 startTs 由 confirmNewGame / continueRun 落定并随存档往返。 */
-function runElapsedMs(s){ const g=s||G; return Math.max(0, Date.now() - ((g && g.startTs) || Date.now())); }
-/* 总分分项（用户口径：分数规则要包含剩余击杀 / 剩余金币 / 用时等）：
-     层数推进 = 幕数×1000 + 层数×50 · 击败敌人 = 击杀×8 · 剩余金币 = 金币×10 ·
-     剩余生命 = 生命×20 · 灵汁收获 = 瓶数×100 · 用时 = 每快 1 秒 +2（以 30 分钟为基准）；
-     通关额外 +5000（并入分项，不再由 showVictory 手动加）。 */
+/* 本局用时（毫秒）。v1.1.x（用户 2026-10-12）：改成「累计量 + 当前段」两段式 ——
+     · accMs = 已冻结的累计毫秒（每次 saveRun 结算一次）
+     · t0    = 当前计时段起点（新局 / 续档 / 存档后各自落定）
+   用时 = accMs + (now - t0)。切后台仍走真实墙钟（照样累计）；**存档期间停表**
+   （saveRun 把到此刻的累计量写进 accMs、并把 t0 挪到此刻 ⇒ 关掉游戏那段时间不再计入）。 */
+function runElapsedMs(s){ const g=s||G; if(!g) return 0;
+  return Math.max(0, (g.accMs||0) + (g.t0 ? (Date.now()-g.t0) : 0)); }
+/* 通关用时加分（**仅通关结算**，用户口径）：0~15min +3000 / 15~30min +1500 / 30~50min +800 / 50min 往后 +400。 */
+function clearTimeBonus(sec){
+  const m=(sec||0)/60;
+  if(m<15) return 3000;
+  if(m<30) return 1500;
+  if(m<50) return 800;
+  return 400;
+}
+/* 总分分项（用户 2026-10-12 定稿口径）：
+     层数推进 = 全局层号×40 · 普通击杀×10 · 精英击杀×20 · Boss 击杀×30 · 召唤物击杀×5 ·
+     剩余金币×8 · 剩余生命×10 · 灵汁剩余×40；用时加分与 +1000 通关加成**仅通关时**计入。
+   「层号」按**全局楼层**算：(幕-1)×14 + 当前层（1 基）—— 单调递增，契合「推进」语义。 */
 function scoreParts(s){
   const g=s||G; if(!g) return [];
-  const sec=Math.floor(runElapsedMs(g)/1000);
+  const floor=(Math.max(1,g.act|0)-1)*MAP_ROWS + Math.max(0,g.mapRow|0) + 1;
   const parts=[
-    { lab:'层数推进', val:(g.act|0)*1000 + Math.max(0,g.mapRow|0)*50 },
-    { lab:'击败敌人', val:Math.max(0,g.totalKills|0)*8 },
-    { lab:'剩余金币', val:(g.gold|0)*10 },
-    { lab:'剩余生命', val:Math.max(0,g.hp|0)*20 },
-    { lab:'灵汁收获', val:(g.potions?g.potions.length:0)*100 },
-    { lab:'用时', val:Math.max(0,1800-sec)*2 },
+    { lab:'层数推进', val:floor*40 },
+    { lab:'普通击杀', val:Math.max(0,g.killNormal|0)*10 },
+    { lab:'精英击杀', val:Math.max(0,g.killElite|0)*20 },
+    { lab:'首领击杀', val:Math.max(0,g.killBoss|0)*30 },
+    { lab:'召唤物击杀', val:Math.max(0,g.killSummon|0)*5 },
+    { lab:'剩余金币', val:(g.gold|0)*8 },
+    { lab:'剩余生命', val:Math.max(0,g.hp|0)*10 },
+    { lab:'灵汁剩余', val:(g.potions?g.potions.length:0)*40 },
   ];
-  if(g.finalBoss) parts.push({ lab:'通关加成', val:5000 });
+  if(g.finalBoss){
+    parts.push({ lab:'用时', val:clearTimeBonus(Math.floor(runElapsedMs(g)/1000)) });
+    parts.push({ lab:'通关加成', val:1000 });
+  }
   return parts;
 }
 function calcScore(){ let t=0; scoreParts().forEach(function(p){ t+=p.val; }); return t; }
@@ -312,6 +330,7 @@ function settleAnim(R){
   let aS=0, aM=0;
   for(let i=0;i<N;i++){ (function(i){
     setTimeout(function(){
+      sfx('number');   // v1.1.x：滚字滴答（每弹一条分项一声）
       const sr=sRows[i];
       if(sr){ sr.classList.add('on'); const v=sr.querySelector('.settle-val'); if(v) v.textContent='+'+R.sp[i].val; aS+=R.sp[i].val; if(sSum) sSum.textContent=String(aS); }
       const mr=mRows[i];
@@ -322,7 +341,7 @@ function settleAnim(R){
   setTimeout(function(){
     for(let k=0;k<n;k++){ (function(k){
       const idx=n-1-k;                      // 右到左：最末位先出
-      setTimeout(function(){ if(dS[idx]) dS[idx].classList.add('on'); if(dM[idx]) dM[idx].classList.add('on'); }, k*95);
+      setTimeout(function(){ sfx('number'); if(dS[idx]) dS[idx].classList.add('on'); if(dM[idx]) dM[idx].classList.add('on'); }, k*95);
     })(k); }
   }, N*150+280);
 }
@@ -335,18 +354,15 @@ function loseGame(){
   /* v1.0.19：**整局总分榜** —— 被击败即入榜（不用等玩家点「放弃」，直接关掉也算数）。
      复活后分数还会涨，recordScoreRun 按 startTs 去重取最高分 ⇒ 不会重复也不会记低分。 */
   recordScoreRun(false);
-  /* v0.74.0：失败专用整屏背景。三个出口各有归属 —— revive() 显式把战斗背景铺回去
-     （**它原先根本不调 setBg，这一句是本次必须补的**，否则复活后背后仍是那张败局图）；
-     giveUp() 保留这张图（「本局结束」本来就还是败局，观感一致）；showStartScreen() 走 setBg('menu')。 */
-  setBg('defeat.jpg');
+  /* v1.1.x（用户 2026-10-12）：**省去失败整屏背景图**（defeat.jpg）——
+     结算画面由角色败局视频的末帧承担背景，不再额外铺一张整屏图。
+     revive() 仍显式把战斗背景铺回去（`setBg('act'+G.act)`），不依赖这里。 */
   /* v1.0.15：失败也累计里程碑（幂等 —— 复活后再败/再胜不会重复发）。
      v1.1.x：结算画面重做 —— 透明浮层 + 左上「总分计算过程」+ 右上「里程分数」+ 右下按键，
      不再有 <h2> 标题、得分行、里程碑框等赘述；大号 num 浮字从右到左弹出组成总分。 */
   grantRunMilestones();
   const R=settleResultHTML('lose');
-  /* ⚠️ `setBg('defeat.jpg')` 留在上面**同步**执行，不挪进过场里：这一句是状态的一部分
-        （revive 要靠它被换回来）。
-     v1.1.x：结局接**角色败局视频**（settleVideo 内部无头/缺素材回落墨过场）。 */
+  /* v1.1.x：结局接**角色败局视频**（settleVideo 内部无头/缺素材回落墨过场）。 */
   settleVideo('lose', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); });
 }
 function giveUp(){
@@ -355,7 +371,9 @@ function giveUp(){
   G.score=sc;                 // v1.0.19：落定分数，供整局总分榜记录（放弃也算一整局）
   clearRunSave();
   recordScoreRun(false);
-  showOverlay(`<h2>本局结束</h2><p style="color:var(--gold)">最终得分 <b>${sc}</b></p><p>已结束本局（第 ${G.act} 幕）。</p><button class="btn" onclick="showStartScreen()">返回主菜单</button>`);
+  /* v1.1.x（用户 2026-10-12）：分数 / 里程已结算完，「放弃 · 结束本局」直接回主菜单 ——
+     不再多弹一层「本局结束」面板（结算画面已经承担了这件事）。 */
+  showStartScreen();
 }
 function revive(){
   G.dead=false;
@@ -387,11 +405,11 @@ function reviveAd(){
 function showVictory(){
   sfx('win');
   track('runWin');
-  G.finalBoss=true;                 // 通关即终局：结算画面的「通关加成 +5000」分项靠它（scoreParts）
+  G.finalBoss=true;                 // 通关即终局：结算画面的「用时 / 通关加成」分项靠它（scoreParts）
   G.score=calcScore();
-  /* v0.74.0：通关专用整屏背景。出口 startGame() 经 showHeroSelect()→setBg('hero_select.jpg')，
-     中途回主菜单则由 setBg('menu') 接管，恢复不用单独写。 */
-  setBg('victory.jpg');
+  /* v1.1.x（用户 2026-10-12）：**省去通关整屏背景图**（victory.jpg）——
+     结算画面由角色通关视频的末帧承担背景，不再额外铺一张整屏图。
+     出口 startGame() 经 showHeroSelect()→setBg('hero_select.jpg')，回主菜单由 setBg('menu') 接管。 */
   /* v1.0.14：通关即**终结本局** —— 清掉本局存档。根因是打出最后一张牌时 winFight() 直接 return，
      跳过了 saveRun()，本局档还停在进战斗前（打 Boss 时就是「Boss 战前」）⇒ 续档面板会留一份打不透的档。
      v1.0.17b：升级为 destroyRunSave() —— 置 RUN_FINISHED 拒写 + 删本场那槽 + 云端记脏。
@@ -525,6 +543,9 @@ function restoreEnemy(d){
 function saveRun(scene){
   if(!G) return;
   if(RUN_FINISHED) return;   // v1.0.17b：本局已终结（通关）⇒ 一个字都不许再落盘
+  /* v1.1.x（用户口径「存档可以暂时暂停时间计算」）：落档前把到此刻的累计用时**冻结**进 accMs，
+     并把计时锚点 t0 挪到此刻 ⇒ 存档 / 关掉游戏那段时间不计入；续档后从 accMs 继续累加。 */
+  G.accMs=runElapsedMs(G); G.t0=Date.now();
   const s=scene || SCENE || 'map';
   const data={
     v:3, scene:s,               // v3：新增 mapSeed（地图随机化的复现依据）
@@ -553,6 +574,9 @@ function saveRun(scene){
     shiqi:G.尸气||0, xuenu:G.xuenu||0, xisuiTurns:G.xisuiTurns||0, xisuiShiqi:G.xisuiShiqi||0,
     duhun:G.duhun||null, xuejiBonus:G.xuejiBonus||0, turnStats:G.turnStats||null,
     totalHpLost:G.totalHpLost||0, totalKills:G.totalKills||0, score:calcScore(),
+    /* v1.1.x：分档击杀计数（结算分数规则）与冻结后的累计用时 accMs —— 都要随档往返。 */
+    killNormal:G.killNormal||0, killElite:G.killElite||0, killBoss:G.killBoss||0, killSummon:G.killSummon||0,
+    accMs:G.accMs||0,
     startTs:G.startTs||0,        // v1.0.1：本局开局时刻（结算显示本局用时靠它，随存档往返）
     relics:G.relics||[], potions:(G.potions||[]).map(potionSnap),
     removeCount:G.removeCount||0, shopMarkup:G.shopMarkup||0, potionBought:G.potionBought||0,
@@ -595,6 +619,11 @@ function continueRun(slot){
   RUN_FINISHED=false;   // v1.0.17b：续起了这局（也只会续到未终结的档）⇒ 解除拒写
   G=newState();
   G.startTs=d.startTs||Date.now();   // v1.0.1：老档没有 startTs ⇒ 以本次续档时刻为计时起点
+  /* v1.1.x：用时两段式恢复 —— 老档（无 accMs）回落「now-startTs」，保持老行为；
+     新档从冻结的 accMs 继续累加；t0 一律取此刻 ⇒ 续档后从这一秒接着计时。 */
+  G.accMs=(d.accMs!=null)?Math.max(0,d.accMs|0):Math.max(0, Date.now()-G.startTs);
+  G.t0=Date.now();
+  G.killNormal=d.killNormal||0; G.killElite=d.killElite||0; G.killBoss=d.killBoss||0; G.killSummon=d.killSummon||0;
   rngRestore(d.rng);          // v0.61.06：先恢复随机态，再重放后续判定
   G.act=d.act; G.mapRow=d.mapRow; G.mapCol=d.mapCol; G.mapPath=Array.isArray(d.mapPath)?d.mapPath:[]; G.hero=d.hero; // 老存档没 mapPath → 空数组，连线退化成只有「可达」
   // v0.61.39 修 bug：G.hp/G.maxHp/G.gold 原先写在同一行末尾，被上面那句 `//` 注释整段吞掉，

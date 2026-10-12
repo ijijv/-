@@ -149,10 +149,28 @@ const SFX_TABLE = {
   ui_curtain:     [['b',.34,.30,2400,900],['t',620,.22,'sine',.10,0,1500],['t',1250,.14,'triangle',.08,.06,900]],
   ui_poster:      [['b',.13,.42,900,170],['t',250,.12,'triangle',.16,0,430],['t',430,.10,'sine',.10,.05,560]],
   ui_drag:        [['b',.09,.20,3000,1400],['t',760,.05,'triangle',.07,0,1300]],
+  /* K 组 · v1.1.x（用户交付真采样：素材/sfx/<键名>.wav —— 在就用素材，不在就走下面的合成兜底）
+     number        结算滚字滴答（总分 / 里程逐条 + 大号浮字逐位）
+     stone_broken  主界面「入塔 / 续」石碑崩碎（与 ui_stele 同族，换成真采样）
+     rank          主界面点皇榜 → 风云榜入口
+     boom          腐毒发作跳伤（配已有 素材/fx/fudu_hit.png）
+     energy        罗汉伏虎 / 铁布衫：蓝色元气汇聚冲散 */
+  number:         [['t',1180,.03,'triangle',.08]],
+  stone_broken:   [['b',.30,.55,1700,220],['t',150,.16,'square',.20,0,80],['t',430,.10,'triangle',.13,.07,320]],
+  rank:           [['t',660,.12,'triangle',.14,0,980],['t',990,.14,'sine',.12,.09,1320]],
+  boom:           [['b',.30,.50,1400,120],['t',120,.24,'sawtooth',.20,0,60]],
+  energy:         [['t',420,.26,'sine',.13,0,900],['t',640,.22,'sine',.11,.10,1200]],
+  /* L 组 · v1.1.x（用户交付真采样：素材/sfx/<键名>.wav —— 同 K 组机制，缺文件时走合成兜底）
+     spark      反伤 / 反震：金属火花迸溅（玩家反伤敌人、敌人反震玩家共用）
+     slash      饮血刃：利刃斩击
+     lightning  雷谴符：逐段落雷（按分段层数多段、紧凑连绵） */
+  spark:          [['b',.12,.34,3600,1200],['t',2400,.10,'triangle',.14,0,900]],
+  slash:          [['b',.10,.30,4000,1100],['t',1600,.09,'sawtooth',.12,0,1400]],
+  lightning:      [['b',.30,.46,2600,300],['t',120,.28,'sawtooth',.20,0,70],['t',1800,.14,'square',.12,.06,600]],
   /* 遗留键：新代码一律走 hit_light / hit_heavy / hit_crit 按伤害量分级，此键仅为兼容保留 */
   hit:            [['b',.14,.5,2000,160],['t',150,.12,'square',.2,0,70]]
 };
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 75 个键名（v1.0.23：+主菜单与里程碑 4 键 ⇒ 74 条复用组 + 遗留键 hit）
+const SFX_KEYS = Object.keys(SFX_TABLE);   // 83 个键名（v1.1.x：K 组 +5 真采样键 number/stone_broken/rank/boom/energy，L 组 +3 真采样键 spark/slash/lightning ⇒ 76 条复用组 + 遗留键 hit）
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;

@@ -35,6 +35,13 @@ function newState(){
     shiWangCard:null, ranhunType:null, ranhunSelf:null, endBlockKind:null, xiejiaUp:false,
     zhouhunSteal:0, stealWatch:false, stealAccum:0,   // 咒印(#42B)：咒魂吸血监视
     _mileGiven:false,   // v1.0.15：里程碑「一局只发一次」的幂等守卫（新局由 newState 重置）
+    /* v1.1.x（用户 2026-10-12 分数规则）—— 分档击杀计数（结算时各自乘系数）：
+       普通 ×10 / 精英 ×20 / Boss ×30 / 敌方召唤物 ×5。totalKills 仍是里程碑用的总数。 */
+    killNormal:0, killElite:0, killBoss:0, killSummon:0,
+    /* v1.1.x：本局用时计时。accMs = 已冻结的累计毫秒（每次存档时结算一次）；
+       t0 = 当前计时段起点（续档 / 新局 / 存档后各自落定）。用时 = accMs + (now - t0)。
+       ⇒ 挂在后台照样走真实墙钟；**存档期间停表**（saveRun 把累计量写进 accMs 并把 t0 挪到此刻）。 */
+    accMs:0, t0:0,
     exhausted:[] };   // 本关已消耗的牌（战斗结束清空回牌库）
 }
 
@@ -118,7 +125,7 @@ function applyDamageTo(e,d,ignoreBlock,point,hitNormal,floatDelay){
   if(G.stealWatch){ G.stealAccum=(G.stealAccum||0)+actual; } // 咒印(#42B)：累计这张攻击牌的实际伤害，供 100% 吸血
   e.hp-=d; G.turnStats.dealt+=d; afterEnemyDamaged(e);
   if(duhunActive() && actual>0){ DUHUN_ACC+=actual; if(!DUHUN_BATCH) duhunFlush(); } // v0.61.33：攒批，批外（如敌人自伤类）单发即结
-  if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; sfx('thorns'); playFx('thorns_light', 'player'); log(`${e.name} 反震：反弹 ${r} 点伤害`); if(G.hero==='yincha' && r>0) gainRage(r); } }   // v1.1.4：敌人侧反震补上金属碰撞音效 + 玩家立绘的浅显荆棘叠图
+  if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; sfx('spark'); playFx('damage_reflect', 'player', {mirror:true}); log(`${e.name} 反震：反弹 ${r} 点伤害`); if(G.hero==='yincha' && r>0) gainRage(r); } }   // v1.1.x：反伤统一改用 damage_reflect 精灵图 + spark 音；敌人反震玩家 ⇒ **镜像**翻面
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ sfx('kw_yehuo'); G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.hpLostTurn=(G.hpLostTurn||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); if(G.hero==='yincha') gainRage(1); }
   /* v0.61.25：打击层按「打在什么上 / 打了多少 / 有没有打死」分级；
      point=true 是连击的逐段调用，改用极短的 atk_multi_each（60ms 一发也不糊）。 */
@@ -507,7 +514,7 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
   if(full>0){
     /* 罗汉拳套[蓝·武僧]（v1.1.4：反伤 1→2）+ 铁壁[t2·武僧·纯机制]：永久自带反伤，与临时【荆棘】叠加。 */
     const _th=(G.thorns||0)+relicThorns()+mileThorns();
-    if(_th>0){ sfx('thorns'); playFx('thorns_light', enemyEl(attacker)); attacker.hp-=_th; log(`荆棘/反震：反弹 ${_th} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }
+    if(_th>0){ sfx('spark'); playFx('damage_reflect', enemyEl(attacker)); attacker.hp-=_th; log(`荆棘/反震：反弹 ${_th} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }   // v1.1.x：玩家反伤敌人 —— 反伤精灵图基准朝向 + spark 音
     if((G.hitHeal||0)>0){ heal(G.hitHeal); log(`荆棘符：受击恢复 ${G.hitHeal} 点生命`); }
     if((G.hitCurse||0)>0){ applyCurse(attacker, G.hitCurse); log(`铜皮/荆棘：对 ${attacker.name} 施加 ${G.hitCurse} 层【诅咒】`); }
     if((G.hitShiqi||0)>0){ gainShiqi(G.hitShiqi); log(`反震：受击获得 ${G.hitShiqi} 点【尸气】`); }
@@ -580,6 +587,14 @@ function onEnemyDeathCheck(e){
   if(e.phase && !e.phase2){ enterPhase2(e); }
   else {
     G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; if(G.totalKills>=100) unlockAchievement('baizhan'); unlockBestiary(e.key);
+    /* v1.1.x（用户 2026-10-12 分数规则）：击杀按档位分开计数 —— 普通 ×10 / 精英 ×20 / Boss ×30 / 召唤物 ×5。
+       召唤物判据走**定义上的 summon 标记**（ENEMIES[key].summon 只被召唤意图用到，
+       这两个 id 从不进地图敌人池 ⇒ 不会把正常小怪误记成召唤物）。 */
+    const _def=ENEMIES[e.key]||{};
+    if(_def.summon) G.killSummon=(G.killSummon||0)+1;
+    else if(e.boss) G.killBoss=(G.killBoss||0)+1;
+    else if(e.elite) G.killElite=(G.killElite||0)+1;
+    else G.killNormal=(G.killNormal||0)+1;
     e.dying=true; sfx('death');
     /* v0.76.0：被击败档，与 `dying=true` **同刻**发 ⇒ 气泡与 450ms 的消散同窗。
        此刻 DOM 还没重排，`enemyEl(e)` 量得到（阵亡敌人靠 `||e.dying` 留到收尾 render）。 */
@@ -630,6 +645,7 @@ function gainBlock(n){
       G.blockAccum-=50;
       G.hand.push(Object.assign({}, cardById('tiebushan'), {cost:0, costU:null, oneShot:true}));
       sfx('relic_proc'); floatMsg('金刚杵 · 铁布衫'); log('金刚杵：累计格挡满 50，手牌获得 1 张临时【铁布衫】');
+      jingangchuFx();   // v1.1.x：格挡累积位冒烟 → 飞向手牌区幻化为一张铁布衫（短动画，不挡出牌）
     }
   }
 }
@@ -810,18 +826,28 @@ function toggleWuleiPick(i){
   renderWuleiSelect();
 }
 function confirmWuleiSelect(){
-  const s=G.wuleiSelect; if(!s) return;
+  const s=G.wuleiSelect; if(!s || s.confirming) return;
   if(!s.picked.length){ floatMsg('至少选 1 张'); return; }
-  const lf=cardById('leifu');
-  let n=0;
-  [...s.picked].sort((a,b)=>b-a).forEach(i=>{
-    if(!G.hand[i]) return;
-    /* 原地替换：保住手牌顺序（顺序类断言都压在手牌下标上）。 */
-    G.hand[i]=Object.assign({}, lf, {cost:0, costU:null, oneShot:true, up:!!s.up});
-    n++;
-  });
-  sfx('ui_unlock'); log(`五雷法印：${n} 张手牌化为 0 费${s.up?'升级':''}【雷符】（本场临时）`);
-  G.wuleiSelect=null; hideOverlay(); render(); saveRun();
+  const doSwap=function(){
+    const lf=cardById('leifu');
+    let n=0;
+    [...s.picked].sort((a,b)=>b-a).forEach(i=>{
+      if(!G.hand[i]) return;
+      /* 原地替换：保住手牌顺序（顺序类断言都压在手牌下标上）。 */
+      G.hand[i]=Object.assign({}, lf, {cost:0, costU:null, oneShot:true, up:!!s.up});
+      n++;
+    });
+    sfx('ui_unlock'); log(`五雷法印：${n} 张手牌化为 0 费${s.up?'升级':''}【雷符】（本场临时）`);
+    G.wuleiSelect=null; hideOverlay(); render(); saveRun();
+  };
+  /* 无头/关特效：直接换牌（断言与逻辑不受视觉影响） */
+  if(!animLive() || menuFxOff()){ doSwap(); return; }
+  /* 被选中的手牌先冒烟，烟散后原地变成断刃雷符 */
+  s.confirming=true;
+  const nodes=Array.prototype.slice.call(document.querySelectorAll('.reward-cards .card'));
+  s.picked.forEach(i=>{ const el=nodes[i]; if(el && el.classList) el.classList.add('is-smoking'); });
+  sfx('card_exhaust');
+  setTimeout(function(){ try{ doSwap(); }catch(e){} }, 520);
 }
 function cancelWuleiSelect(){
   const s=G.wuleiSelect; if(!s) return;
@@ -1130,6 +1156,7 @@ function startTurn(){
       const p=e.poison, pd=(p*(p+1))/2, el=enemyEl(e);
       e.hp=Math.max(0, e.hp-pd);
       if(el){ playFx('fudu_hit', el); floatDamage('-'+pd, '', el, {}); }   // v1.1.6：腐毒跳伤改用专属毒雾精灵图
+      sfxOnce('boom', 90);   // v1.1.x：腐毒造成伤害时配 boom 采样（节流，避免多敌同帧叠成和弦）
       log(`${e.name} 腐毒发作，失去 ${pd} 点生命（${p} 层三角结算）`);
       e.poison=Math.max(0, e.poison-1);
       if(e.hp<=0) onEnemyDeathCheck(e);

@@ -164,7 +164,7 @@ const CARDS = [
       if(G.hero==='ganshiren') d+=Math.floor((G.尸气||0)/2)*(u?2:1);
       else if(G.hero==='yincha'){ loseHp(2); }
       else if(G.hero==='tianshi'){ const __c=(t.curse||0); d+=__c*(u?2:1); if(__c>0) sfx('kw_curse'); }   // v0.61.32
-      if(d>0){ dealDamageTo(t,d); if(G.hero==='tianshi') t.curse=0; }   // v1.0.13：引爆挪到结算之后（同雷符）
+      if(d>0){ yuanqiStrike(t); sfx('energy'); dealDamageTo(t,d); if(G.hero==='tianshi') t.curse=0; }   // v1.0.13：引爆挪到结算之后（同雷符）
       else log('铁布衫：当前没有格挡，落空'); }},
   {id:'shihun', name:'噬魂术', type:'attack', rarity:'blue', cost:2,
     t:(u)=>G.hero==='ganshiren'?`消耗 ${u?2:4} 点【尸气】，对目标造成 ${u?18:14} 伤害。若本回合召唤过单位，费用 -1`
@@ -618,10 +618,36 @@ const CARDS = [
       ? `对全体敌人按其各自的【诅咒】层数打出等量雷击（第 n 段 n 点；6 层 = 21 伤），随后清空各自的【诅咒】`
       : `对全体敌人按其各自的【诅咒】层数各打 2 点雷击（6 层 = 12 伤），随后清空各自的【诅咒】`,
     eff:(u)=>{ const es=aliveEnemies().slice(); if(!es.length) return; let any=false;
+      const step=90;   // v1.1.x：多段雷击更紧凑（原 dealDamageTo 默认 110）
       es.forEach(t=>{ const c=t.curse||0; if(c<=0) return; any=true;
-        for(let i=1;i<=c;i++){ if(t.hp<=0) break; dealDamageTo(t, u ? i : 2); }
+        const uid=t.uid, snapEl=enemyEl(t);
+        /* v1.1.x：**逐段雷击** —— 每段各自扣血 / 各自飘字 / 各自触发逐击反应，
+           并配 lightning 落雷精灵图（每段一记，key 带段号 ⇒ 同名重播）+ lightning.wav 分段多段雷音（紧凑连绵）。
+           流畅模式 / 无头（enemyActBeats 为假）仍一次算完（冒烟与低配档逐字节不变）。 */
+        for(let i=1;i<=c;i++){
+          const d=calcDamageTo(t, u?i:2, false, false);
+          if(!enemyActBeats()){
+            if(t.hp<=0) break;
+            applyDamageTo(t, d, false, false, false, 0);
+            continue;
+          }
+          (function(i,d){
+            setTimeout(function(){
+              try{
+                if(t.hp>0) applyDamageTo(t, d, false, true, false, 0);
+                const live=uid ? document.querySelector('#enemy-panel .enemy[data-uid="'+uid+'"]') : null;
+                playFx('lightning', live||snapEl, { key:'lqf@'+uid+'#'+i });
+                sfxOnce('lightning', 55);
+                syncBattleHpDom();
+              }catch(e){}
+            }, (i-1)*step);
+          })(i,d);
+        }
         t.curse=0; });
-      if(any) log('雷谴符：清算全体敌人身上的【诅咒】为雷击'); }},
+      if(any) log('雷谴符：清算全体敌人身上的【诅咒】为雷击');
+      if(any && enemyActBeats()){
+        setTimeout(function(){ try{ syncBattleHpDom(); if(!G.battleOver && G.hp>0 && aliveEnemies().length===0) winFight(); }catch(e){} }, 6*step+40);
+      } }},
   /* t5：五雷法印 —— 把至多 5 张手牌化为 0 费【雷符】（**本场临时**，oneShot 不进牌堆循环）。
      未打出的会在本回合末依次自动打出，默认击向**绝对血量最少**的敌人（见 30_engine 的 autoPlayWulei）。
      0 费副本与【断刃雷符】同数值，但挂 oneShot ⇒ 用掉即消失，不重洗、不留到下一关。 */
@@ -660,6 +686,7 @@ const CARDS = [
   {id:'luohanfuhu', name:'罗汉伏虎', type:'attack', rarity:'blue', cost:1, hero:'wuseng', mile:'wuseng_t1',
     t:(u)=>`造成 ${u?7:5} 点伤害，额外加上你当前格挡的一半（上限${u?15:10}，向下取整）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return; const bonus=Math.min(Math.floor((G.block||0)/2), u?15:10);
+      yuanqiStrike(t); sfx('energy');
       dealDamageTo(t, (u?7:5)+bonus); if(bonus>0) log(`罗汉伏虎：额外加上格挡的一半 ${bonus} 点`); }},
   {id:'huajiaweidu', name:'化甲为毒', type:'skill', rarity:'purple', cost:0, hero:'wuseng', mile:'wuseng_t3',
     t:(u)=>`消耗 10 点格挡，为全体敌人施加 1 层【腐毒】（本牌叠加上限 ${u?5:4} 层）`,
@@ -1117,7 +1144,14 @@ const CARD_SFX = {
   fuling:'card_buff',        xisui:'card_buff',
   /* E 组·天师里程碑（v1.1.2）：三张奖励牌逐张点名 —— 出牌即响，不依赖任何收口点。
      点咒符落咒 → 诅咒音；雷谴符群雷 → 符咒音（与雷符/天雷正法同族）；五雷法印是自身强化 → 强化音。 */
-  dianzhoufu:'card_curse',   leiqianfu:'atk_talisman',  wuleifayin:'card_buff'
+  dianzhoufu:'card_curse',   leiqianfu:'lightning',     wuleifayin:'card_buff',
+  /* E 组补（v1.1.x 审计）：里程碑里这两张原本**没有任何收口点**可依（饮血刃是纯攻击、
+     焚身咒是纯自身增益），不点名就只有通用 'card' 那一声 ⇒ 这里逐张补上。
+     其余里程碑牌的音效都已被收口点覆盖，登记反而会同一帧叠两遍：
+       赶尸令 / 万尸朝宗 / 阴兵 → addSummon 的 card_summon；
+       化甲为毒 → applyPoisonAll 的 card_curse；点咒符 → applyCurse 的 card_curse；
+       罗汉伏虎 / 铁布衫 → eff 里的 sfx('energy')。 */
+  yinxueren:'slash',         fenshenzhou:'card_buff'
 };
 function cardSfxFor(c){ return (c && CARD_SFX[c.id]) || null; }
 
@@ -1160,6 +1194,14 @@ const FX_SHEETS = {
   jiangshi:    { c:8, f:34, f0:40, rows:6, i0:5, scale:1.98, ox:0, oy:0.27 },   // 召唤僵尸手（僵王）　素材 40 帧，两端看不见的 6 帧不播
   jinzhong:    { c:8, f:41, f0:43, rows:6, i0:1, scale:1.82, ox:0, oy:0.2 },   // 金光罩 / 金钟罩　素材 43 帧，两端看不见的 2 帧不播
   lei:         { c:8, f:11, f0:19, rows:5, scale:1.05 },   // 雷符　素材 19 帧，两端看不见的 8 帧不播
+  /* v1.1.x：雷谴符**逐段落雷**（用户素材 lightning_3840x2880_32.png —— 8 列 × 6 行、
+     单元 480×480、48 帧，整格都有内容 ⇒ 不写 f0）。scale 取与 burn/fudu_hit 同族的大特效档。 */
+  lightning:   { c:8, f:48, rows:6, i0:0, scale:2.47 },
+  /* v1.1.x：反伤 / 反震**共用**这张精灵图（用户素材 damage_reflect_3840x2880_32.png —— 8 列 × 6 行、
+     单元 480×480、48 帧，整格都有内容 ⇒ 不写 f0）。
+     玩家反伤给敌人 → 锚在敌人；敌人反震给玩家 → 锚在玩家并**镜像**（playFx 的 opts.mirror）。
+     scale 取与 burn/fudu_hit 同族的大特效档。 */
+  damage_reflect: { c:8, f:48, rows:6, i0:0, scale:2.47 },
   lifesteal:   { c:8, f:34, f0:37, rows:5, i0:1, scale:1.43, ox:0.15, oy:0.17 },   // 吸血 / 渡魂归己　素材 37 帧，两端看不见的 3 帧不播
   /* v1.0.14 多段斩击：**一行 = 一个方向**（8 帧一记斩痕），6 行 = 6 个方向。
      播哪一行由 `opts.i0` 现定（`burstShow` 按斩击段数轮流取方向，i0 = 方向 × 8），
@@ -1217,10 +1259,13 @@ const CARD_FX = {
   /* 鬼怪 · 召唤（召唤物只在顶栏有小字，战场上没有格子 ⇒ 锚点在屏幕中心） */
   zhiren:{n:'zhiren',a:'summon'},     xiaogui:{n:'xiaogui',a:'summon'},
   yinbingguo:{n:'yinbing',a:'summon'},shi_wang:{n:'shiwang',a:'summon'},
+  /* v1.1.x 审计补：0 费【阴兵】本体（引魂灯发牌）也沿承【阴兵过境】的召唤精灵图 ——
+     之前只靠 addSummon 的黑雾，牌本体没有自己的特效。 */
+  yinbing:{n:'yinbing',a:'summon'},
   /* 天师里程碑（v1.1.2）：雷谴符是群雷 → 战场锚点（复用雷符的雷击精灵图）；
      五雷法印是自身强化 → 玩家锚点（复用遗物触发金光 relic_proc）。
      点咒符**不在此表**：它的落咒走 applyCurse 的 playFx('curse') 收口点，登记了会同一帧放两遍。 */
-  leiqianfu:{n:'lei',a:'field'},
+  leiqianfu:{n:'lightning',a:'field'},   // v1.1.x：雷谴符逐段清算改用用户交付的落雷精灵图（lightning）
   wuleifayin:{n:'relic_proc',a:'player'},
   /* 茅山赶尸人里程碑（v1.1.3）：赶尸令 / 万尸朝宗都是「召唤纸人」⇒ 沿承【纸人】的召唤精灵图
      （往屏幕中心 summon 锚点放）。逐只召唤的黑雾另由 addSummon 的 summonMistFx 收口，
@@ -1285,7 +1330,7 @@ function gainRage(n){ if(!n || n<=0) return;
      读数 G.rageAccum 挂在血怒标识旁，见 js/60_boot.js 顶栏）。 */
   if(hasRelic('ranxueling') && _got>0){
     G.rageAccum=(G.rageAccum||0)+_got;
-    while(G.rageAccum>=20){ G.rageAccum-=20; G.energy+=1; floatMsg('燃血令 · 符文 +1'); log(`燃血令：累积血怒满 20，获得 1 点符文（现 ${G.energy}）`); }
+    while(G.rageAccum>=20){ G.rageAccum-=20; G.energy+=1; floatMsg('燃血令 · 符文 +1'); log(`燃血令：累积血怒满 20，获得 1 点符文（现 ${G.energy}）`); ranxuelingFx(); }   // v1.1.x：血怒累积位凝血滴→淡红飘带→符文标识凝符文并融入
   } }
 function rageLayers(){ return G.xuenu||0; }
 /* per=每层加成, cap=加成上限：返回可使用的层数，并就地消耗 */

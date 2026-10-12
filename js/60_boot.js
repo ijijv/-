@@ -744,6 +744,7 @@ function confirmNewGame(slot){
     RUN_FINISHED=false;                // v1.0.17b：新局开工 ⇒ 解除「已终结」拒写（见 40_flow.js saveRun 守卫）
     G=newState(); G.mapRow=0;
     G.startTs=Date.now();                        // v1.0.1：本局开局时刻（结算时算本局用时，随存档往返）
+    G.accMs=0; G.t0=Date.now();                  // v1.1.x：计时两段式复位（新局从 0 起算，锚点=此刻）
     const __sd=rngSeedNow(); seedRng(__sd);      // v0.61.06：本局种子（可用 ?seed=N 复现）
     G.mapSeed=__sd; buildActs(__sd); G.mapRow=0; // v0.61.40：按种子生成本局三幕随机地图
     track('runStart');
@@ -1040,6 +1041,8 @@ function showSettings(){
 let RANK_VIEW='clear_total';
 let RANK_SRC='online';     // 'online' = 天下榜（TapTap 全平台） | 'local' = 本机记录
 let RANK_PERIOD='week';    // 'week' = 本周 | 'all' = 历来（本机榜按 ts 过滤；全平台榜由后台定周期）
+/* v1.1.x：本机榜「我的最佳战绩」用的真名真头像（rankSelf 探测到的 TapTap 昵称/头像，异步回填）。 */
+let RANK_SELF_CACHE={name:'', avatar:''};
 const RANK_CAT={clear_total:'通关总榜', clear_tianshi:'符箓天师', clear_ganshiren:'赶尸人',
                 clear_wuseng:'武僧', clear_yincha:'阴差', total_score:'整局总分'};
 /* 角色印章：符 / 尸 / 禅 / 冥（替换现代奖牌，见 GAME_MIGRATION.md §1）。 */
@@ -1064,7 +1067,7 @@ function rankBack(){
 function rankOpen(btn){
   if(MENU_BUSY) return;
   menuBusy(true);
-  sfx('ui_unlock');                       // 皇榜展开：既不是碎石（入塔/续）也不是窗帘（符纸）
+  sfx('rank');                            // v1.1.x：皇榜展开换成用户交付的 rank 采样（素材缺则合成兜底）
   if(btn && btn.classList) btn.classList.add('is-lighting');
   const off=menuFxOff();
   setTimeout(function(){ menuBusy(false); showClearTimes(); }, off?40:340);
@@ -1076,19 +1079,39 @@ function rankLocalList(b){
   return src.filter(r=>!b.hero||r.hero===b.hero)
             .filter(r=>RANK_PERIOD!=='week'||(r.ts||0)>=lim);
 }
-/* 行数据统一形状（本机 / 全平台两路归一）—— 全平台只给 { rank, score, nickname }，
-   其余字段留空由渲染层兜底（见 GAME_MIGRATION.md §4「长昵称 / 非中文昵称」的容错口径）。 */
-function rankRows(b, list, online){
-  return (list||[]).map((r,i)=>{
-    const v=(r&&r.score!=null)?r.score:(r&&r.statisticValue!=null?r.statisticValue:(r&&r.value));
-    const ms=(r&&r.ms!=null)?r.ms:v;
+/* 行数据统一形状（本机 / 全平台两路归一）。
+   v1.1.x 两处改动：
+     ① **真名真头像**：全平台行直接用 TapTap 返回的 nickname/avatar；本机行用 rankSelf 探测到的
+        当前玩家昵称/头像（拿不到回落「我」），不再写「道友」「无名道人」。
+     ② **「1 秒通关」脏数据**：早期版本按「秒」提交过一批成绩，全平台 clear 榜里会混入 1~59 秒的
+        假记录（本游戏不可能 60 秒内通关）⇒ 展示时按用时榜口径过滤掉 < 60s 的条目。
+   self = { name, avatar, rank, score }（rankSelf + loadCurrentPlayerLeaderboardScore 合体，可缺省）。 */
+function rankRows(b, list, online, self){
+  self = self || {};
+  const arr = (list||[]);
+  const msOf = r => (r&&r.ms!=null) ? r.ms
+    : ((r&&r.score!=null) ? r.score
+      : (r&&r.statisticValue!=null ? r.statisticValue : (r&&r.value)));
+  const clean = (online && b.kind==='clear')
+    ? arr.filter(r=>{ const v=msOf(r); return !(v!=null && v>0 && v<60000); })
+    : arr;
+  return clean.map((r,i)=>{
+    const v = msOf(r);
+    const rank = (r&&r.rank)||(i+1);
+    const nm = online ? String((r&&(r.nickname||r.name||r.rankName||r.userName))||'').slice(0,12)
+                      : String(self.name||'我').slice(0,12);
+    const av = online ? String((r&&(r.avatar||r.avatarUrl||r.headImg||r.headUrl||r.icon))||'')
+                      : String(self.avatar||'');
+    const me = online ? ((!!self.name && !!nm && nm===self.name)
+                         || (self.rank!=null && rank===self.rank
+                             && (self.score==null || v===self.score)))
+                      : true;
     return {
-      i:i,
-      rank:(r&&r.rank)||(i+1),
+      i:i, rank:rank, me:me,
       seal:rankSeal((r&&r.hero)||b.hero),
-      name:online?(String((r&&(r.nickname||r.name||r.rankName||r.userName))||'道友').slice(0,12)):'无名道人',
+      name:nm||'道友', avatar:av,
       role:online?(b.hero?heroName(b.hero):'天下道友'):heroName(r&&r.hero),
-      a:(b.kind==='score')?rankInt(v):fmtMMSS(ms),
+      a:(b.kind==='score')?rankInt(v):(v==null?'—':fmtMMSS(v)),
       b:(b.kind==='score')?(online?'—':((r&&r.win)?'通关':'第'+((r&&r.act)||1)+'幕止步')):rankInt(r&&r.score),
       date:online?'—':rankDateStr(r&&r.ts)
     };
@@ -1100,21 +1123,26 @@ function rankTableHTML(b, rows){
     <span style="text-align:right">${b.kind==='score'?'结果':'整局得分'}</span>
     <span style="text-align:right">留名日期</span></div>`;
   if(!rows.length) return head+`<div class="rk-empty">此榜尚无留名，静候道友一展神通。</div>`;
-  return head+rows.map(r=>`<div class="rk-tr${r.i<3?' r'+r.i:''}">
-    <span class="rk-rn">${String(r.i+1).padStart(2,'0')}</span>
-    <span class="rk-pl"><span class="ms">${r.seal}</span><b>${r.name}</b></span>
+  return head+rows.map(r=>{
+    const rk=r.rank||(r.i+1);
+    return `<div class="rk-tr${rk<=3?' r'+(rk-1):''}${r.me?' me':''}">
+    <span class="rk-rn">${String(rk).padStart(2,'0')}</span>
+    <span class="rk-pl">${r.avatar
+      ? `<span class="ms rk-av"><img src="${r.avatar}" alt=""></span>`
+      : `<span class="ms">${r.seal}</span>`}<b>${r.name}</b></span>
     <span class="rk-tm">${r.a}</span>
     <span class="rk-sc">${r.b}</span>
-    <span class="rk-dt">${r.date}</span></div>`).join('');
+    <span class="rk-dt">${r.date}</span></div>`;
+  }).join('');
 }
 function rankPodiumHTML(rows){
   if(rows.length<3) return '';
   const order=[1,0,2], deco=['榜 眼','魁 首','探 花'], yin=['贰','壹','叁'];
   return `<div class="rk-podium">`+order.map((k,j)=>{
     const r=rows[k]; if(!r) return '';
-    return `<div class="rk-champ${k===0?' p1':''}">
+    return `<div class="rk-champ${k===0?' p1':''}${r.me?' me':''}">
       <div class="rk-deco">${deco[j]}</div>
-      <div class="rk-seal">${r.seal}</div>
+      <div class="rk-seal${r.avatar?' rk-av':''}">${r.avatar?`<img src="${r.avatar}" alt="">`:r.seal}</div>
       <div class="rk-nm">${r.name}</div>
       <div class="rk-role">${r.role}${k===0?' · 魁首':''}</div>
       <div class="rk-time">${r.a}</div></div>`;
@@ -1133,14 +1161,18 @@ function showClearTimes(view){
   const cats=boards.map(x=>`<button class="rk-cat${x.id===b.id?' on':''}" onclick="showClearTimes('${x.id}')">
       <span class="sym">${rankSeal(x.hero)}</span>${RANK_CAT[x.id]||x.name}${x.id==='clear_total'?'<span class="tag">总</span>':''}</button>`).join('');
   const best=rankLocalBest(b);
+  /* v1.1.x：本机榜的「我」用 TapTap 真实昵称 + 头像（rankSelf 异步回填，见 rankSelfFill）；
+     拿不到就回落「我」，不再写「无名道人」。 */
+  const myName=(RANK_SELF_CACHE.name||'我');
+  const myAv=RANK_SELF_CACHE.avatar;
   const mineTxt = best
     ? `<span class="rk-myrank">我的<small>最佳战绩</small></span>
-       <span class="rk-seal">${rankSeal(best.hero)}</span>
-       <span class="rk-mynm"><b>无名道人</b><small>${heroName(best.hero)}</small></span>
+       <span class="rk-seal${myAv?' rk-av':''}" id="rk-myav">${myAv?`<img src="${myAv}" alt="">`:rankSeal(best.hero)}</span>
+       <span class="rk-mynm"><b id="rk-mynm">${myName}</b><small>${heroName(best.hero)}</small></span>
        <span class="rk-num">${b.kind==='score'?rankInt(best.score):fmtMMSS(best.ms)}<small>${b.kind==='score'?'整局得分':'通关用时'}</small></span>
        <span class="rk-num">${b.kind==='score'?((best.win)?'通关':'第'+((best.act)||1)+'幕止步'):rankInt(best.score)}<small>${b.kind==='score'?'结果':'整局得分'}</small></span>`
     : `<span class="rk-mynm" style="margin-left:2px">本机暂无战绩 —— 打上塔顶，用时就会记在这里。</span>`;
-  const upBtn=`<button class="rk-btn"${best?'':' disabled'} onclick="rankUploadBest('${b.id}')">上传最佳成绩</button>`;
+  /* v1.1.x：已按用户要求去掉「上传最佳成绩」按钮 —— 通关 / 结算时自动提交（见 recordClearTime / recordScoreRun）。 */
   const tapBtn=online?`<button class="rk-btn ghost" onclick="rankOpenThis('${b.id}')">TapTap 榜单 ›</button>`:'';
   const periodHTML=(RANK_SRC==='local')
     ? `<div class="rk-period"><button class="${RANK_PERIOD==='week'?'on':''}" onclick="rankSetPeriod('week')">本周</button><button class="${RANK_PERIOD==='all'?'on':''}" onclick="rankSetPeriod('all')">历来</button></div>` : '';
@@ -1157,7 +1189,7 @@ function showClearTimes(view){
     bodyHTML=`<div class="rk-podium" id="rk-pod"></div><div class="rk-table" id="rk-table">
         <div class="rk-empty">全平台榜读取中…</div></div>`;
   }else{
-    const rows=rankRows(b, rankLocalList(b), false);
+    const rows=rankRows(b, rankLocalList(b), false, RANK_SELF_CACHE);
     bodyHTML=rankPodiumHTML(rows)+`<div class="rk-table">${rankTableHTML(b,rows)}</div>`;
   }
   showOverlay(`<div class="rk-root"><div class="rk-scroll">
@@ -1180,12 +1212,13 @@ function showClearTimes(view){
           <div class="rk-cap"><span>◇ ${caption}</span><span>${RANK_SRC==='online'?'全平台 · 实时读取':near}</span></div>
           ${bodyHTML}
           <div class="rk-foot"><span>前三甲 · 十强 · 天下道友</span><span>名次有先后，道心无高下</span></div>
-          <div class="rk-mine">${mineTxt}${upBtn}${tapBtn}</div>
+          <div class="rk-mine">${mineTxt}${tapBtn}</div>
         </section>
       </div>
     </div>
   </div></div>`, false, 'rank-scene');
   if(RANK_SRC==='online') rankFillOnline(b);
+  rankSelfFill();
 }
 function rankSetSrc(s){ RANK_SRC=s; showClearTimes(); }
 function rankSetPeriod(p){ RANK_PERIOD=p; showClearTimes(); }
@@ -1196,10 +1229,28 @@ function rankLocalBest(b){
   if(b.kind==='score') return readScores()[0]||null;
   return readClearTimes().filter(r=>!b.hero||r.hero===b.hero)[0]||null;
 }
+/* v1.1.x：异步回填「我的」真名 / 头像（rankSelf 探测结果）——
+   榜单是先 showOverlay 再填，所以这里只改现存 DOM 节点（节点不在就安静返回），不重排整屏。 */
+function rankSelfFill(){
+  if(typeof rankSelf!=='function') return;
+  rankSelf().then(s=>{
+    RANK_SELF_CACHE.name=(s&&s.name)||RANK_SELF_CACHE.name||'';
+    RANK_SELF_CACHE.avatar=(s&&s.avatar)||RANK_SELF_CACHE.avatar||'';
+    const nm=document.getElementById('rk-mynm');
+    if(nm && RANK_SELF_CACHE.name) nm.textContent=RANK_SELF_CACHE.name;
+    const av=document.getElementById('rk-myav');
+    if(av && RANK_SELF_CACHE.avatar){
+      av.classList.add('rk-av');
+      av.innerHTML='<img src="'+RANK_SELF_CACHE.avatar+'" alt="">';
+    }
+  }, ()=>{});
+}
 /* 全平台榜那一块：有接口 ⇒ 拉前排填进新面板的 #rk-table / #rk-pod；
    没接口 ⇒ 把探测到的真实方法名亮出来（真机回报一次就能定接口）。
    ⚠️ 面板是「先 showOverlay 再填」——因为 rankFetch 是异步的，
-      所以这里只读 DOM、不做布局假设（元素不在就安静返回）。 */
+      所以这里只读 DOM、不做布局假设（元素不在就安静返回）。
+   v1.1.x：并发取「我」的真实昵称 / 头像（rankSelf）与「我在此榜的名次」（rankSelfScore），
+           合体成 self 交给 rankRows ⇒ 真名真头像 + 标出本账号那一行。 */
 function rankFillOnline(b){
   b=b||rankBoardById(RANK_VIEW);
   const table=document.getElementById('rk-table');
@@ -1209,7 +1260,9 @@ function rankFillOnline(b){
     table.innerHTML=`<div class="rk-empty">全平台榜：未接入 —— ${rankDiag()}</div>`;
     return;
   }
-  rankFetch(CLEAR_MAX, b.id).then(res=>{
+  const selfP=(typeof rankSelf==='function')?rankSelf():Promise.resolve({});
+  const mineP=(typeof rankSelfScore==='function')?rankSelfScore(b.id).catch(()=>null):Promise.resolve(null);
+  Promise.all([selfP, rankFetch(CLEAR_MAX, b.id), mineP]).then(([self, res, mine])=>{
     const raw=res&&(res.scores||res.data||res.list||res.ranks||res.results);
     const arr=Array.isArray(raw)?raw:(Array.isArray(res)?res:null);
     if(!arr){
@@ -1217,7 +1270,13 @@ function rankFillOnline(b){
       return;
     }
     if(!arr.length){ table.innerHTML=rankTableHTML(b, []); return; }
-    const rows=rankRows(b, arr, true);
+    /* 把「我的名次/头像」并进去：rankSelf 的昵称优先，缺项用 loadCurrentPlayerLeaderboardScore 补齐。 */
+    const s=(self||{});
+    const selfInfo={ name:s.name||(mine&&(mine.nickname||mine.name))||'',
+                     avatar:s.avatar||(mine&&(mine.avatar||mine.avatarUrl))||'',
+                     rank:(mine&&mine.rank!=null)?mine.rank:null,
+                     score:(mine&&mine.score!=null)?mine.score:null };
+    const rows=rankRows(b, arr, true, selfInfo);
     if(pod) pod.outerHTML=rankPodiumHTML(rows)||'<div class="rk-podium"></div>';
     table.innerHTML=rankTableHTML(b, rows);
   }, e=>{
@@ -1229,17 +1288,7 @@ function rankOpenThis(boardId){
   const b=rankBoardById(boardId||RANK_VIEW);
   rankOpenBoard(b.id).then(()=>{}, e=>floatMsg(String((e&&e.message)||e)));
 }
-function rankUploadBest(boardId){
-  const b=rankBoardById(boardId||RANK_VIEW);
-  const best=rankLocalBest(b);
-  if(!best){ floatMsg('本机还没有记录'); return; }
-  const value=(b.kind==='score')?(best.score||0):Math.max(0, Math.round(best.ms||0));   // v1.0.20：clear 榜提交毫秒（与 recordClearTime 同口径）
-  rankSubmit(value, b.id).then(()=>{
-    floatMsg('已上传到全平台榜');
-    if(rankAvailable()) RANK_SRC='online';   // 传完直接切到天下榜看结果（非 TapTap 环境仍留在本机榜）
-    showClearTimes();
-  }, e=>floatMsg(String((e&&e.message)||e)));
-}
+/* v1.1.x：「上传最佳成绩」按钮已按用户要求移除（成绩在通关 / 结算时自动提交）。 */
 /* 清空本机记录的入口已按用户要求移除（不再提供「删除本地数据」按钮）。 */
 function setMusicVol(v){
   SETTINGS.musicVol=+v/100; persistSettings();

@@ -395,6 +395,7 @@ function fxStop(key){
 function fxStopAll(){ Object.keys(FX_LIVE).forEach(fxStop); }
 /* 播放。opts：{key（同名并发键，默认=name；逐敌人特效要传 'curse@uid' 才不会互相顶掉）,
    scale（覆写表里的 scale）, rate（播放倍速）, still（钉帧模式：不排 rAF，交给 fxSeek）,
+   mirror（v1.1.x：左右镜像，反向播放方向性特效，如敌人反震玩家时的反伤图）,
    i0（v1.0.14 覆写起始帧：multi_slash 这种「一行一个方向」的图靠它选排，i0 = 方向 × 列数）} */
 function playFx(name, anchor, opts){
   if(!fx()) return null;                      // 流畅模式门禁 —— 全项目特效的既有惯例（见 10_audio.js 的 fx()）
@@ -410,6 +411,10 @@ function playFx(name, anchor, opts){
   const el=document.createElement('div');
   el.className='fx-sheet';
   el.style.width=box+'px'; el.style.height=box+'px';
+  /* v1.1.x：**镜像**（opts.mirror）—— 反伤精灵图有明确的方向性，玩家反伤敌人与敌人反震玩家要
+     朝相反一侧翻面。翻在**外层**：内层管切格的 translate，翻它会把格序也翻反；外层无 transform
+     （.fx-sheet 只 overflow:hidden），scaleX(-1) 绕自身中心翻面，盒子本就中心对齐锚点 ⇒ 不偏位。 */
+  if(opts.mirror) el.style.transform='scaleX(-1)';
   /* v0.64.0：ox/oy 是**量出来的**「内容框中心相对格子中心」的偏移（占 480 单元的比例），
      由 _patch/fx_tune.py 用 PIL 扫每张图所有帧的 alpha 并集算得，写进 FX_SHEETS。
      不补这一步的后果：不少特效的画面本来就画在格子偏下 1/4 处（烟从地面升起那类），
@@ -1347,6 +1352,108 @@ const NEW_CARDS = new WeakSet();
    handCardHTML 拿它决定「终态那张要不要隐身」。比「NEW_CARDS + 有 pending 批次」精确得多：
    只在飞行窗口内隐形，万一 NEW_CARDS 有残留（build 早退没来得及清）也不会把牌永久藏住。 */
 const FLYING_CARDS = new WeakSet();
+/* v1.1.x：罗汉伏虎 / 铁布衫的「蓝色元气」演出 —— 从**角色格挡芯片**（#player-panel .pstat-block）
+   汇聚三颗元气珠、带淡淡拖尾冲向目标锚点，到点冲散。纯 DOM + CSS 关键帧（不经 playFx 精灵图）。
+   只在本层真能跑动画时起（fx() 门禁 + animLive + 非弱动效）—— 无头 / 流畅 / 关特效一律直接返回，
+   伤害结算仍走各自 eff（本函数只做视觉，不改任何结算，天然不影响冒烟与低配档）。 */
+function yuanqiStrike(anchor){
+  try{
+    if(typeof fx!=='function' || !fx()) return;
+    if(typeof animLive!=='function' || !animLive()) return;
+    if(typeof menuFxOff==='function' && menuFxOff()) return;
+    const tgt=fxAnchorRect(anchor) || {left:0,top:0,width:0,height:0};
+    const src=document.querySelector('#player-panel .pstat-block') || document.querySelector('#player-panel');
+    const sr=(src && src.getBoundingClientRect) ? src.getBoundingClientRect() : null;
+    const x0=Math.round(sr && sr.width ? sr.left+sr.width/2 : tgt.left+tgt.width/2);
+    const y0=Math.round(sr && sr.height ? sr.top+sr.height/2 : tgt.top+tgt.height/2);
+    const x1=Math.round(tgt.left+tgt.width/2), y1=Math.round(tgt.top+tgt.height/2);
+    const layer=document.createElement('div'); layer.className='fx-yuanqi';
+    for(let i=1;i<=3;i++){
+      const b=document.createElement('div'); b.className='fx-yuanqi-band i'+i;
+      b.style.setProperty('--x0', x0+'px'); b.style.setProperty('--y0', y0+'px');
+      b.style.setProperty('--x1', x1+'px'); b.style.setProperty('--y1', y1+'px');
+      layer.appendChild(b);
+    }
+    const burst=document.createElement('div'); burst.className='fx-yuanqi-burst';
+    burst.style.left=x1+'px'; burst.style.top=y1+'px'; burst.style.animationDelay='.42s';
+    layer.appendChild(burst);
+    document.body.appendChild(layer);
+    setTimeout(function(){ try{ if(layer.parentNode) layer.parentNode.removeChild(layer); }catch(e){} }, 950);
+  }catch(e){}
+}
+/* v1.1.x：金刚杵[紫·武僧·t4] —— **累计格挡满 50、往手牌塞临时【铁布衫】**的生效演出。
+   用户口径：「从积累格挡的标识位置积聚烟雾，并飞向手牌区幻化为一张铁布衫卡牌，时长要短」。
+   起点 = 顶栏「格挡累积」芯片（.stat-blockaccum），冒烟聚起 → 飞向手牌区（#hand）→ 末端幻化出
+   一张【铁布衫】卡影后消散。全程 ≈0.64s。纯 DOM + CSS 关键帧（照 yuanqiStrike 模板），只做视觉、
+   不碰结算 ⇒ 无头 / 流畅 / 关特效一律直接返回，冒烟与低配档逐字节不变。 */
+function jingangchuFx(){
+  try{
+    if(typeof fx!=='function' || !fx()) return;
+    if(typeof animLive!=='function' || !animLive()) return;
+    if(typeof menuFxOff==='function' && menuFxOff()) return;
+    const src=document.querySelector('.stat-blockaccum') || document.querySelector('#player-panel .pstat-block') || document.querySelector('#player-panel');
+    const dst=document.querySelector('#hand') || document.querySelector('#col-main');
+    const sr=(src && src.getBoundingClientRect) ? src.getBoundingClientRect() : null;
+    const dr=(dst && dst.getBoundingClientRect) ? dst.getBoundingClientRect() : null;
+    const x0=Math.round(sr && sr.width ? sr.left+sr.width/2 : (window.innerWidth||0)*0.5);
+    const y0=Math.round(sr && sr.height ? sr.top+sr.height/2 : (window.innerHeight||0)*0.08);
+    const x1=Math.round(dr && dr.width ? dr.left+dr.width/2 : (window.innerWidth||0)*0.5);
+    const y1=Math.round(dr && dr.height ? dr.top+dr.height*0.55 : (window.innerHeight||0)*0.7);
+    const stuck=document.querySelector('.fx-jgc'); if(stuck && stuck.parentNode) stuck.parentNode.removeChild(stuck);   // 同帧连触发（累积满 100）不叠层
+    const layer=document.createElement('div'); layer.className='fx-jgc';
+    for(let i=1;i<=3;i++){
+      const p=document.createElement('div'); p.className='fx-jgc-puff p'+i;
+      p.style.left=x0+'px'; p.style.top=y0+'px';
+      layer.appendChild(p);
+    }
+    const smoke=document.createElement('div'); smoke.className='fx-jgc-smoke';
+    smoke.style.setProperty('--x0', x0+'px'); smoke.style.setProperty('--y0', y0+'px');
+    smoke.style.setProperty('--x1', x1+'px'); smoke.style.setProperty('--y1', y1+'px');
+    layer.appendChild(smoke);
+    const card=document.createElement('div'); card.className='fx-jgc-card';
+    card.innerHTML=(typeof artImg==='function') ? artImg('card/tiebushan.png','','fx-jgc-art') : '';
+    card.style.left=x1+'px'; card.style.top=y1+'px';
+    layer.appendChild(card);
+    document.body.appendChild(layer);
+    setTimeout(function(){ try{ if(layer.parentNode) layer.parentNode.removeChild(layer); }catch(e){} }, 760);
+  }catch(e){}
+}
+/* v1.1.x：燃血令[紫·阴差] —— **每累积 20 点血怒、立刻得 1 符文**的生效演出。
+   用户口径：「从积累血怒的标识位置凝聚血滴为浅浅的红色飘带，飘向符文标识形成一枚符文，然后融入
+   符文标识中，时长要短」。起点 = 顶栏「血怒累积」芯片（.stat-rageaccum），血滴凝起 → 淡红飘带
+   流向符文标识（#rune-display 的 .rune-icon）→ 在标识处凝成一枚符文并融入。全程 ≈0.66s。
+   纯 DOM + CSS 关键帧，只做视觉、不碰结算 ⇒ 无头 / 流畅 / 关特效直接返回。 */
+function ranxuelingFx(){
+  try{
+    if(typeof fx!=='function' || !fx()) return;
+    if(typeof animLive!=='function' || !animLive()) return;
+    if(typeof menuFxOff==='function' && menuFxOff()) return;
+    const src=document.querySelector('.stat-rageaccum') || document.querySelector('#player-panel');
+    const dst=document.querySelector('#rune-display .rune-icon') || document.querySelector('#rune-display');
+    const sr=(src && src.getBoundingClientRect) ? src.getBoundingClientRect() : null;
+    const dr=(dst && dst.getBoundingClientRect) ? dst.getBoundingClientRect() : null;
+    const x0=Math.round(sr && sr.width ? sr.left+sr.width/2 : (window.innerWidth||0)*0.5);
+    const y0=Math.round(sr && sr.height ? sr.top+sr.height/2 : (window.innerHeight||0)*0.08);
+    const x1=Math.round(dr && dr.width ? dr.left+dr.width/2 : (window.innerWidth||0)*0.88);
+    const y1=Math.round(dr && dr.height ? dr.top+dr.height/2 : (window.innerHeight||0)*0.12);
+    const stuck=document.querySelector('.fx-rxl'); if(stuck && stuck.parentNode) stuck.parentNode.removeChild(stuck);   // 同帧连触发不叠层
+    const layer=document.createElement('div'); layer.className='fx-rxl';
+    for(let i=1;i<=3;i++){
+      const d=document.createElement('div'); d.className='fx-rxl-drop d'+i;
+      d.style.left=x0+'px'; d.style.top=y0+'px';
+      layer.appendChild(d);
+    }
+    const ribbon=document.createElement('div'); ribbon.className='fx-rxl-ribbon';
+    ribbon.style.setProperty('--x0', x0+'px'); ribbon.style.setProperty('--y0', y0+'px');
+    ribbon.style.setProperty('--x1', x1+'px'); ribbon.style.setProperty('--y1', y1+'px');
+    layer.appendChild(ribbon);
+    const rune=document.createElement('div'); rune.className='fx-rxl-rune';
+    rune.style.left=x1+'px'; rune.style.top=y1+'px';
+    layer.appendChild(rune);
+    document.body.appendChild(layer);
+    setTimeout(function(){ try{ if(layer.parentNode) layer.parentNode.removeChild(layer); }catch(e){} }, 720);
+  }catch(e){}
+}
 function animLive(){
   try{ return typeof window!=='undefined' && typeof window.innerWidth==='number' && window.innerWidth>0; }
   catch(e){ return false; }

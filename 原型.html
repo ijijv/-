@@ -1418,6 +1418,71 @@
   .fx-dmg.to-player{color:#ff4b4b; font-size:24px;}
   .fx-dmg.heal{color:var(--green);}
   @keyframes fxDmg{0%{opacity:0; transform:translate(-50%,-50%) scale(.5)}14%{opacity:1; transform:translate(-50%,-75%) scale(1.1)}100%{opacity:0; transform:translate(-50%,-180%) scale(1)}}
+  /* v1.1.x：罗汉伏虎 / 铁布衫 —— 蓝色元气从**角色格挡芯片**汇聚、带淡淡拖尾冲向目标后冲散。
+     三层元气珠错开 60ms 追尾（--x0/--y0 起点、--x1/--y1 终点由 JS 按实时矩形写入）。 */
+  .fx-yuanqi{position:fixed; inset:0; z-index:62; pointer-events:none;}
+  .fx-yuanqi-band{position:fixed; width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:50%;
+    background:radial-gradient(circle, rgba(155,218,255,.95), rgba(70,150,255,.5) 46%, rgba(40,110,220,0) 72%);
+    filter:blur(1px); box-shadow:0 0 18px rgba(90,170,255,.75);
+    animation:yuanqiFly .46s cubic-bezier(.55,.06,.4,1) both;}
+  .fx-yuanqi-band.i2{animation-delay:.06s;}
+  .fx-yuanqi-band.i3{animation-delay:.12s;}
+  @keyframes yuanqiFly{0%{left:var(--x0); top:var(--y0); opacity:0; transform:scale(.45);}
+    18%{opacity:1;} 100%{left:var(--x1); top:var(--y1); opacity:.12; transform:scale(1.15);}}
+  .fx-yuanqi-burst{position:fixed; width:130px; height:130px; margin:-65px 0 0 -65px; border-radius:50%;
+    background:radial-gradient(circle, rgba(205,238,255,.9), rgba(90,170,255,.42) 40%, rgba(40,110,220,0) 70%);
+    animation:yuanqiBurst .34s ease-out both;}
+  @keyframes yuanqiBurst{0%{opacity:0; transform:scale(.3);}40%{opacity:1;}100%{opacity:0; transform:scale(1.6);}}
+  /* v1.1.x：金刚杵[武僧t4] 生效 —— 格挡累积芯片处冒烟 → 飞向手牌区 → 幻化出【铁布衫】卡影后消散。
+     全程 ≈0.64s（用户口径：时长要短，别挡出牌）。居中一律用 margin 负半宽，不用 translate(-50%,-50%)，
+     免得关键帧里的 transform 把定位 translate 顶掉（本文件反复踩过的坑）。 */
+  .fx-jgc{position:fixed; inset:0; z-index:63; pointer-events:none;}
+  .fx-jgc-puff{position:fixed; width:20px; height:20px; margin:-10px 0 0 -10px; border-radius:50%;
+    background:radial-gradient(circle, rgba(212,212,222,.85), rgba(150,150,166,.34) 55%, rgba(120,120,136,0) 74%);
+    filter:blur(1.5px); animation:jgcPuff .34s ease-out both;}
+  .fx-jgc-puff.p2{animation-delay:.05s;}
+  .fx-jgc-puff.p3{animation-delay:.1s;}
+  @keyframes jgcPuff{0%{opacity:0; transform:scale(.4);}40%{opacity:.95;}100%{opacity:0; transform:translateY(-9px) scale(1.5);}}
+  .fx-jgc-smoke{position:fixed; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%;
+    background:radial-gradient(circle, rgba(226,226,236,.95), rgba(160,160,176,.5) 46%, rgba(120,120,136,0) 74%);
+    filter:blur(2px); box-shadow:0 0 16px rgba(200,200,216,.5);
+    animation:jgcFly .5s cubic-bezier(.5,.05,.35,1) both;}
+  @keyframes jgcFly{0%{left:var(--x0); top:var(--y0); opacity:0; transform:scale(.4);}
+    16%{opacity:1;}100%{left:var(--x1); top:var(--y1); opacity:.18; transform:scale(1.22);}}
+  .fx-jgc-card{position:fixed; width:52px; height:76px; margin:-38px 0 0 -26px; border-radius:6px;
+    background:linear-gradient(160deg, rgba(92,150,220,.9), rgba(38,80,150,.85)); overflow:hidden; opacity:0;
+    box-shadow:0 0 18px rgba(120,180,255,.75), 0 0 4px rgba(220,240,255,.9);
+    animation:jgcCard .26s ease-out .38s both;}
+  .fx-jgc-card .fx-jgc-art{width:100%; height:100%; object-fit:cover; display:block;}
+  @keyframes jgcCard{0%{opacity:0; transform:scale(.5);}45%{opacity:1; transform:scale(1.12);}100%{opacity:0; transform:scale(1);}}
+  /* v1.1.x：燃血令[阴差] 生效 —— 血怒累积芯片处凝血滴 → 淡红飘带飘向符文标识 → 凝成一枚符文并融入。
+     全程 ≈0.66s。同样用 margin 负半宽居中，不依赖基础 transform。 */
+  .fx-rxl{position:fixed; inset:0; z-index:63; pointer-events:none;}
+  .fx-rxl-drop{position:fixed; width:12px; height:16px; margin:-8px 0 0 -6px;
+    border-radius:50% 50% 50% 50%/60% 60% 40% 40%;
+    background:radial-gradient(circle at 50% 35%, rgba(255,132,132,.95), rgba(192,42,42,.6) 60%, rgba(150,20,20,0) 82%);
+    filter:blur(.4px); animation:rxlDrop .3s ease-out both;}
+  .fx-rxl-drop.d2{animation-delay:.05s;}
+  .fx-rxl-drop.d3{animation-delay:.1s;}
+  @keyframes rxlDrop{0%{opacity:0; transform:translateY(6px) scale(.4);}45%{opacity:1;}100%{opacity:0; transform:translateY(-8px) scale(1.1);}}
+  .fx-rxl-ribbon{position:fixed; width:76px; height:16px; margin:-8px 0 0 -38px;
+    border-radius:40% 60% 55% 45%/60% 60% 40% 40%; filter:blur(1.4px);
+    background:linear-gradient(90deg, rgba(255,150,150,0) 0%, rgba(255,140,140,.5) 38%, rgba(202,62,62,.68) 70%, rgba(255,160,160,0) 100%);
+    animation:rxlRibbon .5s cubic-bezier(.5,.05,.35,1) both;}
+  @keyframes rxlRibbon{0%{left:var(--x0); top:var(--y0); opacity:0; transform:rotate(9deg) scaleX(.5);}
+    18%{opacity:.95;}100%{left:var(--x1); top:var(--y1); opacity:.2; transform:rotate(-6deg) scaleX(1.12);}}
+  .fx-rxl-rune{position:fixed; width:30px; height:30px; margin:-15px 0 0 -15px; border-radius:50%; opacity:0;
+    border:2px solid rgba(255,152,152,.85);
+    box-shadow:0 0 16px rgba(255,110,110,.75), inset 0 0 10px rgba(255,120,120,.5);
+    animation:rxlRune .28s ease-out .38s both;}
+  @keyframes rxlRune{0%{opacity:0; transform:scale(.4) rotate(-25deg);}50%{opacity:1; transform:scale(1.15) rotate(6deg);}100%{opacity:0; transform:scale(.72) rotate(0);}}
+  /* v1.1.x：五雷法印转化 —— 被选手牌先冒烟，烟散后（换牌那一刻）由 JS 收尾 */
+  .card.is-smoking{animation:wuleiChar .52s ease-out both;}
+  .card.is-smoking::after{content:''; position:absolute; inset:-12%; pointer-events:none; border-radius:50%;
+    background:radial-gradient(circle at 50% 80%, rgba(96,96,104,.55), rgba(130,130,140,.28) 44%, rgba(160,160,168,0) 72%);
+    animation:wuleiSmoke .52s ease-out both;}
+  @keyframes wuleiChar{0%{filter:none;}42%{filter:brightness(1.35) hue-rotate(180deg);}100%{filter:brightness(.45) grayscale(1);}}
+  @keyframes wuleiSmoke{0%{opacity:0; transform:translateY(10%) scale(.55);}36%{opacity:1;}100%{opacity:0; transform:translateY(-46%) scale(1.5);}}
   .enemy.hit{animation:shake .22s ease-out;}
   /* v0.72.0：这两个关键帧里的位移**必须带上 translate(var(--ex),var(--ey))** ——
      关键帧的 transform 会整个替掉元素自己的 transform（不是叠加）。
@@ -2951,6 +3016,10 @@
     .ct-corner{display:block; position:absolute; left:2%; bottom:1.4%; z-index:3;
                font-size:7px; line-height:1; padding:1px 4px; border-radius:4px;
                background:rgba(42,33,25,.85); color:#d8bd82; letter-spacing:.5px;}
+    /* v1.1.x：分类标改由 4 张属性图标（素材/ui/ct_*.png，白色线稿透明底）承担 ——
+       压在深色小墨牌上正好可辨。图标尺寸固定 14px、块级摆放；图没到时 iconTag 回落成
+       TNAME 文字（font-size:7px 的老外观），只补一点上下内边距让两种形态都不挤。 */
+    .ct-corner .ct-icon{display:block; width:14px; height:14px; object-fit:contain;}
     /* 详情里的「完整信息」一行：见 60_boot.js renderTopbar() 的 statsDetail。 */
     .tb-detail .stat.stat-detail-full{display:inline-flex;}
 
@@ -3264,11 +3333,20 @@
     background:rgba(252,240,208,.94); border-bottom:1px solid rgba(161,116,58,.45);}
   .rk-tr.r0{background:rgba(196,162,82,.22);}
   .rk-tr.r1,.rk-tr.r2{background:rgba(196,162,82,.13);}
+  /* v1.1.x：本账号那一行 —— 明显深色底纹（比前三甲更醒目）+ 金色描边，一眼认出自己。 */
+  .rk-tr.me{background:rgba(30,20,12,.52); box-shadow:inset 0 0 0 1px rgba(196,162,82,.55);}
+  .rk-tr.me .rk-rn{color:#c4a252;}
+  .rk-tr.me .rk-pl b{color:#2a2016; font-weight:600;}
   .rk-rn{text-align:center; font-size:13px; color:#8a6a3c;}
   .rk-tr.r0 .rk-rn{font-size:15px; color:#7c2118;}
   .rk-pl{display:flex; align-items:center; gap:6px; min-width:0;}
   .rk-pl .ms{flex:0 0 auto; width:17px; height:17px; border:1px solid #a1743a; border-radius:2px;
     display:flex; align-items:center; justify-content:center; font-size:10px; color:#8c2b21;}
+  /* v1.1.x：TapTap 真实头像 —— 圆形裁切，占位与角色印章同一格。 */
+  .rk-pl .ms.rk-av{padding:0; overflow:hidden; border-radius:50%; border-color:#c4a252;}
+  .rk-pl .ms.rk-av img{width:100%; height:100%; object-fit:cover; display:block;}
+  .rk-seal.rk-av{padding:0; overflow:hidden; border-radius:50%;}
+  .rk-seal.rk-av img{width:100%; height:100%; object-fit:cover; display:block;}
   .rk-pl b{font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#42361f;}
   .rk-tm{text-align:right; color:#7c2118;}
   .rk-sc{text-align:right; color:#8a6a3c;}
