@@ -823,17 +823,25 @@ def main():
           '存在 `@media (min-width:521px) and (min-height:561px)` 这道桌面门 —— 它是 ≤520 宽 / ≤360 宽 / '
           'T-short（max-height 560）三个还原档的**补集**：矮屏与窄屏里本节一条都不匹配，'
           '那些档的 .panel 原样生效、实心面板零像素变化')
+    # ⚠️ 同条件的桌面门**不止一道**（战斗纵向定高、排行榜 1.5× 各写了一道），所以不能拿
+    #    第一道当 pick-scene 的门 —— 那会随书写顺序静默取错块、四条断言一起假红。
+    #    逐道抠块、取含 pick-scene 的那道（与下面 _media_blocks 同一套「同条件多块」的写法）。
     _pick_block = ''
     if _pick_cond:
-        _pi, _pd = _pick_cond.end() - 1, 0
-        for _pk in range(_pi, len(_style_clean)):
-            if _style_clean[_pk] == '{':
-                _pd += 1
-            elif _style_clean[_pk] == '}':
-                _pd -= 1
-                if _pd == 0:
-                    _pick_block = _style_clean[_pi + 1:_pk]
-                    break
+        for _pm in _re.finditer(r'@media\s*\(min-width:\s*521px\)\s*and\s*\(min-height:\s*561px\)\s*\{',
+                                _style_clean):
+            _pi, _pd = _pm.end() - 1, 0
+            for _pk in range(_pi, len(_style_clean)):
+                if _style_clean[_pk] == '{':
+                    _pd += 1
+                elif _style_clean[_pk] == '}':
+                    _pd -= 1
+                    if _pd == 0:
+                        if 'pick-scene' in _style_clean[_pi + 1:_pk]:
+                            _pick_block = _style_clean[_pi + 1:_pk]
+                        break
+            if _pick_block:
+                break
     check('pick-scene' in _pick_block and 'width:165px' in _pick_block,
           '桌面门里同时有 `#overlay.pick-scene` 与 1.25 倍卡宽 165px（少一个 = 去底与放大只剩一半）')
     check(bool(_re.search(r'#overlay\.pick-scene\s+#overlayWrap\s*\{[^}]*max-width\s*:\s*none', _pick_block)),

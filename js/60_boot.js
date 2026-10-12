@@ -270,8 +270,8 @@ function toggleTopbar(){ TOPBAR_OPEN=!TOPBAR_OPEN; renderTopbar(); }
 /* v1.0.4：召唤物筹码条**全档默认收起**（用户口径），点玩家立绘右下角的折叠键才展开。
    状态必须是模块级 let：render() 每次都重建 #player-panel 的 innerHTML，
    状态留在 DOM 上会「一点就没」（与 TOPBAR_OPEN 同一手法）。
-   ⚠️ 桌面档看不到这个键也看不到筹码条（基档 `.ps-fold{display:none}`、`.psummons{display:none}`）
-      ⇒ 桌面仍只看顶栏详情里的 `.tb-summons`，与改动前逐像素相同。 */
+   ⚠️ 桌面档看不到折叠键（基档 `.ps-fold{display:none}`），但筹码条**桌面常驻**（v1.1.x 起，
+      用户报障「电脑端看不到召唤物」）⇒ 桌面靠 PSUMMONS_OPEN 之外的那条 `!__narrowSummon` 恒展开。 */
 let PSUMMONS_OPEN=false;
 function toggleSummonBar(){ PSUMMONS_OPEN=!PSUMMONS_OPEN; render(); }
 /* 折叠键上的预读：召 N · 伤 X · 挡 Y · 回 Z（数值为 0 的项不写，键才不会撑宽）。
@@ -428,7 +428,10 @@ function render(){
         —— 用户口径是「不论是否收起，增加召唤物的预伤害和预格挡的提示数值」。 */
   const psList=(G.summons||[]).filter(s=>(s.dur||0)>0);
   const summonFold=(SCENE==='battle' && psList.length)?`<button class="ps-fold" type="button" onclick="toggleSummonBar()">${summonFoldLabel(psList)}</button>`:'';
-  const summonBar=(SCENE==='battle' && psList.length && PSUMMONS_OPEN)?`<div class="psummons">${psList.map(s=>summonHTML(s)).join('')}</div>`:'';
+  /* v1.1.x：筹码条**桌面常驻**（用户报障「电脑端看不到召唤物」）——
+     非手机横屏档（即桌面）恒渲染，手机横屏档才由 .ps-fold 的 PSUMMONS_OPEN 控制展开/收起。 */
+  const __narrowSummon=(typeof matchMedia==='function') && matchMedia('(max-height:560px) and (min-width:521px)').matches;
+  const summonBar=(SCENE==='battle' && psList.length && (PSUMMONS_OPEN || !__narrowSummon))?`<div class="psummons">${psList.map(s=>summonHTML(s)).join('')}</div>`:'';
   /* v1.0.13：玩家立绘右侧的极简状态芯片（只留层数；见 playerBuffChips）。基档不显示 ⇒ 桌面零改动。 */
   const pbuffs=(SCENE==='battle')?playerBuffChips():'';
   writePanel('player', 'player-panel', `

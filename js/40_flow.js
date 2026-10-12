@@ -126,7 +126,7 @@ function winFight(){
   track('battleWin');
   const hasElite=G.enemies.some(e=>e.elite);
   const isBoss=G.enemies.some(e=>e.boss);
-  if(hasElite){ const p=randomPotion(); G.potions.push(p); log(`击败精英，获得灵汁【${p.name}】`); }
+  if(hasElite){ const p=randomPotion(); gainPotion(p); log(`击败精英，获得灵汁【${p.name}】`); }
   G.finalBoss = isBoss && G.act>=ACTS.length;
   // v0.61.10(P7)：战后金币 3/6/9 → 4/8/12（普通/精英/Boss）。Boss 血量与篝火密度均不动。
   let g=4; if(hasElite) g=8; if(isBoss) g=12;
@@ -151,7 +151,21 @@ function winFight(){
   G.rewardTier = isBoss?'boss':hasElite?'elite':'normal';
   G.lastGold=g; G.battleGold=g; G.goldDoubled=false;
   G.battleResult={g, hpLost, h, extra, isBoss, finalBoss:G.finalBoss};
-  showBattleResult(G.battleResult);
+  /* v1.1.x（用户口径）：**撤掉「战斗结算」面板** —— 打完直接走「掉落 → 抽牌」，选完牌自动进地图。
+     三条特例：
+       · 最后一幕最后一关 boss（G.finalBoss）：不掉落、不抽牌，直接结束（advanceAct → 通关画面）。
+       · 前 1/2 幕 boss：战利品（遗物 + 灵汁）随掉落就地发放，图标飞进锦囊；抽完牌**自动进锻造**。
+       · 精英：额外来一件遗物（走既有遗物三选一，选中那件飞进锦囊）。
+     ⚠️ showBattleResult 本体**保留**（冒烟 / 驱动脚本仍直接调它，smoke_runner.js:832/841）；只是战斗流程不再经过。
+     ⚠️ 因此 `result-scene` 的墨过场也不再从这条战斗路径走（loseGame / showVictory 仍然照走，那两条没撤）。 */
+  if(G.finalBoss){ advanceAct(); return; }
+  if(isBoss){
+    G.rewardTier=null;   // v0.61 B5：Boss 不产卡，就地清空 tier，别泄漏给下一家商店的稀有度表
+    const relic=weightedRelic(); grantRelic(relic);
+    const potion=randomPotion(); gainPotion(potion);
+    log(`击败幕主，获得遗物【${relic.name}】和灵汁【${potion.name}】`);
+  }
+  playDropSequence();   // 击杀末敌掉落动画 → 抽牌界面（详见 50_ui.js）
 }
 function showBattleResult(r){
   const names=G.enemies.map(e=>e.name).join('、');
@@ -188,7 +202,7 @@ function showBossReward(){
   G.rewardTier = null; // v0.61 B5：Boss 奖励是遗物/灵汁/锻造、不产卡 —— 就地清空 tier，别让「boss」泄漏到下一场商店的稀有度表
   const relic=weightedRelic();
   grantRelic(relic);
-  const potion=randomPotion(); G.potions.push(potion);
+  const potion=randomPotion(); gainPotion(potion);
   log(`击败幕主，获得遗物【${relic.name}】和灵汁【${potion.name}】`);
   showOverlay(`<h2>Boss 战利品</h2><p>你击败了幕主，收获丰厚：</p>
     <div class="reward-cards">

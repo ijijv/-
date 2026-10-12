@@ -235,6 +235,18 @@
      再被 #app{overflow:hidden} 裁掉一截。要省高度只能缩立绘本身（见矮屏档的
      clamp 那套），不能靠压缩容器。 */
   .battle{display:flex; gap:14px; align-items:flex-end; margin-bottom:2px; flex:0 0 auto;}
+  /* v1.1.x（用户报障：电脑端战斗场景纵向会随敌人体积上下跳 ——
+     「打小怪整体在中上、打体积大的就往下移」）：
+     把 .battle 的**最小高度**钉在「boss 立绘高 + 68px」≈ 打 boss 时那套排版的高度，
+     但比它略矮一点 ⇒ 整排（角色/敌人/手牌）比打 boss 时**往上挪一点**。
+     .battle 本来就是 align-items:flex-end ⇒ 角色与**所有**敌人底部同线：
+     敌人再大也只是往上长，不再把角色和手牌一起往下顶。
+     照旧给 min-height（不是 height）：徽章多两行时让盒子长高、而不是让敌人头顶
+     戳进顶栏（.battle 顶边就在 #topbar 下面，戳出去会被 #app{overflow:hidden} 裁掉）。
+     ⚠️ 仅桌面：手机横屏档全是 max-height ≤560 的媒体块，被这条的 min-height:561px 排除。 */
+  @media (min-width:521px) and (min-height:561px){
+    .battle{min-height:calc(var(--eportrait-boss-h) + 68px);}
+  }
   /* v0.72.0：`margin-left:var(--player-inset-x,0)` 把玩家从**左边缘**推进来一点
      （「不要太贴近左下方」）。它同时会吃掉 `#enemy-panel` 的可用宽 ⇒ 每一档的值
      都是照着「不改变敌人换行」定的，见 :root 那条注释。
@@ -283,7 +295,9 @@
      ⚠️ 两个都必须容忍 0：窄屏档（≤520 / ≤360）要把弧线**整个归零**（那两档
         .battle 是 flex-direction:column ⇒ 玩家在上、敌人在下，「玩家左下」本来就失效）。
         读的时候判据必须是「有限且 ≥0」，写成 >0 会把 0 误判成非法而回落成 1。 */
-  :root{--rise-unit:1; --slot-dx-k:1; --player-inset-x:24px;}
+  :root{--rise-unit:1; --slot-dx-k:1; --player-inset-x:24px;
+        /* v1.1.x：boss 立绘高的**唯一**来源 —— 基档 :350 与桌面定高共用一条公式，免得两处漂移。 */
+        --eportrait-boss-h:clamp(97px,calc(372px + (100vh - 880px)*0.871),372px);}
   /* v0.72.0：`--player-inset-x` 是**玩家面板的左内缩**（用户要求「玩家在左下方但
      不要太贴近左下方」）。挂成 `#player-panel{margin-left}`（见下面那条规则）。
      为什么也做成变量、也按档给：margin 占的是 `.battle` 的可用宽 ⇒ 直接吃
@@ -347,7 +361,7 @@
   .enemy .eportrait.e-summon{height:clamp(24px,calc(93px + (100vh - 880px)*0.2178),93px);}
   .enemy .eportrait.e-normal{height:clamp(48px,calc(186px + (100vh - 880px)*0.4355),186px);}
   .enemy .eportrait.e-elite{height:clamp(73px,calc(280px + (100vh - 880px)*0.6555),280px);}
-  .enemy .eportrait.e-boss{height:clamp(97px,calc(372px + (100vh - 880px)*0.871),372px);}
+  .enemy .eportrait.e-boss{height:var(--eportrait-boss-h);}
   .enemy .enemyhpbar{width:134px;}
   .enemy.e-elite .enemyhpbar{width:194px;}
   .enemy.e-boss .enemyhpbar{width:262px;}
@@ -1584,6 +1598,77 @@
   .low-spec .card.xue-fire::after{animation:none; opacity:.62;}
   .low-spec .reward-cards.reward-flip .rcard{animation:none;}
   .low-spec .reward-cards.flip-cards .rcard-inner{transition-duration:.15s;}
+  /* —— v1.1.x：击杀末敌「掉落 3 张牌」→ 抽牌界面右下「牌堆」UI → 选中的牌飞回牌堆 ——
+     drop-layer / fly-* 一律 z-index:30：必须压过 #overlay(z-index:10)，否则动画被面板盖住。 */
+  .drop-layer{position:fixed; inset:0; pointer-events:none; z-index:30; overflow:hidden;}
+  .drop-card{position:fixed; width:34px; height:50px; margin:0; border-radius:5px; pointer-events:none;
+    background-color:#2a2119; background-image:var(--pile-back-img,none);
+    background-repeat:no-repeat; background-size:100% 100%;
+    box-shadow:0 3px 8px rgba(0,0,0,.5), 0 0 10px rgba(224,179,65,.35);
+    transform:translate(-50%,0); will-change:transform,opacity;}
+  .drop-card.drop-fall{animation:dropFall .44s cubic-bezier(.4,0,.9,1) both; animation-delay:calc(var(--dd,0) * 80ms);}
+  @keyframes dropFall{0%{opacity:0; transform:translate(-50%,-46px) scale(.6) rotate(-14deg);}
+    62%{opacity:1; transform:translate(-50%,4px) scale(1.08) rotate(3deg);}
+    100%{opacity:1; transform:translate(-50%,0) scale(1) rotate(0deg);}}
+  /* 右下角牌堆 UI：显示玩家**主牌库**剩余张数（选牌后即时 +1） */
+  .reward-pile{position:absolute; right:14px; bottom:12px; display:flex; align-items:flex-end; gap:9px;
+    padding:8px 12px; border-radius:10px; background:rgba(0,0,0,.44); border:1px solid var(--ink3);
+    box-shadow:0 4px 14px rgba(0,0,0,.5); pointer-events:none;}
+  .reward-pile .rp-stack{position:relative; width:30px; height:42px;}
+  .reward-pile .rp-card{position:absolute; inset:0; border-radius:4px; background-color:#2a2119;
+    background-image:var(--pile-back-img,none); background-repeat:no-repeat; background-size:100% 100%;
+    border:1px solid rgba(224,179,65,.5); box-shadow:0 1px 3px rgba(0,0,0,.5);}
+  .reward-pile .rp-card:nth-child(1){transform:translate(-4px,-3px) rotate(-6deg);}
+  .reward-pile .rp-card:nth-child(2){transform:translate(-2px,-1px) rotate(-2deg);}
+  .reward-pile .rp-card:nth-child(3){transform:translate(0,1px) rotate(2deg);}
+  .reward-pile .rp-meta{display:flex; flex-direction:column; align-items:center; line-height:1.1;}
+  .reward-pile .rp-label{font-size:11px; color:var(--dim);}
+  .reward-pile .rp-n{font-size:20px; font-weight:700; color:var(--gold);}
+  /* 遗物 / 灵汁小图标飞进锦囊（手机端与电脑端锦囊位置不同，落点由 JS 运行时量取） */
+  .fly-ico{position:fixed; z-index:30; width:30px; height:30px; margin:0; padding:0;
+    display:flex; align-items:center; justify-content:center; pointer-events:none;
+    transform:translate(-50%,-50%); will-change:transform,opacity;
+    filter:drop-shadow(0 0 6px rgba(224,179,65,.85));}
+  .fly-ico .ricon{width:30px; height:30px; margin:0;}
+  .fly-ico .ricon-fb{font-size:18px;}
+  #jinnangBtn.pouch-flash,.mt-jinnang.pouch-flash{animation:pouchFlash .76s ease-out;}
+  @keyframes pouchFlash{0%{box-shadow:0 0 0 0 rgba(255,226,140,.95); filter:brightness(1.9);}
+    45%{box-shadow:0 0 16px 7px rgba(255,226,140,.75); filter:brightness(1.5);}
+    100%{box-shadow:0 0 0 0 rgba(255,226,140,0); filter:brightness(1);}}
+  .low-spec .drop-card.drop-fall{animation:none;}
+  /* —— v1.1.x：锻造 / 净坛 卡牌特效（用户口径） ——
+     锻造：卡牌被火焰覆盖 → 一阵风吹散 → 升级卡牌亮相。
+     净坛：火焰从左下角烧起 → 烧到右上角 → 最后化为灰烬。
+     ⚠️ .card 自带 overflow:hidden，伪元素被裁在卡面内，不会糊到别的卡。 */
+  .card.is-forging::after{content:''; position:absolute; inset:0; z-index:5; pointer-events:none;
+    border-radius:inherit; mix-blend-mode:screen; opacity:0;
+    background:linear-gradient(0deg, #fff2a8 0%, #ffb24d 26%, #ff6a1a 58%, #c2320b 100%);
+    background-size:100% 220%; background-position:0 100%;
+    animation:forgeFlame .64s ease-out forwards;}
+  @keyframes forgeFlame{0%{opacity:0; background-position:0 100%;}
+    38%{opacity:.95; background-position:0 42%;}
+    100%{opacity:.9; background-position:0 0%;}}
+  .card.is-forging.is-blown::after{animation:forgeBlow .46s ease-in forwards;}
+  @keyframes forgeBlow{0%{opacity:.9; transform:skewX(0deg) translateX(0); filter:blur(0);}
+    100%{opacity:0; transform:skewX(-16deg) translateX(28px); filter:blur(6px);}}
+  .card.is-forging.is-blown{animation:forgeReveal .46s ease-out;}
+  @keyframes forgeReveal{0%{filter:brightness(1.1);}
+    42%{filter:brightness(1.6) saturate(1.25); box-shadow:0 0 0 3px rgba(255,226,140,.92),0 0 26px rgba(224,179,65,.8);}
+    100%{filter:brightness(1);}}
+  .card.is-burning::after{content:''; position:absolute; left:-10%; top:-10%; width:120%; height:120%;
+    z-index:5; pointer-events:none; mix-blend-mode:screen; opacity:0; border-radius:inherit;
+    background:radial-gradient(circle at 50% 50%, #fff6c0 0%, #ffb24d 20%, rgba(255,90,10,.72) 38%, rgba(150,40,0,.3) 58%, rgba(0,0,0,0) 74%);
+    animation:pileBurn .8s ease-in forwards;}
+  @keyframes pileBurn{0%{opacity:0; transform:translate(-40%,40%) scale(.42);}
+    24%{opacity:.92;}
+    58%{opacity:.96; transform:translate(0,0) scale(.98);}
+    100%{opacity:0; transform:translate(40%,-40%) scale(1.34);}}
+  .card.is-ash{animation:pileAsh .36s ease-out forwards;}
+  @keyframes pileAsh{0%{opacity:1; transform:scale(1); filter:grayscale(.4) brightness(.92);}
+    70%{opacity:.45; filter:grayscale(1) brightness(.6);}
+    100%{opacity:0; transform:scale(.9) translateY(9px); filter:grayscale(1) brightness(.4);}}
+  .low-spec .card.is-forging::after,.low-spec .card.is-burning::after{animation:none; opacity:0;}
+  .low-spec .card.is-ash{animation:none;}
   .enemy.dying{animation:enemyDie .45s ease-out forwards; pointer-events:none;}
   @keyframes enemyDie{0%{opacity:1; transform:translate(var(--ex,0px),var(--ey,0px)) scale(1)}100%{opacity:0; transform:translate(var(--ex,0px),var(--ey,0px)) scale(.55)}}
   /* —— v0.72.0：卡牌动画层（抽 / 弃 / 洗 + 易物） ——
@@ -2883,7 +2968,13 @@
         后者更长 ⇒ 顺序其实无所谓；但 `.psummons` / `.ct-corner` 是同特异度，
         顺序错了就会「手机档打开、又被后面这条关掉」）。 */
   .ct-corner{display:none;}
-  .psummons{display:none;}
+  /* v1.1.x（用户报障：电脑端看不到召唤物）：筹码条改**桌面常驻** —— 基档就给全样式
+     （与手机横屏档那份逐字一致）；手机横屏档只在「收起」时不渲染（由 JS 决定），
+     不再靠 display:none 把桌面也一起关掉。
+     ⚠️ 仍必须放在下面所有 media 块**之前**：与 .ct-corner 同特异度，靠书写顺序取胜。 */
+  .psummons{display:flex; position:absolute; left:100%; top:100%; margin-left:2px; margin-top:2px;
+            flex-wrap:wrap; align-content:flex-start; gap:2px; max-width:min(96px,20vw); z-index:2;}
+  .psummons .summon{font-size:10px; line-height:1.25; padding:1px 6px; border-radius:10px; white-space:nowrap;}
   .sb-short{display:none;}
   /* ⚠️ 选择器必须比 :1262 的 `.tb-detail .stat{display:inline-flex}` **更长**：
      那条会把裸 `.stat-detail-full{display:none}` 盖掉 ⇒ 桌面档的详情里凭空多出一行完整信息。 */
@@ -3064,7 +3155,7 @@
      ⚠️ 判据在 JS（60_boot.js render 的 classList.toggle）：只有「恰 1 只 boss + 其余全是 summon 小怪
         + 按算出来的宽度装不下」才加这个类 ⇒ 844×390（一行放得下）与桌面档一个字都不变。 */
 
-  /* —— ① 折叠键的**基档**：桌面档不出现（桌面看顶栏详情里的 .tb-summons，与改动前一致） ——
+  /* —— ① 折叠键的**基档**：桌面档不出现（桌面筹码条常驻，不需要这颗开合键；见 :2886） ——
      ⚠️ 必须写在下面 media 块之前（同特异度靠书写顺序取胜）。 */
   .ps-fold{display:none;}
   /* v1.0.13：玩家立绘右侧的极简状态芯片（只留层数/数值，全名进 data-tip）。
@@ -3252,6 +3343,17 @@
   /* 内容区落在卷轴内侧红框之内（内边距按素材量出来的比例） */
   .rk-body{position:absolute; inset:11.5% 6.8% 10.5%; display:flex; flex-direction:column;
     min-height:0; text-align:left; color:#3b2f1e;}
+  /* v1.1.x（用户：电脑端排行榜的字与布局偏小）：内容整体 **1.5×**。
+     做法：把内容盒按 1/1.5 收小（86.4%→57.6%、78%→52%），再用 transform 放大回去 ——
+     视觉上正好铺满**原来的**内容区，所以皇榜卷轴底图 .rk-scrollbg 一个字都不用动。
+     ⚠️ 不用 zoom：各浏览器对 zoom 下百分比 inset 的解释有分歧；transform 只说一件事。
+     ⚠️ transform-origin 必须是 0 0，配 left/top 才是「从左上角长出来」。
+     仅电脑端：手机横屏档是 max-height ≤560 的媒体块，被这里 min-height:561px 排除。 */
+  @media (min-width:521px) and (min-height:561px){
+    .rk-body{left:6.8%; top:11.5%; right:auto; bottom:auto;
+             width:calc(86.4% / 1.5); height:calc(78% / 1.5);
+             transform:scale(1.5); transform-origin:0 0;}
+  }
   .rk-top{flex:0 0 auto; display:flex; align-items:center; gap:8px; height:30px;}
   .rk-back{flex:0 0 auto; background:none; border:0; cursor:pointer; font-family:inherit;
     font-size:13px; letter-spacing:1px; color:#8c2b21; padding:2px 8px 2px 0;

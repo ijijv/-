@@ -832,17 +832,26 @@ function doUnknown(ev){
 }
 function unknownRemove(){
   if(G.deck.length<=1){ unknownEmpty(); return; }
-  const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="askUnknownRemove(${i})">${cardBody(c)}</div>`).join('');
-  showOverlay(`<h2>净 坛</h2><p>一座祭坛，香火缭绕。你可以焚掉一张牌，净化牌组。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`);
+  const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" data-fi="${i}" onclick="askUnknownRemove(${i})">${cardBody(c)}</div>`).join('');
+  /* v1.1.x（用户口径「净坛布局：直接复用锻造的卡片尺寸与列数、整行铺满」）——
+     净坛是**单张卡**格（无「当前 ▸ 升级后」对照），所以复用 forge/pile 共用那条
+     满屏宽 grid（`#overlay.pile-scene` 就是「单张卡 = 132px 单元格」的那一半），
+     而不是再传 forge-scene：那条被 verify_dist 钉着「恰好两处调用」（道观 / 篝火）。 */
+  showOverlay(`<h2>净 坛</h2><p>一座祭坛，香火缭绕。你可以焚掉一张牌，净化牌组。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`, undefined, 'pile-scene');
 }
 function doUnknownRemove(i){
   const c=G.deck[i];
   if(c && c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
-  const cc=G.deck.splice(i,1)[0]; log(`焚符净坛：删除【${cc.name}】`);
-  hideOverlay(); goNext();
+  /* v1.1.x（用户口径）：火焰从左下角烧到右上角、化为灰烬，动画走完才真正从牌组移除并推进。
+     无 DOM / 流畅模式 ⇒ 同步收尾。 */
+  let el=null; try{ el=document.querySelector('#overlay.pile-scene .reward-cards [data-fi="'+i+'"]'); }catch(e){}
+  cardFxAnim(el, 'pile', ()=>{
+    const cc=G.deck.splice(i,1)[0]; log(`焚符净坛：删除【${cc.name}】`);
+    hideOverlay(); goNext();
+  });
 }
 function unknownPotion(){
-  const p=randomPotion(); G.potions.push(p);
+  const p=randomPotion(); gainPotion(p);
   showOverlay(`<h2>灵 泉</h2><p>一泓清泉自石缝渗出，隐隐有灵光。<br>你取一瓢饮下，得了一瓶【${p.name}】。</p><div class="reward-cards"><div class="relic r-blue">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
 /* v0.68.1：古井许愿**先问后扣**（用户报「他要你八点生命换一个遗物，你又不想要换，
@@ -1056,7 +1065,84 @@ function showReward(){
   const cards=picks.map((c,i)=>({c,i})).sort((a,b)=>(_TYPE_ORD[a.c.type]??9)-(_TYPE_ORD[b.c.type]??9)||a.i-b.i)
     .map(({c,i},k)=>`<div class="rcard" data-ri="${i}" style="--rd:${k}" onclick="flipReward(this,${i})"><div class="rcard-inner"><div class="rcard-face rcard-front"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div><div class="rcard-face rcard-back"></div></div></div>`).join('');
   const cls='reward-cards flip-cards'+(fx()?' reward-flip':'');
-  showOverlay(`<h2>战斗胜利 · 三选一</h2><p>点击卡牌翻开查看，再点一次加入牌组（或跳过）</p><div class="${cls}">${cards}</div><button class="btn ghost" onclick="skipReward()">跳过</button>`);
+  /* v1.1.x（用户口径）：
+     · 标题改成「请选择你中意的手牌」；
+     · 「跳过」按键改叫「无视」（语义不变，只是换个说法）；
+     · 右下角加一枚**抽牌堆 UI**，显示玩家**主牌库**（G.deck）当前张数 ——
+       选中一张后 `pickReward` 会**即时**把数字 +1（见下）。 */
+  const pileUI=`<div class="reward-pile" id="rewardPile"><div class="rp-stack"><div class="rp-card"></div><div class="rp-card"></div><div class="rp-card"></div></div><div class="rp-meta"><span class="rp-label">牌库</span><span class="rp-n" id="rewardPileN">${(G.deck||[]).length}</span></div></div>`;
+  showOverlay(`<h2>请选择你中意的手牌</h2><p>点击卡牌翻开查看，再点一次加入牌组（或无视）</p><div class="${cls}">${cards}</div>${pileUI}<button class="btn ghost" onclick="skipReward()">无视</button>`);
+}
+/* v1.1.x：击杀每关最后一个敌人的**掉落动画**（用户口径：三张牌背小图标落在最后击杀的敌人身上，
+   再浮向屏幕正中，化为正常的翻牌界面）—— 动画走完再亮出 showReward()。
+   ⚠️ 无 DOM / 流畅模式 / 战斗界面不在场时**直接同步** showReward()：冒烟宿主没有 #enemy-panel，
+      走同步分支 ⇒ winFight 的断言（gold / exhausted / battleResult）不受影响。 */
+function playDropSequence(){
+  let host=null; try{ host=document.getElementById('enemy-panel'); }catch(e){}
+  const canAnim = (typeof fx==='function' && fx()) && host && document.createElement && document.body && window.requestAnimationFrame;
+  if(!canAnim){ showReward(); return; }
+  try{
+    const rect=lastKillRect();
+    const cx=rect?rect.cx:window.innerWidth/2, cy=rect?rect.cy:window.innerHeight*0.42;
+    const layer=document.createElement('div'); layer.className='drop-layer';
+    const els=[];
+    for(let k=0;k<3;k++){
+      const d=document.createElement('div');
+      d.className='drop-card drop-fall'; d.style.setProperty('--dd',String(k));
+      d.style.left=(cx+(k-1)*20)+'px'; d.style.top=(cy-8)+'px';
+      layer.appendChild(d); els.push(d);
+    }
+    document.body.appendChild(layer);
+    const midX=window.innerWidth/2, midY=window.innerHeight*0.44;
+    setTimeout(()=>{
+      els.forEach((d,k)=>{
+        const dx=(midX+(k-1)*56)-(cx+(k-1)*20), dy=midY-(cy-8);
+        d.style.transition='none'; d.classList.remove('drop-fall');
+        d.style.transform='translate(-50%,0) scale(1)'; d.style.opacity='1';
+        void d.offsetWidth;
+        d.style.transition='transform .44s cubic-bezier(.35,.1,.25,1), opacity .44s ease';
+        requestAnimationFrame(()=>{ d.style.transform=`translate(calc(-50% + ${dx}px), ${dy}px) scale(1.7)`; d.style.opacity='.15'; });
+      });
+    }, 440);
+    setTimeout(()=>{ try{ layer.remove(); }catch(e){} showReward(); }, 950);
+  }catch(e){ try{ const l=document.querySelector('.drop-layer'); if(l) l.remove(); }catch(_){} showReward(); }
+}
+/* 最后击杀的那只敌人（G.enemies 末位）在场上的锚点；量不到就交给上层兜底屏幕中心。 */
+function lastKillRect(){
+  try{
+    const arr=(G&&G.enemies)||[]; let el=null;
+    for(let i=arr.length-1;i>=0;i--){ const x=enemyEl(arr[i]); if(x){ el=x; break; } }
+    if(!el){ const p=document.getElementById('enemy-panel'); if(p) el=p; }
+    if(!el || !el.getBoundingClientRect) return null;
+    const r=el.getBoundingClientRect(); if(!r || (!r.width && !r.height)) return null;
+    return { cx:r.left+r.width/2, cy:r.top+r.height*0.62 };
+  }catch(e){ return null; }
+}
+/* 选中的那张牌**飞回右下角牌堆 UI**（用户口径：「飞回牌堆的牌肯定是选中的牌」）。
+   量不到元素 / 无线框 / 流畅模式 ⇒ 同步回调，逻辑不受动画影响。 */
+function flyCardToPile(el, done){
+  const finish=()=>{ if(done) done(); };
+  try{
+    const pile=document.getElementById('rewardPile');
+    if(!el || !el.getBoundingClientRect || !pile || !document.body || !document.createElement || (typeof fx==='function' && !fx())) return finish();
+    /* el 是 .rcard（翻转容器，宽 = 网格列宽 304px）；真正要飞的是里面那张 132×200 的 .card。 */
+    const card=(el.querySelector && el.querySelector('.card')) || el;
+    const a=card.getBoundingClientRect ? card.getBoundingClientRect() : null;
+    if(!a || (!a.width && !a.height)) return finish();
+    const stack=(pile.querySelector && pile.querySelector('.rp-stack')) || pile;
+    const b=stack.getBoundingClientRect ? stack.getBoundingClientRect() : null;
+    if(!b) return finish();
+    const tx=(b.left+b.width/2)-(a.left+a.width/2), ty=(b.top+b.height/2)-(a.top+a.height/2);
+    const fly=card.cloneNode(true);
+    fly.classList.add('fly-card');
+    fly.style.left=a.left+'px'; fly.style.top=a.top+'px'; fly.style.width=a.width+'px'; fly.style.height=a.height+'px';
+    fly.style.zIndex='30'; fly.style.transformOrigin='50% 50%';
+    fly.style.transition='transform .52s cubic-bezier(.4,.05,.3,1), opacity .52s ease';
+    document.body.appendChild(fly); el.style.visibility='hidden';
+    void fly.offsetWidth;
+    requestAnimationFrame(()=>{ fly.style.transform=`translate(${tx}px, ${ty}px) scale(.1)`; fly.style.opacity='.18'; });
+    setTimeout(()=>{ try{ fly.remove(); }catch(e){} finish(); }, 560);
+  }catch(e){ finish(); }
 }
 /* v1.0.14（P3-15）：翻牌交互 —— 第一次点=翻开看内容（不改动 G.rewardPicks），第二次点=选中带进牌组。
    v1.0.17：翻开走**专用音** ui_flip（素材/sfx/ui_flip.mp3），与选走的 ui_reward 分开。 */
@@ -1070,6 +1156,8 @@ function pickReward(i){
   const c=G.rewardPicks[i];
   G.deck.push(c);
   log(`获得卡牌【${c.name}】`);
+  /* v1.1.x（用户口径）：右下角牌堆 UI 显示**玩家主牌库剩余张数**，加入所选牌后**即时** +1。 */
+  try{ const n=document.getElementById('rewardPileN'); if(n) n.textContent=G.deck.length; }catch(e){}
 
   // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
   const tier = G.rewardTier || 'normal';
@@ -1077,8 +1165,10 @@ function pickReward(i){
     updateGoldCompensation(G.lastRewardHadGold);
   }
 
-  hideOverlay();
-  afterReward();
+  /* 选中的那张牌**飞回右下角牌堆 UI**，动画走完再关面板、进下一环（用户口径：飞回去的是选中的牌）。
+     ⚠️ 无元素 / 无线框 / 流畅模式时 flyCardToPile **同步**回调 ⇒ 冒烟打桩不会漏进真实 goNext。 */
+  let el=null; try{ el=document.querySelector('.reward-cards .rcard[data-ri="'+i+'"]'); }catch(e){}
+  flyCardToPile(el, ()=>{ hideOverlay(); afterReward(); });
 }
 function skipReward(){
   // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
@@ -1091,8 +1181,71 @@ function skipReward(){
   afterReward();
 }
 function afterReward(){
-  if(G.pendingRelic){ G.pendingRelic=false; showRelicReward(); }
-  else goNext();
+  /* v1.1.x（用户口径）：撤掉「关卡结算」面板后，抽完牌的去处分三种 ——
+       · 幕主（前 1/2 幕 boss）：**自动进锻造**（配「点击关卡图标」音效 ui_map）；
+         战利品（遗物 + 灵汁）已在 winFight 就地发放、图标已飞进锦囊。
+       · 精英：额外来一件遗物（三选一，选中那件飞进锦囊）。
+       · 普通关：直接进地图。
+     ⚠️ 最后一幕最后一关 boss 早在 winFight 就 advanceAct() 走了，压根不到这儿。 */
+  if(G.battleResult && G.battleResult.isBoss){ G.pendingRelic=false; sfx('ui_map'); showForgePicker('boss'); return; }
+  if(G.pendingRelic){ G.pendingRelic=false; showRelicReward(); return; }
+  goNext();
+}
+
+/* ===================== 掉落 / 飞行 / 锦囊（v1.1.x） =====================
+   用户口径：「以后获得遗物和灵汁都要加入这种动画，回到锦囊」——「获得瞬间从来源位置飞向锦囊」。
+   手机端与电脑端锦囊位置**不同**（战斗内 #jinnangBtn / 地图上 #mtJinnangBtn），一律**运行时量取**。 */
+/* 锦囊按钮：战斗顶栏是 #jinnangBtn，地图顶栏是 #mtJinnangBtn。 */
+function pouchButtonEl(){
+  try{ return document.getElementById('jinnangBtn') || document.getElementById('mtJinnangBtn') || null; }
+  catch(e){ return null; }
+}
+/* 掉落来源元素：战斗里取**最后击杀的那只敌人**（G.enemies 末位），没有就 null（回落屏幕中心）。 */
+function dropSourceEl(){
+  try{
+    const arr=(G&&G.enemies)||[];
+    for(let i=arr.length-1;i>=0;i--){ const x=enemyEl(arr[i]); if(x) return x; }
+  }catch(e){}
+  return null;
+}
+/* 锦囊闪一下金光（获遗物 / 灵汁时）。 */
+function pouchFlash(){
+  try{
+    const b=pouchButtonEl(); if(!b || !b.classList) return;
+    b.classList.remove('pouch-flash'); void b.offsetWidth; b.classList.add('pouch-flash');
+    setTimeout(()=>{ try{ b.classList.remove('pouch-flash'); }catch(e){} }, 760);
+  }catch(e){}
+}
+/* 小图标从**来源位置**飞向锦囊按钮中心，到位后锦囊闪金光。
+   srcEl 空 ⇒ 回落屏幕中心。无 DOM / 量不到按钮 / 流畅模式 ⇒ **同步**闪金光并收尾。 */
+function flyToPouch(srcEl, iconHTML, done){
+  const finish=()=>{ if(done) done(); };
+  try{
+    const pouch=pouchButtonEl();
+    const r=pouch && pouch.getBoundingClientRect ? pouch.getBoundingClientRect() : null;
+    const ok=!!(pouch && r && (r.width||r.height) && document.body && document.createElement && window.requestAnimationFrame);
+    if(!(typeof fx==='function' && fx()) || !ok){ pouchFlash(); return finish(); }
+    let src=null;
+    if(srcEl && srcEl.getBoundingClientRect){ const a=srcEl.getBoundingClientRect(); if(a && (a.width||a.height)) src=a; }
+    const x=src?(src.left+src.width/2):window.innerWidth/2;
+    const y=src?(src.top+src.height/2):window.innerHeight*0.45;
+    const tX=r.left+r.width/2, tY=r.top+r.height/2;
+    const fly=document.createElement('div');
+    fly.className='fly-ico'; fly.innerHTML=iconHTML||'';
+    fly.style.left=x+'px'; fly.style.top=y+'px';
+    document.body.appendChild(fly);
+    requestAnimationFrame(()=>{
+      fly.style.transform=`translate(calc(-50% + ${tX-x}px), calc(-50% + ${tY-y}px)) scale(.5)`;
+      fly.style.opacity='.2';
+    });
+    setTimeout(()=>{ try{ fly.remove(); }catch(e){} pouchFlash(); finish(); }, 560);
+  }catch(e){ pouchFlash(); finish(); }
+}
+/* 灵汁获取的**唯一入口**：入包 + 图标从来源位置飞向锦囊。 */
+function gainPotion(p){
+  if(!p) return;
+  G.potions.push(p);
+  flyToPouch(dropSourceEl(), potionIcon(p));
 }
 function weightedRelic(){
   /* 专属遗物过滤：带 hero 的只进该英雄池；通用（无 hero）四人共用。
@@ -1120,11 +1273,18 @@ function showRelicReward(){
   if(!unowned.length){ goNext(); return; }
   const picks = shuffle([...unowned]).slice(0,3);
   G.relicPicks=picks;
-  const html=picks.map((r,i)=>`<div class="relic ${RCOLOR[r.rarity]}" onclick="pickRelic(${i})">${relicIcon(r)}<div class="cname" data-tip="relic:${r.id}">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype">遗物 · ${RNAME[r.rarity]}</div></div>`).join('');
+  const html=picks.map((r,i)=>`<div class="relic ${RCOLOR[r.rarity]}" data-ri="${i}" onclick="pickRelic(${i})">${relicIcon(r)}<div class="cname" data-tip="relic:${r.id}">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype">遗物 · ${RNAME[r.rarity]}</div></div>`).join('');
   showOverlay(`<h2>获得遗物 · 三选一</h2><p>遗物本局永久生效，点击获得（或跳过）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="skipRelic()">跳过</button>`);
 }
-/* v0.61.32：遗物音按法器类别分化（同古井许愿那一处） */
-function pickRelic(i){ const r=G.relicPicks[i]; grantRelic(r); sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`); hideOverlay(); goNext(); }
+/* v0.61.32：遗物音按法器类别分化（同古井许愿那一处）
+   v1.1.x：选中那件先**飞进锦囊**（用户口径「击杀后遗物会飘到锦囊」），动画走完再关面板推进。 */
+function pickRelic(i){
+  const r=G.relicPicks[i];
+  sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`);
+  /* 选中那件从三选一面板**飞进锦囊**（grantRelic 内部飞 + 锦囊闪金光），动画走完再关面板推进。 */
+  let el=null; try{ el=document.querySelector('.reward-cards .relic[data-ri="'+i+'"] .ricon'); }catch(e){}
+  grantRelic(r, el, ()=>{ hideOverlay(); goNext(); });
+}
 function skipRelic(){ hideOverlay(); goNext(); }
 
 function showCampfire(){
@@ -1194,9 +1354,39 @@ function forgeCard(i){
   const c=G.deck[i];
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   if(!canUpgrade(c)){ floatMsg('不可升级'); log(`【${c.name}】没有可升级的变化，无法锻造`); return; }
-  c.up=true; log(`锻造升级【${c.name}】`); sfx('ui_levelup');   // v0.61.32：升级从蹭遗物音改成专属音
-  if(G.forgeFrom==='camp'){ G.campActed=true; G.forgeFrom=null; saveRun(); renderCampfire(); }
-  else { G.forgeFrom=null; hideOverlay(); goNext(); }
+  sfx('ui_levelup');   // v0.61.32：升级从蹭遗物音改成专属音（⚠️ 必须**同步**出声：冒烟 v0.61.32 钉着这一条）
+  /* v1.1.x（用户口径）：火焰覆盖 → 一阵风吹散 → 升级卡牌亮相；动画走完才真正置 up 并推进。
+     无 DOM / 流畅模式 ⇒ cardFxAnim 直接同步收尾（冒烟与无头环境照样推进）。 */
+  let el=null; try{ el=document.querySelector('.reward-cards [data-fi="'+i+'"]'); }catch(e){}
+  cardFxAnim(el, 'forge', ()=>{
+    c.up=true; log(`锻造升级【${c.name}】`);
+    if(G.forgeFrom==='camp'){ G.campActed=true; G.forgeFrom=null; saveRun(); renderCampfire(); }
+    else { G.forgeFrom=null; hideOverlay(); goNext(); }
+  });
+}
+/* —— v1.1.x：锻造 / 净坛 卡牌特效（用户口径） ——
+   锻造：卡牌被火焰覆盖 → 一阵风吹散 → 升级卡牌亮相。
+   净坛：火焰从左下角烧起 → 烧到右上角 → 最后化为灰烬。
+   无 DOM / 流畅模式 / 量不到元素 ⇒ **同步**收尾（推进逻辑不依赖动画）。 */
+function cardFxAnim(el, kind, done){
+  const finish=()=>{ if(done) done(); };
+  try{
+    const canAnim = el && el.classList && document.body && (typeof fx==='function' && fx());
+    if(!canAnim) return finish();
+    if(kind==='forge'){
+      el.classList.add('is-forging');
+      setTimeout(()=>{
+        el.classList.add('is-blown');
+        setTimeout(()=>{ try{ el.classList.remove('is-forging','is-blown'); }catch(e){} finish(); }, 470);
+      }, 650);
+    } else {
+      el.classList.add('is-burning');
+      setTimeout(()=>{
+        el.classList.add('is-ash');
+        setTimeout(()=>{ try{ el.classList.remove('is-burning','is-ash'); }catch(e){} finish(); }, 370);
+      }, 800);
+    }
+  }catch(e){ finish(); }
 }
 
 /* ===================== 鬼市商店 ===================== */
@@ -1240,7 +1430,7 @@ function buyPotion(i){
   const price=potionPrice();
   if(G.gold<price){ floatMsg(`金币不足（需 ${price}）`); return; }
   const p=G.shopPotions[i]; if(!p) return;
-  G.gold-=price; G.potionBought=(G.potionBought||0)+1; G.potions.push(p); G.shopPotions.splice(i,1);
+  G.gold-=price; G.potionBought=(G.potionBought||0)+1; gainPotion(p); G.shopPotions.splice(i,1);
   sfx('gold'); log(`花费 ${price} 金币购买灵汁【${p.name}】`); saveRun(); renderShop();
 }
 function removeCard(){
@@ -2146,7 +2336,7 @@ function forgeCardHTML(c,i){
           高特异度规则给（见 原型.html 锻造段），不是自动生效的。 */
   const lock = !c.up && !canUpgrade(c);   // 升级无变化的牌：置灰、不可锻造
   /* 一张卡面。cls / badge / descCls 三个都是给「左」「右」两张卡分身的差异入口。 */
-  const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" onclick="askForgeCard(${i})">
+  const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" data-fi="${i}" onclick="askForgeCard(${i})">
     ${cardFrame()}<div class="cname">${cc.name}${cc.up?'<span class="up-mark" title="已升级">↑</span>':''}${badge}</div>
     ${cardArt(cc)}${exhaustMark(cc)}
     <div class="cost"${cc.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(cc)}</div>

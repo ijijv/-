@@ -1583,8 +1583,8 @@ function relById(id){ return RELICS.find(r=>r.id===id); }
    ⚠️ 三处获取点都必须走这里：精英三选一 pickRelic()、Boss 战利品 showBossReward()、
       古井许愿 doWellOffer()。漏一处就会出现「拿到【断刃】却没有断刃雷符」这种半截状态。
    需要「获得即生效/发牌」的遗物都挂在这个函数里，别再散落到各入口。 */
-function grantRelic(r){
-  if(!r) return;
+function grantRelic(r, srcEl, done){
+  if(!r){ if(done) done(); return; }
   if(!hasRelic(r.id)) G.relics.push(r.id);
   /* v1.0.17：拿到遗物的那一刻，叠一道**通用金光**（fx/relic_proc，自绘：金符纹扩散 + 上浮光点）。
      它是一张「任何遗物生效都能复用」的通用素材 —— 这里先挂在「获得遗物」这个最显眼的触点上。
@@ -1592,6 +1592,9 @@ function grantRelic(r){
   if(typeof SCENE !== 'undefined' && SCENE === 'battle'){ try{ playFx('relic_proc', 'player'); }catch(e){} }
   if(r.id==='duanren'){ G.deck.push(cardById('duanren_leifu')); log('断刃：牌库中生成一张【断刃雷符】'); }
   if(r.id==='yinhundeng'){ G.deck.push(cardById('yinbing')); log('引魂灯：牌库中生成一张【阴兵】'); }
+  /* v1.1.x（用户口径）：获得遗物的瞬间，小图标**从来源位置飞进锦囊**，到位后锦囊闪金光。
+     srcEl 由调用方按语境给（精英三选一给选中那张卡）；不给就取战斗里**最后击杀的敌人**。 */
+  flyToPouch(srcEl || dropSourceEl(), relicIcon(r), done);
 }
 
 /* —— 遗物对「上限类 / 被动数值」的加成：统一走函数 ——
