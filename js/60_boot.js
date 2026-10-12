@@ -356,15 +356,13 @@ function renderTopbar(){
   syncJinnangIcons();
 }
 /* v1.1.x：锦囊入口按钮的图标（图到了自动变 <img>，图没到回落「锦囊」两字）。
-   两枚按钮同图：题头竖栏的 #jinnangBtn（战斗）与地图顶栏的 #mtJinnangBtn。
+   战斗内只有题头竖栏的 #jinnangBtn 一枚；战局外的锦囊是 #outPouch（由 outHudSync 换图）。
    ⚠️ 必须写在 renderTopbar 里逐帧核对：iconTag 的探图是**异步**的（Image.onload 才翻 yes），
       而 #jinnangBtn 是静态 HTML、不会自己重渲染 —— 只在 renderTopbar 里对一次，探到后才会换图。 */
 function syncJinnangIcons(){
   const h=iconTag('ui/menu/jinnang-nobg.png','锦囊');
-  ['jinnangBtn','mtJinnangBtn'].forEach(id=>{
-    const b=document.getElementById(id);
-    if(b && b.innerHTML!==h) b.innerHTML=h;
-  });
+  const b=document.getElementById('jinnangBtn');
+  if(b && b.innerHTML!==h) b.innerHTML=h;
 }
 /* —— 符文图标按英雄换皮（用户口径「每个角色的符文样式」）——
    静态 <img src="素材/rune.png"> 保留为**默认 + 兜底**：打包.py 只内联这一处静态 src，
@@ -506,6 +504,8 @@ function render(){
      队列空时只是一句判断（绝大多数 render 零成本）。 */
   if(typeof pumpSay==='function') pumpSay();
   if(typeof fxReanchor==='function') fxReanchor();
+  /* v1.1.8：战局外常驻 HUD（牌堆 / 锦囊）随场景切换同步显隐 + 牌数刷新。 */
+  if(typeof outHudSync==='function') outHudSync();
 }
 
 /* ===================== 开局 ===================== */
@@ -639,17 +639,21 @@ function showHeroSelect(){
      名字挪到 btn_primary 的按钮底上，面板底换成程序化生成的旧纸纹（见 _patch/mk_panel_bg.py）。
      三张图的地址在文件顶部的「UI 皮肤图统一注入」里写进 :root 的 --ui-* 变量（走 assetURL）。 */
   const cards=HEROES.map(h=>{
+    /* v1.1.8（用户 2026-10-13）：角色不再按里程自动解锁，改由【入门符纸】解锁 ——
+       锁定卡若手上有符纸 ⇒ 可点（弹「是/否」确认，消耗 1 张）；没有则显示「需入门符纸」。 */
     const locked=!mileOn('hero',h.id);
-    const m=locked?MILESTONES.find(x=>x.heroes && x.heroes.indexOf(h.id)>=0):null;
-    const need=m?m.need:0;
+    const tk=mileTickets();
+    const canUnlock=locked && tk>0;
     const portrait=artImg('hero/'+h.id+'.png', `<div class="hero-emoji">${locked?'🔒':'🀄'}</div>`, 'hero-portrait');
     const nameBtn=locked
       ? `<div class="hero-name"><span>${h.name}</span></div>`
       : `<div class="hero-name" data-tip="hero:${h.id}"><span>${h.name}</span></div>`;
     const tail=locked
-      ? `<div class="hero-note">未解锁 · 里程碑 ${need} 点</div>`
+      ? `<div class="hero-note">${canUnlock?`入门符纸解锁 · 剩 ${tk} 张`:'未解锁 · 需入门符纸'}</div>`
       : `<div class="hero-note">点击选择</div>`;
-    return `<div class="hero-card${locked?' locked':''}"${locked?'':` onclick="pickHero('${h.id}')"`}>`
+    const act=locked ? (canUnlock?` onclick="askUnlockHero('${h.id}')"`:'')
+                     : ` onclick="pickHero('${h.id}')"`;
+    return `<div class="hero-card${locked?' locked':''}${canUnlock?' can-unlock':''}"${act}>`
       + `<div class="hero-frame">${portrait}</div>`
       + nameBtn
       + `<div class="hero-brief">${h.brief||h.desc}</div>`
@@ -676,6 +680,19 @@ function heroDeck(id){
   const h=HEROES.find(x=>x.id===id);
   const d=[]; h.deck.forEach(([cid,n])=>{ for(let i=0;i<n;i++) d.push(cardById(cid)); });
   return d;
+}
+/* v1.1.8（用户 2026-10-13）：用 1 张【入门符纸】解锁锁定角色。
+   走既有的「是/否」图标确认浮层（askConfirm），确认后扣 1 张、落 SAVE.unlockedHeroes 并重渲染选角页。 */
+function askUnlockHero(id){
+  const h=HEROES.find(x=>x.id===id); if(!h) return;
+  if(mileTickets()<1){ sfx('error'); floatMsg('没有【入门符纸】'); return; }
+  askConfirm(`消耗 1 张【入门符纸】解锁【${h.name}】？<br>当前持有 ${mileTickets()} 张。`, ()=>{
+    if(unlockHeroWithTicket(id)){
+      log(`使用入门符纸解锁角色【${h.name}】`);
+      floatMsg(`已解锁【${h.name}】 · 剩 ${mileTickets()} 张`);
+      showHeroSelect();
+    } else { sfx('error'); floatMsg('解锁失败'); }
+  });
 }
 /* ===================== 初始牌组二选一（v1.1.5 · 血祭阴差 t4） =====================
    用户口径：选角后立刻（首轮抽牌前）弹出——上「现有阴差初始牌组」、下「血怒流初始牌组」，
@@ -1236,9 +1253,7 @@ function rankLocalBest(b){
    榜单是先 showOverlay 再填，所以这里只改现存 DOM 节点（节点不在就安静返回），不重排整屏。 */
 function rankSelfFill(){
   if(typeof rankSelf!=='function') return;
-  rankSelf().then(s=>{
-    RANK_SELF_CACHE.name=(s&&s.name)||RANK_SELF_CACHE.name||'';
-    RANK_SELF_CACHE.avatar=(s&&s.avatar)||RANK_SELF_CACHE.avatar||'';
+  const paint=()=>{
     const nm=document.getElementById('rk-mynm');
     if(nm && RANK_SELF_CACHE.name) nm.textContent=RANK_SELF_CACHE.name;
     const av=document.getElementById('rk-myav');
@@ -1246,6 +1261,22 @@ function rankSelfFill(){
       av.classList.add('rk-av');
       av.innerHTML='<img src="'+RANK_SELF_CACHE.avatar+'" alt="">';
     }
+  };
+  rankSelf().then(s=>{
+    RANK_SELF_CACHE.name=(s&&s.name)||RANK_SELF_CACHE.name||'';
+    RANK_SELF_CACHE.avatar=(s&&s.avatar)||RANK_SELF_CACHE.avatar||'';
+    paint();
+    /* v1.1.8：tap 上没有取用户信息的方法时（真机回报：仍显示「道友」+ 无头像），
+       退一步用**官方排行榜接口**取「我在本榜的名次」—— loadCurrentPlayerLeaderboardScore
+       按官方口径会带回当前玩家的 nickname/avatar，且不走「好友关系」隐私授权。
+       这一路只需基础库 ≥1.8.0（排行榜本来就要求），比猜 tap 上的取用户方法确定性高得多。 */
+    if((RANK_SELF_CACHE.name && RANK_SELF_CACHE.avatar) || typeof rankSelfScore!=='function') return;
+    rankSelfScore(RANK_VIEW).then(mine=>{
+      if(!mine) return;
+      RANK_SELF_CACHE.name=RANK_SELF_CACHE.name||String(mine.nickname||mine.name||'');
+      RANK_SELF_CACHE.avatar=RANK_SELF_CACHE.avatar||String(mine.avatar||mine.avatarUrl||'');
+      paint();
+    }, ()=>{});
   }, ()=>{});
 }
 /* 全平台榜那一块：有接口 ⇒ 拉前排填进新面板的 #rk-table / #rk-pod；

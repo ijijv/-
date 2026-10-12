@@ -287,7 +287,11 @@ function calcScore(){ let t=0; scoreParts().forEach(function(p){ t+=p.val; }); r
 /* 结算面板正文（纯文字数字 + 透明背景、无纯色底板）。返回 { html, kind, sp, mp, sTot, mTot } 交给 settleAnim。 */
 function settleResultHTML(mode){
   const kind=settleKind();
-  const sp=scoreParts(G), mp=mileParts(G);
+  /* v1.1.8（用户报障「结算 +700 多、里程界面只 +500 多」）：里程分项取**发放当刻的快照**
+     （grantRunMilestones 落 G._mileParts）—— 「先败 → 复活 → 再败」时，第二次结算若用当时的 G
+     重算会显示一个**根本没发出去**的更大值（幂等守卫已把第二次发放挡掉了）。分数 sp 不受此限：
+     总分是每局实时重算的（复活后分数确实会涨，也真的会入榜）。 */
+  const sp=scoreParts(G), mp=(G && G._mileParts) ? G._mileParts : mileParts(G);
   const sTot=sp.reduce(function(a,p){ return a+p.val; },0);
   const mTot=mp.reduce(function(a,p){ return a+p.val; },0);
   const rows=function(arr){ return arr.map(function(p){
@@ -309,7 +313,13 @@ function settleResultHTML(mode){
     +'<div class="settle-block settle-mile"><div class="settle-cap">里程分数</div>'
     +'<div class="settle-rows" id="settle-mile-rows">'+rows(mp)
     +'<div class="settle-row settle-sum"><span class="settle-lab">里程</span><span class="settle-val">0</span></div></div>'
-    +'<div class="settle-big" id="settle-bigm"></div></div>'
+    +'<div class="settle-big" id="settle-bigm"></div>'
+    /* v1.1.8（用户口径「结算画面的『里程』是本局获得的、『累计』就是里程界面该角色海报下的累积」）：
+       「累计」直接读 milePts(G.hero) —— 与里程界面海报下 `.ml-hinfo` 的读数是**同一个数**，
+       不再用无参的全局 p.pts（那是跨角色累加，与界面读数对不上）。
+       ⚠️ 这一行是**静态**的、不进 `#settle-mile-rows`：settleAnim 按「行序」对齐 R.mp，多一行会让下标错位。 */
+    +'<div class="settle-acc">累计 <b>'+(typeof milePts==='function' ? milePts((G&&G.hero)||'tianshi') : 0)+'</b> 点</div>'
+    +'</div>'
     +'<div class="settle-actions">'+btns+'</div>'
     +'</div>';
   return { html:html, kind:kind, sp:sp, mp:mp, sTot:sTot, mTot:mTot };
@@ -413,9 +423,6 @@ function reviveFree(){
   floatMsg('复活 · 回满血');
   revive();
 }
-function reviveAd(){
-  adPlaceholder('复活', ()=>{ track('revive'); revive(); });
-}
 function showVictory(){
   sfx('win');
   track('runWin');
@@ -482,9 +489,21 @@ function recordClearTime(ms){
        榜单在后台是按**时间类型**建的（TapTap 的时间榜收毫秒、并自动格式化成「X 秒/分」）。
        原先提交 1800（秒）被当成 1800ms ⇒ 官方榜显示 1.8 秒。这里原样提交 ms 即对齐。 */
     const vms=Math.max(0, Math.round(ms));
-    try{ rankSubmit(vms, 'clear_total').catch(function(){}); }catch(e){}
+    /* v1.1.8：**不再静默** —— 用户报障「TapTap 开发者中心里 6 个榜一直没变」，
+       旧版这条路两个 catch 都是空的，真机上一条新成绩都没上去也看不到任何原因。
+       改为与 recordScoreRun 同款：把真实错误（含 rankDiag 的方法名诊断串）浮字出来，
+       一次真机回报即可判定是「后台建榜/权限没配」还是「基础库太低拿不到管理器」。
+       两个榜的错误串完全相同时只浮一条，免得同一原因刷屏。 */
+    let _clearErrShown='';
+    function clearRankSay(e){
+      const msg='榜单上传失败：'+((e&&e.message)||e);
+      if(msg===_clearErrShown) return;
+      _clearErrShown=msg;
+      if(typeof floatMsg==='function') floatMsg(msg);
+    }
+    try{ rankSubmit(vms, 'clear_total').catch(clearRankSay); }catch(e){}
     const hb='clear_'+(G.hero||'');
-    try{ if(typeof RANK_IDS!=='undefined' && RANK_IDS[hb]) rankSubmit(vms, hb).catch(function(){}); }catch(e){}
+    try{ if(typeof RANK_IDS!=='undefined' && RANK_IDS[hb]) rankSubmit(vms, hb).catch(clearRankSay); }catch(e){}
   }
 }
 

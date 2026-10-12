@@ -3680,13 +3680,14 @@
      真出问题也无人响。这里补两条：① 渲染出的 HTML 确实是「卡背朝前的翻转结构」；
      ② 交互确实是「第一次点翻开、第二次点才选走」（不是一点就走）。 */
   (function () {
-    var keepSO = showOverlay, seen = null;
+    var keepSO = showOverlay, keepDrop = dropUI, seen = null;
     showOverlay = function (h) { seen = String(h || ''); };
+    dropUI = function (h) { seen = String(h || ''); };
     try {
       G = __base('tianshi');
       showReward();
     } catch (e) { seen = 'ERR:' + e; }
-    finally { showOverlay = keepSO; }
+    finally { showOverlay = keepSO; dropUI = keepDrop; }
     __ok('v1.0.14 战后三选一用 .flip-cards 容器（翻转交互的唯一挂钩）',
       !!seen && seen.indexOf('reward-cards flip-cards') >= 0, (seen || '').slice(0, 140));
     __ok('v1.0.14 每张牌都有正/背两面（.rcard-front + .rcard-back，缺背面就翻不出东西）',
@@ -4978,8 +4979,8 @@
       !!MAP_BG[1] && !!MAP_BG[2] && !!MAP_BG[3]);
     __ok('v0.61.40 UI nodeLabel 与敌人库解耦（不再触碰 ENEMIES）',
       String(nodeLabel).indexOf('ENEMIES') < 0, String(nodeLabel));
-    __ok('v0.61.40 UI 地图页提示文案已改（不再说「只能走进相邻列」）',
-      String(showMap).indexOf('只能走进相邻列的节点') < 0 && String(showMap).indexOf('沿连线向上') >= 0);
+    __ok('v0.61.40 UI 地图页提示文案已改（不再说「只能走进相邻列」；v1.1.8 起幕名匾并进顶栏横幅）',
+      String(showMap).indexOf('只能走进相邻列的节点') < 0 && String(mapTopbarHTML).indexOf('沿连线向上') >= 0);
     __ok('v0.61.40 UI 连线改为读节点自带的 next（不再用 |列差|<=1 猜）',
       String(drawMapLinks).indexOf('.next') >= 0 && String(drawMapLinks).indexOf('Math.abs(c2-c)') < 0);
     __ok('v0.61.40 UI nodeAt 改成 data-r/data-c 属性查询（行宽可变后位置法会错位）',
@@ -5868,8 +5869,9 @@
             var iRem = cls.indexOf('overlay:-map-scene'), iAdd = cls.indexOf('overlay:+map-scene');
             return iRem >= 0 && iAdd > iRem;
           })(), cls.join(' '));
-        __ok('v0.62.0 场景 顶栏复用了角色专属资源（尸气/血怒分支）与锦囊入口，不是另造一套',
-          String(mapTopbarHTML).indexOf('HEROES') >= 0 && String(mapTopbarHTML).indexOf('mt-jinnang') >= 0 &&
+        __ok('v1.1.8 场景 顶栏复用了角色专属资源（尸气/血怒分支）与菜单入口 + 幕名匾并进横幅，不再自带锦囊按钮（锦囊改由 .out-hud 落屏幕左下）',
+          String(mapTopbarHTML).indexOf('HEROES') >= 0 && String(mapTopbarHTML).indexOf('mt-menu') >= 0 &&
+          String(mapTopbarHTML).indexOf('map-plaque') >= 0 &&
           String(mapTopbarHTML).indexOf('openMenu') >= 0);
         /* 卷轴三张素材必须走 assetURL（打包.py 不重写 CSS 里的 url()，相对路径在产物里会 404）。
            ⚠️ 别断言「源码里有 '素材/'」—— 那正是会 404 的那条路。要断言的是**三条都走了 assetURL**。 */
@@ -6248,7 +6250,7 @@
       + '由 _patch/mk_flame_sheets.py 出图；v1.1.6 起的 fudu_hit 是用户素材重排：'
       + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480）；'
       + 'v1.1.x 起的 lightning 是用户素材：8 列 × 6 行、单元 480×480、48 帧；'
-      + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 6 行、单元 480×480、48 帧）',
+      + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 3 行、单元 480×480、24 帧）',
       Object.keys(FX_SHEETS).length === 39 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
@@ -7209,10 +7211,10 @@
       milePointsFor({}) === 0 && milePointsFor({ act: 0, mapRow: -3, totalKills: -9 }) === 0);
     __ok('v1.0.25 一局普通通关（≈1295 点）能让天师轨 ≥2 档达标（正反馈）',
       MILE_TRACKS.tianshi.nodes.filter(function (n) { return n.need <= 1295; }).length >= 2);
-    __ok('v1.0.15 三个角色里程碑 need 各不同、不挤在最后一条',
-      new Set(MILESTONES.filter(function (m) { return m.heroes; }).map(function (m) { return m.need; })).size === 3 &&
+    __ok('v1.1.8 角色门禁已撤：MILESTONES 不含任何 heroes 条目（角色改由【入门符纸】解锁）',
+      !MILESTONES.some(function (m) { return m.heroes; }) &&
       ['hero_ganshiren', 'hero_wuseng', 'hero_yincha'].every(function (id) {
-        return MILESTONES.some(function (m) { return m.id === id; });
+        return !MILESTONES.some(function (m) { return m.id === id; });
       }));
 
     /* 2) mileOn 四种 kind 的边界（初始：只有基础内容） */
@@ -7234,6 +7236,22 @@
     SAVE.mile = ['adv_card', 'adv_relic', 'potion_new'];
     __ok('v1.0.15 解锁 adv_card / adv_relic / potion_new 后对应内容立即可用',
       mileOn('card', 'tianlei') === true && mileOn('relic', 'jifengfu') === true && mileOn('potion', 'jingangjiu') === true);
+
+    /* 2a-2) v1.1.8：角色改由【入门符纸】解锁 —— 手上无符纸时锁定角色不可解锁；
+       有符纸（mileTickets）时消耗 1 张才写 SAVE.unlockedHeroes，mileOn('hero') 随之放行。 */
+    SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0, heroes: {} },
+             mile: [], mileClaimed: [], unlockedHeroes: [], mileTickets: 0 };
+    __ok('v1.1.8 入门符纸：符纸为 0 时锁定角色不可解锁 / mileOn(hero) 仍锁',
+      mileTickets() === 0 && unlockHeroWithTicket('ganshiren') === false &&
+      mileOn('hero', 'ganshiren') === false && mileOn('hero', 'wuseng') === false);
+    SAVE.mileTickets = 2;
+    __ok('v1.1.8 入门符纸：消耗 1 张解锁角色（幂等、不重复扣），并写入 SAVE.unlockedHeroes',
+      unlockHeroWithTicket('ganshiren') === true && heroUnlocked('ganshiren') === true &&
+      mileTickets() === 1 && mileOn('hero', 'ganshiren') === true &&
+      unlockHeroWithTicket('ganshiren') === false && mileTickets() === 1 &&
+      mileOn('hero', 'wuseng') === false);
+    __ok('v1.1.8 入门符纸：解锁 tianshi / 非法 id 一律拒绝且不扣符纸',
+      unlockHeroWithTicket('tianshi') === false && unlockHeroWithTicket('__nope') === false && mileTickets() === 1);
 
     /* 2b) v1.1.1 里程碑专属内容硬门禁：未在里程界面领取该档前，即使门禁总开关为开也不放行。 */
     SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [], mileClaimed: [] };
@@ -7484,10 +7502,11 @@
     var ptsBefore = SAVE.progress.pts, j3 = grantRunMilestones();
     __ok('v1.0.25 grantRunMilestones：普通通关一次点亮天师轨 ≥2 档',
       j3.length >= 2, 'unlocked=' + j3.map(function (m) { return m.id; }).join(','));
-    __ok('v1.1.x grantRunMilestones：解锁同时含本角色轨档位 id 与旧门禁表 id，均写入 SAVE.mile',
+    __ok('v1.1.8 grantRunMilestones：解锁本角色轨档位 + 新表剩余 id（紫/金内容），且不再写任何 hero_* 角色 id',
       j3.some(function (m) { return /^tianshi_t\d+$/.test(m.id); }) &&
       j3.every(function (m) { return mileDone(m.id) && SAVE.mile.indexOf(m.id) >= 0; }) &&
-      SAVE.mile.indexOf('hero_ganshiren') >= 0);
+      SAVE.mile.indexOf('adv_card') >= 0 && SAVE.mile.indexOf('adv_relic') >= 0 &&
+      !SAVE.mile.some(function (id) { return /^hero_/.test(id); }));
     __ok('v1.0.25 grantRunMilestones：通关计入 wins / bestAct',
       SAVE.progress.wins === 1 && SAVE.progress.bestAct === 3);
     var j4 = grantRunMilestones();
@@ -7547,14 +7566,17 @@
       ['ganshiren','wuseng','yincha'].every(function(h){
         return JSON.stringify(mileNodesFor(h).map(function(n){ return n.need; })) ===
           JSON.stringify([550, 1400, 2900, 4500, 7500, 11000]); }));
-    /* v1.1.x（门禁开关打开的配套）：解锁**同时**记本角色轨档位 id 与旧门禁表 id —— 后者是 mileOn 的查询键。 */
-    __ok('v1.1.x 里程碑：解锁记 <hero>_t<N> 且同步补旧表 id（hero_ganshiren 达标即写）',
+    /* v1.1.8（角色符纸解锁）：解锁记本角色轨档位 id + 新门禁表剩余 id（紫/金内容），不再写 hero_*。 */
+    __ok('v1.1.8 里程碑：解锁记 <hero>_t<N> 与新表 id（395 点 ⇒ adv_card/potion_new 达标、adv_relic 未达）',
       (function(){ var bak = SAVE;
         SAVE = { unlocked:[], progress:{ pts:0, runs:0, wins:0, bestAct:0, kills:0, heroes:{} }, mile:[] };
         G = __base('tianshi'); G.act = 2; G.mapRow = 9; G.totalKills = 12;   // 200+135+60 = 395
         var j = grantRunMilestones();
         var r = j.length >= 1 && j.some(function(n){ return /^tianshi_t\d+$/.test(n.id); }) &&
-                SAVE.mile.indexOf('hero_ganshiren') >= 0 && SAVE.progress.heroes.tianshi.pts === 395;
+                SAVE.mile.indexOf('adv_card') >= 0 && SAVE.mile.indexOf('potion_new') >= 0 &&
+                SAVE.mile.indexOf('adv_relic') < 0 &&
+                !SAVE.mile.some(function(id){ return /^hero_/.test(id); }) &&
+                SAVE.progress.heroes.tianshi.pts === 395;
         SAVE = bak; return r; })());
     MILE_GATE_ON = __gate0;
 

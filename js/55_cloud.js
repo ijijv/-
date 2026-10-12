@@ -645,12 +645,15 @@ function rankCall(ctx, name, payload){
     try{
       const fn = ctx[name];
       if(typeof fn !== 'function') return bad(new Error('管理器没有 ' + name + ' 方法'));
+      const onFail = (code, message) => bad(new Error((message || '排行榜调用失败') + (code != null ? ('（code ' + code + '）') : '')));
       fn.call(ctx, Object.assign({
-        callback: {
-          onSuccess: good,
-          /* onFailure(code, message)：code 是 SDK 错误码（缺「好友关系」隐私权限时也会走这里） */
-          onFailure: (code, message) => bad(new Error((message || '排行榜调用失败') + (code != null ? ('（code ' + code + '）') : '')))
-        }
+        callback: { onSuccess: good, onFailure: onFail },
+        /* v1.1.8：**两套回调形状一起下发**。「6 个榜一直没变」的可疑点之一就是回调形状对不上：
+           官方 H5 文档页要登录、原文核不到，不同基础库版本可能走 `{success, fail}` 而非
+           `callback:{onSuccess, onFailure}`（早先 v1.0.19 正是从 `{success,fail}` 改过来的）。
+           两套键同时给：SDK 认哪套用哪套，多出来的键会被忽略；任一先回调，good/bad 的 done 闸保证只结算一次。 */
+        success: good,
+        fail: e => bad(new Error((e && (e.errMsg || e.message)) || '排行榜调用失败'))
       }, payload));
       /* 兜底：SDK 静默不回调时别把界面永远钉在「读取中…」 */
       if(typeof setTimeout === 'function') timer = setTimeout(() => bad(new Error('排行榜接口无响应（15 秒）')), 15000);

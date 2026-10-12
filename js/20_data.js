@@ -1118,7 +1118,7 @@ const YINCHA_NO_CURSE_TAG = ['leifu','huofu','jianfu','tianlei','shihun','shixue
 // 天师：伤害随【诅咒】层数 / 当前格挡 / 召唤物浮动的牌 —— 卡面正文只写基础值，徽章恒定显示实时预伤害
 const TIANSHI_DYN_DMG = ['leifu','jianfu','zhanyaojian','tiebushan','shihun','qungui','taomufu','baigui','zhongkui','zhiren','xiaogui','leiqianfu']; // v0.61.35：小鬼改为「目标带诅咒则 +2/3」，伤害随目标状态浮动；v1.1.0 加雷谴符（裸伤随目标诅咒层数）
 /* ===================== 全卡重做：流派 / 资源 / 召唤 / 状态 助手 ===================== */
-const COL_A='ganshiren', COL_B='wuseng', COL_C='yincha', COL_D='tianshi';
+const COL_B='wuseng', COL_C='yincha', COL_D='tianshi';
 const GHOST_IDS = ['zhiren','xiaogui','wutong','yinbingguo','zhongkui','shi_wang','yinbing'];   // 【鬼怪牌】白名单（v1.0.20 补引魂灯附加卡【阴兵】）
 const CAN_CURSE_IDS = ['huofu','wanjian','taomufu','shihunzhou','sheshen','fenfu','zhouyin','zhouyu','zhiren','dianzhoufu']; // 无条件可施加诅咒的牌（10 张；v0.61.35 加入纸人；v1.1.0 加入点咒符[天师里程碑]——目标恒为诅咒最高者，无前置条件）
 const isGhostCard = c => !!(c && c.type==='spirit' && GHOST_IDS.includes(c.id));
@@ -1197,11 +1197,14 @@ const FX_SHEETS = {
   /* v1.1.x：雷谴符**逐段落雷**（用户素材 lightning_3840x2880_32.png —— 8 列 × 6 行、
      单元 480×480、48 帧，整格都有内容 ⇒ 不写 f0）。scale 取与 burn/fudu_hit 同族的大特效档。 */
   lightning:   { c:8, f:48, rows:6, i0:0, scale:2.47 },
-  /* v1.1.x：反伤 / 反震**共用**这张精灵图（用户素材 damage_reflect_3840x2880_32.png —— 8 列 × 6 行、
-     单元 480×480、48 帧，整格都有内容 ⇒ 不写 f0）。
-     玩家反伤给敌人 → 锚在敌人；敌人反震给玩家 → 锚在玩家并**镜像**（playFx 的 opts.mirror）。
+  /* v1.1.x：反伤 / 反震**共用**这张精灵图（用户素材 damage_reflect —— 画布 8 列 × 6 行、单元 480×480）。
+     动作只占**前 3 行（24 帧）**（用户口径「8 列 × 3 行」）：后 3 行是出图留白，不播 ⇒ f:24。
+     ⚠️ rows 必须写**画布真实排数 6**（不是播放的 3）：打包.py 按图片高度切按排键，
+        verify_dist 又拿 rows 反推「应有哪些按排键」—— 写 3 会与产物里切出来的 6 排对不上（多 3 排报红）。
+     玩家反伤给敌人（荆棘/罗汉拳套/铁壁…）→ 锚在**玩家**、基准朝向不动；
+     敌人反震给玩家（fanzhen 词缀）→ 锚在**敌人**并**镜像**（playFx 的 opts.mirror）。
      scale 取与 burn/fudu_hit 同族的大特效档。 */
-  damage_reflect: { c:8, f:48, rows:6, i0:0, scale:2.47 },
+  damage_reflect: { c:8, f:24, rows:6, i0:0, scale:2.47 },
   lifesteal:   { c:8, f:34, f0:37, rows:5, i0:1, scale:1.43, ox:0.15, oy:0.17 },   // 吸血 / 渡魂归己　素材 37 帧，两端看不见的 3 帧不播
   /* v1.0.14 多段斩击：**一行 = 一个方向**（8 帧一记斩痕），6 行 = 6 个方向。
      播哪一行由 `opts.i0` 现定（`burstShow` 按斩击段数轮流取方向，i0 = 方向 × 8），
@@ -1283,7 +1286,6 @@ const CARD_FX = {
 /* 没登记的牌 = 确实没有对应素材，**不是忘了**。其中这三张最容易被当成漏：
    铁布衫（伤害=当前格挡+引爆诅咒）/ 噬魂术（引爆诅咒）/ 群鬼乱舞（触发全部召唤）——
    提示词文档的 30 条里没有它们，已记进 `特效接入对照表.md` 的「有机制没素材」清单。 */
-function cardFxFor(c){ return (c && CARD_FX[c.id]) || null; }
 
 /* I 组·遗物分化：12 件法器按「铃/幡 · 符/笔/剑 · 镜/录/道心」三类分开，
    聚宝盆与返魂香不属这三类 → 退回通用的 relic 音（所以 relic 键也没退役）。 */
@@ -1461,7 +1463,6 @@ function summonTarget(preferCursed){
   return al[Math.floor(rng()*al.length)];
 }
 /* —— 镇魂（含“此前已被镇魂”永久标记） —— */
-function wasSealedBefore(e){ return !!(e && (e.seal || e.sealedEver)); }
 function sealEnemy(e, turns){
   if(!e) return false;
   if(isLinghua(e)){ sfx('kw_linghua'); log(e.name+' 灵化免疫了【镇魂】'); return false; }   // v0.61.32：弹开的听感要能分辨
@@ -1717,11 +1718,6 @@ function randomPotion(){
   const p=pool[Math.floor(rng()*pool.length)];
   return {...p};
 }
-function potionSummary(){
-  const m={};
-  G.potions.forEach(p=>{ m[p.name]=(m[p.name]||0)+1; });
-  return Object.entries(m).map(([name,n])=>`🧪${name}×${n}`).join(' ');
-}
 function potionTooltipHTML(){
   if(!G.potions.length) return '';
   const m={}; G.potions.forEach(p=>{ m[p.name]=(m[p.name]||0)+1; });
@@ -1740,18 +1736,6 @@ function usePotion(i){
 }
 /* v1.0.14：顶栏灵汁改「图标 + 数量」，不再写名字（用户口径）——
    名字与效果都在 data-tip（`potionname:`）里，点一下即可使用。 */
-function potionBagHTML(){
-  if(!G.potions.length) return '';
-  const m={}; const order=[];
-  G.potions.forEach(p=>{ if(!m[p.name]){ m[p.name]=1; order.push(p.name); } else m[p.name]++; });
-  const items=order.map(name=>{
-    const p=G.potions.find(x=>x.name===name);
-    const src=p?lingshiSrc(p.id):'';
-    const ic=src?iconTag(src,'🧪'):((p&&p.ic)||'🧪');
-    return `<span class="potion-chip" data-tip="potionname:${name}" onclick="event.stopPropagation();usePotionByName('${name}')">${ic}${m[name]>1?`<b>${m[name]}</b>`:''}</span>`;
-  }).join('');
-  return `<span class="stat stat-potion" style="color:#c86bd8" data-tip="potionbag">${items}</span>`;
-}
 function usePotionByName(name){
   const i=G.potions.findIndex(p=>p.name===name);
   if(i<0) return;
@@ -2398,6 +2382,56 @@ function enforceRouteQuota(rows, act, seed, minionPool, elitePool){
   }
 }
 
+/* —— v1.1.8 分岔口「前方不重样」（用户要求「地图的分岔路尽量避免前方出现一样的关卡」）——
+   一个节点 next≥2 时，若后继里出现同类型节点（fight/camp/shop/unknown/elite 标签相同），
+   就尽量把其中一个与**同一行**的另一种类型节点**互换类型**。
+   换位只改 t/e、完全不动 next/prev；同一行的类型多重集不变 ⇒ 拓扑/走廊计数都不受影响，
+   只在结尾补跑一次 enforceRouteQuota 补回可能被挪走的路线下限缺口。
+   随机流独立（deriveSeed(seed,7777)），绝不碰全局 rng ⇒ 「同种子完全一致」仍成立。 */
+function diversifyForks(rows, act, seed, minionPool, elitePool){
+  const R=mkRng(deriveSeed(seed, 7777));
+  const LAST=rows.length-1;
+  const fillE=function(node, row){                      // 换型后按新类型补敌人（口径同 assignTypes）
+    if(node.t==='elite'){
+      const k=[elitePool[Math.floor(R()*elitePool.length)]];
+      if(R()<0.5) k.push(minionPool[Math.floor(R()*minionPool.length)]);
+      node.e=k;
+    } else if(node.t==='fight') node.e=pickFightFrom(minionPool, R, row, act);
+    else node.e=[];
+  };
+  for(let r=0;r<LAST;r++){
+    for(let c=0;c<rows[r].length;c++){
+      const nx=rows[r][c].next||[];
+      if(nx.length<2) continue;                         // 非分岔点
+      const lo=rows[r+1];
+      const seen={};                                    // 类型 → 该类型后继的列号
+      for(let i=0;i<nx.length;i++){ const nd=lo[nx[i]]; if(nd) (seen[nd.t]=seen[nd.t]||[]).push(nx[i]); }
+      for(const ty in seen){
+        if(ty==='boss' || seen[ty].length<2) continue;   // Boss 行唯一，不参与；无重样则跳过
+        for(let k=1;k<seen[ty].length;k++){             // 保留第一个，其余逐个换掉
+          const dc=seen[ty][k], dn=lo[dc];
+          if(!dn || dn.t!==ty) continue;                // 可能已被本行更早的分岔换走
+          const cands=[];
+          for(let cc=0;cc<lo.length;cc++){
+            if(cc===dc) continue;
+            const cn=lo[cc];
+            if(!cn || cn.t==='boss' || cn.t===ty) continue;
+            if(seen[cn.t]) continue;                    // 该类型也已在分岔口出现 ⇒ 换了还重样
+            cands.push(cc);
+          }
+          if(!cands.length) break;                      // 本行没有可用的另一种类型
+          const cc=cands[Math.floor(R()*cands.length)];
+          const cn=lo[cc];
+          const tmp=dn.t; dn.t=cn.t; cn.t=tmp;           // 纯类型换位
+          fillE(dn, r+1);                                 // 两侧都按新类型重刷敌人
+          fillE(cn, r+1);
+          seen[dn.t]=[dc];                               // 换进来的类型也计入「已出现」，后续不再重复引回
+        }
+      }
+    }
+  }
+}
+
 /* —— 入口：一个种子 → 一整幕树状图 —— */
 function genAct(act, seed, opts){
   const O=opts||{};
@@ -2421,8 +2455,11 @@ function genAct(act, seed, opts){
     for(let j=0;j<rows[r+1].length;j++) rows[r+1][j].prev=L.prevOf[j].slice().sort(function(a,b){ return a-b; });
   }
   rows[MAP_ROWS-1][0].next=[];
+  // v1.1.8：分岔口去重（前方尽量不重样），只改 t/e 不动拓扑。
+  diversifyForks(rows, act, seed, minionPool, elitePool);
   // v0.62.0：按路线补齐特殊节点下限。**必须在连边之后**（靠 next 枚举路线），
   // 且只改 t/e 不动拓扑 ⇒ 不影响 linkRows 建立的「边不交叉 / 无死路 / 无孤岛」。
+  // 放在 diversifyForks 之后 ⇒ 把被换走的特殊节点缺口补回来。
   enforceRouteQuota(rows, act, seed, minionPool, elitePool);
   return rows;
 }
@@ -2553,13 +2590,16 @@ let MILE_GATE_ON = true;
    它**不再是进度来源** —— 里程的累积与达标已全面由下面的**每角色 6 档 MILE_TRACKS** 驱动
    （见 grantRunMilestones）。等第 1~5 档的真实奖励内容定稿后，把奖励与档位对上，
    这张表就彻底退休（连同 MILE_GATE_ON 一起撤）。 */
+/* v1.1.8（用户 2026-10-13）：「撤掉这三条角色门禁」—— 三条 `heroes:[...]` 条目
+   （hero_ganshiren / hero_wuseng / hero_yincha）已删除：角色不再按全局里程点数自动放行，
+   改为「入门符纸」解锁 —— 第 6 档【入门符纸】领取后得 1 张（SAVE.mileTickets），
+   在选角页对锁定角色**消耗 1 张**才解锁（SAVE.unlockedHeroes）。见 50_ui.js 的 mileOn / unlockHeroWithTicket。
+   ⚠️ 这也顺带修掉「每用一名角色打一场就自动解锁下一名角色」的根因 —— 旧配合段
+      （grantRunMilestones 里按全局 pts 推旧表 id）再也不会写进任何 hero_* id。 */
 const MILESTONES = [
-  { id:'hero_ganshiren', need:120,  name:'尸影初现', desc:'解锁角色【茅山赶尸人】',   heroes:['ganshiren'] },
   { id:'adv_card',       need:220,  name:'符箓精进', desc:'紫/金进阶卡牌进入奖励池',   advCards:true },
   { id:'potion_new',     need:300,  name:'丹炉重开', desc:'解锁 4 瓶新灵汁',           potions:['jingangjiu','qingxinlu','fugusan','tongyoucha'] },
-  { id:'hero_wuseng',    need:380,  name:'禅心初定', desc:'解锁角色【苦行武僧】',       heroes:['wuseng'] },
   { id:'adv_relic',      need:700,  name:'法器通灵', desc:'紫/金遗物进入掉落池',       advRelics:true },
-  { id:'hero_yincha',    need:1250, name:'血祭成煞', desc:'解锁角色【血祭阴差】',       heroes:['yincha'] },
 ];
 /* 一局结束时的里程碑点数 —— **独立函数**，便于冒烟直接断言。
    v1.0.25（用户定稿口径）：公式改为 —— 每推进一幕 200 点（act 从 1 起，故 act-1）·
@@ -2668,11 +2708,12 @@ Object.keys(MILE_TIER_NEED).forEach(function(hid){
     const last = (i === MILE_TIER_COUNT - 1), tier = i + 1;
     const rw = (hid==='tianshi') ? MILE_TIANSHI_RW[tier] : (hid==='ganshiren') ? MILE_GANSHIREN_RW[tier] : (hid==='wuseng') ? MILE_WUSENG_RW[tier] : (hid==='yincha') ? MILE_YINCHA_RW[tier] : null;
     if(rw) return { id:hid+'_t'+tier, tier:tier, need:need, pending:false, name:rw.name, desc:rw.desc };
-    /* 其余档位仍标 pending：**里程数已定稿，但奖励内容（含第 6 档符纸的解锁动作）尚未实装**，
-       先按「待定稿」渲染，避免点了白框出现「已领取」却不发奖励的假交互。 */
-    return { id:hid+'_t'+tier, tier:tier, need:need, pending:true, ticket:last,
-      name: last ? '入门符纸' : '奖励待定',
-      desc: last ? '可任选一名角色解锁（符纸发放待实装）。' : '档位奖励待定稿（里程数已定）。' };
+    /* v1.1.8（用户 2026-10-13）：第 6 档【入门符纸】**已实装** —— 到点即可点「领取」，
+       领取后 `SAVE.mileTickets` +1（不再是「待定稿」占位）。其余未实装的档位仍标 pending。 */
+    if(last) return { id:hid+'_t'+tier, tier:tier, need:need, pending:false, ticket:true,
+      name:'入门符纸', desc:'领取后得 1 张【入门符纸】，可在选角页解锁一名角色。' };
+    return { id:hid+'_t'+tier, tier:tier, need:need, pending:true,
+      name:'奖励待定', desc:'档位奖励待定稿（里程数已定）。' };
   })};
 });
 

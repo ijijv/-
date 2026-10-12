@@ -35,6 +35,9 @@ function newState(){
     shiWangCard:null, ranhunType:null, ranhunSelf:null, endBlockKind:null, xiejiaUp:false,
     zhouhunSteal:0, stealWatch:false, stealAccum:0,   // 咒印(#42B)：咒魂吸血监视
     _mileGiven:false,   // v1.0.15：里程碑「一局只发一次」的幂等守卫（新局由 newState 重置）
+    /* v1.1.8：结算面板的里程分项**快照** —— 发放当刻记下，复活后再败时结算画面仍显示「真正发出去的那一份」，
+       不再用当时的 G 重算（否则会出现「结算 +700、却只到账 500」的错位，用户报障）。 */
+    _mileParts:null,
     /* v1.1.x（用户 2026-10-12 分数规则）—— 分档击杀计数（结算时各自乘系数）：
        普通 ×10 / 精英 ×20 / Boss ×30 / 敌方召唤物 ×5。totalKills 仍是里程碑用的总数。 */
     killNormal:0, killElite:0, killBoss:0, killSummon:0,
@@ -125,7 +128,7 @@ function applyDamageTo(e,d,ignoreBlock,point,hitNormal,floatDelay){
   if(G.stealWatch){ G.stealAccum=(G.stealAccum||0)+actual; } // 咒印(#42B)：累计这张攻击牌的实际伤害，供 100% 吸血
   e.hp-=d; G.turnStats.dealt+=d; afterEnemyDamaged(e);
   if(duhunActive() && actual>0){ DUHUN_ACC+=actual; if(!DUHUN_BATCH) duhunFlush(); } // v0.61.33：攒批，批外（如敌人自伤类）单发即结
-  if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; sfx('spark'); playFx('damage_reflect', 'player', {mirror:true}); log(`${e.name} 反震：反弹 ${r} 点伤害`); if(G.hero==='yincha' && r>0) gainRage(r); } }   // v1.1.x：反伤统一改用 damage_reflect 精灵图 + spark 音；敌人反震玩家 ⇒ **镜像**翻面
+  if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; sfx('spark'); playFx('damage_reflect', enemyEl(e), {mirror:true}); log(`${e.name} 反震：反弹 ${r} 点伤害`); if(G.hero==='yincha' && r>0) gainRage(r); } }   // v1.1.x：反伤统一改用 damage_reflect 精灵图 + spark 音；敌人反震玩家 ⇒ **镜像**翻面
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ sfx('kw_yehuo'); G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.hpLostTurn=(G.hpLostTurn||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); if(G.hero==='yincha') gainRage(1); }
   /* v0.61.25：打击层按「打在什么上 / 打了多少 / 有没有打死」分级；
      point=true 是连击的逐段调用，改用极短的 atk_multi_each（60ms 一发也不糊）。 */
@@ -187,7 +190,6 @@ function dealDamageTo(e,n,ignoreBlock,floatDelay,point,hitNormal,o){
   }
   return applyDamageTo(e,d,ignoreBlock,point,hitNormal,floatDelay);
 }
-function dealDamageToTarget(n, ignoreBlock){ const e=curEnemy(); if(e) dealDamageTo(e,n,ignoreBlock); }
 function dealDamageToAll(n){ aliveEnemies().forEach(e=>dealDamageTo(e,n)); }
 /* v1.0.12：**引爆类卡牌的斩击演出**（噬魂术这类「按层数一次打光」的牌）。
    v1.0.14：伤害本体也分段了 —— 调用方给 dealDamageTo 传第 7 参 `{segs,step}`（见上）。
@@ -514,7 +516,7 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
   if(full>0){
     /* 罗汉拳套[蓝·武僧]（v1.1.4：反伤 1→2）+ 铁壁[t2·武僧·纯机制]：永久自带反伤，与临时【荆棘】叠加。 */
     const _th=(G.thorns||0)+relicThorns()+mileThorns();
-    if(_th>0){ sfx('spark'); playFx('damage_reflect', enemyEl(attacker)); attacker.hp-=_th; log(`荆棘/反震：反弹 ${_th} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }   // v1.1.x：玩家反伤敌人 —— 反伤精灵图基准朝向 + spark 音
+    if(_th>0){ sfx('spark'); playFx('damage_reflect', 'player'); attacker.hp-=_th; log(`荆棘/反震：反弹 ${_th} 点伤害给 ${attacker.name}`); afterEnemyDamaged(attacker); }   // v1.1.x：玩家反伤敌人 —— 挂在**玩家**身上、基准朝向（不镜像）+ spark 音
     if((G.hitHeal||0)>0){ heal(G.hitHeal); log(`荆棘符：受击恢复 ${G.hitHeal} 点生命`); }
     if((G.hitCurse||0)>0){ applyCurse(attacker, G.hitCurse); log(`铜皮/荆棘：对 ${attacker.name} 施加 ${G.hitCurse} 层【诅咒】`); }
     if((G.hitShiqi||0)>0){ gainShiqi(G.hitShiqi); log(`反震：受击获得 ${G.hitShiqi} 点【尸气】`); }
@@ -684,10 +686,25 @@ function enemyGainBlock(e, n){
   log(`${e.name} 获得 ${n} 点格挡`);
   return n;
 }
-function discardRandomHand(){ if(!G.hand.length) return null; const i=Math.floor(rng()*G.hand.length); const c=G.hand.splice(i,1)[0]; if(c.type!=='junk') G.discard.push(c); sfx('card_discard'); log(`弃掉【${c.name}】`); return c; }   // v0.61.32
+/* v1.1.8（用户口径「尸王不能被勾魂/忘忧/篝火弃掉，只可在易物或火符等手牌作用而弃掉」）：
+   【尸王】免疫一切**非玩家主动**的弃牌 —— 缠绕（pendingDiscard 随机弃）/ 随机弃牌兜底 / 忘忧汤选牌 / 篝火删牌。
+   玩家打出的手牌效果（易物 / 火符 / 焚符 等）仍可正常把它弃掉。 */
+function isProtectedFromDiscard(c){ return !!(c && c.id==='shi_wang'); }
+/* 随机弃手牌的下标：无保护牌时与旧口径**逐字一致**（rng 消耗不变，不扰动随机流）；
+   只有手牌里真有尸王时才切到「过滤后抽取」；全被保护 → 返回 -1（弃无可弃）。 */
+function pickDiscardIndex(){
+  const n=G.hand.length; if(!n) return -1;
+  let prot=0; for(let k=0;k<n;k++) if(isProtectedFromDiscard(G.hand[k])) prot++;
+  if(!prot) return Math.floor(rng()*n);
+  const cand=[]; for(let k=0;k<n;k++) if(!isProtectedFromDiscard(G.hand[k])) cand.push(k);
+  if(!cand.length) return -1;
+  return cand[Math.floor(rng()*cand.length)];
+}
+function discardRandomHand(){ if(!G.hand.length) return null; const i=pickDiscardIndex(); if(i<0) return null; const c=G.hand.splice(i,1)[0]; if(c.type!=='junk') G.discard.push(c); sfx('card_discard'); log(`弃掉【${c.name}】`); return c; }   // v0.61.32
 function enemyRandomDiscard(){
   if(!G.hand.length){ log('缠绕生效，但你已无手牌可弃'); return; }
-  const i=Math.floor(rng()*G.hand.length);
+  const i=pickDiscardIndex();
+  if(i<0){ floatMsg('【尸王】镇住神魂'); log('缠绕：可弃之牌皆被【尸王】镇住，无从下手'); return; }
   const c=G.hand.splice(i,1)[0];
   if(c.type!=='junk') G.discard.push(c);
   floatMsg(`被弃掉：${c.name}`); sfx('card_discard');   // v0.61.32：缠绕弃牌从通用 card 改成弃牌专用音
@@ -696,7 +713,9 @@ function enemyRandomDiscard(){
 }
 function showWangyouChoice(){
   // v0.61 B8：快照存「卡对象引用」而非下标 —— 同帧若还有缠绕/业火等 splice 手牌，下标会错位（弃错牌 / undefined.type）
-  const pool=G.hand.slice();
+  // v1.1.8：尸王免疫 —— 从候选里剔除（只剩尸王时视同「手牌中无牌可饮」，直接躲过）
+  const pool=G.hand.slice().filter(c=>!isProtectedFromDiscard(c));
+  if(!pool.length){ log('忘忧汤翻涌，但【尸王】镇住神魂，你躲过一劫'); return; }
   G.wangyouPool=pool;
   const cards=pool.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="drinkWangyou(${i})">${cardBody(c)}</div>`).join('');
   /* v0.72.0：本文件里共**六处**选牌小窗（忘忧 / 焚符 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一），

@@ -222,6 +222,24 @@ function enemyEl(e){ return (e && document.querySelector) ? document.querySelect
    **为什么用 background-position 而不是 canvas**：省一层离屏合成；而且 `fxSeek` 能直接钉帧，
    截图夹具要靠它（headless 的 --virtual-time-budget 下后注册的 rAF 拿不到帧）。 */
 let FX_LIVE = {};
+/* v1.1.8（性能 · 用户报「召唤物多时 / 反伤时卡」）：**精灵图并发上限**。
+   每个 playFx 都新建一个 DOM 元素 + 一层带 will-change 的合成层；一次召唤群攻
+   （6 召唤物 × 3 敌人）或一连串反伤能在一两拍里堆出几十个活体元素，手机上合成层爆掉
+   就是肉眼可见的掉帧。超过上限时淘汰**最老的那个**（t0 最小）——最新的那几个玩家最可能在看。
+   上限给足 14：正常战斗同时活着的通常 3~6 个（一段 1 秒的动画 + 节拍步进 200ms），够不到这条线。 */
+const FX_MAX_LIVE = 14;
+/* 淘汰最老的一个活体。调用点只有 playFx。 */
+function fxEvictOldest(){
+  const k=Object.keys(FX_LIVE);
+  if(k.length < FX_MAX_LIVE) return;
+  let old=null;
+  for(let i=0;i<k.length;i++){
+    const st=FX_LIVE[k[i]];
+    if(!st || st.dead) continue;
+    if(!old || st.t0 < old.t0) old=st;
+  }
+  if(old) fxStop(old.key);
+}
 /* 取表项；未知名字返回 null。别在别处直接下标 FX_SHEETS —— 少一处裸引用少一处崩点 */
 function fxSheet(name){
   return (typeof FX_SHEETS!=='undefined' && FX_SHEETS) ? (FX_SHEETS[name] || null) : null;
@@ -408,6 +426,7 @@ function playFx(name, anchor, opts){
                      * (opts.scale||S.scale||1));
   if(cap>0 && box>cap) box=cap;
   fxStop(key);                                // 同名正在播 → **重播**而不是叠加（连击会在原地堆十几个元素）
+  fxEvictOldest();                            // v1.1.8：并发超上限先淘汰最老的（见 FX_MAX_LIVE 注释）
   const el=document.createElement('div');
   el.className='fx-sheet';
   el.style.width=box+'px'; el.style.height=box+'px';

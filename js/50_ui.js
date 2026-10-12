@@ -184,23 +184,28 @@ function mapTopbarHTML(){
   else if(G.hero==='yincha') res=`<span class="mt-xuenu">血怒 <b>${G.xuenu||0}/${relicMaxXuenu()}</b></span>`;
   /* v1.1.x：遗物不再排进地图顶栏 —— 与战斗顶栏同一口径，内容统一收进「锦囊」入口（下方那枚按钮）。
      血条独占第二行，空出来的横向空间留给生命条。 */
+  /* v1.1.8（用户口径）：顶栏改为「悬浮贴屏顶的横幅」—— 手机横屏下整条顶栏吃 0 布局高度
+     （.map-topbar 绝对定位，画心吃满全屏 ⇒ 一屏多露 1~2 层）。幕名匾并进横幅第二行。
+     锦囊按钮**移出顶栏** —— 屏幕左下的常驻 HUD（#outPouch）已经常驻锦囊，不再重复。 */
   return `<div class="map-topbar">
-    <span class="mt-portrait">${artImg('hero/'+G.hero+'.png','','')}</span>
-    <span class="mt-col">
-      <span class="mt-row">
-        <span class="mt-name">${hero?hero.name:'—'}</span>
-        <span class="mt-gold"><i></i><b>${G.gold}</b></span>
-        <span>牌库 <b>${G.deck.length}</b> 张</span>
-        ${res}
+    <div class="mt-bar">
+      <span class="mt-portrait">${artImg('hero/'+G.hero+'.png','','')}</span>
+      <span class="mt-col">
+        <span class="mt-row">
+          <span class="mt-name">${hero?hero.name:'—'}</span>
+          <span class="mt-gold"><i></i><b>${G.gold}</b></span>
+          <span>牌库 <b>${G.deck.length}</b> 张</span>
+          ${res}
+        </span>
+        <span class="mt-row">
+          <span class="hpbar${G.block>0?' has-block':''} mt-hp"><i class="hpghost" style="width:${hpPct}%"></i><i class="hpfill" style="width:${hpPct}%"></i><span class="hp-label">${G.hp}/${G.maxHp}</span></span>
+        </span>
       </span>
-      <span class="mt-row">
-        <span class="hpbar${G.block>0?' has-block':''} mt-hp"><i class="hpghost" style="width:${hpPct}%"></i><i class="hpfill" style="width:${hpPct}%"></i><span class="hp-label">${G.hp}/${G.maxHp}</span></span>
+      <span class="mt-acts">
+        <button class="mt-menu" onclick="openMenu()" title="菜单">☰</button>
       </span>
-    </span>
-    <span class="mt-acts">
-      <button class="mt-menu" onclick="openMenu()" title="菜单">☰</button>
-      <button class="mt-jinnang" id="mtJinnangBtn" onclick="showJinnang()" title="锦囊" aria-label="锦囊">${iconTag('ui/menu/jinnang-nobg.png','锦囊')}</button>
-    </span>
+    </div>
+    <div class="map-plaque">${ACT_NAMES[G.act-1]}<small>第 ${G.mapRow+1}/${MAP.length} 层 · 沿连线向上，规划好路线</small></div>
   </div>`;
 }
 
@@ -526,8 +531,9 @@ function showMap(opts){
   if(stepFrom>=0 && MAP[G.mapRow]){
     for(let c=0;c<MAP[G.mapRow].length;c++) if(mapReachable(G.mapRow,c)) breakSet[G.mapRow+','+c]=true;
   }
+  /* v1.1.8：幕名匾并进 .map-topbar 第二行；底栏（菜单按键）整条去掉 —— 菜单在顶栏右上角，
+     牌堆 / 锦囊由战局外常驻 HUD 落在屏幕右下 / 左下（见 原型.html .out-hud）。 */
   let html=`<div class="map-root">${mapTopbarHTML()}`;
-  html+=`<div class="map-plaque">${ACT_NAMES[G.act-1]}<small>第 ${G.mapRow+1}/${MAP.length} 层 · 沿连线向上，规划好路线</small></div>`;
   /* v0.63.0：卷轴收成一根**居中**的卷轴（用户：「木轴只比画心宽一点点，不要横跨屏幕」）。
      .map-scroll 是那一列（桌面 792 = 画心上限 760 + 两侧各 16），.map-frame 只给左右 16px 内边距 ⇒
      木轴恰好比画心宽 32px；窄屏列宽退化成 100%，木轴仍是「屏幕宽 - 32」，**不用负 margin**（那会溢出）。
@@ -566,7 +572,6 @@ function showMap(opts){
   html+=`</div>`;         // 收 .map-frame
   html+=`<div class="map-roller bot" aria-hidden="true"></div>`;
   html+=`</div>`;         // 收 .map-scroll
-  html+=`<div class="map-bottombar"><button class="btn ghost" onclick="openMenu()">菜单（重开 / 退出）</button></div>`;
   html+=`</div>`;         // 收 .map-root
   showOverlay(html);
   /* v0.61.42 起的 .map-scene 在 v0.62.0 换了语义：不再是「半透明黑幕 + 半透明面板」，
@@ -1039,6 +1044,95 @@ function getHeroSpecificCardPool(originalPool, tier = 'normal') {
 
   return enhancedPool;
 }
+/* ===================== 掉落浮层（v1.1.8） =====================
+   用户口径：战利品掉落要「边浮边放大在屏幕中央」，**不要**再跳一块带纯色底板的翻牌面板 ——
+   背景就是战场本身，只在中间放三张牌、右下角放牌堆、底部放一枚「无视」。
+   #dropUI 与 #overlay 并列挂在 body 下（见 原型.html），背景透明、不吃面板样式。 */
+function dropUI(html){
+  try{
+    let el=document.getElementById('dropUI');
+    if(!el){
+      if(!document.body || !document.createElement) return;
+      el=document.createElement('div'); el.id='dropUI'; el.className='drop-ui';
+      document.body.appendChild(el);
+    }
+    el.innerHTML=html;
+    if(el.classList) el.classList.remove('hidden');
+    alignRewardPile();
+  }catch(e){}
+}
+function dropUIHide(){
+  try{ const el=document.getElementById('dropUI'); if(!el) return;
+    if(el.classList) el.classList.add('hidden'); el.innerHTML=''; }catch(e){}
+}
+/* 把掉落浮层里的「牌堆」对齐到战斗右下角**真实抽牌堆**上（用户口径「盖住抽牌堆即可」）。
+   量不到就退回 CSS 默认的右下角位。 */
+function alignRewardPile(){
+  try{
+    const pile=document.getElementById('rewardPile'); if(!pile || !pile.style) return;
+    let tgt=document.getElementById('pile-draw');
+    if(!tgt){ const op=document.getElementById('outPile'); if(op) tgt=op; }
+    const r=(tgt && tgt.getBoundingClientRect) ? tgt.getBoundingClientRect() : null;
+    if(!r || (!r.width && !r.height)) return;
+    pile.style.right='auto'; pile.style.bottom='auto';
+    pile.style.left=(r.left+r.width/2)+'px';
+    pile.style.top=(r.top+r.height/2)+'px';
+    pile.style.transform='translate(-50%,-50%)';
+  }catch(e){}
+}
+/* ===================== 战局外常驻 HUD（牌堆 / 锦囊）（v1.1.8） =====================
+   用户口径：战斗之外的每个场景（地图 / 商店 / 营地 / 事件房 / 锻造 …）都要常驻「牌堆」与
+   「锦囊」两个图标；一有卡牌 / 遗物 / 灵汁收获，图标就从来源飞过去。
+   #outHud 是静态 HTML（见 原型.html），z-index 高于 #overlay ⇒ 商店面板上照样看得见。 */
+let OUT_HUD_BUILT=false;
+function outHudSync(){
+  try{
+    const hud=document.getElementById('outHud'); if(!hud || !hud.style) return;
+    const show = (typeof G!=='undefined') && !!G && SCENE!=='menu' && SCENE!=='battle';
+    hud.style.display = show ? 'flex' : 'none';
+    if(!show) return;
+    if(!OUT_HUD_BUILT){
+      OUT_HUD_BUILT=true;
+      const pp=document.getElementById('outPouch'), pl=document.getElementById('outPile');
+      const pi=(pp && pp.querySelector) ? pp.querySelector('.out-ico') : null;
+      if(pi) pi.innerHTML=iconTag('ui/menu/jinnang-nobg.png','🧧');
+      const ci=(pl && pl.querySelector) ? pl.querySelector('.out-ico') : null;
+      if(ci) ci.innerHTML=iconTag('ui/card/back.png','🂠');
+    }
+    const pn=document.getElementById('outPileN'); if(pn) pn.textContent=(G.deck||[]).length;
+  }catch(e){}
+}
+/* 战局外场景的「牌堆」落点（对照 pouchButtonEl）。 */
+function pileButtonEl(){
+  try{
+    if(SCENE!=='battle'){ const o=document.getElementById('outPile'); if(o) return o; }
+    return document.getElementById('pile-draw') || document.getElementById('outPile') || null;
+  }catch(e){ return null; }
+}
+/* 小图标从来源位置飞向牌堆（战局外买卡 / 得牌时）。无 DOM / 流畅模式 ⇒ 同步收尾。 */
+function flyToPile(srcEl, iconHTML, done){
+  const finish=()=>{ if(done) done(); };
+  try{
+    const pile=pileButtonEl();
+    const r=(pile && pile.getBoundingClientRect) ? pile.getBoundingClientRect() : null;
+    const ok=!!(pile && r && (r.width||r.height) && document.body && document.createElement && window.requestAnimationFrame);
+    if(!(typeof fx==='function' && fx()) || !ok) return finish();
+    let src=null;
+    if(srcEl && srcEl.getBoundingClientRect){ const a=srcEl.getBoundingClientRect(); if(a && (a.width||a.height)) src=a; }
+    const x=src?(src.left+src.width/2):window.innerWidth/2;
+    const y=src?(src.top+src.height/2):window.innerHeight*0.45;
+    const tX=r.left+r.width/2, tY=r.top+r.height/2;
+    const fly=document.createElement('div');
+    fly.className='fly-ico'; fly.innerHTML=iconHTML||'';
+    fly.style.left=x+'px'; fly.style.top=y+'px';
+    document.body.appendChild(fly);
+    requestAnimationFrame(()=>{
+      fly.style.transform=`translate(calc(-50% + ${tX-x}px), calc(-50% + ${tY-y}px)) scale(.45)`;
+      fly.style.opacity='.2';
+    });
+    setTimeout(()=>{ try{ fly.remove(); }catch(e){} finish(); }, 560);
+  }catch(e){ finish(); }
+}
 function showReward(){
   /* v0.74.0：战斗胜利三选一的整屏背景。出口 pickReward/skipReward → afterReward()
      → goNext() → showMap() → setBg(mapBgName())，本来就会换回去，不用单独恢复。 */
@@ -1071,7 +1165,9 @@ function showReward(){
      · 右下角加一枚**抽牌堆 UI**，显示玩家**主牌库**（G.deck）当前张数 ——
        选中一张后 `pickReward` 会**即时**把数字 +1（见下）。 */
   const pileUI=`<div class="reward-pile" id="rewardPile"><div class="rp-stack"><div class="rp-card"></div><div class="rp-card"></div><div class="rp-card"></div></div><div class="rp-meta"><span class="rp-label">牌库</span><span class="rp-n" id="rewardPileN">${(G.deck||[]).length}</span></div></div>`;
-  showOverlay(`<h2>请选择你中意的手牌</h2><p>点击卡牌翻开查看，再点一次加入牌组（或无视）</p><div class="${cls}">${cards}</div>${pileUI}<button class="btn ghost" onclick="skipReward()">无视</button>`);
+  /* v1.1.8（用户口径）：不再跳「带纯色底板的翻牌面板」，直接把三张牌浮在战场中央原地翻开。
+     出口 pickReward/skipReward 走 dropUIHide()，不动 #overlay。 */
+  dropUI(`<div class="drop-head"><h2>请选择你中意的手牌</h2><p>点击卡牌翻开查看，再点一次加入牌组</p></div><div class="${cls}">${cards}</div>${pileUI}<button class="btn ghost drop-skip" onclick="skipReward()">无视</button>`);
 }
 /* v1.1.x：击杀每关最后一个敌人的**掉落动画**（用户口径：三张牌背小图标落在最后击杀的敌人身上，
    再浮向屏幕正中，化为正常的翻牌界面）—— 动画走完再亮出 showReward()。
@@ -1168,7 +1264,7 @@ function pickReward(i){
   /* 选中的那张牌**飞回右下角牌堆 UI**，动画走完再关面板、进下一环（用户口径：飞回去的是选中的牌）。
      ⚠️ 无元素 / 无线框 / 流畅模式时 flyCardToPile **同步**回调 ⇒ 冒烟打桩不会漏进真实 goNext。 */
   let el=null; try{ el=document.querySelector('.reward-cards .rcard[data-ri="'+i+'"]'); }catch(e){}
-  flyCardToPile(el, ()=>{ hideOverlay(); afterReward(); });
+  flyCardToPile(el, ()=>{ dropUIHide(); afterReward(); });
 }
 function skipReward(){
   // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
@@ -1177,7 +1273,7 @@ function skipReward(){
     updateGoldCompensation(G.lastRewardHadGold);
   }
 
-  hideOverlay();
+  dropUIHide();
   afterReward();
 }
 function afterReward(){
@@ -1194,11 +1290,14 @@ function afterReward(){
 
 /* ===================== 掉落 / 飞行 / 锦囊（v1.1.x） =====================
    用户口径：「以后获得遗物和灵汁都要加入这种动画，回到锦囊」——「获得瞬间从来源位置飞向锦囊」。
-   手机端与电脑端锦囊位置**不同**（战斗内 #jinnangBtn / 地图上 #mtJinnangBtn），一律**运行时量取**。 */
-/* 锦囊按钮：战斗顶栏是 #jinnangBtn，地图顶栏是 #mtJinnangBtn。 */
+   手机端与电脑端锦囊位置**不同**（战斗内 #jinnangBtn 在题头竖栏 / 战局外 #outPouch 在屏幕左下），
+   一律**运行时量取**。 */
+/* 锦囊按钮：战斗顶栏是 #jinnangBtn，战局外是常驻 HUD 的 #outPouch。 */
 function pouchButtonEl(){
-  try{ return document.getElementById('jinnangBtn') || document.getElementById('mtJinnangBtn') || null; }
-  catch(e){ return null; }
+  try{
+    if(SCENE!=='battle'){ const o=document.getElementById('outPouch'); if(o) return o; }
+    return document.getElementById('jinnangBtn') || document.getElementById('outPouch') || null;
+  }catch(e){ return null; }
 }
 /* 掉落来源元素：战斗里取**最后击杀的那只敌人**（G.enemies 末位），没有就 null（回落屏幕中心）。 */
 function dropSourceEl(){
@@ -1241,11 +1340,11 @@ function flyToPouch(srcEl, iconHTML, done){
     setTimeout(()=>{ try{ fly.remove(); }catch(e){} pouchFlash(); finish(); }, 560);
   }catch(e){ pouchFlash(); finish(); }
 }
-/* 灵汁获取的**唯一入口**：入包 + 图标从来源位置飞向锦囊。 */
-function gainPotion(p){
+/* 灵汁获取的**唯一入口**：入包 + 图标从来源位置飞向锦囊。srcEl 缺省取「最后击杀的敌人」。 */
+function gainPotion(p, srcEl){
   if(!p) return;
   G.potions.push(p);
-  flyToPouch(dropSourceEl(), potionIcon(p));
+  flyToPouch(srcEl || dropSourceEl(), potionIcon(p));
 }
 function weightedRelic(){
   /* 专属遗物过滤：带 hero 的只进该英雄池；通用（无 hero）四人共用。
@@ -1274,7 +1373,8 @@ function showRelicReward(){
   const picks = shuffle([...unowned]).slice(0,3);
   G.relicPicks=picks;
   const html=picks.map((r,i)=>`<div class="relic ${RCOLOR[r.rarity]}" data-ri="${i}" onclick="pickRelic(${i})">${relicIcon(r)}<div class="cname" data-tip="relic:${r.id}">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype">遗物 · ${RNAME[r.rarity]}</div></div>`).join('');
-  showOverlay(`<h2>获得遗物 · 三选一</h2><p>遗物本局永久生效，点击获得（或跳过）</p><div class="reward-cards">${html}</div><button class="btn ghost" onclick="skipRelic()">跳过</button>`);
+  /* v1.1.8（用户口径）：精英关的遗物与卡牌同一套演出 —— 浮在战场中央选，选中的飞进锦囊。 */
+  dropUI(`<div class="drop-head"><h2>获得遗物 · 三选一</h2><p>遗物本局永久生效，点击获得</p></div><div class="reward-cards">${html}</div><button class="btn ghost drop-skip" onclick="skipRelic()">跳过</button>`);
 }
 /* v0.61.32：遗物音按法器类别分化（同古井许愿那一处）
    v1.1.x：选中那件先**飞进锦囊**（用户口径「击杀后遗物会飘到锦囊」），动画走完再关面板推进。 */
@@ -1283,9 +1383,9 @@ function pickRelic(i){
   sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`);
   /* 选中那件从三选一面板**飞进锦囊**（grantRelic 内部飞 + 锦囊闪金光），动画走完再关面板推进。 */
   let el=null; try{ el=document.querySelector('.reward-cards .relic[data-ri="'+i+'"] .ricon'); }catch(e){}
-  grantRelic(r, el, ()=>{ hideOverlay(); goNext(); });
+  grantRelic(r, el, ()=>{ dropUIHide(); goNext(); });
 }
-function skipRelic(){ hideOverlay(); goNext(); }
+function skipRelic(){ dropUIHide(); goNext(); }
 
 function showCampfire(){
   G.campRemoved=false; G.campActed=false;
@@ -1401,9 +1501,9 @@ function showShop(){
 function renderShop(){
   /* v0.74.0：整屏鬼市背景。理由同上 —— 续档的 d.scene==='shop' 分支直呼 renderShop()。 */
   setBg('shop.jpg');
-  const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" onclick="askBuyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
+  const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" data-ri="${i}" onclick="askBuyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
   /* 聚宝盆（蓝）：灵汁 7 折 —— 界面把**原价划掉**、新价加亮，让折扣「看得见」（用户定稿要求）。 */
-  const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const base=potionPriceBase(); const ok=G.gold>=price; const priceTxt=(price!==base)?`<s class="price-old">${base}</s> <b class="price-new">${price}</b>`:`${price}`; return `<div class="relic r-blue ${ok?'':'disabled'}" onclick="askBuyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${priceTxt} 金币</div></div>`; }).join('');
+  const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const base=potionPriceBase(); const ok=G.gold>=price; const priceTxt=(price!==base)?`<s class="price-old">${base}</s> <b class="price-new">${price}</b>`:`${price}`; return `<div class="relic r-blue ${ok?'':'disabled'}" data-ri="${i}" onclick="askBuyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${priceTxt} 金币</div></div>`; }).join('');
   showOverlay(`<h2>鬼 市</h2>${runStatusHTML()}<p>你带着 <b style="color:var(--gold)">${G.gold}</b> 金币。<br>买卡价格随购买递增，跨商店延续；灵汁每买一瓶更贵。</p>
     <div class="reward-cards">${cards}</div>
     <div style="color:var(--gold);margin:8px 0 2px">— 灵汁 —</div>
@@ -1420,6 +1520,10 @@ function buyCard(i){
   // 购买商店卡牌后更新补偿值（商店属于shop类型）
   updateGoldCompensation(c.rarity === 'gold');
 
+  /* v1.1.8（用户口径）：战局外买卡也要有「飞向牌堆」的收获动画（商店在战局外 ⇒ 落点 #outPile）。 */
+  let el=null; try{ el=document.querySelector('.reward-cards .card[data-ri="'+i+'"]'); }catch(e){}
+  flyToPile(el, iconTag('ui/card/back.png','🂠'));
+
   saveRun(); renderShop();
 }
 /* 灵汁原价（未打折）。界面上要在聚宝盆在场时把它「划掉」再展示新价，所以必须留一个原价出口。 */
@@ -1430,7 +1534,10 @@ function buyPotion(i){
   const price=potionPrice();
   if(G.gold<price){ floatMsg(`金币不足（需 ${price}）`); return; }
   const p=G.shopPotions[i]; if(!p) return;
-  G.gold-=price; G.potionBought=(G.potionBought||0)+1; gainPotion(p); G.shopPotions.splice(i,1);
+  G.gold-=price; G.potionBought=(G.potionBought||0)+1;
+  /* v1.1.8：来源取**被点击的那瓶灵汁**（战局外锦囊 = #outPouch）。 */
+  let pel=null; try{ pel=document.querySelector('.reward-cards .relic[data-ri="'+i+'"]'); }catch(e){}
+  gainPotion(p, pel); G.shopPotions.splice(i,1);
   sfx('gold'); log(`花费 ${price} 金币购买灵汁【${p.name}】`); saveRun(); renderShop();
 }
 function removeCard(){
@@ -1539,8 +1646,12 @@ function loadSave(){
     if(!Array.isArray(SAVE.mile)) SAVE.mile=[];
     /* v1.0.26：里程碑奖励的**领取位**（永久解锁）落盘 —— 未领取前专属牌/遗物不进任何池。 */
     if(!Array.isArray(SAVE.mileClaimed)) SAVE.mileClaimed=[];
+    /* v1.1.8（用户 2026-10-13）：角色改由【入门符纸】解锁 ——
+       unlockedHeroes = 已用符纸解锁的角色 id 列表；mileTickets = 手上剩余的符纸张数。 */
+    if(!Array.isArray(SAVE.unlockedHeroes)) SAVE.unlockedHeroes=[];
+    SAVE.mileTickets = Math.max(0, SAVE.mileTickets|0);
   }
-  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], mileResetV2:true}; }
+  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], unlockedHeroes:[], mileTickets:0, mileResetV2:true}; }
 }
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
@@ -1564,11 +1675,40 @@ function mileDone(id){ return !!(SAVE && SAVE.mile && SAVE.mile.indexOf(id) >= 0
 /* v1.0.26：里程碑奖励**是否已领取**（领取后才真正解锁对应牌/遗物，见 MILE_CLAIMED → SAVE.mileClaimed）。
    与 mileDone（按里程达标自动置位）不同：这里要玩家在里程界面点一次「领取」才落盘。 */
 function mileClaimed(id){ return !!(SAVE && SAVE.mileClaimed && SAVE.mileClaimed.indexOf(id) >= 0); }
+/* v1.1.8：【入门符纸】—— 领取第 6 档奖励后手上剩余的符纸张数（可花掉，故不是布尔）。 */
+function mileTickets(){ return Math.max(0, (SAVE && SAVE.mileTickets)|0); }
+/* 是否为「已用符纸解锁」的角色（tianshi 由 mileOn 单独恒开）。 */
+function heroUnlocked(id){ return !!(SAVE && SAVE.unlockedHeroes && SAVE.unlockedHeroes.indexOf(id)>=0); }
+/* 用 1 张【入门符纸】解锁一名角色。返回 true=成功。无符纸 / 已解锁 / 非角色 ⇒ false（不落盘）。 */
+function unlockHeroWithTicket(id){
+  if(!id || id==='tianshi' || heroUnlocked(id)) return false;
+  if(typeof HEROES!=='undefined' && !HEROES.some(h=>h && h.id===id)) return false;
+  if(mileTickets() < 1) return false;
+  SAVE.mileTickets = mileTickets() - 1;
+  if(!Array.isArray(SAVE.unlockedHeroes)) SAVE.unlockedHeroes=[];
+  SAVE.unlockedHeroes.push(id);
+  persistSave();
+  return true;
+}
 /* 依稀有度取卡/遗物的对象（key 可以是 id 字符串，也可以是对象本身） */
 function _mileObj(kind,key){
   const list = kind==='card' ? CARDS : RELICS;
   if(key && typeof key==='object') return key;
   return list.find(x=>x.id===key) || null;
+}
+/* v1.1.9（用户 2026-10-13）：里程节点上的**奖励配图** —— 按卡/遗物的 `mile` 字段反查该档的真实奖励，
+   返回 {rel,name,desc}（rel 为素材相对路径，卡 256×192 / 遗物 128×128）；纯机制档无对应对象 ⇒ null。 */
+function mileRewardOf(nodeId){
+  if(!nodeId) return null;
+  if(typeof CARDS!=='undefined' && CARDS && CARDS.length){
+    const c=CARDS.find(x=>x && x.mile===nodeId);
+    if(c) return { rel:'card/'+c.id+'.png', name:c.name||'', desc:c.desc||'' };
+  }
+  if(typeof RELICS!=='undefined' && RELICS && RELICS.length){
+    const r=RELICS.find(x=>x && x.mile===nodeId);
+    if(r) return { rel:'relic/'+r.id+'.png', name:r.name||'', desc:r.desc||'' };
+  }
+  return null;
 }
 /* 门禁核心：kind ∈ hero|card|relic|potion，返回该内容当前是否**可用**。
    查不到条目 ⇒ 一律放行（绝不允许把内容静默蒸发）；老 4 瓶灵汁 / tianshi / 白·蓝卡遗物恒开。 */
@@ -1582,8 +1722,10 @@ function mileOn(kind,key){
   if(!MILE_GATE_ON) return true;                            // v1.0.16：总开关关掉 ⇒ 一律放行（测试期，见 20_data.js）
   if(kind==='hero'){
     if(key==='tianshi') return true;                        // 初始角色恒开
-    const m=MILESTONES.find(x=>x.heroes && x.heroes.indexOf(key)>=0);
-    return !m || mileDone(m.id);
+    /* v1.1.8（用户 2026-10-13）：角色**不再按里程自动放行**，改由【入门符纸】解锁
+       （选角页消耗 1 张，落 SAVE.unlockedHeroes）。未登记的 id 仍一律放行，不静默蒸发内容。 */
+    if(typeof HEROES!=='undefined' && !HEROES.some(h=>h && h.id===key)) return true;
+    return !!(SAVE && SAVE.unlockedHeroes && SAVE.unlockedHeroes.indexOf(key)>=0);
   }
   if(kind==='card' || kind==='relic'){
     const o=_mileObj(kind,key);
@@ -1610,6 +1752,7 @@ function grantRunMilestones(){
   const p=SAVE.progress;
   const pts=milePointsFor(G);
   G._mileGain=pts;                                          // 记录**实际发放额**：结算面板读它，别重算（幂等返回时重算会显示一个没真发的数）
+  G._mileParts=mileParts(G);                                // v1.1.8：分项也一起快照 —— 复活后再败，结算画面仍显示「真正发出去的那一份」
   p.pts=(p.pts|0)+pts;
   p.runs=(p.runs|0)+1;
   const won=!!G.finalBoss;                                  // finalBoss 只在打穿最后一幕幕主时置真 ⇒ 通关
@@ -1629,10 +1772,10 @@ function grantRunMilestones(){
       SAVE.mile.push(n.id); fresh.push(n);
     }
   });
-  /* v1.1.x（门禁总开关打开后的配套）：mileOn() 查的仍是**旧 MILESTONES 表**的 id
-     （hero_ganshiren / adv_card / potion_new / adv_relic / hero_yincha），而新体系只推
-     每角色轨的 <hero>_t<N> ⇒ 不补这一段的话角色/紫·金内容永久锁死。
-     旧表按**全局累计 pts** 判定（与 v1.0.15 的原始语义一致）。 */
+  /* v1.1.8（用户 2026-10-13）：角色三条门禁已从 MILESTONES 表删除 ⇒ 这一段如今只推
+     adv_card / potion_new / adv_relic（紫金卡与紫金遗物的掉落池门禁）。
+     ⚠️ 这正是「每打一场就自动解锁下一名角色」的根因段：旧表里三条 `heroes:[...]` 会让
+        一局 ≈395 点就直接满足 need 120/380 而写入 hero_* id。删掉后不再发生。 */
   MILESTONES.forEach(m=>{
     if((p.pts|0)>=m.need && SAVE.mile.indexOf(m.id)<0){
       SAVE.mile.push(m.id); fresh.push(m);
@@ -1641,23 +1784,6 @@ function grantRunMilestones(){
   persistSave();
   if(fresh.length) unlockSfx();                             // 新里程碑解锁音（与图鉴/成就同款）
   return fresh;
-}
-/* 结算面板里的里程碑区块：本局 +N 点 · 累计 M 点，并列出本次新解锁条目；
-   全部解锁后加一句「全部里程碑已解锁」。 */
-function mileSettleHTML(gain, just){
-  const pts=milePts();
-  /* v1.0.25：结算面板的「全部达成」按**本局角色的那条轨**判定（新体系；不再看全局 MILESTONES）。 */
-  const heroId=(G && G.hero) ? G.hero : 'tianshi';
-  const tierTotal=(typeof MILE_TRACKS!=='undefined' && MILE_TRACKS[heroId])
-    ? MILE_TRACKS[heroId].nodes.length : MILE_TIER_COUNT;
-  const gone=(SAVE.mile||[]).filter(id=>id.indexOf(heroId+'_t')===0).length >= tierTotal;
-  const rows=(just&&just.length)
-    ? just.map(m=>`<div style="margin-top:4px"><b style="color:var(--gold)">${m.name}</b><br><span style="color:var(--dim);font-size:13px">${m.desc}</span></div>`).join('')
-    : '';
-  const tail=gone ? ` · <span style="color:var(--green)">全部里程碑已解锁</span>` : '';
-  return `<div style="margin:10px 0;padding:10px 12px;border:1px solid var(--ink3);border-radius:8px;background:rgba(0,0,0,.25);text-align:left;font-size:14px">`
-    + `<div>本局里程碑 <b style="color:var(--gold)">+${gain}</b> 点 · 累计 <b style="color:var(--gold)">${pts}</b> 点${tail}</div>`
-    + rows + `</div>`;
 }
 /* ===================== 独立的「解锁」界面（v1.0.16） =====================
    主菜单的「解锁」入口调它。展示全部里程碑：阈值 / 累计点数 / 进度条 / 已解锁态。
@@ -1711,6 +1837,7 @@ function mileFillPct(nodes, pts){
    待定 / 未知 / 尾节点一律不可领（还没定稿，也没有里程数可比）。
    ⚠️ 真奖励（牌 / 遗物 / 被动 / 新角色）等定稿后再在这里发放，现在只演示交互。 */
 function mileClaim(nodeId){
+  if(_mlPressFired){ _mlPressFired=false; return; }   // v1.1.9：长按看详情后抬手，别顺手再领一次
   const n=MILE_NODES.filter(x=>x.id===nodeId)[0];
   if(!n || n.pending || n.unknown || n.tail) return;
   const pts=milePts(MILE_HERO);
@@ -1719,9 +1846,11 @@ function mileClaim(nodeId){
   if(mileClaimed(nodeId)) return;
   if(!Array.isArray(SAVE.mileClaimed)) SAVE.mileClaimed=[];
   SAVE.mileClaimed.push(nodeId);
+  /* v1.1.8：第 6 档【入门符纸】领取 ⇒ 手头符纸 +1（选角页消耗 1 张解锁一名角色）。 */
+  if(n.ticket){ SAVE.mileTickets = mileTickets() + 1; }
   persistSave();
   sfx('ui_reward'); sfx('ui_unlock');
-  floatMsg('已领取 · '+(n.name||'里程奖励'));
+  floatMsg(n.ticket ? `获得 1 张【入门符纸】 · 共 ${mileTickets()} 张` : ('已领取 · '+(n.name||'里程奖励')));
   const el=document.querySelector('.ml-node[data-mid="'+nodeId+'"]');
   if(el&&el.classList){
     el.classList.remove('can'); el.classList.add('claimed','claiming');
@@ -1729,7 +1858,69 @@ function mileClaim(nodeId){
        只在 DOM 存在时挂（headless / 无该节点时自动跳过，不影响落盘与门禁）。 */
     const fx=document.createElement('span'); fx.className='ml-claimfx'; el.appendChild(fx);
     setTimeout(function(){ el.classList.remove('claiming'); if(fx.parentNode) fx.parentNode.removeChild(fx); }, 900);
+    /* v1.1.9（用户口径「所有里程碑奖励领取时必须添加特效动画」）：奖励图**从节点位置竖直上飞 + 淡出消散**。 */
+    mileFlyOff(el);
   }
+}
+/* v1.1.9：领取时奖励图向上飘散 —— 克隆节点里的奖励缩略图（纯机制档无图 ⇒ 符纸字形兜底），
+   以 `.ml-root` 为定位上下文，竖直上飞 + 透明度 1→0 消散，动画完自行摘掉。
+   ⚠️ 无 DOM（冒烟沙箱 querySelector 恒 null）或无节点时**同步 return**，绝不在无头下挂定时器。 */
+function mileFlyOff(el){
+  try{
+    if(!el || !el.getBoundingClientRect) return;
+    const host=document.querySelector('.ml-root');
+    if(!host || !host.getBoundingClientRect) return;
+    const r0=el.getBoundingClientRect(), h0=host.getBoundingClientRect();
+    if(!r0 || !h0) return;
+    const img=el.querySelector ? el.querySelector('.ml-rwimg') : null;
+    const fly=document.createElement('div');
+    fly.className='ml-flyimg';
+    fly.innerHTML = img ? img.outerHTML : '<span class="ml-flyemoji">🎫</span>';
+    fly.style.left=Math.round(r0.left-h0.left+(r0.width/2)-26)+'px';
+    fly.style.top =Math.round(r0.top -h0.top-16)+'px';
+    host.appendChild(fly);
+    setTimeout(function(){ if(fly.parentNode) fly.parentNode.removeChild(fly); }, 1250);
+  }catch(e){}
+}
+/* v1.1.9（用户口径）：里程节点**长按 550ms 看详情** —— 弹一张居中的奖励详情卡（图 + 名 + 说明 + 里程），
+   点任意处关闭。与 mileClaim 的单击互补：长按后抬手不再触发领取（_mlPressFired 挡一下）。 */
+let _mlPress=null, _mlPressFired=false;
+function milePressStart(e,nodeId){
+  milePressEnd();
+  const el=(e && e.currentTarget) || null;
+  _mlPress={ t:setTimeout(function(){ _mlPress=null; _mlPressFired=true; mileDetail(nodeId); }, 550) };
+}
+function milePressEnd(){
+  if(_mlPress){ clearTimeout(_mlPress.t); _mlPress=null; }
+}
+function mileDetail(nodeId){
+  const n=(MILE_NODES||[]).filter(x=>x.id===nodeId)[0];
+  if(!n) return;
+  const host=document.querySelector('.ml-root');
+  if(!host || !host.querySelector) return;                 // 无 DOM ⇒ 静默返回（不挂定时器）
+  const old=host.querySelector('.ml-detail');
+  if(old && old.parentNode) old.parentNode.removeChild(old);
+  const rw=mileRewardOf(nodeId);
+  const pts=milePts(MILE_HERO);
+  const need=(n.need!=null) ? n.need : '待定';
+  const got=mileClaimed(nodeId);
+  const state=got ? '已领取' : ((n.need!=null && pts>=n.need) ? '可领取' : '未达成');
+  const d=document.createElement('div');
+  d.className='ml-detail';
+  d.innerHTML=`<div class="ml-dtbox">`
+    + (rw ? `<div class="ml-dtart">${artImg(rw.rel,'','ml-dtimg')}</div>` : '')
+    + `<b class="ml-dtname">${rw?rw.name:(n.name||'')}</b>`
+    + `<p class="ml-dtdesc">${(rw?rw.desc:(n.desc||''))||'—'}</p>`
+    + `<div class="ml-dtmeta">里程 <b>${need}</b> · 当前 <b>${pts}</b> · ${state}</div>`
+    + `<div class="ml-dthint">点击任意处关闭</div></div>`;
+  host.appendChild(d);
+  sfx('ui_poster');
+  const close=function(){
+    if(d.parentNode) d.parentNode.removeChild(d);
+    try{ host.removeEventListener('pointerdown', close, true); }catch(e){}
+  };
+  /* 稍后再挂关闭监听，避免**开启它的那一次 pointerdown 冒泡上来**把它当场关掉。 */
+  setTimeout(function(){ try{ host.addEventListener('pointerdown', close, true); }catch(e){} }, 80);
 }
 /* 里程轨横向拖动（鼠标；触屏走原生 overflow 滚动）。拖动中节流响「布面摩擦」。 */
 const _mlDrag={on:false,x:0,sl:0,el:null,last:0};
@@ -1792,17 +1983,23 @@ function viewMilestones(heroId){
     const pct=mileSlotPct(i, slots);
     const done=(n.need!=null && pts>=n.need);
     const got=mileClaimed(n.id);
+    const rw=mileRewardOf(n.id);                          // v1.1.9：该档真实奖励（纯机制档 ⇒ null，不画缩略图）
     let cls='ml-node';
     if(n.unknown) cls+=' unknown'; else if(n.pending) cls+=' pending';
     if(done) cls+=' done';
+    if(rw) cls+=' has-rw';
     if(!n.unknown && !n.pending) cls+= got?' claimed':(done?' can':'');
     const needTxt=(n.need!=null) ? n.need : '?';
     const state=n.unknown ? '未来角色'
       : n.pending ? (n.ticket ? '解锁角色' : '待定稿')
-      : (got ? '已领取' : (done ? '点击领取' : '未达成'));
+      : (got ? '已领取' : (done ? (n.ticket ? '点击领取符纸' : '点击领取') : '未达成'));
     const click=(n.unknown||n.pending) ? '' : ` onclick="mileClaim('${n.id}')"`;
+    /* v1.1.9：长按 550ms 看详情（单击仍是领取）。 */
+    const press=` onpointerdown="milePressStart(event,'${n.id}')" onpointerup="milePressEnd()"`
+      + ` onpointerleave="milePressEnd()" onpointercancel="milePressEnd()"`;
+    const thumb=rw ? `<div class="ml-rw">${artImg(rw.rel,'','ml-rwimg')}</div>` : '';
     return `<div class="${cls}" data-mid="${n.id}" style="left:${pct}%">`
-      + `<div class="ml-box"${click}><b>${n.name}</b><span>${n.desc||''}</span>`
+      + `<div class="ml-box"${click}${press}>${thumb}<b>${n.name}</b><span>${n.desc||''}</span>`
       + `<em class="ml-state">${state}</em></div>`
       + `<div class="ml-stem"></div><div class="ml-dot"></div>`
       + `<div class="ml-need">${needTxt}</div></div>`;
@@ -1837,6 +2034,9 @@ function viewMilestones(heroId){
           </div>
         </div>
       </div>
+    </div>
+    <div class="ml-ticket" aria-label="入门符纸存量">
+      <span class="ml-ticket-ico">${iconTag('ui/rumenfuzhi.png','🎫')}</span><span class="ml-ticket-num">${mileTickets()}</span>
     </div>
   </div>`, true, 'mile-scene');
 }
@@ -1939,12 +2139,6 @@ function todayStr(){
   const d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-function weekKey(){
-  const d=new Date();
-  const day=(d.getDay()+6)%7; // 周一为 0
-  d.setDate(d.getDate()-day);
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
 function signedToday(){ return SAVE.lastSignIn===todayStr(); }
 function adPlaceholder(name, reward){ AdSlot.request(name, reward); } // v0.61.06：转发到统一入口
 function doSignIn(){
@@ -1963,19 +2157,6 @@ function doAdDouble(){
   adPlaceholder('签到翻倍', ()=>{ SAVE.signInBonus=(SAVE.signInBonus||0)+5; persistSave(); });
   showStartScreen();
 }
-function signInPanelHTML(){
-  let html=`<div class="menu-panel">`;
-  if(signedToday()){
-    html+=`<p style="color:var(--green);margin-bottom:8px">✓ 今日已签到 · 连续 <b>${SAVE.streak||0}</b> 天</p>`;
-    /* v1.0.1：广告入口隐藏（未接广告）—— doAdDouble / adPlaceholder 本体保留，接广告后还原这一行。 */
-    if(SAVE.signInBonus>0) html+=`<p style="color:var(--gold);margin-top:8px;font-size:13px">开局将额外携带 +${SAVE.signInBonus} 金币</p>`;
-  } else {
-    html+=`<button class="btn" onclick="doSignIn()">每日签到 · 领取 +5 开局金币</button>`;
-  }
-  html+=`</div>`;
-  return html;
-}
-
 /* ===================== 数据埋点（局外统计，正式版接统计 SDK） ===================== */
 function track(event){
   if(!SAVE.stats) SAVE.stats = {};
@@ -2147,7 +2328,9 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   if(ov && ov.classList) ov.classList.toggle('ov-enter', !wasOpen || sceneChanged);
   if(scene && ov.classList) ov.classList.add(scene);
   const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none';
-  ovMarkCornerBtns(); }
+  ovMarkCornerBtns();
+  /* v1.1.8：商店 / 锻造 / 营地等面板都在战局外 ⇒ 常驻 HUD 要跟着显隐、并压在面板之上。 */
+  if(typeof outHudSync==='function') outHudSync(); }
 /* v1.0.12（用户 2026-10-05：「所有界面的返回/确认按钮放到左上角跟右上角，方便按」）——
    小屏横屏时，把面板**末尾**那一串直接子级行动按钮钉到屏幕两上角（拇指区）：
      · 文本以 返回/放弃/跳过 开头 → 左上；其余（继续/离开/确定…）→ 右上（close-x 左边）。
@@ -2178,7 +2361,8 @@ function ovMarkCornerBtns(){
 }
 function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
   if(typeof settleVidDrop==='function') settleVidDrop();   // v1.1.x：结局视频停在末帧，收面板时一并摘掉
-  document.getElementById('overlay').classList.add('hidden'); }
+  document.getElementById('overlay').classList.add('hidden');
+  if(typeof outHudSync==='function') outHudSync(); }
 /* v1.0.20（用户 2026-10-08：「有时候从图鉴或者排行榜等界面回到主界面会卡住」）——
    旧判据只有 `if(!G)`，但 G 退局后**并不清空**（quitToMenu / showVictory / loseGame 都只调
    showStartScreen，没把 G 置空）。于是「本会话玩过一局 → 回主菜单 → 开图鉴/榜单/引导 → 返回」时
@@ -2442,8 +2626,23 @@ function intentChip(e){
   const atk=e.intent.v+(e.pendingDamage||0)+st;
   const I=(n,fb)=>iconTag('ui/intent_'+n+'.png', fb);
   const B=(n,fb)=>iconTag('buff/'+n+'.png', fb);
+  /* v1.1.8（用户：「又要攻击又要勾魂等情况，要有多个意图图标」）：
+     带【勾魂】等**攻击触发词缀**的敌人，攻击那一下会**顺带**触发词缀效果（见 30_engine 的
+     dealDamageToPlayer：judu 追加伤害 / shixue 吸血 / gouhun 勾魂 / feipai 塞废牌）。
+     以前只画一枚攻击图标 ⇒ 玩家看不出这一击还附送勾魂。这里给攻击类意图**追加词缀图标**，
+     一招多效时并排显示。词缀图标就是 deliverable 里那套 buff/<id>.png。 */
+  const affixChips=(function(){
+    let s='';
+    if(e && e.affixes){
+      if(e.affixes.some(a=>a.id==='gouhun')) s+=B('gouhun','🔗');
+      if(e.affixes.some(a=>a.id==='judu'))   s+=B('judu','☠️');
+      if(e.affixes.some(a=>a.id==='shixue')) s+=B('shixue','🩸');
+      if(e.affixes.some(a=>a.id==='feipai')) s+=B('feipai','🃏');
+    }
+    return s;
+  })();
   switch(e.intent.type){
-    case 'attack': return I('attack','⚔️')+atk;
+    case 'attack': return I('attack','⚔️')+atk+affixChips;
     case 'charge': return B('charge','⏳')+'+'+e.intent.v;
     case 'block': return B('block','🛡️')+e.intent.v;
     case 'heal': return I('heal','❤️')+e.intent.v;
@@ -2451,15 +2650,15 @@ function intentChip(e){
     case 'gouhun': return B('gouhun','🔗');
     case 'burn': return B('burn','🔥')+e.intent.v;
     case 'strength': return B('strength','💪')+e.intent.v+(e.intent.weak?B('weak','🥀'):'')+(e.intent.sealHeal?I('heal','❤️'):'');
-    case 'multi': return I('multi','⚔️')+e.intent.n+'×'+atkPlain;
+    case 'multi': return I('multi','⚔️')+e.intent.n+'×'+atkPlain+affixChips;
     case 'discard': return I('discard','🗑️');
-    case 'attackBlock': return I('attack','⚔️')+atkPlain+B('block','🛡️')+e.intent.block;
+    case 'attackBlock': return I('attack','⚔️')+atkPlain+B('block','🛡️')+e.intent.block+affixChips;
     case 'summon': return I('summon','👥')+e.intent.n;
     case 'jiming': return B('ledger','📜');
     case 'qingsuan': return I('qingsuan','⚖️');
     case 'yehuo': return B('karmafire','🔥');
     case 'wangyou': return I('wangyou','🍵');
-    case 'aoe': return I('aoe','💥')+atk;
+    case 'aoe': return I('aoe','💥')+atk+affixChips;
     case 'dormant': return I('dormant','💤');
     default: return '…';
   }
