@@ -371,7 +371,9 @@
   .enemy.selected .ename{color:#ffd76a;}
   .enemy .ename{font-family:var(--font-kai); font-size:19px; color:var(--red); letter-spacing:2px; margin-bottom:6px;}
   .badges{margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;}
-  .badge{font-size:12px; padding:2px 8px; border-radius:20px; border:1px solid var(--ink3); color:var(--dim);}
+  /* v1.1.9：buff 徽章不再套一层描边方框（用户口径）。边框改 `transparent` —— 保留 1px 占位，
+     这样 `.badge.ybtarget` / `.badge.curse-max` 只覆写 border-color 就能各自亮出金圈，普通徽章则无框。 */
+  .badge{font-size:12px; padding:2px 8px; border-radius:20px; border:1px solid transparent; color:var(--dim);}
   .badge.curse{color:#c86bd8;} .badge.charm{color:#e06b9b;} .badge.strength{color:#e08b3a;} .badge.seal{color:#3ac0c0;} .badge.thorns{color:#e06b6b;} .badge.affix{color:#e0b060;} .badge.ybtarget{color:#ffd76a; border-color:rgba(255,215,106,.7); background:rgba(255,215,106,.12);}
   /* v1.0.12：诅咒**满 6 层**时徽章变样（太上咒箓[金·天师]的定稿要求「满 6 层诅咒图标要变化」）。
      走代码画（美术方案 B）：金边 + 金色光晕 + 轻微放大，一眼区别于 1~5 层。
@@ -1407,7 +1409,8 @@
      改成 **76×76 方框 + margin 居中**：图放大 36%，横板的空档自然消失。
      ⚠️ `.relic` 是 `flex-direction:column` 且默认 `align-items:stretch`，
      显式给了 width 之后 `margin:0 auto` 才真的居中（stretch 不再拉伸它）。 */
-  .ricon{width:76px; height:76px; object-fit:contain; border-radius:6px; margin:0 auto 6px; background:rgba(0,0,0,.2);}
+  /* v1.1.9：去掉 `background:rgba(0,0,0,.2)` 的半透明暗底（用户口径：图标 UI 不要被半透明框框住）。 */
+  .ricon{width:76px; height:76px; object-fit:contain; border-radius:6px; margin:0 auto 6px;}
   /* v0.67.0：**无图道具的「字牌」占位**（目前只有还阳露 / 孟婆汤两瓶灵汁没有贴图）。
      与 .ricon 同尺寸同暗底，中间一个字（取名字末字：还阳露→露、孟婆汤→汤）。
      为什么要有：同排的 .reward-cards 是 `align-items:stretch`，一排放 4 张卡时
@@ -1610,8 +1613,8 @@
     100%{opacity:1; transform:translate(-50%,0) scale(1) rotate(0deg);}}
   /* 右下角牌堆 UI：显示玩家**主牌库**剩余张数（选牌后即时 +1） */
   .reward-pile{position:absolute; right:14px; bottom:12px; display:flex; align-items:flex-end; gap:9px;
-    padding:8px 12px; border-radius:10px; background:rgba(0,0,0,.44); border:1px solid var(--ink3);
-    box-shadow:0 4px 14px rgba(0,0,0,.5); pointer-events:none;}
+    padding:8px 12px; border-radius:10px; background:transparent; border:0;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.9)); pointer-events:none;}
   .reward-pile .rp-stack{position:relative; width:30px; height:42px;}
   .reward-pile .rp-card{position:absolute; inset:0; border-radius:4px; background-color:#2a2119;
     background-image:var(--pile-back-img,none); background-repeat:no-repeat; background-size:100% 100%;
@@ -1707,9 +1710,11 @@
   /* —— v1.1.8：战局外常驻 HUD（牌堆 / 锦囊）—— 地图 / 商店 / 营地 / 事件房 / 锻造 … 都常驻。
      z-index:15 高于 #overlay(10) ⇒ 商店面板上照样看得见，也能当收获动画的落点。 —— */
   .out-hud{position:fixed; inset:0; z-index:15; display:none; pointer-events:none;}
+  /* v1.1.9：去掉半透明底框 —— 素材本身是**去背图**，再套一层 rgba 底 + 描边反而难看（用户口径）。
+     只留一圈投影压住底图，保证在亮/暗场景都看得清；内边距保留作点击热区。 */
   .out-hud .out-pouch,.out-hud .out-pile{position:absolute; bottom:12px; display:flex; align-items:center; gap:6px;
-    padding:8px 12px; border-radius:12px; background:rgba(0,0,0,.5); border:1px solid var(--ink3);
-    box-shadow:0 4px 14px rgba(0,0,0,.5); pointer-events:auto; cursor:pointer; color:var(--gold);}
+    padding:10px; border-radius:12px; background:transparent; border:0;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.9)); pointer-events:auto; cursor:pointer; color:var(--gold);}
   .out-hud .out-pouch{left:12px;}
   .out-hud .out-pile{right:12px;}
   .out-hud .out-ico{display:inline-flex; align-items:center; font-size:24px; line-height:1;}
@@ -2696,10 +2701,10 @@
     background:linear-gradient(180deg,rgba(26,20,14,.94),rgba(16,12,9,.55));}
   /* v1.1.8：【入门符纸】存量徽标 —— 固定浮在整屏右下角（父级 .ml-root 定位），
      **不随**里程轨横向滚动 / 海报列纵向滚动而移动（用户口径）。pointer-events:none 免得挡住底下的轨。 */
+  /* v1.1.9：去掉半透明胶囊底 + 金描边（用户口径），只留一圈投影；数字自带描影，压在截图上仍清晰。 */
   .ml-ticket{position:absolute; right:14px; bottom:12px; z-index:5; display:flex; align-items:center; gap:8px;
     padding:5px 15px 5px 9px; border-radius:999px; pointer-events:none;
-    border:1px solid rgba(224,179,65,.5); background:linear-gradient(180deg,rgba(40,29,16,.95),rgba(20,15,10,.92));
-    box-shadow:0 5px 16px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,231,184,.16);}
+    filter:drop-shadow(0 3px 8px rgba(0,0,0,.9));}
   .ml-ticket-ico{display:flex; align-items:center; justify-content:center; width:36px; height:36px; font-size:26px; line-height:1;}
   .ml-ticket-ico img{width:36px; height:36px; object-fit:contain; display:block; filter:drop-shadow(0 2px 4px rgba(0,0,0,.55));}
   .ml-ticket-num{font-size:23px; line-height:1; color:#ffe7b8; letter-spacing:1px; text-shadow:0 2px 6px #000;}
@@ -2843,12 +2848,15 @@
     border-radius:50%; border:2px solid #ffd77a; pointer-events:none;
     box-shadow:0 0 16px rgba(255,215,122,.9), inset 0 0 10px rgba(255,215,122,.6);
     animation:mlClaimRing .6s ease-out forwards;}
-  /* v1.1.9：节点奖励配图（卡图 / 遗物图标）+ 领取时上飞淡出 + 长按奖励详情卡。 */
-  .ml-rw{display:flex; justify-content:center; margin:0 0 2px;}
+  /* v1.1.9：节点奖励配图（卡图 / 遗物图标）+ 领取时上飞淡出 + 长按奖励详情卡。
+     v1.1.9（用户口径）：配图从白框**内部顶部**挪到「奖励标记」的**下方**（里程数下面）。
+     ⚠️ 原来塞在白框顶，手机横屏档（白框以 bottom 锚定、向上长到 130px 高）顶部会被
+        **顶部海报横排浮层**（.ml-heroes，z-index:2 压住 .ml-stage:1）盖掉 ⇒ 图整张看不见。
+        现在固定在里程数下方，永不被遮，白框也回到原高度（不再需要 has-rw 加高）。 */
+  .ml-rw{position:absolute; left:-30px; top:calc(var(--rail-y) + 38px); width:60px;
+    display:flex; justify-content:center; pointer-events:none;}
   .ml-rwimg{width:34px; height:34px; object-fit:contain; display:block; border-radius:4px;
     filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));}
-  .ml-node.has-rw .ml-box{max-height:130px;}
-  .ml-node.has-rw .ml-box span{-webkit-line-clamp:2;}
   @keyframes mlFlyUp{0%{opacity:0; transform:translateY(12px) scale(.7);}
     16%{opacity:1; transform:translateY(-6px) scale(1.12);}
     100%{opacity:0; transform:translateY(-124px) scale(.72);}}
@@ -2907,6 +2915,7 @@
     .ml-state{font-size:9px;}
     .ml-stem{height:20px;}
     .ml-need{top:calc(var(--rail-y) + 12px); font-size:10px;}
+    .ml-rw{left:-27px; top:calc(var(--rail-y) + 32px); width:54px;}
     .ml-badge{font-size:11px; letter-spacing:1px;}
     .ml-hnm{font-size:11px; letter-spacing:1px;}
     .ml-node.unknown .ml-box b{font-size:18px;}
@@ -3277,9 +3286,10 @@
           12 枚最多 3~4 行（≈50~70px），永远够不到筹码条那一行。 */
     .pbuffs{display:flex; position:absolute; left:calc(100% + 6px); top:2px; z-index:3;
             flex-wrap:wrap; align-content:flex-start; gap:2px; width:min(108px,22vw);}
+    /* v1.1.9：去掉半透明底 + 彩色描边方框（用户口径），改用颜色字 + 描影保证压在立绘上也读得清。 */
     .pbuff{font-size:10px; line-height:1.1; min-width:14px; padding:1px 5px; border-radius:8px;
-           text-align:center; white-space:nowrap; background:rgba(42,33,25,.9);
-           color:var(--c,#d8bd82); border:1px solid var(--c,#d8bd82);}
+           text-align:center; white-space:nowrap; background:transparent; border:0;
+           color:var(--c,#d8bd82); text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 5px rgba(0,0,0,.9);}
 
     /* ③ 网格版式：召唤小怪在左侧 2×2，boss 独占最右一列、跨两行。
        ⚠️ `grid-row:1 / span 2` **不能**写成 `1 / -1` —— 行是隐式的，`-1` 只指向显式网格的

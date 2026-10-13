@@ -1248,23 +1248,32 @@ function flipReward(el, i){
   pickReward(i);
 }
 function pickReward(i){
-  sfx('ui_reward');   // v0.61.25：三选一翻牌音
-  const c=G.rewardPicks[i];
-  G.deck.push(c);
-  log(`获得卡牌【${c.name}】`);
-  /* v1.1.x（用户口径）：右下角牌堆 UI 显示**玩家主牌库剩余张数**，加入所选牌后**即时** +1。 */
-  try{ const n=document.getElementById('rewardPileN'); if(n) n.textContent=G.deck.length; }catch(e){}
+  /* v1.1.9：与 pickRelic 同口径 —— 推进必须无条件发生（说明见 pickRelic）。
+     原实现里 `sfx / G.deck.push / updateGoldCompensation / 元素查询` 任一同步抛异常，
+     `flyCardToPile(...)` 就注册不上，`dropUIHide()+afterReward()` 永不执行 ⇒ 停在抽牌面板。
+     这里同样抽成幂等的 go()，异常路径兜底。 */
+  let advanced=false;
+  const go=()=>{ if(advanced) return; advanced=true; dropUIHide(); afterReward(); };
+  let el=null;
+  try{
+    sfx('ui_reward');   // v0.61.25：三选一翻牌音
+    const c=G.rewardPicks[i];
+    G.deck.push(c);
+    log(`获得卡牌【${c.name}】`);
+    /* v1.1.x（用户口径）：右下角牌堆 UI 显示**玩家主牌库剩余张数**，加入所选牌后**即时** +1。 */
+    try{ const n=document.getElementById('rewardPileN'); if(n) n.textContent=G.deck.length; }catch(e){}
 
-  // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
-  const tier = G.rewardTier || 'normal';
-  if(tier !== 'boss' && G.hasOwnProperty('lastRewardHadGold')) {
-    updateGoldCompensation(G.lastRewardHadGold);
-  }
+    // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
+    const tier = G.rewardTier || 'normal';
+    if(tier !== 'boss' && G.hasOwnProperty('lastRewardHadGold')) {
+      updateGoldCompensation(G.lastRewardHadGold);
+    }
 
-  /* 选中的那张牌**飞回右下角牌堆 UI**，动画走完再关面板、进下一环（用户口径：飞回去的是选中的牌）。
-     ⚠️ 无元素 / 无线框 / 流畅模式时 flyCardToPile **同步**回调 ⇒ 冒烟打桩不会漏进真实 goNext。 */
-  let el=null; try{ el=document.querySelector('.reward-cards .rcard[data-ri="'+i+'"]'); }catch(e){}
-  flyCardToPile(el, ()=>{ dropUIHide(); afterReward(); });
+    /* 选中的那张牌**飞回右下角牌堆 UI**，动画走完再关面板、进下一环（用户口径：飞回去的是选中的牌）。
+       ⚠️ 无元素 / 无线框 / 流畅模式时 flyCardToPile **同步**回调 ⇒ 冒烟打桩不会漏进真实 goNext。 */
+    try{ el=document.querySelector('.reward-cards .rcard[data-ri="'+i+'"]'); }catch(e){}
+  }catch(e){}
+  try{ flyCardToPile(el, go); }catch(e){ go(); }
 }
 function skipReward(){
   // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
@@ -1380,10 +1389,18 @@ function showRelicReward(){
    v1.1.x：选中那件先**飞进锦囊**（用户口径「击杀后遗物会飘到锦囊」），动画走完再关面板推进。 */
 function pickRelic(i){
   const r=G.relicPicks[i];
-  sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`);
+  /* v1.1.9（用户报障「精英关选完遗物后卡在战场、要手动点结束回合才进地图」）：
+     **推进必须无条件发生**。沿用 `sfx/log/元素查询/grantRelic` 任一同步抛异常，grantRelic 就调不到，
+     `dropUIHide()+goNext()` 永不执行 ⇒ 停在遗物面板上（面板透明，背后就是战场）。
+     这里把「关面板 + 进地图」抽成幂等的 go()，用 advanced 自守：
+       · 正常路径：grantRelic 的异步回调 → go()（飞锦囊动画照旧，不受影响）；
+       · 异常路径：catch 里兜底 go() —— 最坏只是少了飞行动画，但玩家一定能进地图。 */
+  let advanced=false;
+  const go=()=>{ if(advanced) return; advanced=true; dropUIHide(); goNext(); };
+  try{ sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`); }catch(e){}
   /* 选中那件从三选一面板**飞进锦囊**（grantRelic 内部飞 + 锦囊闪金光），动画走完再关面板推进。 */
   let el=null; try{ el=document.querySelector('.reward-cards .relic[data-ri="'+i+'"] .ricon'); }catch(e){}
-  grantRelic(r, el, ()=>{ dropUIHide(); goNext(); });
+  try{ grantRelic(r, el, go); }catch(e){ go(); }
 }
 function skipRelic(){ dropUIHide(); goNext(); }
 
@@ -1422,14 +1439,22 @@ function showRestConfirm(){
 }
 function campRemoveCard(){
   if(G.deck.length<=1){ floatMsg('牌组只剩一张了'); return; }
-  const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" onclick="doCampRemove(${i})">${cardBody(c)}</div>`).join('');
+  /* v1.1.x（用户口径）：篝火删牌复用「净坛」的焚牌特效 —— 卡片必须带 data-fi 才能定位到元素做动画。 */
+  const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" data-fi="${i}" onclick="doCampRemove(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>篝火 · 删牌</h2><p>选择一张牌从牌组移除（仅限一张，免费）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="renderCampfire()">返回</button>`);
 }
 function doCampRemove(i){
   const c=G.deck[i];
   if(c && c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
-  const cc=G.deck.splice(i,1)[0]; log(`删除一张【${cc.name}】`); sfx('card');
-  G.campRemoved=true; saveRun(); renderCampfire();
+  /* v1.1.x（用户口径）：「净坛的删牌特效也要用在篝火的删牌上面」 —— 与 doUnknownRemove 同一条
+     焚牌路径（火焰自左下烧至右上 → 化为灰烬），动画走完才真正从牌组移除并回篝火。
+     ⚠️ 这里不再额外 `sfx('card')`：音效统一由 cardFxAnim 出（与净坛一致，等用户给音效后接入）。
+     无 DOM / 流畅模式 ⇒ cardFxAnim 同步收尾（冒烟与无头环境照样推进）。 */
+  let el=null; try{ el=document.querySelector('.reward-cards [data-fi="'+i+'"]'); }catch(e){}
+  cardFxAnim(el, 'pile', ()=>{
+    const cc=G.deck.splice(i,1)[0]; log(`删除一张【${cc.name}】`);
+    G.campRemoved=true; saveRun(); renderCampfire();
+  });
 }
 function showForgePicker(from){
   if(!G.deck.length){ floatMsg('牌组已空'); return; }
@@ -1473,6 +1498,10 @@ function cardFxAnim(el, kind, done){
   try{
     const canAnim = el && el.classList && document.body && (typeof fx==='function' && fx());
     if(!canAnim) return finish();
+    /* v1.1.x（用户交付音效）：锻造 / 焚牌 各一声，落在「特效起手」那一帧（与 CSS 动画对齐）。
+       `sfx` 按名探测 素材/sfx/<key>.mp3，文件缺失时静默回落合成音 ⇒ 不阻塞动画。 */
+    if(kind==='forge'){ try{ sfx('fx_forge'); }catch(e){} }
+    else { try{ sfx('fx_burn'); }catch(e){} }
     if(kind==='forge'){
       el.classList.add('is-forging');
       setTimeout(()=>{
@@ -1987,7 +2016,7 @@ function viewMilestones(heroId){
     let cls='ml-node';
     if(n.unknown) cls+=' unknown'; else if(n.pending) cls+=' pending';
     if(done) cls+=' done';
-    if(rw) cls+=' has-rw';
+    if(rw) cls+=' has-rw';                                // 仅作样式钩子（配图已移到白框**下方**）
     if(!n.unknown && !n.pending) cls+= got?' claimed':(done?' can':'');
     const needTxt=(n.need!=null) ? n.need : '?';
     const state=n.unknown ? '未来角色'
@@ -1997,12 +2026,14 @@ function viewMilestones(heroId){
     /* v1.1.9：长按 550ms 看详情（单击仍是领取）。 */
     const press=` onpointerdown="milePressStart(event,'${n.id}')" onpointerup="milePressEnd()"`
       + ` onpointerleave="milePressEnd()" onpointercancel="milePressEnd()"`;
+    /* v1.1.9（用户口径）：奖励配图放在**奖励标记的下方**（里程数下面），不再塞在白框顶部 ——
+       原来白框靠上，手机横屏档白框顶会被顶部海报横排浮层压住，配图直接被盖掉。 */
     const thumb=rw ? `<div class="ml-rw">${artImg(rw.rel,'','ml-rwimg')}</div>` : '';
     return `<div class="${cls}" data-mid="${n.id}" style="left:${pct}%">`
-      + `<div class="ml-box"${click}${press}>${thumb}<b>${n.name}</b><span>${n.desc||''}</span>`
+      + `<div class="ml-box"${click}${press}><b>${n.name}</b><span>${n.desc||''}</span>`
       + `<em class="ml-state">${state}</em></div>`
       + `<div class="ml-stem"></div><div class="ml-dot"></div>`
-      + `<div class="ml-need">${needTxt}</div></div>`;
+      + `<div class="ml-need">${needTxt}</div>${thumb}</div>`;
   }).join('');
   /* 轨尾「敬请期待」：里程不设上限（用户口径），后续版本继续加档 ⇒ 虚线占位、不可领。 */
   const tailMark=`<div class="ml-node ml-end" style="left:${mileSlotPct(nodes.length, slots)}%">`

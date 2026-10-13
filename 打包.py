@@ -74,6 +74,12 @@ WEB_IMG_EXT = {'.png', '.jpg', '.jpeg', '.bmp'}
 # 例：fx/daoxin_full.png 是 1024×1024 的道心插画，恰好满足「宽 = 8 格、高为整数格」，
 # 会被 fx_row_datauris 误拆成 8 行 → 运行时请求的 fx/daoxin_full.png 整键反而消失（破碎动画 404）。
 FX_WHOLE_SKIP = {'daoxin_full'}
+# v1.1.9：**非方形格**精灵图的真实排数（单帧 480×720、8 列 4 行）。默认按正方形格切
+# （cell = W//8 = 480，排数 = H//480），但 lightning / damage_reflect 与 boss_vfx 同规格：
+# 高 2880 = 4×720，正方形口径会错切成 6 排 ⇒ 产物里的按排键与 FX_SHEETS.rows 对不上
+# （verify_dist [2d] 报红），运行时纵偏移也错。这里按 key 显式给出真实排数。
+# ⚠️ 必须与 js/20_data.js 的 FX_SHEETS[key].rows 同口径（那边是唯一真相源）。
+FX_SPLIT_ROWS = {'lightning': 4, 'damage_reflect': 4}
 
 
 def human(n):
@@ -106,7 +112,7 @@ def img_datauri(path, quality, maxdim):
     return 'data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'), len(raw), os.path.getsize(path)
 
 
-def fx_row_datauris(path, quality, cols=8):
+def fx_row_datauris(path, quality, cols=8, rows=None):
     """特效精灵图 → **按排**的 WebP data URI 列表；不是 8 列整图就返回 None。
 
     v1.0.9（手机端性能）：单文件产物原来是「一个特效 = 一张 3840×2880 整图」，
@@ -115,11 +121,25 @@ def fx_row_datauris(path, quality, cols=8):
     正是用户报的「打出手牌那一瞬间卡」。
     拆成按排小图（3840×480 = 1.8 Mpx）后每次只解 1/6，**像素逐字节不变**（只是切了一刀），
     出牌尖峰随之降到十几毫秒。运行时的取法见 js/00_base.js 的 playFx（<name>_r<行>.png）。
-    尺寸全从图自己量（不写死 480）：单元边长 = 宽/8，排数 = 高/单元边长。"""
+    默认尺寸从图自己量（不写死 480）：单元边长 = 宽/cols，排数 = 高/单元边长。
+    v1.1.9：`rows` 显式给定时按「高 / rows」等高横切 —— 用于单帧**非方形**（480×720）的图，
+    正方形口径（H//480）会把 4 排错算成 6 排。"""
     im = Image.open(path)
     if im.mode in ('P', 'LA', 'L'):
         im = im.convert('RGBA' if 'transparency' in im.info or im.mode == 'LA' else 'RGB')
     W, H = im.size
+    if rows:
+        if W % cols or H % rows:
+            return None
+        rh = H // rows
+        out = []
+        for k in range(rows):
+            y0 = k * rh
+            buf = io.BytesIO()
+            im.crop((0, y0, W, y0 + rh)).save(buf, 'WEBP', quality=quality, method=6)
+            raw = buf.getvalue()
+            out.append(('data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'), len(raw)))
+        return out
     cell = W // cols
     if cell <= 0 or W != cols * cell or H % cell:
         return None
@@ -485,7 +505,7 @@ def main():
             # 运行时只挂当前那一排（见 js/00_base.js 的 playFx）。画质逐像素不变。
             _fxm = re.match(r'^fx/([a-z][a-z0-9_]*)\.png$', rel)
             if _fxm and not args.no_webp and _fxm.group(1) not in FX_WHOLE_SKIP:
-                _rows = fx_row_datauris(path, args.quality)
+                _rows = fx_row_datauris(path, args.quality, rows=FX_SPLIT_ROWS.get(_fxm.group(1)))
                 if _rows:
                     stat['in'] += os.path.getsize(path)
                     for _k, (_uri, _got) in enumerate(_rows):

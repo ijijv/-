@@ -254,10 +254,12 @@ function fxBoxSize(anchorShort, vw, vh){
   if(cap>0 && s>cap) s=cap;
   return Math.round(s);
 }
-/* 第 i 帧在精灵图里的左上角偏移（**纯函数**）：行优先，8 列 */
-function fxCellPos(i, cols, box){
-  const c=Math.max(1, cols||8);
-  return { x:-(i%c)*box, y:-Math.floor(i/c)*box };
+/* 第 i 帧在精灵图里的左上角偏移（**纯函数**）：行优先，8 列。
+   v1.1.9：第 4 参 ch = 单帧高/宽（默认 1 = 正方形格）。boss_vfx 同规格的 lightning /
+   damage_reflect 是 480×720 的**非方形格**（ch=1.5），纵偏移必须按 720 算，否则第 2 格起错位。 */
+function fxCellPos(i, cols, box, ch){
+  const c=Math.max(1, cols||8), h=box*(ch||1);
+  return { x:-(i%c)*box, y:-Math.floor(i/c)*h };
 }
 /* v1.0.7（手机端性能）：格子偏移 → 内层精灵图的 transform。
    background-position 不是合成属性（改一次 = 主线程重光栅化一次）；transform 是，
@@ -425,11 +427,14 @@ function playFx(name, anchor, opts){
   let box=Math.round(fxBoxSize(Math.min(r.width||0, r.height||0), window.innerWidth, window.innerHeight)
                      * (opts.scale||S.scale||1));
   if(cap>0 && box>cap) box=cap;
+  /* v1.1.9：单帧高宽比（默认 1 = 正方形格）。480×720 的图（lightning / damage_reflect）写 ch:1.5，
+     盒子高、内层高、纵偏移、by 修正都跟着它走 —— 否则下半格被裁掉、第 2 格起整体错位。 */
+  const ch=S.ch||1;
   fxStop(key);                                // 同名正在播 → **重播**而不是叠加（连击会在原地堆十几个元素）
   fxEvictOldest();                            // v1.1.8：并发超上限先淘汰最老的（见 FX_MAX_LIVE 注释）
   const el=document.createElement('div');
   el.className='fx-sheet';
-  el.style.width=box+'px'; el.style.height=box+'px';
+  el.style.width=box+'px'; el.style.height=(box*ch)+'px';
   /* v1.1.x：**镜像**（opts.mirror）—— 反伤精灵图有明确的方向性，玩家反伤敌人与敌人反震玩家要
      朝相反一侧翻面。翻在**外层**：内层管切格的 translate，翻它会把格序也翻反；外层无 transform
      （.fx-sheet 只 overflow:hidden），scaleX(-1) 绕自身中心翻面，盒子本就中心对齐锚点 ⇒ 不偏位。 */
@@ -439,13 +444,13 @@ function playFx(name, anchor, opts){
      不补这一步的后果：不少特效的画面本来就画在格子偏下 1/4 处（烟从地面升起那类），
      照格子中心贴到锚点上，scale 一放大就整块沉到单位脚底下。补完之后
      **内容框的中心**落在锚点中心 —— 与素材留白多少、scale 多少都无关。 */
-  const ox=(S.ox||0)*box, oy=(S.oy||0)*box;
+  const ox=(S.ox||0)*box, oy=(S.oy||0)*box*ch;
   /* v0.69.0：首次定位算成局部量 lft/tp —— 既写进 style，也存进 st.lx/ly。
      st 在下面才建，所以先算好；lx/ly 留空的话重锚的短路就失效，每个 render 都要白写一次 style。
      isFinite 守卫：fxAnchorRect 的兜底在 vm_host 的 sandbox 里是 NaN（那边没有 innerWidth），
      NaN 写进 style.left 会被浏览器丢弃，且 NaN===st.lx 恒假 ⇒ 每个 render 都白写。 */
   const lft=Math.round(r.left+r.width/2-box/2-ox);
-  const tp =Math.round(r.top+r.height/2-box/2-oy);
+  const tp =Math.round(r.top+r.height/2-box*ch/2-oy);
   if(isFinite(lft)) el.style.left=lft+'px';
   if(isFinite(tp))  el.style.top =tp+'px';
   /* v1.0.7（手机端性能）：整张精灵图挂**内层**，靠 transform 平移切格；外层只当裁切窗（overflow:hidden）。
@@ -469,7 +474,7 @@ function playFx(name, anchor, opts){
   const inner=document.createElement('div');
   inner.className='fx-sheet-in';
   inner.style.width=(c0*box)+'px';
-  inner.style.height=((strip?1:rows)*box)+'px';
+  inner.style.height=((strip?1:rows)*box*ch)+'px';
   /* v1.0.8（手机端性能）：这里必须带 wantBlob=true。单文件产物（TapTap 包）里不带第二参时，
      assetURL 会返回**整张精灵图的 base64 字串**（3840px 宽，几百 KB），而它被塞进 CSS 的
      background-image，且**每次出牌都新建一个**：浏览器要逐字解析并保存这串值，真机上就是
@@ -496,22 +501,23 @@ function playFx(name, anchor, opts){
      开头 0.2 秒画面上什么都没有（像点了没反应），结尾又挂着一个透明元素不删。
      裁剪边界由 _patch/fx_tune.py 用 PIL 逐帧量覆盖率算得，写进 FX_SHEETS。
      v1.0.9：按排图只有**一排**高，纵偏移恒 0（横偏移仍是格内列号），起点落在 (i0%8, 0)。 */
-  const p0 = strip ? { x:-(i0%c0)*box, y:0 } : fxCellPos(i0, c0, box);
+  const p0 = strip ? { x:-(i0%c0)*box, y:0 } : fxCellPos(i0, c0, box, ch);
   inner.style.transform=fxCellTf(p0);
   preRow(row0+1);                             // 一进场就把下一排排上队（见 preRow 注释）
   el.appendChild(inner);
   fxLayer().appendChild(el);
   if(opts.still) return el;                   // 钉帧：不进 FX_LIVE、不排 rAF（只给截图夹具用）
-  const st={ el:el, inner:inner, key:key, i:0, S:S, i0:i0, box:box, dead:false, pend:null,
+  const st={ el:el, inner:inner, key:key, i:0, S:S, i0:i0, box:box, ch:ch, dead:false, pend:null,
              /* v1.0.9：按排模式的两个游标 —— c0 是列数（算行号），row 是当前挂着的那一排（换排才改
                 backgroundImage；同一排内只动 transform）。非按排模式下 strip=false，两字段闲置。 */
              strip:strip, c0:c0, row:row0, preRow:preRow,
              /* v0.69.0 重锚字段：spec 是可重新解析的锚点描述符（不存元素引用 —— render() 每次
                 整块重写面板 innerHTML，引用必然游离）；ax/ay 是锚点矩形内的比例（精灵图取中心）；
-                bx/by 是盒子自身偏移（半个格子 + ox/oy 内容框修正）；lx/ly 是上次写入值，用于短路。 */
-             spec:fxAnchorSpec(anchor), ax:0.5, ay:0.5, bx:box/2+ox, by:box/2+oy,
+                bx/by 是盒子自身偏移（半个格子 + ox/oy 内容框修正）；lx/ly 是上次写入值，用于短路。
+                v1.1.9：by 用 box*ch（非方形格的高），与 lft/tp 的首次定位同一口径。 */
+             spec:fxAnchorSpec(anchor), ax:0.5, ay:0.5, bx:box/2+ox, by:box*ch/2+oy,
              lx:isFinite(lft)?lft:null, ly:isFinite(tp)?tp:null,
-             dur:1000/(24*(opts.rate||1)),    // 源速 24fps
+             dur:1000/((S.fps||24)*(opts.rate||1)),    // 源速 24fps（v1.1.9：可被 S.fps 覆写，boss_vfx 规格为 30fps）
              t0:(window.performance&&performance.now?performance.now():Date.now()), raf:0 };
   FX_LIVE[key]=st;
   st.raf=requestAnimationFrame(function step(){
@@ -533,7 +539,7 @@ function playFx(name, anchor, opts){
         }
         st.inner.style.transform=fxCellTf({ x:-(k%st.c0)*box, y:0 });
       } else {
-        st.inner.style.transform=fxCellTf(fxCellPos(k, st.c0, box));
+        st.inner.style.transform=fxCellTf(fxCellPos(k, st.c0, box, st.ch));
       }
     }
     st.raf=requestAnimationFrame(step);
