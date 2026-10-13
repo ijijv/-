@@ -3476,7 +3476,7 @@
       var i, j, k, s, ok, got, missing, bad, steps;
 
       /* ① 分发表完整性：80 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 104 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键）', SFX_KEYS.length === 104, 'n=' + SFX_KEYS.length);
+      __ok('v0.61.25 音效表 113 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键）', SFX_KEYS.length === 113, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];
@@ -3986,7 +3986,7 @@
       var e = makeEnemy(ENEMIES['xiuluowang'], 'xiuluowang'); e.hp = 200; e.maxHp = 200; e.block = 0;
       G.enemies = [e]; G.target = 0; dealDamageTo(e, 5);
     });
-    __ok('v0.61.32 关键词·业火反噬 → kw_yehuo（会响很多次的那个）', got.indexOf('kw_yehuo') >= 0, got.join(','));
+    __ok('v0.61.32 关键词·业火反噬 → kw_yehuo（会响很多次的那个；v1.1.12 起修罗王改走 b8_xiuluo_backlash 专属）', got.indexOf('kw_yehuo') >= 0 || got.indexOf('b8_xiuluo_backlash') >= 0, got.join(','));
     got = __rec(function () { G = __base('ganshiren'); var e = G.enemies[0]; e.hp = 10; e.maxHp = 50; e.affixes = [{ id: 'zaisheng', tier: 1 }]; e.intents = [{ type: 'dormant' }]; e.intent = e.intents[0]; __realEnemyAct(); });
     __ok('v0.61.32 关键词·再生词缀回血 → kw_regen', got.indexOf('kw_regen') >= 0, got.join(','));
 
@@ -4020,8 +4020,8 @@
     __ok('v0.61.32 Boss·判官王生死簿记账 → boss_ledger（v0.61.25 时整段静默；v1.1.10 起改为 boss_vfx 专属 b5_judge_record）',
       (got.indexOf('boss_ledger') >= 0 || got.indexOf('b5_judge_record') >= 0), got.join(','));
     got = __rec(function () { G = __base('ganshiren'); var e = makeEnemy(ENEMIES['xiuluowang'], 'xiuluowang'); e.hp = 200; e.maxHp = 200; e.intents = [{ type: 'yehuo' }]; e.intent = e.intents[0]; G.enemies = [e]; G.target = 0; __realEnemyAct(); });
-    __ok('v0.61.32 Boss·修罗王业火附体 → boss_yehuo（从通用 buff 拆出）',
-      got.indexOf('boss_yehuo') >= 0 && got.indexOf('enemy_buff_self') < 0, got.join(','));
+    __ok('v0.61.32 Boss·修罗王业火附体 → boss_yehuo（从通用 buff 拆出；v1.1.12 起改走 b8_xiuluo_karma_fire 专属）',
+      (got.indexOf('boss_yehuo') >= 0 || got.indexOf('b8_xiuluo_karma_fire') >= 0) && got.indexOf('enemy_buff_self') < 0, got.join(','));
 
     /* —— 6. 出牌时的逐张点名音（CARD_SFX 的唯一消费点，走真 doPlayCard） —— */
     var PLAY_CASES = [['leifu', 'atk_talisman'], ['zhanyaojian', 'atk_slash'], ['tiebushan', 'atk_blunt'],
@@ -6244,7 +6244,7 @@
        靠 `_patch/shot_fx.py` 的实拍对照图定 scale。 */
 
     /* ---------- F1. 表结构 ---------- */
-    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 73 条'
+    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 85 条'
       + '（帧数是 _patch/fx_tune.py 按每格 alpha 实扫的 —— 8 列末排常留空，拿 行×8 当帧数会播到空白格；'
       + 'v1.0.14 起的 multi_slash 是多方向图，由 _patch/mk_multi_slash.py 程序生成、不在 fx_tune 的重算范围内；'
       + 'v1.0.17 起的 guling_suck / relic_proc / shiqi_flame / xuenu_flame 四张、v1.1.4 起的 thorns_light 也是程序绘制，'
@@ -6252,9 +6252,9 @@
       + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480）；'
       + 'v1.1.x 起的 lightning 是用户素材：8 列 × 6 行、单元 480×480、48 帧；'
       + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 3 行、单元 480×480、24 帧；'
-      + 'v1.1.10 起的 boss_vfx b1~b6 幕主 34 张：8 列 × 4 行、30fps、32 帧，'
+      + 'v1.1.10 起的 boss_vfx b1~b6 幕主 34 张、v1.1.12 起 b7~b9 幕主 12 张：8 列 × 4 行、30fps、32 帧，'
       + '常规段单元 480×720（ch=1.5）、连接段 480×256（ch≈0.5333））',
-      Object.keys(FX_SHEETS).length === 73 &&
+      Object.keys(FX_SHEETS).length === 85 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
         return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
@@ -6282,7 +6282,7 @@
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
     __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
-      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 73);
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 85);
 
     /* ---------- F2. CARD_FX 接线 ---------- */
     __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
@@ -6478,7 +6478,7 @@
         SETTINGS.lowSpec = keep;
         return got === 'lei|0';
       })());
-    __ok('v0.64.0 **全部 73 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
+    __ok('v0.64.0 **全部 85 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
       + 'v1.0.17 的 grantRelic / onSummonDeath、v1.1.6 的 startTurn 腐毒跳伤、v1.1.10 的 bossSkillFx/bossSelfFx 走 BOSS_VFX 表）'
       + '合起来覆盖了 FX_SHEETS 的全部键'
       + '（素材做了但没接线 = 白花钱出图，这条就是防它；两张芯片火焰走 CSS 循环、不经 playFx，按名单豁免）',

@@ -170,7 +170,7 @@ const SFX_TABLE = {
   /* 遗留键：新代码一律走 hit_light / hit_heavy / hit_crit 按伤害量分级，此键仅为兼容保留 */
   hit:            [['b',.14,.5,2000,160],['t',150,.12,'square',.2,0,70]]
 };
-/* M 组 · v1.1.10：boss_vfx 第 1~6 幕 Boss 技能音效（19 个）。
+/* M 组 · v1.1.10/11：boss_vfx 全部 9 幕 Boss 技能音效（28 个 = 前 6 幕 19 + 后 3 幕 9）。
    真采样由用户交付（`素材/sfx/<键名>.mp3`，见 30_engine.js 的 BOSS_VFX）—— 下面这条只是
    **采样没到位 / 解码失败时的合成兜底**，不写的话 sfx() 会走 sfxWarnUnknown 静默吞掉。
    键名与 boss_vfx/README 的技能 key 一一对应（_cast / _self / _link 播它；_hit 播通用 hit_light|hit_heavy）。 */
@@ -180,7 +180,10 @@ const BOSS_VFX_SFX_KEYS = [
   'b3_xueshi_attack_claw','b3_xueshi_charge','b3_xueshi_heavy_smash','b3_xueshi_lifesteal',
   'b4_xiebian_attack_staff','b4_xiebian_soul_hook','b4_xiebian_split',
   'b5_judge_attack_gavel','b5_judge_record','b5_judge_settle',
-  'b6_mengpo_attack_ladle','b6_mengpo_forget','b6_mengpo_heal'
+  'b6_mengpo_attack_ladle','b6_mengpo_forget','b6_mengpo_heal',
+  'b7_yewang_attack_blade','b7_yewang_pressure',
+  'b8_xiuluo_attack_slash','b8_xiuluo_backlash','b8_xiuluo_karma_fire',
+  'b9_yanluo_affix','b9_yanluo_attack_smash','b9_yanluo_revive','b9_yanluo_summon_yinchai'
 ];
 const _BOSS_SFX_FALLBACK = [['b',.18,.42,2200,320],['t',420,.12,'triangle',.10,.05,300]];
 BOSS_VFX_SFX_KEYS.forEach(function(k){ if(!SFX_TABLE[k]) SFX_TABLE[k]=_BOSS_SFX_FALLBACK; });
@@ -191,7 +194,7 @@ BOSS_VFX_SFX_KEYS.forEach(function(k){ if(!SFX_TABLE[k]) SFX_TABLE[k]=_BOSS_SFX_
    下面两条仅是采样缺失/解码失败时的合成兜底，与 K/L/M 组同机制。） */
 SFX_TABLE.fx_forge = [['b',.22,.32,2600,700],['b',.16,.22,500,2400]];
 SFX_TABLE.fx_burn  = [['b',.42,.34,2200,300],['t',180,.28,'sawtooth',.10,0,70]];
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 104 个键名（v1.1.x 83 条 + v1.1.10 boss_vfx 19 条 + 焚牌 2 条）
+const SFX_KEYS = Object.keys(SFX_TABLE);   // 113 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条）
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;

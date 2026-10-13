@@ -1236,7 +1236,8 @@ const FX_SHEETS = {
   zhenyaoling: { c:8, f:41, f0:43, rows:6, i0:1, scale:1.28, ox:0, oy:0.09 },   // 镇妖铃　素材 43 帧，两端看不见的 2 帧不播
   zhiren:      { c:8, f:34, f0:42, rows:6, i0:6, scale:2.51, ox:0, oy:0.23 },   // 纸人召唤　素材 42 帧，两端看不见的 8 帧不播
   zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.08 },   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播
-  /* ——— v1.1.10：boss_vfx 第 1~6 幕 Boss 技能特效（用户交付 46 段的**前 34 段**）———
+  /* ——— v1.1.10/11：boss_vfx 全部 9 幕 Boss 技能特效（用户交付的 46 段全接入）———
+     前 34 段（第 1~6 幕）在 v1.1.10、后 12 段（第 7~9 幕 夜王/修罗王/阎罗天子）在 v1.1.12。
      与 lightning / damage_reflect 同一套出图规格：8 列 × 4 行、**单帧 480×720**（ch:1.5）、
      **30fps** ⇒ 32 帧 ≈ 1.07s。连接段 `_link` 单帧 **480×256**（ch = 256/480 = 0.5333）、同为 8 列 4 行。
      这些图**没有两端空帧**（出图校验：首帧非空、末帧覆盖率 0）⇒ 一律 i0:0、f:32。
@@ -1282,7 +1283,22 @@ const FX_SHEETS = {
   b6_mengpo_attack_ladle_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
   b6_mengpo_attack_ladle_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
   b6_mengpo_forget_hit:            { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b6_mengpo_heal_self:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 }
+  b6_mengpo_heal_self:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  /* 第三幕 · 夜王（暗刃 / 暗夜威压） */
+  b7_yewang_attack_blade_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b7_yewang_attack_blade_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b7_yewang_pressure_hit:          { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  /* 第三幕 · 修罗王（业火斩 / 业火反噬 / 业火附体） */
+  b8_xiuluo_attack_slash_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b8_xiuluo_attack_slash_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b8_xiuluo_backlash_self:         { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b8_xiuluo_karma_fire_self:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  /* 第三幕 · 阎罗天子（开局词缀 / 幽冥重击 / 轮回复活 / 召唤阴差） */
+  b9_yanluo_affix_self:            { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_attack_smash_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_attack_smash_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_revive_self:           { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_summon_yinchai_self:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 }
 };
 /* `锁_破裂` **故意不在这张表里**：v0.62.0 已用移植 canvas 代码实现（playLockBreak），
    不接精灵图；30 条提示词文档里也没有它。 */

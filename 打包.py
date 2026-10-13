@@ -87,7 +87,7 @@ FX_WHOLE_SKIP = {'daoxin_full'}
 FX_SPLIT_ROWS = {'lightning': 4, 'damage_reflect': 4}
 # v1.1.10：boss_vfx（b1~b6 幕主）同 specs —— 常规段 3840×2880（8 列 4 行、单帧 480×720，
 # 正方形口径会错切成 6 排）、连接段 3840×1024（单帧 480×256，连 H%480 都不为 0 ⇒ 直接返回 None、
-# 运行时请求 _r0 落空 404）。34 条全部显式给 4。7~9 幕（夜王/修罗王/阎罗天子）入库时照此追加。
+# 运行时请求 _r0 落空 404）。34 条全部显式给 4。v1.1.12：7~9 幕（夜王/修罗王/阎罗天子）12 条同追加。
 BOSS_VFX_KEYS = [
     'b1_jiangwang_attack_claw_cast', 'b1_jiangwang_attack_claw_hit',
     'b1_jiangwang_drain_feed_cast', 'b1_jiangwang_drain_feed_hit', 'b1_jiangwang_drain_feed_link',
@@ -104,6 +104,12 @@ BOSS_VFX_KEYS = [
     'b5_judge_settle_cast', 'b5_judge_settle_hit', 'b5_judge_settle_link',
     'b6_mengpo_attack_ladle_cast', 'b6_mengpo_attack_ladle_hit',
     'b6_mengpo_forget_hit', 'b6_mengpo_heal_self',
+    # v1.1.12：第 7~9 幕（无 _link 段，全部 3840×2880 常规段）
+    'b7_yewang_attack_blade_cast', 'b7_yewang_attack_blade_hit', 'b7_yewang_pressure_hit',
+    'b8_xiuluo_attack_slash_cast', 'b8_xiuluo_attack_slash_hit',
+    'b8_xiuluo_backlash_self', 'b8_xiuluo_karma_fire_self',
+    'b9_yanluo_affix_self', 'b9_yanluo_attack_smash_cast', 'b9_yanluo_attack_smash_hit',
+    'b9_yanluo_revive_self', 'b9_yanluo_summon_yinchai_self',
 ]
 for _k in BOSS_VFX_KEYS:
     FX_SPLIT_ROWS[_k] = 4

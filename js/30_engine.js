@@ -129,7 +129,7 @@ function applyDamageTo(e,d,ignoreBlock,point,hitNormal,floatDelay){
   e.hp-=d; G.turnStats.dealt+=d; afterEnemyDamaged(e);
   if(duhunActive() && actual>0){ DUHUN_ACC+=actual; if(!DUHUN_BATCH) duhunFlush(); } // v0.61.33：攒批，批外（如敌人自伤类）单发即结
   if(e.affixes && d>0){ const fz=e.affixes.find(a=>a.id==='fanzhen'); if(fz){ const r=3*fz.tier; G.hp=Math.max(0,G.hp-r); G.totalHpLost=(G.totalHpLost||0)+r; G.hpLostTurn=(G.hpLostTurn||0)+r; G.turnStats.dmgTaken+=r; sfx('spark'); playFx('damage_reflect', enemyEl(e), {mirror:true}); log(`${e.name} 反震：反弹 ${r} 点伤害`); if(G.hero==='yincha' && r>0) gainRage(r); } }   // v1.1.x：反伤统一改用 damage_reflect 精灵图 + spark 音；敌人反震玩家 ⇒ **镜像**翻面
-  if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ sfx('kw_yehuo'); G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.hpLostTurn=(G.hpLostTurn||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); if(G.hero==='yincha') gainRage(1); }
+  if(e.key==='xiuluowang' && (G.karmaFire||0)>0 && d>0){ if(bossVfxKey(e,'backlash')) bossSelfFx(e,'backlash'); else sfx('kw_yehuo'); G.hp=Math.max(0,G.hp-1); G.totalHpLost=(G.totalHpLost||0)+1; G.hpLostTurn=(G.hpLostTurn||0)+1; G.turnStats.dmgTaken+=1; log('业火反噬：你对修罗王造成伤害，损失 1 点生命'); if(G.hero==='yincha') gainRage(1); }
   /* v0.61.25：打击层按「打在什么上 / 打了多少 / 有没有打死」分级；
      point=true 是连击的逐段调用，改用极短的 atk_multi_each（60ms 一发也不糊）。 */
   const __blockedAll=(absorbed>0 && d<=0), __killed=(hpBefore>0 && e.hp<=0);
@@ -611,7 +611,7 @@ function enterPhase2(e){
   addEnemyStrength(e, 2);
   e.intents = e.intents2 ? e.intents2.map(it=>({...it})) : e.intents;
   e.intentIndex=0;
-  sfx('boss_phase2');   // v0.61.25：二阶段专用转场（原来是蹭遗物音）
+  if(bossVfxKey(e,'revive')) bossSelfFx(e,'revive'); else sfx('boss_phase2');   // v0.61.25：二阶段专用转场（原来是蹭遗物音）；v1.1.12：阎罗天子改用轮回复活专图
   floatMsg('轮回 · 第二阶段');
   bossPhaseIntro(e.name||'阎罗天子'); // v0.61.20(P4)：裂印 + 红目的二阶段转场（非阻塞，见该函数注释）
   log('阎罗天子堕入轮回，阴气更盛——进入第二阶段！');
@@ -1138,6 +1138,7 @@ function startBattle(keys){
        ⚠️ Boss 战这条路径在 `bossIntro` 的回调里 ⇒ 气泡出现在**印章退场之后**，次序是对的。
        ⚠️ `bindSaySkip()` 幂等，放这儿只为「用到才挂」，不给启动期添副作用。 */
     G.enemies.forEach(e=>enemySay(e,'in'));
+    G.enemies.forEach(e=>{ if(bossVfxKey(e,'affix')) bossSelfFx(e,'affix'); });   // v1.1.12：阎罗天子开局词缀专图（render 之后才量得到锚点）
     bindSaySkip();
     if(!tutorialSeen()) startGuidedTutorial(); startTurn();
   };
@@ -1511,14 +1512,17 @@ function resolveEndBlock(){
   G.block=Math.max(0, G.block-bk);
   G.endBlockKind=null; G.xiejiaHealCap=0;
 }
-/* ===================== v1.1.10：boss_vfx 技能特效（第 1~6 幕） =====================
-   用户交付 46 段 Boss 技能特效，本批接**前 34 段**（僵王 / 旱魃 / 血尸 / 谢必安 / 判官王 / 孟婆）。
+/* ===================== v1.1.10/11：boss_vfx 技能特效（全部 9 幕） =====================
+   用户交付 46 段 Boss 技能特效，全部接入（前 34 段 b1~b6 在 v1.1.10，后 12 段 b7~b9 在 v1.1.12）。
    四类后缀 = 挂给谁（见 boss_vfx/README.md §1.1）：
      `_cast` 挂 Boss（起手/挥击/投射物飞出）  `_hit` 挂玩家（命中/状态落定）
      `_self` 挂 Boss（增益/召唤/回血/变身）  `_link` 平铺在两点之间（吸食/吸血/勾魂/清算 4 个）
    下表把「敌人 key + 意图槽位」映射到特效前缀；触发点全在 enemyActOne 的分支里
    （外加 splitBoss / 僵王吸食 / 血尸吸血 / 灼烧跳伤 这几个收口点）。
-   ⚠️ 只登记已入库的 1~6 幕；7~9 幕（夜王/修罗王/阎罗天子）等第二批。 */
+   第 7~9 幕新增槽位：pressure（夜王暗夜威压·目标侧只有 _hit）、backlash（修罗王业火反噬·_self）、
+   karma（修罗王业火附体·_self）、affix（阎罗天子开局词缀·_self）、revive（阎罗天子轮回复活·_self）。
+   ⚠️ affix 的触发点在 startBattle→beginBattle（render 之后）；revive 在 enterPhase2；
+      backlash 在 applyDamageTo（玩家打它的每一击）。 */
 const BOSS_VFX = {
   jiangwang:  { multi:'b1_jiangwang_attack_claw', summon:'b1_jiangwang_summon_minion', feed:'b1_jiangwang_drain_feed' },
   hanba:      { multi:'b2_hanba_attack_flame_claw', burn:'b2_hanba_burn_apply', burnTick:'b2_hanba_burn_tick' },
@@ -1526,7 +1530,11 @@ const BOSS_VFX = {
   xiebian:    { multi:'b4_xiebian_attack_staff', gouhun:'b4_xiebian_soul_hook', split:'b4_xiebian_split' },
   bian:       { multi:'b4_xiebian_attack_staff', gouhun:'b4_xiebian_soul_hook' },   // 分化出的「必安」复用谢必安那一套
   panguanwang:{ multi:'b5_judge_attack_gavel', jiming:'b5_judge_record', qingsuan:'b5_judge_settle' },
-  mengpowang: { multi:'b6_mengpo_attack_ladle', wangyou:'b6_mengpo_forget', heal:'b6_mengpo_heal' }
+  mengpowang: { multi:'b6_mengpo_attack_ladle', wangyou:'b6_mengpo_forget', heal:'b6_mengpo_heal' },
+  /* 第三幕（v1.1.12）*/
+  yewang:      { multi:'b7_yewang_attack_blade', pressure:'b7_yewang_pressure' },
+  xiuluowang:  { multi:'b8_xiuluo_attack_slash', backlash:'b8_xiuluo_backlash', karma:'b8_xiuluo_karma_fire' },
+  yanluotianzi:{ multi:'b9_yanluo_attack_smash', summon:'b9_yanluo_summon_yinchai', affix:'b9_yanluo_affix', revive:'b9_yanluo_revive' }
 };
 /* 该敌人这个槽位有没有专图；没有就返回 null（调用方一律回落既有通用特效） */
 function bossVfxKey(e, slot){ const m=e && BOSS_VFX[e.key]; return (m && m[slot]) || null; }
@@ -1652,7 +1660,7 @@ function enemyActOne(e, atkDly){
       case 'weak': enemyActAnim(e,'cast',__atkDly); sfx('kw_weak'); if(!G.debuffImmune){ G.weak=2; playFx('weak', 'player'); floatMsg('你被【虚弱】'); log(`${e.name} 对你施加【虚弱】`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【虚弱】`); break;
       /* v0.61.32：勾魂从通用 enemy_debuff 拆出（白无常/拘魂使/阎罗） */
       case 'gouhun': enemyActAnim(e,'cast',__atkDly); if(bossVfxKey(e,'gouhun')) bossSkillFx(e,'gouhun',{link:1,linkMs:1100}); else sfx('kw_gouhun'); if(!G.debuffImmune){ G.gouhun=1; if(!bossVfxKey(e,'gouhun')) playFx('gouhun', 'player'); floatMsg('勾魂'); log(`${e.name} 勾魂：你下回合少抽 1 张`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【勾魂】`); break;
-      case 'strength': { enemyActAnim(e,'cast',__atkDly); sfx('enemy_strength'); const _sB4=e.strength||0; addEnemyStrength(e, e.intent.v); const _sGot=(e.strength||0)-_sB4; if(_sGot>0) log(`${e.name} 力量 +${_sGot}`); if(e.intent.weak){ sfx('kw_weak'); if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【暗夜威压】`); } if(e.intent.sealHeal){ if(bossVfxKey(e,'heal')) bossSelfFx(e,'heal'); const h=(G.wangyouDrunk||0)*8; if(h>0) enemyGainHp(e, h, 'enemy_heal', '汲取你饮下的忘忧汤，回复'); G.wangyouDrunk=0; } break; }
+      case 'strength': { enemyActAnim(e,'cast',__atkDly); sfx('enemy_strength'); const _sB4=e.strength||0; addEnemyStrength(e, e.intent.v); const _sGot=(e.strength||0)-_sB4; if(_sGot>0) log(`${e.name} 力量 +${_sGot}`); if(e.intent.weak){ const _pvb=bossVfxKey(e,'pressure'); if(_pvb) bossSkillFx(e,'pressure'); else sfx('kw_weak'); if(!G.debuffImmune){ G.weak=2; floatMsg('你被【虚弱】'); log(`${e.name} 暗夜威压：对你施加【虚弱】`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【暗夜威压】`); } if(e.intent.sealHeal){ if(bossVfxKey(e,'heal')) bossSelfFx(e,'heal'); const h=(G.wangyouDrunk||0)*8; if(h>0) enemyGainHp(e, h, 'enemy_heal', '汲取你饮下的忘忧汤，回复'); G.wangyouDrunk=0; } break; }
       // v0.61.01：连击不吃蓄力加值，也不消耗已存的蓄力（用户拍板口径）
       // v1.0.12：出手动作按**段**重播（n 段 = 抽动 n 下），并接上「依次行动」的屏序错峰
       case 'multi': { if(e.vfxHeavy){ e.vfxHeavy=false; bossSkillFx(e,'heavy'); } else bossSkillFx(e,'multi'); enemyAttackAnim(e,e.intent.n||1,__atkDly); for(let i=0;i<e.intent.n;i++){ if(G.hp<=0) break; dealDamageToPlayer(e.intent.v,e,i*140,{multi:true}); } break; }
@@ -1667,7 +1675,7 @@ function enemyActOne(e, atkDly){
       case 'jiming': { enemyActAnim(e,'rite',__atkDly); if(bossVfxKey(e,'jiming')) bossSkillFx(e,'jiming'); else sfx('boss_ledger'); e.ledgerActive=true; e.ledgerDmg=0; const avail=AFFIXES.filter(a=>!(e.affixes||[]).some(x=>x.id===a.id)); if(avail.length){ const a=avail[Math.floor(rng()*avail.length)]; e.ledgerAffix={id:a.id, tier:1}; log(`${e.name} 记下你的名字，并记下一条罪状【${a.name}】`); } else { e.ledgerAffix=null; log(`${e.name} 记下你的名字（罪状已记满）`); } floatMsg('生死簿 · 记名'); break; }
       case 'qingsuan': { enemyActAnim(e,'rite',__atkDly); if(bossVfxKey(e,'qingsuan')) bossSkillFx(e,'qingsuan',{link:1,linkMs:1100}); else sfx('enemy_qingsuan'); const ledger=e.ledgerDmg||0; const dmg=Math.min(24, Math.floor(ledger*0.3)); if(e.ledgerAffix){ const a=AFFIXES.find(x=>x.id===e.ledgerAffix.id); if(a){ if(!e.affixes) e.affixes=[]; e.affixes.push({id:a.id, tier:1}); if(a.id==='pingbi'){ e.pingbi=(e.pingbi||0)+8; enemyGainBlock(e, 8); } log(`${e.name} 清算：【${a.name}】生效——${a.desc}`); } } e.ledgerActive=false; e.ledgerDmg=0; e.ledgerAffix=null; if(dmg>0){ floatMsg('生死簿 · 清算'); const dead=directDamage(dmg, `${e.name} 清算生死簿：反弹 ${dmg} 点伤害`); if(dead) return 'dead'; /* v0.61 B10：判负已在 directDamage→loseGame 幂等收口，棋盘停格属正常终局，不再续跑其余敌人 */ } else log(`${e.name} 翻开生死簿：无账可清`); break; }
       /* v0.61.32：业火附体是修罗王招牌机制，从通用 buff 拆出 */
-      case 'yehuo': enemyActAnim(e,'cast',__atkDly); sfx('boss_yehuo'); if(!G.debuffImmune){ G.karmaFire=2; playFx('yehuo', 'player'); floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害 -30%，每次造成伤害反噬 1 点生命，它受到的诅咒层数翻倍`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【业火】`); break;
+      case 'yehuo': { enemyActAnim(e,'cast',__atkDly); const _kvb=bossVfxKey(e,'karma'); if(_kvb) bossSelfFx(e,'karma'); else sfx('boss_yehuo'); if(!G.debuffImmune){ G.karmaFire=2; if(!_kvb) playFx('yehuo', 'player'); floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害 -30%，每次造成伤害反噬 1 点生命，它受到的诅咒层数翻倍`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【业火】`); break; }
       case 'wangyou': enemyActAnim(e,'cast',__atkDly); if(bossVfxKey(e,'wangyou')) bossSkillFx(e,'wangyou'); else { sfx('enemy_debuff'); playFx('wangyou', 'player'); } G.wangyouTurns=2; G.wangyouDrunk=0; floatMsg('忘忧 · 两回合'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合开始时可选 1 张手牌「饮下」弃置，否则受 8 点真实伤害`); playerDebuffReceived(); break;
       case 'dormant': sfx('enemy_dormant'); log(`${e.name} 在观望`); break;
     }
