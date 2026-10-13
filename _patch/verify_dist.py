@@ -83,6 +83,9 @@ def dump_ids():
           "lingshiMap:LINGSHI_FILE,potions:POTIONS.map(p=>p.id),"
           "fxSheets:Object.keys(FX_SHEETS),"
           "fxRows:Object.keys(FX_SHEETS).reduce(function(o,k){ o[k]=FX_SHEETS[k].rows; return o; },{}),"
+          # v1.1.10：单帧高/宽（ch）。boss_vfx 同规格里有 480×720 的常规格（ch=1.5）与 480×256 的
+          # 连接段（ch≈0.5333）⇒ 几何闸的「格高」不能再写死 480，必须按每条 ch 现算。
+          "fxCh:Object.keys(FX_SHEETS).reduce(function(o,k){ o[k]=FX_SHEETS[k].ch||1; return o; },{}),"
           # v0.69.0 §D5：KEYWORDS 的键（唯一真相源在游戏作用域）。用来数「零引用词条」——
           # 见下面那条反向钉。
           # v1.0.x：待交付美术名单（唯一真相源在 20_data.js 的 ART_PENDING）。
@@ -493,15 +496,19 @@ def main():
         # 宽必须正好 8 格；高必须是整数格；行数不能超过表里登记的行数（多出来的排是空白，
         # 但少于登记行数 = FX_SHEETS 的 rows 写大了，f ≤ 8×rows 的护栏会失效）
         rows = int(ids['fxRows'][base]) if base in (ids.get('fxRows') or {}) else 0
-        if w != FX_COLS * FX_CELL or h % FX_CELL != 0 or h // FX_CELL < rows:
-            badfxgeom.append('%s %dx%d（期望宽 %d、高为 %d 的整数倍、至少 %d 排）'
-                             % (d, w, h, FX_COLS * FX_CELL, FX_CELL, rows))
+        # v1.1.10：格高按该条的 ch 现算（默认 1 = 正方形格）。写死 480 会把 boss_vfx 的
+        # 480×720 常规段（ch=1.5）与 480×256 连接段（ch≈0.5333）全部误报成几何错位。
+        ch = float(ids['fxCh'][base]) if base in (ids.get('fxCh') or {}) else 1.0
+        cell_h = int(round(FX_CELL * ch))
+        if w != FX_COLS * FX_CELL or h % cell_h != 0 or h // cell_h < rows:
+            badfxgeom.append('%s %dx%d（期望宽 %d、高为 %d(=480×ch) 的整数倍、至少 %d 排）'
+                             % (d, w, h, FX_COLS * FX_CELL, cell_h, rows))
     check(not badfxname, 'fx/ 下都是 <小写键名>.png（坏 %d）' % len(badfxname))
     check(not badfxkey, '%d 张精灵图的键名都已登记在 FX_SHEETS（未登记 %d）'
           % (len(diskfx), len(badfxkey)))
     check(not badfxpng, 'fx/ 下都是真 PNG（签名与 IHDR 头可解析，坏 %d）' % len(badfxpng))
-    check(not badfxgeom, '精灵图几何全部合规：宽 == %d、高 %% %d == 0 且排数 ≥ FX_SHEETS.rows（坏 %d）'
-          % (FX_COLS * FX_CELL, FX_CELL, len(badfxgeom)))
+    check(not badfxgeom, '精灵图几何全部合规：宽 == %d、高 %% (480×ch) == 0 且排数 ≥ FX_SHEETS.rows（坏 %d）'
+          % (FX_COLS * FX_CELL, len(badfxgeom)))
     for x in badfxname[:8]:
         print('       命名: %s —— 代码请求的是 fx/<FX_SHEETS 的键>.png，这个永远不会被取到' % x)
     for x in badfxkey[:8]:

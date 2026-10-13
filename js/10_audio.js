@@ -170,7 +170,21 @@ const SFX_TABLE = {
   /* 遗留键：新代码一律走 hit_light / hit_heavy / hit_crit 按伤害量分级，此键仅为兼容保留 */
   hit:            [['b',.14,.5,2000,160],['t',150,.12,'square',.2,0,70]]
 };
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 83 个键名（v1.1.x：K 组 +5 真采样键 number/stone_broken/rank/boom/energy，L 组 +3 真采样键 spark/slash/lightning ⇒ 76 条复用组 + 遗留键 hit）
+/* M 组 · v1.1.10：boss_vfx 第 1~6 幕 Boss 技能音效（19 个）。
+   真采样由用户交付（`素材/sfx/<键名>.mp3`，见 30_engine.js 的 BOSS_VFX）—— 下面这条只是
+   **采样没到位 / 解码失败时的合成兜底**，不写的话 sfx() 会走 sfxWarnUnknown 静默吞掉。
+   键名与 boss_vfx/README 的技能 key 一一对应（_cast / _self / _link 播它；_hit 播通用 hit_light|hit_heavy）。 */
+const BOSS_VFX_SFX_KEYS = [
+  'b1_jiangwang_attack_claw','b1_jiangwang_drain_feed','b1_jiangwang_summon_minion',
+  'b2_hanba_attack_flame_claw','b2_hanba_burn_apply','b2_hanba_burn_tick',
+  'b3_xueshi_attack_claw','b3_xueshi_charge','b3_xueshi_heavy_smash','b3_xueshi_lifesteal',
+  'b4_xiebian_attack_staff','b4_xiebian_soul_hook','b4_xiebian_split',
+  'b5_judge_attack_gavel','b5_judge_record','b5_judge_settle',
+  'b6_mengpo_attack_ladle','b6_mengpo_forget','b6_mengpo_heal'
+];
+const _BOSS_SFX_FALLBACK = [['b',.18,.42,2200,320],['t',420,.12,'triangle',.10,.05,300]];
+BOSS_VFX_SFX_KEYS.forEach(function(k){ if(!SFX_TABLE[k]) SFX_TABLE[k]=_BOSS_SFX_FALLBACK; });
+const SFX_KEYS = Object.keys(SFX_TABLE);   // 102 个键名（v1.1.x 的 83 条 + v1.1.10 boss_vfx 19 条）
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;
@@ -188,7 +202,7 @@ function sfxOnce(name, ms){
 /* ——— 外置音效采样：有 素材/sfx/<键名>_<变体号>.<ext> 就用它，没有就回退合成 ——— */
 const SFX_SAMPLE_DIR = 'sfx/';
 const SFX_VARIANTS_MAX = 3;      // 每个键最多几个变体（_1 _2 _3）
-const SFX_SAMPLE_MAX = 96;       // 最多预解码多少个键，防内存失控
+const SFX_SAMPLE_MAX = 120;      // 最多预解码多少个键，防内存失控（v1.1.10：键数升到 102，留出余量）
 const SFX_LOAD_TIMEOUT = 8000;   // 单个键的解码总超时（ms），超了就当没有
 const SFX_RATE_MIN = 0.94, SFX_RATE_MAX = 1.22;   // 变调下限/上限（伤害越大音越亮）
 /* 采样不走单独的注入表：打包.py 的素材遍历本来就按相对路径收 AUD_MIME 文件，

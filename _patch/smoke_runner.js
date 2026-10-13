@@ -3476,7 +3476,7 @@
       var i, j, k, s, ok, got, missing, bad, steps;
 
       /* ① 分发表完整性：80 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 83 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键）', SFX_KEYS.length === 83, 'n=' + SFX_KEYS.length);
+      __ok('v0.61.25 音效表 102 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键）', SFX_KEYS.length === 102, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];
@@ -4014,10 +4014,11 @@
     __ok('v0.61.32 无词缀的敌人不响 enemy_buff_self', got.indexOf('enemy_buff_self') < 0, got.join(','));
 
     got = __rec(function () { G = __base('ganshiren'); var e = makeEnemy(ENEMIES['xiebian'], 'xiebian'); e.hp = 200; e.maxHp = 200; G.enemies = [e]; G.target = 0; splitBoss(e); });
-    __ok('v0.61.32 Boss·谢必安分化 → boss_split（原先蹭 relic 音）',
-      got.indexOf('boss_split') >= 0 && got.indexOf('relic') < 0, got.join(','));
+    __ok('v0.61.32 Boss·谢必安分化 → boss_split（原先蹭 relic 音；v1.1.10 起改为 boss_vfx 专属 b4_xiebian_split）',
+      (got.indexOf('boss_split') >= 0 || got.indexOf('b4_xiebian_split') >= 0) && got.indexOf('relic') < 0, got.join(','));
     got = __rec(function () { G = __base('ganshiren'); var e = makeEnemy(ENEMIES['panguanwang'], 'panguanwang'); e.hp = 200; e.maxHp = 200; e.intents = [{ type: 'jiming' }]; e.intent = e.intents[0]; G.enemies = [e]; G.target = 0; __realEnemyAct(); });
-    __ok('v0.61.32 Boss·判官王生死簿记账 → boss_ledger（v0.61.25 时整段静默）', got.indexOf('boss_ledger') >= 0, got.join(','));
+    __ok('v0.61.32 Boss·判官王生死簿记账 → boss_ledger（v0.61.25 时整段静默；v1.1.10 起改为 boss_vfx 专属 b5_judge_record）',
+      (got.indexOf('boss_ledger') >= 0 || got.indexOf('b5_judge_record') >= 0), got.join(','));
     got = __rec(function () { G = __base('ganshiren'); var e = makeEnemy(ENEMIES['xiuluowang'], 'xiuluowang'); e.hp = 200; e.maxHp = 200; e.intents = [{ type: 'yehuo' }]; e.intent = e.intents[0]; G.enemies = [e]; G.target = 0; __realEnemyAct(); });
     __ok('v0.61.32 Boss·修罗王业火附体 → boss_yehuo（从通用 buff 拆出）',
       got.indexOf('boss_yehuo') >= 0 && got.indexOf('enemy_buff_self') < 0, got.join(','));
@@ -6243,15 +6244,17 @@
        靠 `_patch/shot_fx.py` 的实拍对照图定 scale。 */
 
     /* ---------- F1. 表结构 ---------- */
-    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 39 条'
+    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 73 条'
       + '（帧数是 _patch/fx_tune.py 按每格 alpha 实扫的 —— 8 列末排常留空，拿 行×8 当帧数会播到空白格；'
       + 'v1.0.14 起的 multi_slash 是多方向图，由 _patch/mk_multi_slash.py 程序生成、不在 fx_tune 的重算范围内；'
       + 'v1.0.17 起的 guling_suck / relic_proc / shiqi_flame / xuenu_flame 四张、v1.1.4 起的 thorns_light 也是程序绘制，'
       + '由 _patch/mk_flame_sheets.py 出图；v1.1.6 起的 fudu_hit 是用户素材重排：'
       + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480）；'
       + 'v1.1.x 起的 lightning 是用户素材：8 列 × 6 行、单元 480×480、48 帧；'
-      + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 3 行、单元 480×480、24 帧）',
-      Object.keys(FX_SHEETS).length === 39 &&
+      + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 3 行、单元 480×480、24 帧；'
+      + 'v1.1.10 起的 boss_vfx b1~b6 幕主 34 张：8 列 × 4 行、30fps、32 帧，'
+      + '常规段单元 480×720（ch=1.5）、连接段 480×256（ch≈0.5333））',
+      Object.keys(FX_SHEETS).length === 73 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
         return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
@@ -6279,7 +6282,7 @@
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
     __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
-      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 39);
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 73);
 
     /* ---------- F2. CARD_FX 接线 ---------- */
     __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
@@ -6475,8 +6478,9 @@
         SETTINGS.lowSpec = keep;
         return got === 'lei|0';
       })());
-    __ok('v0.64.0 **全部 39 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
-      + 'v1.0.17 的 grantRelic / onSummonDeath、v1.1.6 的 startTurn 腐毒跳伤）合起来覆盖了 FX_SHEETS 的全部键'
+    __ok('v0.64.0 **全部 73 个特效一个都没白做**：CARD_FX 与引擎收口点（含 v1.0.14 的 burstShow、'
+      + 'v1.0.17 的 grantRelic / onSummonDeath、v1.1.6 的 startTurn 腐毒跳伤、v1.1.10 的 bossSkillFx/bossSelfFx 走 BOSS_VFX 表）'
+      + '合起来覆盖了 FX_SHEETS 的全部键'
       + '（素材做了但没接线 = 白花钱出图，这条就是防它；两张芯片火焰走 CSS 循环、不经 playFx，按名单豁免）',
       (function () {
         var used = {};
@@ -6484,7 +6488,10 @@
            见 原型.html 的 .relic-flame-*::before），地址由 fxStripURL() 内联、从不进 playFx
            ⇒ 收口点扫描天然捞不到，只能按名单豁免。 */
         var CSS_ONLY_FX = { shiqi_flame: 1, xuenu_flame: 1 };
-        var RE = /playFx\('([a-z_]+)'/g;
+        /* v1.1.10：boss_vfx 的键**含数字**（b1_…），且 playFx 的实参是 `base+'_cast'` 这种**拼接**，
+           字面量扫描天然捞不到 ⇒ 按「敌人 key → 技能槽」的 BOSS_VFX 基名 × 四个后缀展开登记。
+           （多登记基名本身无副作用：used 只用来过滤 orphan，多一个键不影响。） */
+        var RE = /playFx\('([a-z0-9_]+)'/g;
         [dealDamageToPlayer, gainBlock, heal, duhunFlush, applyCurse, gainShiqi, gainRage, __realEnemyAct,
          enemyActOne, enemyActTail, burstShow, grantRelic, onSummonDeath, damoyingBurst, startTurn].forEach(function (fn) {
           var s = String(fn), m;
@@ -6492,6 +6499,13 @@
           while ((m = RE.exec(s)) !== null) { used[m[1]] = 1; }   // 取捕获组；别对整段 match 去字符（那是 'playFx('hurt'' → 'playxhurt'）
         });
         Object.keys(CARD_FX).forEach(function (k) { used[CARD_FX[k].n] = 1; });
+        Object.keys(BOSS_VFX).forEach(function (ek) {
+          var slots = BOSS_VFX[ek];
+          Object.keys(slots).forEach(function (slot) {
+            var base = slots[slot];
+            ['', '_cast', '_hit', '_self', '_link'].forEach(function (sfx) { used[base + sfx] = 1; });
+          });
+        });
         var orphan = Object.keys(FX_SHEETS).filter(function (k) { return !used[k] && !CSS_ONLY_FX[k]; });
         if (orphan.length) { globalThis.__orphanFx = orphan; }
         return orphan.length === 0;

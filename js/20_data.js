@@ -1235,7 +1235,54 @@ const FX_SHEETS = {
   yinbing:     { c:8, f:44, f0:51, rows:7, i0:4, scale:1.00, ox:0, oy:0.27 },   // 阴兵过境　素材 51 帧，两端看不见的 7 帧不播
   zhenyaoling: { c:8, f:41, f0:43, rows:6, i0:1, scale:1.28, ox:0, oy:0.09 },   // 镇妖铃　素材 43 帧，两端看不见的 2 帧不播
   zhiren:      { c:8, f:34, f0:42, rows:6, i0:6, scale:2.51, ox:0, oy:0.23 },   // 纸人召唤　素材 42 帧，两端看不见的 8 帧不播
-  zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.08 }   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播
+  zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.08 },   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播
+  /* ——— v1.1.10：boss_vfx 第 1~6 幕 Boss 技能特效（用户交付 46 段的**前 34 段**）———
+     与 lightning / damage_reflect 同一套出图规格：8 列 × 4 行、**单帧 480×720**（ch:1.5）、
+     **30fps** ⇒ 32 帧 ≈ 1.07s。连接段 `_link` 单帧 **480×256**（ch = 256/480 = 0.5333）、同为 8 列 4 行。
+     这些图**没有两端空帧**（出图校验：首帧非空、末帧覆盖率 0）⇒ 一律 i0:0、f:32。
+     scale 沿用同为该规格的 lightning / damage_reflect 档（2.47）；_link 不进 playFx
+     （由 00_base.js 的 bossLinkFx 自算盒宽），scale 只是「>0」的占位。
+     挂点与触发时机见 30_engine.js 的 BOSS_VFX / bossSkillFx（_cast 挂 Boss、_hit 挂玩家、_self 挂 Boss）。 */
+  /* 第一幕 · 僵王（爪击 / 吸食 / 召唤小僵尸） */
+  b1_jiangwang_attack_claw_cast:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_attack_claw_hit:    { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_drain_feed_cast:    { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_drain_feed_hit:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_drain_feed_link:    { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
+  b1_jiangwang_summon_minion_self: { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  /* 第一幕 · 旱魃（焰爪 / 灼烧施加 / 灼烧跳伤循环） */
+  b2_hanba_attack_flame_claw_cast: { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b2_hanba_attack_flame_claw_hit:  { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b2_hanba_burn_apply_hit:         { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b2_hanba_burn_tick_hit:          { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  /* 第一幕 · 血尸（爪击 / 蓄力 / 蓄力重击 / 吸血） */
+  b3_xueshi_attack_claw_cast:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_attack_claw_hit:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_charge_self:           { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_heavy_smash_cast:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_heavy_smash_hit:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_lifesteal_cast:        { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_lifesteal_hit:         { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_lifesteal_link:        { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
+  /* 第二幕 · 谢必安（哭丧棒 / 勾魂 / 分化；分出的「必安」复用同一套） */
+  b4_xiebian_attack_staff_cast:    { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_attack_staff_hit:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_soul_hook_cast:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_soul_hook_hit:        { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_soul_hook_link:       { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
+  b4_xiebian_split_self:           { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  /* 第二幕 · 判官王（惊堂木 / 记名 / 清算） */
+  b5_judge_attack_gavel_cast:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b5_judge_attack_gavel_hit:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b5_judge_record_hit:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b5_judge_settle_cast:            { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b5_judge_settle_hit:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b5_judge_settle_link:            { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
+  /* 第二幕 · 孟婆（汤勺 / 忘忧 / 汲血） */
+  b6_mengpo_attack_ladle_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b6_mengpo_attack_ladle_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b6_mengpo_forget_hit:            { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b6_mengpo_heal_self:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 }
 };
 /* `锁_破裂` **故意不在这张表里**：v0.62.0 已用移植 canvas 代码实现（playLockBreak），
    不接精灵图；30 条提示词文档里也没有它。 */
