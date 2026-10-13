@@ -33,13 +33,19 @@
 
 ## 进行中
 
-- `--split` 后台重打 → 完成后 `python _patch/verify_web.py`，再 git commit 回退点。
+- ✅ `--split` 后台重打完成（dist/web/ 完整：8 段 js + 素材/ + index.html + manifest + sw.js + icons/）。
+- ✅ **五道闸全绿确认基线**：verify_dist「全部通过」/ probe_dist bad=0 / verify_web「全部通过」/
+  `_probe_cloud.js` 全部通过 / run_smoke **pass=1499 fail=0**。
+- ✅ **多文件 TapTap 包已产出**：`dist/志怪塔_TapTap包体_多文件.zip`（62.71 MB / 557 文件）。
+  包内自检：第一级唯一 `game`（纯英文）/ `game/index.html` 在 / 脚本 `js/*.js` 相对外链 /
+  `manifest.webmanifest`+`sw.js`+`icons/`+`素材/` 均在 game/ 下 / ASSET_WEBP=true / 无绝对路径泄漏。
+  **待用户真机试传**（第①步），结果需回填 decision-log。
 
 ## 接手第一批（未做 / 更新）
 
-1. **TapTap 多文件包**：打包脚本**已就位**。待 `dist/web/` 出来 →
-   `python 打包.py --taptap-split` 产最小多文件 zip → 交用户真机试传；
-   确认相对路径能跑后再定「是否切为默认口径」。试传结果回填 decision-log 与 progress。
+1. ~~**TapTap 多文件包**~~：脚本已就位、zip 已产出，**待真机试传**。
+   确认相对路径能跑后再定「是否切为默认口径」；若不认 SW，第一排查方向 = 剥离 PWA 组件
+   （只留 index.html + js/ + 素材/）。试传结果回填 decision-log 与 progress。
 2. **boss_vfx 后 3 幕接入**（照前 6 幕 b1~b6 的接法）：
    - b7 夜王：`b7_yewang_attack_blade_cast/_hit`、`b7_yewang_pressure_hit`
    - b8 修罗王：`b8_xiuluo_attack_slash_cast/_hit`、`b8_xiuluo_backlash_self`、`b8_xiuluo_karma_fire_self`

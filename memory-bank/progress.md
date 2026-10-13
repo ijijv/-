@@ -10,6 +10,27 @@
 
 ## Update History
 
+### [Oct 13, 2026] ✅ Feature: 拆包产物重打 + 五道闸全绿 + TapTap 多文件 zip 产出（接手 agent）
+<!-- ID: p_2026-10-13_handover2b -->
+
+- `python 打包.py --split` 重打完成，`dist/web/` 完整（8 段 js + 素材/ + index.html +
+  manifest.webmanifest + sw.js + icons/ 4 张）。
+- **五道闸全绿确认基线**：verify_dist「全部通过」/ probe_dist bad=0 / verify_web「全部通过」/
+  `_probe_cloud.js` 全部通过 / run_smoke **pass=1499 fail=0**。
+- `python 打包.py --taptap-split` 产出 `dist/志怪塔_TapTap包体_多文件.zip`（62.71 MB / 557 文件）。
+  包内自检：第一级唯一 `game`（纯英文）/ `game/index.html` 在 / `js/*.js` 相对外链 /
+  `manifest.webmanifest`+`sw.js`+`icons/`+`素材/`（374 webp / 154 sfx）均在 game/ 下 /
+  `ASSET_WEBP=true` / 无绝对路径泄漏。
+- **下一步**：交用户真机试传；通过后决定是否切为默认口径；不认 SW 则剥离 PWA 组件。
+
+**Affected files:**
+- `打包.py`（本轮已提交于 0a9b33c）、`memory-bank/*`
+
+**Tags:** `v1.1.11`, `TapTap多文件`, `五道闸`, `拆包`
+
+---
+
+
 ### [Oct 13, 2026] 📌 Handover 二刷：焚牌音效接入 + TapTap 多文件包脚本就位（接手 agent）
 <!-- ID: p_2026-10-13_handover2 -->
 

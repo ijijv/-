@@ -53,4 +53,9 @@
 - **Status（2026-10-13 接手 agent）：** 步骤①的脚本已就位 —— `打包.py` 新增 `--taptap-split`
   （`build_taptap_split` / `TAPTAP_SPLIT_OUT = dist/志怪塔_TapTap包体_多文件.zip`），
   复用 `build_split` 的 dist/web/，zip 内为 `game/*` 相对路径，保留合规自检。
-  待 `dist/web/` 重建完成后产最小包交用户真机试传；**试传结果待回填**。
+- **Status（2026-10-13 接手 agent · 更新）：** `--split` 已重打完成、五道闸全绿（verify_dist /
+  probe_dist / verify_web / _probe_cloud / run_smoke 1499/0）；`python 打包.py --taptap-split`
+  已产出 `dist/志怪塔_TapTap包体_多文件.zip`（62.71 MB / 557 文件），包内自检通过
+  （第一级唯一 game / game/index.html / js 相对外链 / ASSET_WEBP=true / 无绝对路径泄漏）。
+  **待用户真机试传；试传结果（能跑/不能跑、缺什么）待回填。**
+  若容器不认 Service Worker：第一排查方向 = 剥离 PWA 组件（只留 index.html + js/ + 素材/）。
