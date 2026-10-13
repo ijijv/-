@@ -29,3 +29,28 @@
   - 代价：闸与 CSS 注释写法强绑定——凡在注释里提「注释起止符」，必须用文字描述而非写出字符本身
   - 同批已按此规范回改 原型.html 与 _drvclip.js 中自己写坏的那段说明
   - JS 块注释同理，但那条路有 node --check 兜住语法错，CSS 没有这层网，故闸必须补在 CSS 侧
+
+## TapTap 上传包从单文件改为多文件（拆包产物入 zip），先最小包真机验证
+- **Date:** 2026-10-13（项目交接既定做法，待执行）
+- **Author:** HP（交接文指定）
+- **Context:** 现 `--taptap` 把 84 MB 自包含单文件压成 `game/index.html` 一个文件的 zip；
+  多文件模块化可利用 TapTap 容器的分包/缓存，且与网页端 dist/web 口径统一。
+  风险点：TapTap H5 容器对包内相对路径（js/、素材/、manifest、sw.js）的支持未经真机证实。
+- **Decision:** 分两步。① 先产「最小多文件 zip」：复用 `打包.py` build_split 产出的 `dist/web/`，
+  把 `dist/web/*` 整体打进 zip 的 `game/*`，交用户真机试传；
+  ② 真机确认相对路径能跑后再做全量打包与脚本正式改造。
+  保留既有合规自检：zip 第一级有且仅有一个纯英文/数字文件夹（game）+ 其下 game/index.html。
+  改造动手前先 git commit 当前状态作为回退点。
+- **Alternatives Considered:**
+  - 直接改 build_taptap 全量切换多文件 —— 被否：容器相对路径支持未证实，失败要整轮回退。
+  - 另起一套多文件打包逻辑 —— 被否：与 build_split 双份逻辑必然漂；必须复用 dist/web。
+- **Consequences:**
+  - `打包.py` 将新增多文件 zip 路径（build_split L339 / build_taptap L436 / main L494 为触点），
+    单文件口径保持可用、互不覆盖。
+  - 注意 split 产物含 PWA 注入（manifest.webmanifest、sw.js、icons/ 均为相对引用），
+    TapTap 容器若不支持 SW 则需在最小包验证后决定是否剥离。
+  - 最小包试传结果（能跑/不能跑、缺什么）必须回填本日志与 active-context。
+- **Status（2026-10-13 接手 agent）：** 步骤①的脚本已就位 —— `打包.py` 新增 `--taptap-split`
+  （`build_taptap_split` / `TAPTAP_SPLIT_OUT = dist/志怪塔_TapTap包体_多文件.zip`），
+  复用 `build_split` 的 dist/web/，zip 内为 `game/*` 相对路径，保留合规自检。
+  待 `dist/web/` 重建完成后产最小包交用户真机试传；**试传结果待回填**。

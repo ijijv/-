@@ -35,7 +35,9 @@
 
 通用用法:
   python 打包.py                    # 单文件：WebP q78 + 混淆
-  python 打包.py --taptap           # 单文件 + TapTap 小游戏上传包（zip）
+  python 打包.py --taptap           # 单文件 + TapTap 小游戏上传包（zip 内仅 game/index.html）
+  python 打包.py --split            # 拆包：dist/web/（多文件 + PWA）
+  python 打包.py --taptap-split     # TapTap 多文件上传包（zip 内 game/* 相对路径，复用 dist/web/）
   python 打包.py --quality 60       # 更小
   python 打包.py --no-obfuscate     # 跳过混淆（排查问题时用）
   python 打包.py --no-webp          # 保留原 PNG，只内联
@@ -56,6 +58,9 @@ OUT  = os.path.join(OUTD, '志怪塔.html')
 WEB_OUTD = os.path.join(OUTD, 'web')                 # 拆包产物，与单文件互不覆盖
 WEB_ICON_SRC = os.path.join(ROOT, '1.ico')           # 应用图标源图（618×618 PNG）
 TAPTAP_OUT = os.path.join(OUTD, '志怪塔_TapTap包体.zip')   # TapTap 小游戏上传包（见 --taptap）
+# v1.1.11：多文件版 TapTap 包 —— 把拆包产物 dist/web/ 整体压进 zip 的 game/*（见 --taptap-split）。
+# 与单文件版互不覆盖：单文件仍是 game/index.html 一个文件，这一版带 js/ 与 素材/ 的相对路径。
+TAPTAP_SPLIT_OUT = os.path.join(OUTD, '志怪塔_TapTap包体_多文件.zip')
 TAPTAP_DIR = 'game'                                  # 包内第一级目录名：只许英文/数字
 OBF  = os.path.join(ROOT, '_build', 'obf.js')
 NODE_MODULES = os.path.join(ROOT, '_build', 'node_modules')
@@ -489,6 +494,57 @@ def build_taptap(html_path):
     print('   上传：TapTap 开发者中心 → 你的应用 → 上传包体 → 选这个 zip')
 
 
+# ==================== TapTap 多文件上传包（--taptap-split） ====================
+
+def build_taptap_split(args):
+    """多文件版 TapTap 上传包：把拆包产物 dist/web/ 整体压进 zip 的 game/*。
+
+    与 build_taptap（单文件，zip 内只有 game/index.html）的差别：这一版把 js/、素材/（webp）、
+    manifest.webmanifest、sw.js、icons/ 全部按**相对路径**放进包内 —— 复用 TapTap 容器的分包/缓存，
+    且与网页端 dist/web 口径统一（同一份产物，不再有第二套打包逻辑）。
+    ⚠️ 待真机验证：TapTap H5 容器对包内相对路径（js/、素材/、manifest、sw.js）的支持尚未证实，
+    故先出这个包给用户真机试传，跑通后再谈「是否切为默认口径」。
+
+    目录规范同单文件版（TapTap 后台硬性要求，不符直接拒收）：
+      压缩包内第一级有且仅有一个文件夹、文件夹名只含英文/数字（固定 game）、其下必须有 index.html。
+    """
+    # 拆包产物不存在就先跑一遍（正常流程里 dist/web/ 已由 --split 生成，不会重复打）
+    if not os.path.isfile(os.path.join(WEB_OUTD, 'index.html')):
+        print('dist/web/ 不完整（缺 index.html）→ 先执行 build_split')
+        build_split(args)
+
+    if not os.path.isfile(os.path.join(WEB_OUTD, 'index.html')):
+        print('FAIL: 拆包产物 dist/web/index.html 仍不存在'); sys.exit(1)
+
+    if not os.path.isdir(OUTD):
+        os.makedirs(OUTD)
+    if os.path.exists(TAPTAP_SPLIT_OUT):
+        os.remove(TAPTAP_SPLIT_OUT)
+
+    # 先在内存里摆好 game/<相对路径>，逐文件写入 —— 路径前缀完全可控，不带本机绝对路径
+    n = 0
+    with zipfile.ZipFile(TAPTAP_SPLIT_OUT, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for dirpath, _, filenames in os.walk(WEB_OUTD):
+            for fn in sorted(filenames):
+                abs_p = os.path.join(dirpath, fn)
+                rel = os.path.relpath(abs_p, WEB_OUTD).replace('\\', '/')
+                z.write(abs_p, '%s/%s' % (TAPTAP_DIR, rel))
+                n += 1
+    with zipfile.ZipFile(TAPTAP_SPLIT_OUT) as z:
+        names = z.namelist()
+
+    # 自检：目录规范（与单文件版同判据，TapTap 后台就是按这个判收不收）
+    tops = sorted({nm.split('/')[0] for nm in names})
+    if tops != [TAPTAP_DIR] or not re.fullmatch(r'[A-Za-z0-9]+', tops[0]):
+        print('FAIL: zip 第一级必须是有且仅有一个纯英文/数字文件夹，实际 %s' % tops); sys.exit(1)
+    if '%s/index.html' % TAPTAP_DIR not in names:
+        print('FAIL: zip 里找不到 %s/index.html' % TAPTAP_DIR); sys.exit(1)
+
+    print('产物: %s  %s（%d 个文件，zip 内均为 %s/* 相对路径）'
+          % (TAPTAP_SPLIT_OUT, human(os.path.getsize(TAPTAP_SPLIT_OUT)), n, TAPTAP_DIR))
+    print('   上传：TapTap 开发者中心 → 你的应用 → 上传包体 → 选这个 zip')
+
+
 # ============================ 单文件（默认） ============================
 
 def main():
@@ -497,11 +553,17 @@ def main():
                     help='拆包模式：产出 dist/web/（多文件 + PWA），与单文件产物互不覆盖')
     ap.add_argument('--taptap', action='store_true',
                     help='TapTap 小游戏模式：先出单文件，再打成 dist/志怪塔_TapTap包体.zip')
+    ap.add_argument('--taptap-split', action='store_true',
+                    help='TapTap 多文件模式：把 dist/web/ 整体压成 dist/志怪塔_TapTap包体_多文件.zip（zip 内 game/* 相对路径）')
     ap.add_argument('--quality', type=int, default=78, help='WebP 质量 1-100（默认 78）')
     ap.add_argument('--max-dim', type=int, default=0, help='图片最长边上限像素，0=不缩放（默认 0）')
     ap.add_argument('--no-webp', action='store_true', help='保留原格式，只做 base64 内联')
     ap.add_argument('--no-obfuscate', action='store_true', help='跳过 JS 混淆')
     args = ap.parse_args()
+
+    if args.taptap_split:
+        build_taptap_split(args)
+        return
 
     if args.split:
         build_split(args)

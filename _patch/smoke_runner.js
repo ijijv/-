@@ -3476,7 +3476,7 @@
       var i, j, k, s, ok, got, missing, bad, steps;
 
       /* ① 分发表完整性：80 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 102 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键）', SFX_KEYS.length === 102, 'n=' + SFX_KEYS.length);
+      __ok('v0.61.25 音效表 104 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键）', SFX_KEYS.length === 104, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];

@@ -10,6 +10,59 @@
 
 ## Update History
 
+### [Oct 13, 2026] 📌 Handover 二刷：焚牌音效接入 + TapTap 多文件包脚本就位（接手 agent）
+<!-- ID: p_2026-10-13_handover2 -->
+
+**修正上一版交接文的滞后**：12:30 那条写「工作区无已跟踪文件改动」不实。实测 git status 显示
+`js/10_audio.js`、`_patch/smoke_runner.js` 有改动，且 `dist/web/` 不完整（仅 素材/）。
+
+已完成：
+- 复核并确认未提交的**焚牌音效**是完整功能：`fx_forge`/`fx_burn` 注册于 `js/10_audio.js` L187-195
+  （SFX_KEYS 102→104），接点 `js/50_ui.js` `cardFxAnim` L1496，调用点
+  forgeCard(L1486)/doUnknownRemove(L853)/doCampRemove(L1454)，CSS 类在 `原型.html` L1644-1672，
+  真采样 `素材/sfx/fx_forge.mp3`+`fx_burn.mp3`，冒烟断言同步。
+- 单文件产物 `dist/志怪塔.html`（88.1 MB，ASSET_MAP 811 / 154 sfx）四道闸全绿：
+  verify_dist 全部通过 / probe_dist bad=0 / `_probe_cloud.js` 全部通过 / run_smoke **1499/0**。
+- `打包.py` 新增 `--taptap-split`：dist/web/* → `dist/志怪塔_TapTap包体_多文件.zip`（zip 内 game/*），
+  保留合规自检；单文件 `--taptap` 口径不动。
+- 重跑 `python 打包.py --split`（后台）补全 dist/web/，待其完成跑 verify_web。
+
+**Affected files:**
+- `js/10_audio.js`、`_patch/smoke_runner.js`（上一轮遗留的未提交改动，本轮复核）
+- `打包.py`（新增 `--taptap-split` / `build_taptap_split` / `TAPTAP_SPLIT_OUT`）
+- `memory-bank/active-context.md`（二刷）
+
+**Tags:** `v1.1.11`, `交接`, `焚牌音效`, `TapTap多文件`, `五道闸`
+
+---
+
+
+### [Oct 13, 2026, 12:30] 📌 Handover: v1.1.10 接手基线确认与交接沉淀
+<!-- ID: p_2026-10-13_handover -->
+
+接手确认：main 分支 HEAD=`95af340`（v1.1.10 boss_vfx 前 6 幕：34 张精灵图 + 19 条专属音效 +
+_link 平铺播放器；FX_SPLIT_ROWS 扩展；verify_dist 按 ch 几何闸），工作区无已跟踪文件改动。
+12:02:31 起跑的 `打包.py --taptap`（PID 30456）12:31:40 完成（实测 29 分钟；资产增至
+811 个 / fx 73 张→342 排；单文件 84.06 MB、zip 61.51 MB），随后自动串联 `--split`。
+发现两处文档滞后并记入 active-context：更新日志.md 正文只到 v0.76.0、README 里程碑只到 v1.0.0，
+v1.0.0→v1.1.10 历史只在 git commit message。
+
+接手第一批未做：(a) TapTap 包改多文件——复用 build_split 的 dist/web/ 打进 zip 的 game/*，
+先出最小多文件 zip 真机试传相对路径，保留包名自检，改造前先留 git 回退点；
+(b) boss_vfx 后 3 幕 b7 夜王 / b8 修罗王 / b9 阎罗天子共 12 段特效，照 b1~b6 接法。
+待用户：纯色背景板风格定稿、两类焚牌音效给料（cardFxAnim 已留挂点）、boss_vfx scale 2.47 真机验收。
+
+**Affected files:**
+- `memory-bank/active-context.md`（占位模板 → 实际当前态）
+- `memory-bank/system-patterns.md`（占位模板 → 8 段拼接/五道闸/三口径/平台约束）
+- `memory-bank/product-context.md`（占位模板 → 项目概况）
+- `memory-bank/progress.md`、`memory-bank/decision-log.md`（本条交接记录）
+
+**Tags:** `v1.1.10`, `交接`, `boss_vfx`, `TapTap多文件`, `五道闸`
+
+---
+
+
 ### [Sep 29, 2026, 1:42 PM] ✨ Feature: v0.72.0 步 6 完成：卡牌动画地基（零接入）
 <!-- ID: p_2026-09-29_mum91vmg -->
 

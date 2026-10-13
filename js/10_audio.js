@@ -184,7 +184,14 @@ const BOSS_VFX_SFX_KEYS = [
 ];
 const _BOSS_SFX_FALLBACK = [['b',.18,.42,2200,320],['t',420,.12,'triangle',.10,.05,300]];
 BOSS_VFX_SFX_KEYS.forEach(function(k){ if(!SFX_TABLE[k]) SFX_TABLE[k]=_BOSS_SFX_FALLBACK; });
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 102 个键名（v1.1.x 的 83 条 + v1.1.10 boss_vfx 19 条）
+/* N 组 · v1.1.9（用户已交付真采样：素材/sfx/fx_forge.mp3、素材/sfx/fx_burn.mp3；
+   挂点在 50_ui.js 的 cardFxAnim —— fx_forge 锻造升级（火焰覆盖→风吹散），
+   fx_burn 净坛/篝火删牌（火焰左下烧到右上→化灰）。
+   不注册的话预加载不会取这两个键，真采样永远不响、还会让 verify_dist [2b] 报未知键名。
+   下面两条仅是采样缺失/解码失败时的合成兜底，与 K/L/M 组同机制。） */
+SFX_TABLE.fx_forge = [['b',.22,.32,2600,700],['b',.16,.22,500,2400]];
+SFX_TABLE.fx_burn  = [['b',.42,.34,2200,300],['t',180,.28,'sawtooth',.10,0,70]];
+const SFX_KEYS = Object.keys(SFX_TABLE);   // 104 个键名（v1.1.x 83 条 + v1.1.10 boss_vfx 19 条 + 焚牌 2 条）
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;
