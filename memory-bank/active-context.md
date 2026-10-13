@@ -1,63 +1,52 @@
 # Current Context
 
-> 本文件 2026-10-13 由接手 agent **二次刷新**（修正上一版交接文的滞后期）。
+> 本文件 2026-10-14 由接手 agent **三次刷新**。
 > 工程根：`C:\Users\HP\Desktop\志怪塔 - 副本 (3)`（换机整文件夹连同 .git 一起拷）。
-> 版本 **v1.1.10**，分支 main，HEAD = `95af340`。
+> 版本 **v1.1.13**，分支 main，HEAD = `e599f09`。
 
-## 当前快照（2026-10-13 接手实测）
+## 当前快照（2026-10-14 实测）
 
-- HEAD `95af340` = v1.1.10 boss_vfx 前 6 幕接入（34 张精灵图 + 19 条专属音效 + _link 平铺播放器）、
-  打包脚本 FX_SPLIT_ROWS 扩展、verify_dist 按 ch 的几何闸。
-- ⚠️ **上一版交接文（进度表里 12:30 那条）已滞后**：它写「工作区无已跟踪文件改动」，
-  实际此后又干了活（13:07 起）。以本文件为准。
-- **未提交改动（经复核是「完整功能」，不是半成品）—— 焚牌音效**：
-  - `js/10_audio.js` L187-195 注册 `fx_forge`（锻造升级·火焰覆盖→风吹散）/ `fx_burn`
-    （净坛·篝火删牌·左下烧到右上→化灰），各带合成兜底；`SFX_KEYS` 102 → **104**。
-  - 接点 `js/50_ui.js` 的 `cardFxAnim`（L1496，L1503 起手帧出音）；
-    调用点：`forgeCard`(L1486 kind=forge) / `doUnknownRemove`(L853 kind=pile) / `doCampRemove`(L1454 kind=pile)。
-  - CSS `.card.is-forging/.is-blown/.is-burning/.is-ash` 在 `原型.html` L1644-1672。
-  - 真采样已交付：`素材/sfx/fx_forge.mp3`(12.7KB) / `素材/sfx/fx_burn.mp3`(28KB)。
-  - 冒烟断言 `_patch/smoke_runner.js` 已同步 102 → 104。
-- 单文件产物 `dist/志怪塔.html`（13:43 重打，88.1 MB，ASSET_MAP **811 键** / 154 sfx）已过四道：
-  verify_dist「全部通过」/ probe_dist bad=0 / `_probe_cloud.js` 全部通过 / run_smoke **pass=1499 fail=0**。
-- `dist/web/` 此前**不完整**（只有 `素材/`，缺 index.html 与 js/ —— 上一轮 `--split` 中途断了）；
-  本轮已重跑 `python 打包.py --split`（后台），完成后跑 verify_web。
+- HEAD `e599f09` = v1.1.13 **选角界面全面重构 + 排行榜导航回弹修复 + 选角音效接入**。
+  上一提交 `3a0fa4d` = v1.1.12（boss_vfx 后 3 幕 b7/b8/b9 接入）。
+- **本轮已提交改动（18 文件，+361/-122）**：
+  - `js/60_boot.js`：重写 `showHeroSelect` 全套（`HS_ORDER=['tianshi','wuseng','ganshiren','yincha']`、
+    `hsRootHTML/hsTalismansHTML/hsDeckHTML/hsApplyHero/hsPickTalisman/heroSelectStart/pickHero` 等），
+    删除旧的 `askUnlockHero` / `showStarterDeckChoice` / `askChooseStarterDeck` / `chooseStarterDeck` /
+    `backToStarterDeck`；`showOpeningChoice` 的 backFn 改指 `backToHeroSelect()`。
+    排行榜导航回弹修复：`showClearTimes` 重排前捕获 `#rk-nav` scrollTop 并回填。
+  - `原型.html`：新增 `.hs-*` CSS 段（L2677-2762，含 `--hs-move/--hs-drop=.46s`、`#overlay.hero-scene` 全屏去底、
+    `hsBgDrop` 顶降落+回弹）；`.ml-flyimg` 52px → 80px（里程碑飞图标放大 2 倍）。
+    ⚠️ 保留基档 L842 `#overlay.hero-scene #overlayWrap{max-width:700px;}`（verify_dist L810 要求成对）。
+  - `js/10_audio.js`：注册 `talisman_click` / `talisman_slide` / `key_press` / `poster_bounce_land`；
+    `SFX_KEYS` 113 → **117**。
+  - `_patch/smoke_runner.js`：SFX 计数断言 113→117；旧 4 条 starter-deck 断言改为新 8 条选角断言。
+- 新素材已入库：`素材/hero_sel/{tianshi,wuseng,ganshiren,yincha}-s.jpg`、
+  `素材/ui/deck_back.png|deck_card1.png|deck_card2.png`、
+  `素材/sfx/{key_press,poster_bounce_land,talisman_click,talisman_slide}.mp3`；
+  另有 `素材/num/{block/2,hurt/1,hurt/2}.png` 被用户覆盖更新。
 
-## 本轮新改动（2026-10-13 接手 agent）
+## 产物与五道闸（2026-10-14 全绿基线）
 
-- `打包.py` 新增 `--taptap-split`：把 `dist/web/` 整体压成 `dist/志怪塔_TapTap包体_多文件.zip`
-  （zip 内均为 `game/*` 相对路径），保留既有合规自检
-  （第一级唯一纯英文/数字文件夹 + 其下 game/index.html）；单文件口径 `--taptap` 不动、互不覆盖。
-  触点：`TAPTAP_SPLIT_OUT` 常量、`build_taptap_split()`、`main()`。
-  ⚠️ **待真机验证**：TapTap H5 容器对包内相对路径（js/、素材/、manifest、sw.js）的支持尚未证实。
-
-## 进行中
-
-- ✅ `--split` 后台重打完成（dist/web/ 完整：8 段 js + 素材/ + index.html + manifest + sw.js + icons/）。
-- ✅ **五道闸全绿确认基线**：verify_dist「全部通过」/ probe_dist bad=0 / verify_web「全部通过」/
-  `_probe_cloud.js` 全部通过 / run_smoke **pass=1499 fail=0**。
-- ✅ **多文件 TapTap 包已产出**：`dist/志怪塔_TapTap包体_多文件.zip`（62.71 MB / 557 文件）。
-  包内自检：第一级唯一 `game`（纯英文）/ `game/index.html` 在 / 脚本 `js/*.js` 相对外链 /
-  `manifest.webmanifest`+`sw.js`+`icons/`+`素材/` 均在 game/ 下 / ASSET_WEBP=true / 无绝对路径泄漏。
-  **待用户真机试传**（第①步），结果需回填 decision-log。
-
-## 接手第一批（未做 / 更新）
-
-1. ~~**TapTap 多文件包**~~：脚本已就位、zip 已产出，**待真机试传**。
-   确认相对路径能跑后再定「是否切为默认口径」；若不认 SW，第一排查方向 = 剥离 PWA 组件
-   （只留 index.html + js/ + 素材/）。试传结果回填 decision-log 与 progress。
-2. **boss_vfx 后 3 幕接入**（照前 6 幕 b1~b6 的接法）：
-   - b7 夜王：`b7_yewang_attack_blade_cast/_hit`、`b7_yewang_pressure_hit`
-   - b8 修罗王：`b8_xiuluo_attack_slash_cast/_hit`、`b8_xiuluo_backlash_self`、`b8_xiuluo_karma_fire_self`
-   - b9 阎罗天子：`b9_yanluo_affix_self`、`b9_yanluo_attack_smash_cast/_hit`、
-     `b9_yanluo_revive_self`、`b9_yanluo_summon_yinchai_self`
-   资产源 `C:\Users\HP\deepseekharness\boss_vfx\`，README.md 是权威（接入规则、§1.3 _link 平铺公式、
-   46 段特效 + 40 音效清单）。入库时 `打包.py` 的 `FX_SPLIT_ROWS` 照 4 追加这 12 条。
+- 单文件 `dist/志怪塔.html`：96.38 MB，重打于 00:34:19。
+- 多文件 `dist/web/index.html`：1,312,649 B，重打于 00:58:08（8 段 js + 素材/ + manifest + sw.js + icons/）。
+- **五道闸基线 = 全绿**：
+  1. `python _patch/run_smoke.py` → node exit 0，**pass=1502 fail=0**（旧基线 1499）。
+  2. `python _patch/verify_dist.py` → 全部通过（EXIT=0）。
+  3. `python _patch/probe_dist.py` → bad=0，A~G 全部通过（EXIT=0）。
+  4. `python _patch/verify_web.py` → 全部通过（EXIT=0）。
+  5. `node _patch/_probe_cloud.js` → 全部通过（EXIT=0）。
+- 注：verify_dist 的「37 个素材从未被游戏请求」是**静态扫描假报**——新选角图/logo/deck 图经
+  `const HS_BG/HS_LOGO` 映射 + `assetURL(...)` 动态引用，扫描器看不到字符串字面量，**不是真未引用**，闸仍判通过。
 
 ## 待用户定稿 / 给料（不动设计）
 
-- 纯色背景板场景清单：已交付，等用户定风格。
-- ~~两类焚牌音效（锻造升级 / 净坛·篝火删牌）~~：**已交付并接入**（见上）。
+- **6 个排行榜 ID 已逐字核对**（`js/55_cloud.js` L536-554 `RANK_IDS`）与用户给定完全一致：
+  total_score=`k74rffqopia2pn6tsb` / clear_tianshi=`xc3t2r13go0t8ykcma` /
+  clear_ganshiren=`kxb793ucsscio9ol1l` / clear_wuseng=`u45n8mhpyr8eyvzop2` /
+  clear_yincha=`n0uxtpk2vde3xt4mc1` / clear_total=`dgakiqz3gn7lb847ss`。
+  **结论：代码侧无需改；线上「榜不存在」是 TapTap 开发者中心尚未建这 6 个榜**（平台侧动作，需用户去建）。
+- **TapTap 多文件包**：脚本 `--taptap-split` 已就位、zip 已产出（62.71 MB / 557 文件），**待用户真机试传**。
+  确认相对路径能跑后再定「是否切为默认口径」；若不认 SW，第一排查方向 = 剥离 PWA 组件。
 - boss_vfx 的 scale 暂用 **2.47**，等真机看效果再调。
 
 ## 外部资源与文档
@@ -77,8 +66,9 @@
 
 ## Next Steps
 
-1. 等 `--split` 跑完 → `python _patch/verify_web.py` 全绿，确认基线。
-2. `python 打包.py --taptap-split` → 产多文件 zip → 交用户真机试传。
-3. git 提交回退点（焚牌音效 + 打包脚本 + memory-bank 刷新）。
-4. 接 boss_vfx 后 3 幕。
-5. 每轮改完：8 段 JS 各自 `node --check` → 重打产物 → 五道闸 → git 保存。
+1. **待用户真机试传 TapTap 多文件 zip**，结果回填 decision-log 与 progress。
+2. 用户侧：在 TapTap 开发者中心建 6 个排行榜（ID 见上），线上榜单即可显示。
+3. **接入 boss_vfx 后 3 幕**（若尚未接入；v1.1.12 记录称已接，需与真机效果核对）：
+   - b7 夜王、b8 修罗王、b9 阎罗天子的精灵图 + 专属音效，照前 6 幕接法；
+     入库时 `打包.py` 的 `FX_SPLIT_ROWS` 照 4 追加这 12 条。
+4. 每轮改完：8 段 JS 各自 `node --check` → 重打产物 → 五道闸 → git 保存。
