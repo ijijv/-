@@ -2674,6 +2674,96 @@
     .sd-thumb .card{transform:scale(.318);}
   }
 
+  /* ===== v1.1.13 选角界面重构（用户 2026-10-13 定稿）=====
+     整屏：立绘背景（contain 完整放入、缝隙纯黑）+ 底部中央 4 张符纸波浪错落
+     + 左上角色文案（浮在图上、无底板）+ 顶部中央【入门符纸】图标与数量
+     + 右上初始牌组图标 + 左下「返回主菜单」/ 右下「开始游戏」（大号红色毛笔纯字、无底图）。
+     ⚠️ 只沿用 `hero-scene` 一个场景类；这里把 #overlayWrap/.panel 拉成全屏（覆盖上面那条 700px 放宽）。 */
+  #overlay.hero-scene #overlayWrap{width:100%; height:100%; max-width:none;}
+  #overlay.hero-scene .panel{background:none; border:0; border-radius:0; padding:0; box-shadow:none;
+    width:100%; height:100%; max-width:none; overflow:hidden;}
+  #overlay.hero-scene #overlayCloseX{display:none;}
+
+  .hs-root{position:absolute; inset:0; overflow:hidden; background:#000;
+    --hs-move:.46s; --hs-drop:.46s;   /* 符纸移动时长 / 背景降落时长（跟随符纸移动，两者一致） */
+    font-family:var(--font-kai); -webkit-user-select:none; user-select:none;}
+  /* 背景层：新立绘从屏幕顶部降落覆盖旧图，落地弹一下再稳住 */
+  .hs-bgwrap{position:absolute; inset:0; overflow:hidden; background:#000;}
+  .hs-bg{position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+    object-position:center; display:block;}
+  .hs-bgdrop{animation:hsBgDrop var(--hs-drop) cubic-bezier(.34,.8,.42,1) both;}
+  @keyframes hsBgDrop{
+    0%{transform:translateY(-100%);}
+    60%{transform:translateY(0);}
+    74%{transform:translateY(-2.6%);}
+    86%{transform:translateY(0);}
+    100%{transform:translateY(0);}}
+  /* 左上：角色名（大·毛笔）/ 被动名（中）/ 被动全文（小，多行、左对齐、首行对齐） */
+  .hs-info{position:absolute; left:2.6%; top:3.4%; width:42%; z-index:5; pointer-events:none;
+    color:#fff; text-align:left;
+    text-shadow:0 2px 10px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.95);}
+  .hs-name{font-family:'MaShanZheng', var(--font-kai), serif; font-size:clamp(18px,3.3vh,34px);
+    line-height:1.12; letter-spacing:4px;}
+  .hs-mech{margin-top:.35em; font-size:clamp(12px,2.1vh,20px); letter-spacing:2px; color:#f3d27a;}
+  .hs-passive{margin-top:.5em; font-size:clamp(10px,1.9vh,15px); line-height:1.55; letter-spacing:.5px;
+    color:#eae3d2;}
+  /* 顶部中央：入门符纸图标 + 持有数量 */
+  .hs-ticket{position:absolute; left:50%; top:2.4%; transform:translateX(-50%); z-index:6;
+    display:flex; align-items:center; gap:8px; pointer-events:none;}
+  .hs-ticket img{width:clamp(26px,4.2vh,44px); height:auto; display:block; object-fit:contain;}
+  .hs-ticket b{font-family:'MaShanZheng', var(--font-kai), serif; font-size:clamp(16px,3vh,28px);
+    color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.9);}
+  /* 右上：初始牌组图标区 */
+  .hs-deck{position:absolute; right:2.6%; top:3.4%; z-index:6;
+    display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .hs-deckrow{display:flex; gap:10px;}
+  .hs-deckbtn{background:none; border:2px solid transparent; border-radius:7px; padding:0; cursor:pointer;
+    transition:border-color .15s, box-shadow .15s, transform .15s; -webkit-tap-highlight-color:transparent;}
+  .hs-deckbtn img{display:block; width:clamp(48px,9.2vh,96px); height:auto; object-fit:contain;}
+  .hs-deckbtn.on{border-color:#ffcf6a;
+    box-shadow:0 0 0 2px rgba(255,207,106,.55), 0 0 16px rgba(255,207,106,.5);}
+  .hs-deck-cap{font-size:9px; letter-spacing:1px; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.95);}
+  /* 底部中央：4 张符纸（波浪错落、互不遮挡；白色纸面半透明、黑字保留） */
+  .hs-talismans{position:absolute; left:0; right:0; bottom:1.5%;
+    display:flex; align-items:flex-end; justify-content:center; gap:clamp(8px,2vw,30px);
+    pointer-events:none; z-index:4;}
+  .hs-tl{pointer-events:auto; flex:0 0 auto; width:clamp(78px,11.5vw,150px); padding:0;
+    background:none; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent;
+    transform:translateY(var(--wave,0px));
+    transition:transform var(--hs-move) cubic-bezier(.2,.7,.25,1);}
+  .hs-tl img{width:100%; height:auto; max-height:34vh; object-fit:contain; display:block;
+    mix-blend-mode:multiply; opacity:.86; pointer-events:none;}
+  .hs-tl-emoji{font-size:clamp(30px,6vh,64px); color:#f3d27a;}
+  .hs-talismans .hs-tl:not(.sel){transform:translateY(calc(var(--wave,0px) - var(--rise,4px)));}
+  .hs-talismans .hs-tl.sel{transform:translateY(calc(var(--wave,0px) + 14px));}
+  /* 左下返回 / 右下开始（大号红色毛笔纯字） */
+  .hs-back,.hs-start{position:absolute; bottom:2.6%; z-index:7; background:none; border:0; cursor:pointer;
+    font-family:'MaShanZheng', var(--font-kai), serif; color:#c8402f;
+    text-shadow:0 2px 10px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.95);
+    -webkit-tap-highlight-color:transparent;}
+  .hs-back{left:2.6%; font-size:clamp(16px,2.6vh,30px); letter-spacing:3px;}
+  .hs-start{right:2.6%; font-size:clamp(18px,3vh,34px); letter-spacing:5px;}
+  .hs-back:hover,.hs-start:hover{color:#e8563f;}
+  /* 灰态：选中角色未解锁 ⇒ 符纸 / 牌组区 / 开始键整体置灰（仍可点，只是不能解锁 / 开始） */
+  .hs-root.hs-locked .hs-tl,
+  .hs-root.hs-locked .hs-deck,
+  .hs-root.hs-locked .hs-start{filter:grayscale(1) brightness(.72);}
+  /* 长按展开的初始牌组预览（1 层或 2 层，卡牌按行铺开 + 返回键） */
+  .hs-prev{position:absolute; inset:0; z-index:20; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:12px; background:rgba(6,8,12,.8);
+    animation:hsPrevIn .16s ease-out; padding:3vh 3vw;}
+  @keyframes hsPrevIn{from{opacity:0;} to{opacity:1;}}
+  .hs-prev-layer{display:flex; flex-direction:column; align-items:center; gap:6px; max-width:96%;}
+  .hs-prev-title{font-size:clamp(13px,2.6vh,20px); letter-spacing:3px; color:#f3d27a;}
+  .hs-prev-title small{margin-left:8px; font-size:.72em; color:#cbbf9e; letter-spacing:1px;}
+  .hs-prev-row{display:flex; flex-wrap:wrap; gap:4px; justify-content:center; max-width:94vw;}
+  @media (max-height:560px){
+    .hs-info{width:46%;}
+    .hs-tl{width:clamp(66px,10vw,112px);}
+    .hs-tl img{max-height:30vh;}
+    .hs-deckbtn img{width:clamp(40px,8vh,72px);}
+  }
+
   /* —— ④ 里程碑「里程轨」界面（v1.0.23 · 用户草图，整屏重做）——
      左列：4 张角色横屏海报（素材/hero/<id>_poster.jpg，3:1）。**未选中只露左边 2/3**
      （露出的右缘压一道暗渐变，暗示还剩 1/3）；点中后展开到全幅，右 1/3 露出该角色机制名，
@@ -2853,18 +2943,19 @@
      ⚠️ 原来塞在白框顶，手机横屏档（白框以 bottom 锚定、向上长到 130px 高）顶部会被
         **顶部海报横排浮层**（.ml-heroes，z-index:2 压住 .ml-stage:1）盖掉 ⇒ 图整张看不见。
         现在固定在里程数下方，永不被遮，白框也回到原高度（不再需要 has-rw 加高）。 */
-  .ml-rw{position:absolute; left:-30px; top:calc(var(--rail-y) + 38px); width:60px;
+  /* v1.1.13（用户）：奖励图标放大 2 倍（34→68px）。容器同步加宽，免得与相邻节点挤在一起。 */
+  .ml-rw{position:absolute; left:-34px; top:calc(var(--rail-y) + 30px); width:68px;
     display:flex; justify-content:center; pointer-events:none;}
-  .ml-rwimg{width:34px; height:34px; object-fit:contain; display:block; border-radius:4px;
-    filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));}
+  .ml-rwimg{width:68px; height:68px; object-fit:contain; display:block; border-radius:6px;
+    filter:drop-shadow(0 3px 5px rgba(0,0,0,.5));}
   @keyframes mlFlyUp{0%{opacity:0; transform:translateY(12px) scale(.7);}
     16%{opacity:1; transform:translateY(-6px) scale(1.12);}
     100%{opacity:0; transform:translateY(-124px) scale(.72);}}
-  .ml-flyimg{position:absolute; z-index:26; width:52px; height:52px; pointer-events:none;
+  .ml-flyimg{position:absolute; z-index:26; width:80px; height:80px; pointer-events:none;
     animation:mlFlyUp 1.2s cubic-bezier(.2,.7,.3,1) forwards;}
   .ml-flyimg img{width:100%; height:100%; object-fit:contain; display:block;
     filter:drop-shadow(0 0 10px rgba(255,215,122,.95));}
-  .ml-flyemoji{display:block; text-align:center; font-size:46px; line-height:52px;}
+  .ml-flyemoji{display:block; text-align:center; font-size:70px; line-height:80px;}
   @keyframes mlDetailIn{from{opacity:0;} to{opacity:1;}}
   .ml-detail{position:absolute; left:0; right:0; top:0; bottom:0; z-index:30;
     display:flex; align-items:center; justify-content:center; background:rgba(8,10,14,.62);

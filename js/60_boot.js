@@ -624,82 +624,212 @@ function renderEndTurnHint(){
   else el.classList.add('off');
 }
 
-function showHeroSelect(){
-  if(typeof settleVidDrop==='function') settleVidDrop();   // v1.1.x：通关面板点「再打一局」进选角，同样必摘
-  /* v0.74.0：选英雄专用整屏背景。setBg 会按 PRE_RUN_BG 表**保留** body.at-menu
-     ⇒ `#app` 仍不渲染：此刻 run 还没开始（G 刚 newState、一次都没 render 过），
-     让 #app 显形就是空骨架透在 .55 的黑幕下，正是 v0.68.2 修掉的那个 bug。 */
-  setBg('hero_select.jpg');
-  /* v0.76.1：加角色立绘 + 文案改用 brief/passiveShort（见 js/20_data.js 的 HEROES 注释）。
-     ⚠️ tooltip（data-tip="hero:<id>"）仍指向全文 desc/passive —— 只挂 data-tip，**没有** hover 依赖；
-        卡面上那句精简被动是触屏也读得到的。 */
-  /* v1.0.15：未解锁的角色**不隐藏**，置灰不可点 —— 让玩家看见还有内容可解锁，
-     并标明所需里程碑点数（`.relic.locked` 的置灰样式见 原型.html）。 */
-  /* v1.0.17（用户定稿）：卡片重做 —— 头像用 panel_nine 九宫框只框住**上半身**，
-     名字挪到 btn_primary 的按钮底上，面板底换成程序化生成的旧纸纹（见 _patch/mk_panel_bg.py）。
-     三张图的地址在文件顶部的「UI 皮肤图统一注入」里写进 :root 的 --ui-* 变量（走 assetURL）。 */
-  const cards=HEROES.map(h=>{
-    /* v1.1.8（用户 2026-10-13）：角色不再按里程自动解锁，改由【入门符纸】解锁 ——
-       锁定卡若手上有符纸 ⇒ 可点（弹「是/否」确认，消耗 1 张）；没有则显示「需入门符纸」。 */
-    const locked=!mileOn('hero',h.id);
-    const tk=mileTickets();
-    const canUnlock=locked && tk>0;
-    const portrait=artImg('hero/'+h.id+'.png', `<div class="hero-emoji">${locked?'🔒':'🀄'}</div>`, 'hero-portrait');
-    const nameBtn=locked
-      ? `<div class="hero-name"><span>${h.name}</span></div>`
-      : `<div class="hero-name" data-tip="hero:${h.id}"><span>${h.name}</span></div>`;
-    const tail=locked
-      ? `<div class="hero-note">${canUnlock?`入门符纸解锁 · 剩 ${tk} 张`:'未解锁 · 需入门符纸'}</div>`
-      : `<div class="hero-note">点击选择</div>`;
-    const act=locked ? (canUnlock?` onclick="askUnlockHero('${h.id}')"`:'')
-                     : ` onclick="pickHero('${h.id}')"`;
-    return `<div class="hero-card${locked?' locked':''}${canUnlock?' can-unlock':''}"${act}>`
-      + `<div class="hero-frame">${portrait}</div>`
-      + nameBtn
-      + `<div class="hero-brief">${h.brief||h.desc}</div>`
-      + `<div class="hero-passive">被动 · ${h.passiveShort||h.passive}</div>`
-      + tail
-      + `</div>`;
+/* ===================== 选角界面重构（v1.1.13 · 用户 2026-10-13 定稿） =====================
+   整屏：立绘背景（contain 完整放入、缝隙纯黑）+ 底部中央 4 张符纸波浪错落
+   + 左上角色文案 + 顶部中央【入门符纸】数量 + 右上初始牌组图标
+   + 左下「返回主菜单」/ 右下「开始游戏」（大号红色毛笔纯字）。
+   ⚠️ 结构与样式在 原型.html 的 `.hs-*` 段；这里只管状态与拼 HTML。
+   ⚠️ 只沿用 `hero-scene` 一个场景类（verify_dist.py §三-11 钉死「CSS 放宽 + JS 摘除」成对；
+      `#overlay.hero-scene #overlayWrap{max-width:700px}` 基档那条仍在，别删）。 */
+const HS_ORDER=['tianshi','wuseng','ganshiren','yincha'];   // 符纸左→右：天师·苦僧(武僧)·赶尸人·阴差
+const HS_BG={ 'tianshi':'hero_sel/tianshi-s.jpg', 'wuseng':'hero_sel/wuseng-s.jpg',
+              'ganshiren':'hero_sel/ganshiren-s.jpg', 'yincha':'hero_sel/yincha-s.jpg' };
+const HS_LOGO={ 'tianshi':'logo/tianshi-logo.png', 'wuseng':'logo/wuseng-logo.png',
+                'ganshiren':'logo/ganshiren-logo.png', 'yincha':'logo/yincha-logo.png' };
+const HS_EMOJI={ 'tianshi':'🀄', 'wuseng':'🧘', 'ganshiren':'👻', 'yincha':'🩸' };
+const HS_WAVE=[10,4,16,7];   // 每张符纸基准起伏位移 px（错落但不互相遮挡）
+const HS_RISE=[8,12,6,10];   // 未选中时上抬的"不等的短距离" px（选中则下沉）
+/* 特殊名词配色（用户口径「血祭用红色」等）。长词在前，避免「血」吞掉「血怒」。 */
+const HS_TERMS=[['召唤单位','#f0b07f'],['诅咒','#c9a0ff'],['咒印','#c9a0ff'],['血怒','#ff6b6b'],
+  ['血祭','#ff6b6b'],['尸气','#7fe0b0'],['尸骸','#7fe0b0'],['尸王','#ffcf6a'],['尸傀','#f0b07f'],
+  ['召唤','#f0b07f'],['格挡','#7fc8f0']];
+let HS_SEL=null, HS_LP=null;   // HS_SEL=当前选中角色；HS_LP=牌组图标长按定时器
+function hsEscape(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+/* 术语着色：按最长优先建一条交替正则，一次 replace 完事（避免反复 replace 叠成嵌套 span）。 */
+function hsTermHTML(s){
+  const esc=hsEscape(s||'');
+  const terms=HS_TERMS.slice().sort((a,b)=>b[0].length-a[0].length);
+  const pat=new RegExp('('+terms.map(t=>t[0]).join('|')+')','g');
+  return esc.replace(pat, m=>{ const t=terms.find(x=>x[0]===m); return t?`<span style="color:${t[1]}">${m}</span>`:m; });
+}
+function hsHero(id){ return HEROES.find(x=>x.id===id) || HEROES[0]; }
+function hsLocked(id){ return !mileOn('hero', id); }
+function hsDeckChoice(){ return (SAVE && SAVE.starterDeck===1) ? 1 : 0; }
+/* 该角色该组的初始牌组：仅阴差第 2 组走备用表，其余一律原初始卡组。 */
+function hsDeckListFor(id, which){ return (id==='yincha' && which===1) ? starterDeckList(1) : heroDeck(id); }
+function hsInfoInner(h){
+  return `<div class="hs-name">${hsEscape(h.name)}</div>`
+    + `<div class="hs-mech">${hsTermHTML(h.mech||'')}</div>`
+    + `<div class="hs-passive">${hsTermHTML(h.passive||h.desc||'')}</div>`;
+}
+function hsTicketInner(){ return artImg('ui/rumenfuzhi.png','','') + `<b>${mileTickets()}</b>`; }
+function hsBgImg(id, drop){
+  return `<img class="hs-bg${drop?' hs-bgdrop':''}" src="${assetURL(HS_BG[id], true)}" draggable="false" alt="" onerror="this.style.display='none'">`;
+}
+function hsTalismanImg(id){ return artImg(HS_LOGO[id], `<div class="hs-tl-emoji">${HS_EMOJI[id]||'🀄'}</div>`, ''); }
+/* 右上牌组图标：阴差已领 t4 ⇒ card1/card2 一对可点切换；其余角色一张 back.png（点击无效、长按展开）。 */
+function hsDeckHTML(h){
+  const canSwitch=(h.id==='yincha' && mileClaimed('yincha_t4'));
+  if(canSwitch){
+    const cur=hsDeckChoice();
+    const one=n=>{
+      const icon=(n===0)?'ui/deck_card1.png':'ui/deck_card2.png';
+      return `<button class="hs-deckbtn${cur===n?' on':''}" data-deck="${n}"`
+        + ` onpointerdown="hsDeckDown(event,${n})" onpointerup="hsDeckUp(event,${n})"`
+        + ` onpointerleave="hsDeckUp(event,${n})" onpointercancel="hsDeckUp(event,${n})">`
+        + artImg(icon,'','') + `</button>`;
+    };
+    return `<div class="hs-deckrow">${one(0)}${one(1)}</div>`
+      + `<div class="hs-deck-cap">点击切换初始牌组</div>`;
+  }
+  return `<button class="hs-deckbtn" data-deck="0"`
+    + ` onpointerdown="hsDeckDown(event,0)" onpointerup="hsDeckUp(event,0)"`
+    + ` onpointerleave="hsDeckUp(event,0)" onpointercancel="hsDeckUp(event,0)">`
+    + artImg('ui/deck_back.png','','') + `</button>`;
+}
+function hsTalismansHTML(){
+  return HS_ORDER.map((hid,i)=>{
+    const sel=(hid===HS_SEL);
+    return `<button class="hs-tl${sel?' sel':''}" style="--wave:${HS_WAVE[i]}px;--rise:${HS_RISE[i]}px"`
+      + ` onclick="hsPickTalisman('${hid}')">${hsTalismanImg(hid)}</button>`;
   }).join('');
-  /* v1.1.5（用户口径）：选角/选牌组/开局抉择三处都要有「返回上一步」。
-     选角这一处是起点 ⇒ 返回主菜单（并复位半途的选角状态）。 */
-  showOverlay(`<h2>选 择 英 雄</h2><p>不同英雄有不同特性，与不同流派卡组联动。</p><div class="hero-cards">${cards}</div>
-    <button class="btn ghost" onclick="heroSelectToMenu()">返回主菜单</button>`, false, 'hero-scene');
+}
+function hsRootHTML(){
+  const h=hsHero(HS_SEL), locked=hsLocked(HS_SEL);
+  return `<div class="hs-root${locked?' hs-locked':''}" id="hs-root">`
+    + `<div class="hs-bgwrap" id="hs-bgwrap">${hsBgImg(HS_SEL, true)}</div>`
+    + `<div class="hs-info" id="hs-info">${hsInfoInner(h)}</div>`
+    + `<div class="hs-ticket" id="hs-ticket">${hsTicketInner()}</div>`
+    + `<div class="hs-deck" id="hs-deck">${hsDeckHTML(h)}</div>`
+    + `<div class="hs-talismans">${hsTalismansHTML()}</div>`
+    + `<button class="hs-back" onclick="heroSelectToMenu()">返回主菜单</button>`
+    + `<button class="hs-start" onclick="heroSelectStart()">开始游戏</button>`
+    + `</div>`;
+}
+function showHeroSelect(){
+  if(typeof settleVidDrop==='function') settleVidDrop();
+  /* setBg 会按 PRE_RUN_BG 表**保留** body.at-menu ⇒ `#app` 仍不渲染（此刻 run 还没开始）：
+     这条是 v0.68.2 修掉的空骨架 bug，别放它回来。 */
+  setBg('hero_select.jpg');
+  HS_SEL=(G && G.hero && HS_ORDER.indexOf(G.hero)>=0) ? G.hero : 'tianshi';
+  showOverlay(hsRootHTML(), false, 'hero-scene');
+}
+/* 点符纸 = 选中：旧符纸上抬、新符纸下沉（就地切 .sel 触发 CSS transition），背景从顶降落并弹跳。 */
+function hsPickTalisman(id){
+  if(!id || HS_ORDER.indexOf(id)<0) return;
+  if(id===HS_SEL){ sfx('talisman_click'); return; }
+  sfx('talisman_click');
+  setTimeout(()=>{ sfx('talisman_slide'); }, 50);
+  hsApplyHero(id, true);
+}
+function hsApplyHero(id, animate){
+  const root=document.getElementById('hs-root'); if(!root) return;
+  HS_SEL=id; if(G) G.hero=id;
+  const btns=root.querySelectorAll('.hs-tl');
+  HS_ORDER.forEach((hid,i)=>{ if(btns[i]) btns[i].classList.toggle('sel', hid===id); });
+  const wrap=document.getElementById('hs-bgwrap');
+  if(wrap){
+    if(animate){
+      const img=document.createElement('img');
+      img.className='hs-bg hs-bgdrop'; img.setAttribute('draggable','false'); img.alt='';
+      img.onerror=function(){ img.style.display='none'; };
+      img.src=assetURL(HS_BG[id], true);
+      wrap.appendChild(img);
+      setTimeout(()=>{ if(img.parentNode===wrap && wrap.children.length>1) wrap.removeChild(wrap.firstChild); }, 720);
+      sfx('poster_bounce_land');
+    } else { wrap.innerHTML=hsBgImg(id, false); }
+  }
+  const h=hsHero(id);
+  const info=document.getElementById('hs-info'); if(info) info.innerHTML=hsInfoInner(h);
+  const deck=document.getElementById('hs-deck'); if(deck) deck.innerHTML=hsDeckHTML(h);
+  const tkb=document.querySelector('#hs-ticket b'); if(tkb) tkb.textContent=mileTickets();
+  root.classList.toggle('hs-locked', hsLocked(id));
+}
+/* 解锁 / 符纸数变化后的轻量刷新（不重播背景降落）。 */
+function hsRefreshTicket(){
+  const root=document.getElementById('hs-root'); if(!root) return;
+  root.classList.toggle('hs-locked', hsLocked(HS_SEL));
+  const tkb=document.querySelector('#hs-ticket b'); if(tkb) tkb.textContent=mileTickets();
+  const deck=document.getElementById('hs-deck'); if(deck) deck.innerHTML=hsDeckHTML(hsHero(HS_SEL));
+}
+/* —— 右上牌组图标：长按 250ms 展开预览；短按=切换（仅阴差 t4 可切）。 —— */
+function hsDeckDown(ev, which){
+  if(ev && ev.preventDefault) ev.preventDefault();
+  if(HS_LP){ clearTimeout(HS_LP); HS_LP=null; }
+  HS_LP=setTimeout(()=>{ HS_LP=null; hsDeckPreview(); }, 250);
+}
+function hsDeckUp(ev, which){
+  if(HS_LP){ clearTimeout(HS_LP); HS_LP=null; hsDeckTap(which); }
+}
+function hsDeckTap(which){
+  const h=hsHero(HS_SEL);
+  if(h.id==='yincha' && mileClaimed('yincha_t4')){ hsSetDeckChoice(which); sfx('talisman_click'); }
+  else sfx('ui_click');
+}
+function hsSetDeckChoice(n){
+  if(!SAVE) return;
+  SAVE.starterDeck=(n===1)?1:0; persistSave();
+  const cur=hsDeckChoice();
+  const root=document.getElementById('hs-root'); if(root){
+    root.querySelectorAll('.hs-deckbtn').forEach(b=>{ b.classList.toggle('on', Number(b.dataset.deck)===cur); });
+  }
+}
+/* 长按展开：阴差 t4 = 两层（上 card1 / 下 card2）；其余角色 = 一层。缩略图复用 starterDeckThumbs。 */
+function hsDeckPreview(){
+  const root=document.getElementById('hs-root'); if(!root) return;
+  const old=document.getElementById('hs-prev'); if(old && old.parentNode) old.parentNode.removeChild(old);
+  const h=hsHero(HS_SEL);
+  const layers=[];
+  if(h.id==='yincha' && mileClaimed('yincha_t4')){
+    layers.push({t:'现有阴差牌组', n:0}); layers.push({t:'血怒流牌组', n:1});
+  } else { layers.push({t:h.name+' 初始牌组', n:0}); }
+  const body=layers.map(L=>{
+    const list=hsDeckListFor(h.id, L.n);
+    return `<div class="hs-prev-layer"><div class="hs-prev-title">${hsEscape(L.t)}<small>共 ${list.length} 张</small></div>`
+      + `<div class="hs-prev-row">${starterDeckThumbs(list)}</div></div>`;
+  }).join('');
+  const div=document.createElement('div');
+  div.className='hs-prev'; div.id='hs-prev';
+  div.innerHTML=body + `<button class="btn ghost" style="margin:0" onclick="hsDeckPreviewClose()">返回</button>`;
+  root.appendChild(div);
+  sfx('ui_click');
+}
+function hsDeckPreviewClose(){
+  const p=document.getElementById('hs-prev'); if(p && p.parentNode) p.parentNode.removeChild(p);
+  sfx('key_press');
+}
+/* 右下「开始游戏」：已解锁直接进；未解锁弹「消耗 1 张入门符纸解锁」，无符纸则不可进。 */
+function heroSelectStart(){
+  const h=hsHero(HS_SEL); if(!h) return;
+  sfx('key_press');
+  if(mileOn('hero', HS_SEL)){ pickHero(HS_SEL); return; }
+  if(mileTickets()<1){ sfx('error'); floatMsg('没有【入门符纸】'); return; }
+  askConfirm(`消耗 1 张【入门符纸】解锁【${hsEscape(h.name)}】？<br>当前持有 ${mileTickets()} 张。`, ()=>{
+    if(unlockHeroWithTicket(HS_SEL)){
+      log(`使用入门符纸解锁角色【${h.name}】`);
+      floatMsg(`已解锁【${h.name}】 · 剩 ${mileTickets()} 张`);
+      hsRefreshTicket();
+    } else { sfx('error'); floatMsg('解锁失败'); }
+  });
 }
 function pickHero(id){
   G.hero=id;
   const h=HEROES.find(x=>x.id===id);
-  G.deck=heroDeck(id);
+  /* v1.1.13（用户 2026-10-13）：初始牌组改在选角界面右上角选定（见 hsDeck*）；
+     这里按 SAVE.starterDeck 取组 —— 非阴差 / 未领 t4 一律取原初始卡组。 */
+  const which=(id==='yincha' && mileClaimed('yincha_t4'))?hsDeckChoice():0;
+  G.deck=hsDeckListFor(id, which);
   log(`选择英雄【${h.name}】`);
-  /* v1.1.5（血祭阴差 t4 · 新初始牌组）：领取该档后，选角之后**先**弹「初始牌组二选一」，
-     选完才进开局抉择（两步都在首轮抽牌之前）。其它角色维持旧路径，逐字节不变。 */
-  if(id==='yincha' && mileClaimed('yincha_t4')) showStarterDeckChoice();
-  else showOpeningChoice();
+  showOpeningChoice();
 }
 function heroDeck(id){
   const h=HEROES.find(x=>x.id===id);
   const d=[]; h.deck.forEach(([cid,n])=>{ for(let i=0;i<n;i++) d.push(cardById(cid)); });
   return d;
 }
-/* v1.1.8（用户 2026-10-13）：用 1 张【入门符纸】解锁锁定角色。
-   走既有的「是/否」图标确认浮层（askConfirm），确认后扣 1 张、落 SAVE.unlockedHeroes 并重渲染选角页。 */
-function askUnlockHero(id){
-  const h=HEROES.find(x=>x.id===id); if(!h) return;
-  if(mileTickets()<1){ sfx('error'); floatMsg('没有【入门符纸】'); return; }
-  askConfirm(`消耗 1 张【入门符纸】解锁【${h.name}】？<br>当前持有 ${mileTickets()} 张。`, ()=>{
-    if(unlockHeroWithTicket(id)){
-      log(`使用入门符纸解锁角色【${h.name}】`);
-      floatMsg(`已解锁【${h.name}】 · 剩 ${mileTickets()} 张`);
-      showHeroSelect();
-    } else { sfx('error'); floatMsg('解锁失败'); }
-  });
-}
-/* ===================== 初始牌组二选一（v1.1.5 · 血祭阴差 t4） =====================
-   用户口径：选角后立刻（首轮抽牌前）弹出——上「现有阴差初始牌组」、下「血怒流初始牌组」，
-   缩略卡图各**排一行、整组概览**；**不允许跳过**（必须选一组才继续）。
-   纯机制、无贴图；点整组即选（走 askConfirm「是/否」图标确认）。
-   ⚠️ 缩略卡图直接复用 cardBody（唯一牌面渲染器），靠 CSS `.sd-thumb .card{transform:scale}`
-      缩放，不新建并行渲染路径。 */
+/* ===================== 阴差 t4「血怒流」初始牌组（v1.1.5；v1.1.13 改由选角界面右上角选定） =====================
+   备用组：饮血刃×3/金刚符×2/焚身咒×1/佛渡×1/噬魂术×1/血契×1/守一×1/渡魂归己×1。
+   缩略卡图直接复用 cardBody（唯一牌面渲染器），靠 CSS `.sd-thumb .card{transform:scale}` 缩放。 */
 const YINCHA_STARTER_ALT=[['yinxueren',3],['jingang',2],['fenshenzhou',1],['fodu',1],['shihun',1],['xueqi',1],['shouyi',1],['duhunguiji',1]];
 function starterDeckList(which){
   if(which!==1) return heroDeck('yincha');
@@ -709,42 +839,14 @@ function starterDeckList(which){
 function starterDeckThumbs(list){
   return list.map(c=>`<div class="sd-thumb"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div>`).join('');
 }
-function showStarterDeckChoice(){
-  const left=starterDeckList(0), right=starterDeckList(1);
-  showOverlay(`<h2>初 始 牌 组</h2><p>血怒流开路——选择你的起手牌组（须选一组，不能跳过）。</p>
-    <div class="starter-decks">
-      <div class="starter-deck" onclick="askChooseStarterDeck(0)">
-        <div class="sd-title">现有阴差牌组<small>共 ${left.length} 张</small></div>
-        <div class="sd-row">${starterDeckThumbs(left)}</div>
-      </div>
-      <div class="starter-deck" onclick="askChooseStarterDeck(1)">
-        <div class="sd-title">血怒流牌组<small>共 ${right.length} 张</small></div>
-        <div class="sd-row">${starterDeckThumbs(right)}</div>
-      </div>
-    </div>
-    <button class="btn ghost" onclick="backToHeroSelect()">返回上一步</button>`, false, 'hero-scene');
-}
-function askChooseStarterDeck(i){
-  const name=(i===1)?'血怒流牌组':'现有阴差牌组';
-  askConfirm(`以【${name}】作为初始牌组？`, ()=>chooseStarterDeck(i));
-}
-function chooseStarterDeck(i){
-  G.deck=starterDeckList(i);
-  log(`初始牌组：${(i===1)?'血怒流':'现有阴差'}（共 ${G.deck.length} 张）`);
-  showOpeningChoice();
-}
-/* —— 「返回上一步」三处（显式 rollback，不只是重渲染）—— */
+/* —— 「返回上一步」（显式 rollback，不只是重渲染）—— */
 function heroSelectToMenu(){                 // 选角 → 主菜单
   G.hero=null; G.deck=[]; G.openingPicks=null;
   showStartScreen();
 }
-function backToHeroSelect(){                 // 牌组 / 开局抉择 → 选角
+function backToHeroSelect(){                 // 开局抉择 → 选角
   G.hero=null; G.deck=[]; G.openingPicks=null;
   showHeroSelect();
-}
-function backToStarterDeck(){                // 开局抉择 → 牌组二选一（仅阴差 t4）
-  G.deck=heroDeck('yincha');
-  showStarterDeckChoice();
 }
 /* v1.0.1：多存档。3 个槽位，1 号槽沿用旧键名（老档天然落进 1 号槽，无需迁移）。
    开始新局优先用**第一个空槽**；3 个都满了才弹「存档已满」让玩家挑一个覆盖。 */
@@ -857,9 +959,8 @@ function showOpeningChoice(){
         : '天师真传：从本角色全部牌库中自由挑选一张加入起始牌组（或跳过）。')
     : '天师赠你一道符，挑一张加入起始牌组（或跳过）。';
   /* v1.0.1：广告入口隐藏 —— 摘掉「看广告 · 重随一次」。rerollOpening / adPlaceholder 本体保留。 */
-  /* v1.1.5（用户口径）：「返回上一步」——阴差 t4 时上一步是「初始牌组二选一」，
-     其余角色上一步是「选角」；显式 rollback（见 backToStarterDeck / backToHeroSelect）。 */
-  const backFn=(G.hero==='yincha' && mileClaimed('yincha_t4'))?'backToStarterDeck()':'backToHeroSelect()';
+  /* v1.1.13：初始牌组已在选角界面选定 ⇒ 开局抉择的上一步恒为「选角」。 */
+  const backFn='backToHeroSelect()';
   showOverlay(`<h2>开 局 抉 择</h2><p>${tip}</p><div class="${poolCls}">${cards}</div>
     <button class="btn ghost" onclick="${backFn}">返回上一步</button>
     <button class="btn ghost" onclick="skipOpening()">跳过</button>`);
@@ -1212,6 +1313,10 @@ function showClearTimes(view){
     const rows=rankRows(b, rankLocalList(b), false, RANK_SELF_CACHE);
     bodyHTML=rankPodiumHTML(rows)+`<div class="rk-table">${rankTableHTML(b,rows)}</div>`;
   }
+  /* v1.1.13：切榜 / 切来源 / 切周期都会整屏重排（innerHTML 全换），左侧大类导航的滚动位置会被
+     复位到顶 ⇒ 手机横屏档「整局总分榜」压在导航底部，每次点一下都得重新下滑才看得到。
+     重排前先记下当前 nav 的 scrollTop，重排后回填到同一个位置。 */
+  const _navTop = (()=>{ const n=document.getElementById('rk-nav'); return n?n.scrollTop:0; })();
   showOverlay(`<div class="rk-root"><div class="rk-scroll">
     ${artImg('ui/huangbang.png','','rk-scrollbg')}
     <div class="rk-body">
@@ -1224,7 +1329,7 @@ function showClearTimes(view){
         <aside class="rk-side">
           <div class="rk-side-title"><span class="big">榜</span><div>天下英杰<br><small>各显神通</small></div></div>
           <div class="rk-side-label">通 关 计 时</div>
-          <nav class="rk-nav">${cats}</nav>
+          <nav class="rk-nav" id="rk-nav">${cats}</nav>
           <div class="rk-side-foot"><span class="rk-seal">敕</span><span class="rk-poem">山海有灵 · 来者留名</span></div>
         </aside>
         <section class="rk-main">
@@ -1237,6 +1342,7 @@ function showClearTimes(view){
       </div>
     </div>
   </div></div>`, false, 'rank-scene');
+  { const n=document.getElementById('rk-nav'); if(n && _navTop>0) n.scrollTop=_navTop; }
   if(RANK_SRC==='online') rankFillOnline(b);
   rankSelfFill();
 }

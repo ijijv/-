@@ -194,7 +194,17 @@ BOSS_VFX_SFX_KEYS.forEach(function(k){ if(!SFX_TABLE[k]) SFX_TABLE[k]=_BOSS_SFX_
    下面两条仅是采样缺失/解码失败时的合成兜底，与 K/L/M 组同机制。） */
 SFX_TABLE.fx_forge = [['b',.22,.32,2600,700],['b',.16,.22,500,2400]];
 SFX_TABLE.fx_burn  = [['b',.42,.34,2200,300],['t',180,.28,'sawtooth',.10,0,70]];
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 113 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条）
+/* O 组 · v1.1.13（用户已交付真采样：素材/sfx/<键名>.mp3 —— 挂点在选角界面 60_boot.js；
+   下面是采样缺失/解码失败时的合成兜底，与 K/L/M/N 组同机制）：
+     talisman_click      点符纸 = 选中
+     talisman_slide      符纸按下沉的移动
+     key_press           点「开始游戏 / 返回主菜单」
+     poster_bounce_land  背景立绘从顶部降落、落地弹一下 */
+SFX_TABLE.talisman_click     = [['t',560,.06,'triangle',.16,0,320],['b',.05,.14,3000,900]];
+SFX_TABLE.talisman_slide     = [['b',.14,.22,1800,500],['t',420,.10,'sine',.08,0,760]];
+SFX_TABLE.key_press          = [['t',520,.07,'triangle',.14,0,660],['t',780,.06,'sine',.10,.03,980]];
+SFX_TABLE.poster_bounce_land = [['b',.20,.42,1200,180],['t',180,.12,'triangle',.14,.06,90]];
+const SFX_KEYS = Object.keys(SFX_TABLE);   // 117 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条 + 选角 4 条）
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;

@@ -3476,7 +3476,7 @@
       var i, j, k, s, ok, got, missing, bad, steps;
 
       /* ① 分发表完整性：80 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 113 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键）', SFX_KEYS.length === 113, 'n=' + SFX_KEYS.length);
+      __ok('v0.61.25 音效表 117 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键；v1.1.13：+选角 4 键 talisman_click/talisman_slide/key_press/poster_bounce_land）', SFX_KEYS.length === 117, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];
@@ -7447,12 +7447,33 @@
       __code(calcDamageTo).indexOf('_mul+=1') >= 0 && __code(calcDamageTo).indexOf('_mul+=0.25') >= 0 &&
       __code(previewDamage).indexOf('damageDoubleTurn') >= 0 &&
       RELICS.filter(function (r) { return r.id === 'fengduling'; })[0].rarity === 'gold');
-    __ok('v1.1.5 新初始牌组(t4)：选角后（首轮抽牌前）先弹「初始牌组二选一」，仅阴差且已领 t4 时',
-      __code(pickHero).indexOf("id==='yincha'") >= 0 &&
-      __code(pickHero).indexOf("mileClaimed('yincha_t4')") >= 0 &&
-      __code(pickHero).indexOf('showStarterDeckChoice()') >= 0 &&
-      __code(pickHero).indexOf('showOpeningChoice()') >= 0 &&
-      typeof showStarterDeckChoice === 'function' && typeof chooseStarterDeck === 'function');
+    __ok('v1.1.13 选角：4 张符纸左→右 天师·武僧·赶尸人·阴差；点符纸=选中并切换背景（顶部降落+弹跳）；界面类仍为 hero-scene',
+      (typeof HS_ORDER !== 'undefined' && String(HS_ORDER) === 'tianshi,wuseng,ganshiren,yincha') &&
+      __code(hsTalismansHTML).indexOf("hsPickTalisman('") >= 0 &&
+      __code(hsPickTalisman).indexOf("sfx('talisman_click')") >= 0 &&
+      __code(hsPickTalisman).indexOf("sfx('talisman_slide')") >= 0 &&
+      __code(hsApplyHero).indexOf('hs-bgdrop') >= 0 &&
+      __code(hsApplyHero).indexOf("sfx('poster_bounce_land')") >= 0 &&
+      __code(showHeroSelect).indexOf("showOverlay(hsRootHTML(), false, 'hero-scene')") >= 0);
+    __ok('v1.1.13 选角左上文案（名/被动名/被动全文，术语着色）/ 顶部入门符纸图标+数量 / 左下返回·右下开始',
+      __code(hsInfoInner).indexOf('hs-name') >= 0 &&
+      __code(hsInfoInner).indexOf('hs-mech') >= 0 &&
+      __code(hsInfoInner).indexOf('hs-passive') >= 0 &&
+      __code(hsTermHTML).indexOf('color:') >= 0 &&
+      __code(hsTicketInner).indexOf('ui/rumenfuzhi.png') >= 0 &&
+      __code(hsTicketInner).indexOf('mileTickets()') >= 0 &&
+      __code(hsRootHTML).indexOf('返回主菜单') >= 0 &&
+      __code(hsRootHTML).indexOf('开始游戏') >= 0);
+    __ok('v1.1.13 右上初始牌组图标：阴差已领 t4 ⇒ card1/card2 一对可点切换（.on 加重）+ 提示字；其余角色单张 back.png；长按 250ms 展开预览',
+      __code(hsDeckHTML).indexOf("mileClaimed('yincha_t4')") >= 0 &&
+      __code(hsDeckHTML).indexOf('ui/deck_card1.png') >= 0 &&
+      __code(hsDeckHTML).indexOf('ui/deck_card2.png') >= 0 &&
+      __code(hsDeckHTML).indexOf('ui/deck_back.png') >= 0 &&
+      __code(hsDeckHTML).indexOf('点击切换初始牌组') >= 0 &&
+      __code(hsDeckDown).indexOf('250') >= 0 &&
+      typeof hsDeckPreview === 'function' &&
+      __code(hsDeckPreview).indexOf('hs-prev') >= 0 &&
+      __code(hsDeckPreview).indexOf('starterDeckThumbs') >= 0);
     __ok('v1.1.5 新初始牌组(t4)：右组「血怒流」= 饮血刃×3/金刚符×2/焚身咒×1/佛渡×1/噬魂术×1/血契×1/守一×1/渡魂归己×1（共 11），左组＝现有阴差牌组',
       (function () {
         var alt = starterDeckList(1);
@@ -7461,23 +7482,34 @@
         return cnt.yinxueren === 3 && cnt.jingang === 2 && cnt.fenshenzhou === 1 &&
           cnt.fodu === 1 && cnt.shihun === 1 && cnt.xueqi === 1 && cnt.shouyi === 1 && cnt.duhunguiji === 1;
       })() &&
-      starterDeckList(0).length === heroDeck('yincha').length &&
-      __code(chooseStarterDeck).indexOf('G.deck=starterDeckList(i)') >= 0 &&
-      __code(chooseStarterDeck).indexOf('showOpeningChoice()') >= 0);
-    __ok('v1.1.5 新初始牌组(t4)：缩略卡图复用 cardBody（唯一牌面渲染器）无并行渲染路径；两侧各排一行、点整组即选、**不允许跳过**',
+      typeof hsDeckListFor === 'function' &&
+      hsDeckListFor('yincha', 1).length === starterDeckList(1).length &&
+      hsDeckListFor('yincha', 0).length === heroDeck('yincha').length &&
+      hsDeckListFor('tianshi', 0).length === heroDeck('tianshi').length &&
+      __code(pickHero).indexOf('hsDeckListFor') >= 0);
+    __ok('v1.1.13 选角后不再弹「初始牌组二选一」整屏：pickHero 直接进开局抉择（旧三函数已删）',
+      __code(pickHero).indexOf('showOpeningChoice()') >= 0 &&
+      __code(pickHero).indexOf('showStarterDeckChoice') < 0 &&
+      typeof showStarterDeckChoice === 'undefined' &&
+      typeof chooseStarterDeck === 'undefined' &&
+      typeof askChooseStarterDeck === 'undefined' &&
+      typeof backToStarterDeck === 'undefined' &&
       __code(starterDeckThumbs).indexOf('cardBody(c)') >= 0 &&
-      __code(starterDeckThumbs).indexOf('sd-thumb') >= 0 &&
-      __code(showStarterDeckChoice).indexOf('starter-decks') >= 0 &&
-      __code(showStarterDeckChoice).indexOf('askChooseStarterDeck') >= 0 &&
-      __code(showStarterDeckChoice).indexOf('skip') < 0);
-    __ok('v1.1.5 返回上一步（三处）：选角→主菜单 / 牌组→选角 / 阴差 t4 时开局抉择→牌组（显式 rollback 清 hero/deck）',
+      __code(starterDeckThumbs).indexOf('sd-thumb') >= 0);
+    __ok('v1.1.13 返回上一步（两处）：选角→主菜单 / 开局抉择→选角（显式 rollback 清 hero/deck）',
       __code(heroSelectToMenu).indexOf('G.hero=null') >= 0 && __code(heroSelectToMenu).indexOf('G.deck=[]') >= 0 &&
       __code(backToHeroSelect).indexOf('showHeroSelect()') >= 0 &&
-      __code(backToStarterDeck).indexOf('showStarterDeckChoice()') >= 0 &&
-      __code(showHeroSelect).indexOf('返回主菜单') >= 0 &&
+      __code(hsRootHTML).indexOf('heroSelectToMenu()') >= 0 &&
       __code(showOpeningChoice).indexOf('返回上一步') >= 0 &&
-      __code(showOpeningChoice).indexOf("mileClaimed('yincha_t4')") >= 0 &&
-      __code(showOpeningChoice).indexOf('backToStarterDeck()') >= 0);
+      __code(showOpeningChoice).indexOf('backToHeroSelect()') >= 0 &&
+      __code(showOpeningChoice).indexOf('backToStarterDeck') < 0);
+    __ok('v1.1.13 未解锁：符纸/牌组/开始键置灰（可点不可进）；点开始键弹「消耗 1 张入门符纸解锁」',
+      __code(hsRootHTML).indexOf('hs-locked') >= 0 &&
+      __code(hsApplyHero).indexOf('hs-locked') >= 0 &&
+      typeof heroSelectStart === 'function' &&
+      __code(heroSelectStart).indexOf("sfx('key_press')") >= 0 &&
+      __code(heroSelectStart).indexOf('askConfirm') >= 0 &&
+      __code(heroSelectStart).indexOf('unlockHeroWithTicket') >= 0);
     SAVE.mile = [];
     G = __base('tianshi');
     var poolLock = CARDS.filter(function (c) { return mileOn('card', c); });
