@@ -869,6 +869,10 @@ function confirmWuleiSelect(){
     let n=0;
     [...s.picked].sort((a,b)=>b-a).forEach(i=>{
       if(!G.hand[i]) return;
+      /* v1.1.16：被置换掉的原牌进弃牌堆 —— 在本关卡的牌循环里继续参与（洗牌后照样能抽到）。
+         原先只做 `G.hand[i]=…` 原地覆盖，原牌既不入弃牌堆也不入抽牌堆 ⇒ 本场循环每换一次净少 1 张，
+         牌越换越少（用户 2026-10-14 真机报障）。副本仍 isOneShot，用掉即散。 */
+      if(G.discard) G.discard.push(G.hand[i]);
       /* 原地替换：保住手牌顺序（顺序类断言都压在手牌下标上）。 */
       G.hand[i]=Object.assign({}, lf, {cost:0, costU:null, oneShot:true, up:!!s.up});
       n++;

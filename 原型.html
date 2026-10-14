@@ -923,12 +923,14 @@
      百分比定位，必须有确定高度，故用 aspect-ratio 而不是 height:auto 裸放）。 */
   #overlay.deck-scene #overlayWrap{max-width:none; width:100%;}
   #overlay.deck-scene .panel{padding:22px 14px;}
+  /* v1.1.16（用户口径）：卡与卡之间留间隙；整块铺展区左右各留「2 倍间隙」的贴边距；仍 6 列；
+     单元格 1fr ⇒ 内缩后列宽自然缩小（卡面面积随之变小）。列隙取 16px ⇒ 左右边距 = 32px。 */
   #overlay.deck-scene .deck-grid{display:grid; grid-template-columns:repeat(6, minmax(0, 1fr));
-    gap:12px 10px; justify-items:center;}
+    column-gap:16px; row-gap:24px; margin:4px 32px; justify-items:center;}
   #overlay.deck-scene .deck-grid .card{width:100%; height:auto; aspect-ratio:132/200;}
   @media (max-height:560px){
     #overlay.deck-scene .panel{padding:12px 10px;}
-    #overlay.deck-scene .deck-grid{gap:8px 10px; margin:4px 0;}
+    #overlay.deck-scene .deck-grid{column-gap:12px; row-gap:14px; margin:2px 24px;}
     #overlay.deck-scene .panel h2{margin-bottom:4px;}
   }
   /* v1.1.15 覆盖存档提示（overwrite-scene）：**全部纯文字** —— 透明底、无边框、无纯色底板。
@@ -1754,8 +1756,9 @@
     filter:drop-shadow(0 2px 6px rgba(0,0,0,.9)); pointer-events:auto; cursor:pointer; color:var(--gold);}
   .out-hud .out-pouch{left:12px;}
   .out-hud .out-pile{right:12px;}
-  .out-hud .out-ico{display:inline-flex; align-items:center; font-size:24px; line-height:1;}
-  .out-hud .out-ico .bicon{width:26px; height:26px; vertical-align:middle;}
+  /* v1.1.16（用户口径）：锦囊与牌库两枚图标放大到 1.5 倍（26 → 39px）。 */
+  .out-hud .out-ico{display:inline-flex; align-items:center; font-size:36px; line-height:1;}
+  .out-hud .out-ico .bicon{width:39px; height:39px; vertical-align:middle;}
   .out-hud .out-n{font-size:18px; font-weight:700; color:var(--gold);}
   #outPouch.pouch-flash{animation:pouchFlash .76s ease-out;}
   /* 洗牌的「一圈光晕」：与 inkBurst 同一套纯 CSS radial-gradient 手法，

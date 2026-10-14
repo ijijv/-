@@ -7712,6 +7712,81 @@
     SAVE = SAVE0;   // 复原
   })();
 
+  /* ===== F 组 · v1.1.16（用户 2026-10-14 真机报障 + 改版口径）===== */
+  (function () {
+    /* ① 五雷法印：被置换掉的原牌必须进弃牌堆（否则本关卡牌越换越少）。功能级断言：
+       手牌 [zhiren, jingang]，只置换下标 0 ⇒ 弃牌堆应多出那张 zhiren，手牌 0 变成 0 费 oneShot 雷符。 */
+    __ok('v1.1.16 五雷法印：置换掉的原牌进弃牌堆，0 费雷符副本仍在手牌（不再凭空蒸发）',
+      (function () {
+        G = __base('tianshi');
+        G.hand = [__card('zhiren'), __card('jingang')];
+        G.discard = [];
+        G.wuleiSelect = { up: false, picked: [0], srcCard: null, cost: 0 };
+        var d0 = G.discard.length;
+        confirmWuleiSelect();
+        var h = G.hand[0], out = G.hand[1];
+        return G.discard.length === d0 + 1 && G.discard[0] === __card('zhiren') &&
+          h && h.id === 'leifu' && h.cost === 0 && h.oneShot === true &&
+          out && out.id === 'jingang';
+      })());
+
+    /* ② 置换出的 0 费雷符：费用处挂绿底芯片（与段刃雷符同款），普通雷符不挂。 */
+    __ok('v1.1.16 绿底费用芯片：oneShot 雷符副本的卡面费用格是绿底（普通雷符不绿）',
+      (function () {
+        var lf = cardById('leifu');
+        var one = Object.assign({}, lf, { oneShot: true, cost: 0, costU: null });
+        return cardBody(one).indexOf('background:var(--green)') >= 0 &&
+          cardBody(lf).indexOf('background:var(--green)') < 0;
+      })());
+    __ok('v1.1.16 绿底判据覆盖三处渲染器（cardBody / forgeCardHTML / handCardHTML）',
+      __code(cardBody).indexOf("c.id==='duanren_leifu'||(c.oneShot&&c.id==='leifu')") >= 0 &&
+      __code(forgeCardHTML).indexOf("cc.oneShot&&cc.id==='leifu'") >= 0 &&
+      __code(handCardHTML).indexOf("c.oneShot&&c.id==='leifu'") >= 0);
+
+    /* ⑤ 锦囊返回：开面板前快照 / 返回时还原（覆盖锻造/商店/事件房/地图全部战局外场景）。 */
+    __ok('v1.1.16 锦囊返回：showJinnang 快照 overlay（class+内容），jinnangBack 优先还原快照',
+      __code(showJinnang).indexOf('JINNANG_SNAP') >= 0 &&
+      __code(showJinnang).indexOf("contains('pouch-scene')") >= 0 &&
+      __code(jinnangBack).indexOf('ov.className=snap.cls') >= 0 &&
+      __code(jinnangBack).indexOf('oc.innerHTML=snap.html') >= 0);
+
+    /* ⑥ 选角界面隐藏战局外 HUD（hero-scene 排除）。④ 牌库图标改用 deck_back.png。 */
+    __ok('v1.1.16 战局外 HUD：选角屏(hero-scene)排除 + 牌库图标改 ui/deck_back.png',
+      __code(outHudSync).indexOf('hero-scene') >= 0 &&
+      __code(outHudSync).indexOf('ui/deck_back.png') >= 0);
+
+    /* ③ 初始牌库铺展单行（列数由 JS 按牌数内联，天然单行居中）。 */
+    __ok('v1.1.16 初始牌库铺展：单行（列数 = 牌数内联覆盖 6 列）',
+      __code(hsDeckPreview).indexOf('repeat(${list.length}') >= 0);
+
+    /* ⑦ boss_vfx 那批 + 反伤 + fudu_hit / guling_suck / relic_proc / lightning 缩到 scale 2.0；thorns（1.98）刻意不动。 */
+    __ok('v1.1.16 boss_vfx 那批缩到 scale 2.0（_link 变体仍 1）＋ 反伤 damage_reflect/thorns_light 与 fudu_hit/guling_suck/relic_proc/lightning 也缩到 2.0',
+      Object.keys(FX_SHEETS).filter(function (k) { return /^b\d/.test(k); }).every(function (k) {
+        var s = FX_SHEETS[k]; return s.scale === 2.0 || s.scale === 1;
+      }) &&
+      FX_SHEETS.b1_jiangwang_attack_claw_cast.scale === 2.0 &&
+      FX_SHEETS.b9_yanluo_summon_yinchai_self.scale === 2.0 &&
+      FX_SHEETS.damage_reflect.scale === 2.0 && FX_SHEETS.thorns_light.scale === 2.0 &&
+      FX_SHEETS.fudu_hit.scale === 2.0 && FX_SHEETS.guling_suck.scale === 2.0 &&
+      FX_SHEETS.relic_proc.scale === 2.0 && FX_SHEETS.lightning.scale === 2.0 &&
+      FX_SHEETS.thorns.scale === 1.98);
+
+    /* ⑧ 里程碑调试开关：存在且默认开，且**在无头沙箱里自动跳过**（不污染里程断言）。 */
+    __ok('v1.1.16 里程碑调试开关：debugMaxMile 存在、DEBUG_MAX_MILE 默认开、拉满值很高',
+      typeof debugMaxMile === 'function' && DEBUG_MAX_MILE === true && DEBUG_MAX_MILE_PTS >= 11000);
+    __ok('v1.1.16 里程碑调试开关：无头沙箱里 debugMaxMile 自跳过（pts 不被改写）',
+      (function () {
+        var bak = SAVE;
+        SAVE = { progress: { pts: 0, heroes: {} } };
+        debugMaxMile();
+        var r = SAVE.progress.pts === 0 && !SAVE.progress.heroes.tianshi;
+        SAVE = bak; return r;
+      })());
+    /* 调试开关只拉 pts，绝不写 mileClaimed（不自动领取 ⇒ 玩家手点才能验奖励发放链路）。 */
+    __ok('v1.1.16 里程碑调试开关：只改 pts，不写 SAVE.mileClaimed',
+      __code(debugMaxMile).indexOf('mileClaimed') < 0 && __code(debugMaxMile).indexOf('persistSave') >= 0);
+  })();
+
   rep.pass = _p; rep.fail = _f;
   try { globalThis.__report = rep; } catch (e) { this.__report = rep; }
 })();

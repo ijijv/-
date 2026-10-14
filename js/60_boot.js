@@ -786,7 +786,7 @@ function hsDeckPreview(){
   const body=layers.map(L=>{
     const list=hsDeckListFor(h.id, L.n);
     return `<div class="hs-prev-layer"><div class="hs-prev-title">${hsEscape(L.t)}<small>共 ${list.length} 张</small></div>`
-      + `<div class="hs-prev-row">${starterDeckThumbs(list)}</div></div>`;
+      + `<div class="hs-prev-row" style="grid-template-columns:repeat(${list.length},minmax(0,1fr))">${starterDeckThumbs(list)}</div></div>`;
   }).join('');
   const div=document.createElement('div');
   div.className='hs-prev'; div.id='hs-prev';
@@ -1573,6 +1573,7 @@ function sysSafeInit(){
 }
 sysSafeInit();
 loadSave();
+debugMaxMile();   // v1.1.16：里程碑调试拉满（临时调试开关，正式发版移除；无头沙箱里自跳过）
 loadSettings();
 applyLowSpec();
 applyPerfReadout();   // v1.0.5：恢复上次的性能读数开关（默认关，桌面零变化）

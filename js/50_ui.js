@@ -1091,7 +1091,12 @@ let OUT_HUD_BUILT=false;
 function outHudSync(){
   try{
     const hud=document.getElementById('outHud'); if(!hud || !hud.style) return;
-    const show = (typeof G!=='undefined') && !!G && SCENE!=='menu' && SCENE!=='battle';
+    /* v1.1.16（用户报障「有存档时选角界面左下/右下露出锦囊与牌库图标」）：
+       选角屏也挂在 #overlay 上（scene='hero-scene'），而它**不改 SCENE** ⇒ 有存档时
+       SCENE 还停在旧场景（map/camp…），只按 SCENE 判显隐必然漏 ⇒ 显式排除 hero-scene。 */
+    const ov=document.getElementById('overlay');
+    const heroOn = !!(ov && ov.classList && ov.classList.contains('hero-scene'));
+    const show = (typeof G!=='undefined') && !!G && SCENE!=='menu' && SCENE!=='battle' && !heroOn;
     hud.style.display = show ? 'flex' : 'none';
     if(!show) return;
     if(!OUT_HUD_BUILT){
@@ -1100,7 +1105,7 @@ function outHudSync(){
       const pi=(pp && pp.querySelector) ? pp.querySelector('.out-ico') : null;
       if(pi) pi.innerHTML=iconTag('ui/menu/jinnang-nobg.png','🧧');
       const ci=(pl && pl.querySelector) ? pl.querySelector('.out-ico') : null;
-      if(ci) ci.innerHTML=iconTag('ui/card/back.png','🂠');
+      if(ci) ci.innerHTML=iconTag('ui/deck_back.png','🂠');
     }
     const pn=document.getElementById('outPileN'); if(pn) pn.textContent=(G.deck||[]).length;
   }catch(e){}
@@ -1689,6 +1694,38 @@ function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
   if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }   // v0.76.2 云存档：同上
 }
+/* ==== v1.1.16 里程碑调试开关（**临时功能 · 正式发版必须移除**）====
+   用户口径：「为了目前的开发调试，我要你先给游戏的里程默认拉满，我要试试所有奖励是否有 bug，
+   以及里程数的积累是否有 bug」，并明确「拉满是『只把 pts 拉到很高』」——不自动领取奖励。
+   ⇒ 这里只把全局 pts 与**每个角色各自的 pts** 顶到 DEBUG_MAX_MILE_PTS，
+      **绝不写 SAVE.mileClaimed** ⇒ 里程界面上每一档都亮成「可领取」状态，
+      玩家逐档手点「领取」，才真正验得到奖励发放链路（符纸 / 牌 / 遗物 / 被动）。
+   卸载方式：把 DEBUG_MAX_MILE 置 false（或连同 debugMaxMile 与 60_boot 里那一行调用一起删）。
+   ⚠️ 只在真机 / 浏览器生效：无头冒烟沙箱里 `window.innerWidth` 为 undefined（见 vm_host.js 的
+      桩，与 animLive 的判据同源）⇒ 恒跳过，免得污染「loadSave 老档 ⇒ pts 应为 0」那类断言。 */
+const DEBUG_MAX_MILE = true;
+const DEBUG_MAX_MILE_PTS = 999999;
+function debugMaxMile(){
+  try{
+    if(!DEBUG_MAX_MILE) return;
+    if(typeof window==='undefined' || !(window.innerWidth>0)) return;   // 无头沙箱 ⇒ 跳过
+    if(!SAVE || typeof SAVE!=='object') return;
+    if(!SAVE.progress || typeof SAVE.progress!=='object' || Array.isArray(SAVE.progress)) SAVE.progress={};
+    const p=SAVE.progress;
+    p.pts=DEBUG_MAX_MILE_PTS;
+    if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
+    /* 覆盖「有真角色表」与「有里程档位表」两种口径的并集 —— 用哪张表都能带出全部角色 id。 */
+    const ids=[];
+    if(typeof HEROES!=='undefined' && HEROES) HEROES.forEach(h=>{ if(h && h.id && ids.indexOf(h.id)<0) ids.push(h.id); });
+    if(typeof MILE_TIER_NEED!=='undefined' && MILE_TIER_NEED) Object.keys(MILE_TIER_NEED).forEach(id=>{ if(ids.indexOf(id)<0) ids.push(id); });
+    ids.forEach(id=>{
+      const cur=p.heroes[id];
+      if(!cur || typeof cur!=='object' || Array.isArray(cur)) p.heroes[id]={pts:0,runs:0,wins:0};
+      p.heroes[id].pts=DEBUG_MAX_MILE_PTS;
+    });
+    persistSave();
+  }catch(e){}
+}
 /* ===================== 里程碑判定（渐进门禁制 · v1.0.15） =====================
    真相源表在 js/20_data.js 的 MILESTONES；点数公式在 20_data.js 的 milePointsFor()。
    本段与 SAVE 同侧（同文件、紧挨存档读写），四类内容入口统一调 mileOn() 过滤。 */
@@ -2246,8 +2283,23 @@ function viewRelics(){
    ⚠️ 两块都挂 `touch-action:pan-y`（.pouch-item / .pouch-scroll）——
       否则手机上「点一下用灵汁」与「滑动看更多」互相打架（商店/锻造那几处同一处理）。
    ⚠️ 灵汁走 usePotionByName（**保留既有调用链**，与旧顶栏芯片同一个口），用掉后就地重开本面板刷新数量。 */
+/* v1.1.16（用户报障「锻造界面点锦囊再返回，落到不可互动的战斗场景」）——
+   战局外**所有**场景（地图 / 营地 / 商店 / 事件房 / 锻造…）都渲染在 #overlay 里，
+   而 showOverlay 是**整块覆写** #overlayContent ⇒ 开锦囊的一瞬间，底下那层面板就被冲掉了，
+   返回时无从还原 ⇒ 落到 #app 的战斗骨架。
+   解法：开锦囊**之前**把「#overlay 的 class 名 + #overlayContent 内容」整份快照，
+   返回时原样贴回 —— 一处机制覆盖锻造(篝火/道观) / 商店 / 事件房 / 地图全部路径，
+   不必为每个场景各写一条还原分支（那种写法必然随场景增减而漂）。
+   ⚠️ 只在「当前确实压着一块面板」时快照（overlay 非 hidden）：战斗里锦囊挂在 #app 顶上，
+      overlay 是 hidden 的，快照了反而会把上一块战斗面板(如奖励)重新贴到屏幕上。
+   ⚠️ 锦囊自身在面板里「用一瓶灵汁」后会重开本面板（showJinnang）⇒ 那一次不能再快照，
+      否则快照被自己的 pouch 面板顶掉，返回就回到锦囊页而不是底下的场景。 */
+let JINNANG_SNAP=null;
 function showJinnang(){
   if(!G) return;
+  { const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
+    if(ov && oc && ov.classList && !ov.classList.contains('hidden') && !ov.classList.contains('pouch-scene'))
+      JINNANG_SNAP={ cls:ov.className, html:oc.innerHTML }; }
   const pm={}; const porder=[];
   (G.potions||[]).forEach(p=>{ if(!pm[p.name]){ pm[p.name]=1; porder.push(p.name); } else pm[p.name]++; });
   const potionHTML = porder.length
@@ -2274,8 +2326,24 @@ function showJinnang(){
 }
 /* v1.1.x（用户报障「地图进锦囊后返回，卡进战斗界面」）——
    地图本身就渲染在 #overlay 里（showMap→showOverlay+map-scene），而锦囊返回原先写死
-   hideOverlay() ⇒ 摘掉 overlay 露出背后的 #app 战斗版面。按 SCENE 分流：在地图上就重画地图。 */
+   hideOverlay() ⇒ 摘掉 overlay 露出背后的 #app 战斗版面。按 SCENE 分流：在地图上就重画地图。
+   v1.1.16：改为**优先还原开锦囊前的快照**（见 showJinnang 顶部注释），一处覆盖全部战局外场景；
+   快照不在（战斗里开的锦囊 / 快照失败）时，才回落到既有的「地图重画 / 否则收面板」两条老路。 */
 function jinnangBack(){
+  const snap=JINNANG_SNAP; JINNANG_SNAP=null;
+  if(snap){
+    const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
+    if(ov && oc){
+      try{
+        ov.className=snap.cls; oc.innerHTML=snap.html;
+        ov.classList.remove('hidden');
+        const x=document.getElementById('overlayCloseX'); if(x) x.style.display='';
+        if(typeof ovMarkCornerBtns==='function') ovMarkCornerBtns();
+        if(typeof outHudSync==='function') outHudSync();
+        return;
+      }catch(e){}
+    }
+  }
   if(SCENE==='map'){ showMap(); return; }
   hideOverlay();
 }
@@ -2542,7 +2610,9 @@ function cardBody(c){
      手机横屏档把 `.ct-type/.ct-sep` 藏掉之后，手牌左下角有「攻击／防御」可辨，
      面板里却什么都没有 ⇒ 玩家没法靠类型筛牌（用户 2026-10-05 报障）。
      三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 桌面逐像素不变。 */
-  return `${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${c.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${ctCorner(c.type)}</span>`;
+  /* v1.1.16：绿底费用芯片的判据扩到「0 费减费牌」——断刃雷符，以及五雷法印置换出的
+     0 费【雷符】副本（`oneShot && id==='leifu'`，与 autoPlayWulei 的识别判据一致）。 */
+  return `${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${(c.id==='duanren_leifu'||(c.oneShot&&c.id==='leifu'))?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${ctCorner(c.type)}</span>`;
 }
 function forgeCardHTML(c,i){
   /* v0.75.0：锻造卡面从「一张卡 + 卡内一行红字预览」改成**一组两列对照** ——
@@ -2565,7 +2635,7 @@ function forgeCardHTML(c,i){
   const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" data-fi="${i}" onclick="askForgeCard(${i})">
     ${cardFrame()}<div class="cname">${cc.name}${cc.up?'<span class="up-mark" title="已升级">↑</span>':''}${badge}</div>
     ${cardArt(cc)}${exhaustMark(cc)}
-    <div class="cost"${cc.id==='duanren_leifu'?' style="background:var(--green);color:#fff"':''}>${cardCost(cc)}</div>
+    <div class="cost"${(cc.id==='duanren_leifu'||(cc.oneShot&&cc.id==='leifu'))?' style="background:var(--green);color:#fff"':''}>${cardCost(cc)}</div>
     <div class="cplate" data-cardid="${cc.id}" data-cardup="${cc.up?1:0}">
     <div class="cdesc${descCls}">${wrapKw(cardText(cc,cc.up))}</div>
     </div><div class="ctype"><span class="ct-type">${TNAME[cc.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[cc.rarity]}</span></div><span class="ct-corner">${ctCorner(cc.type)}</span>
@@ -2592,7 +2662,7 @@ function groupHand(){
 }
 function handCardHTML(c, disabled, i, n){
   const eff=effectiveCost(c);
-  const costHtml = (eff<cardCost(c) || c.id==='duanren_leifu') ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
+  const costHtml = (eff<cardCost(c) || c.id==='duanren_leifu' || (c.oneShot&&c.id==='leifu')) ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
   /* v0.61.33：删除卡面「预伤徽章」（含数值 / 落空 / 诅咒×N 等标签）。
      原因：徽章按「上次锁定的敌人」算，拖动改指向另一只时数字不跟着变，会显示错伤害。
      预伤改为只在拖拽时浮在**目标敌人头顶**（60_boot.js showDragPreview），并跟随所指目标变化。 */
