@@ -7785,6 +7785,27 @@
     /* 调试开关只拉 pts，绝不写 mileClaimed（不自动领取 ⇒ 玩家手点才能验奖励发放链路）。 */
     __ok('v1.1.16 里程碑调试开关：只改 pts，不写 SAVE.mileClaimed',
       __code(debugMaxMile).indexOf('mileClaimed') < 0 && __code(debugMaxMile).indexOf('persistSave') >= 0);
+
+    /* ===== v1.1.17 性能 ===== */
+    /* ③ 并发上限按「流畅模式」降档（普通 14 / 低配 8），常量本身不动。 */
+    __ok('v1.1.17 特效并发上限：流畅模式(低配机)降到 8，普通档仍 14',
+      FX_MAX_LIVE === 14 &&
+      (function () {
+        var bak = SETTINGS.lowSpec, a, b;
+        SETTINGS.lowSpec = false; a = fxMaxLive();
+        SETTINGS.lowSpec = true;  b = fxMaxLive();
+        SETTINGS.lowSpec = bak;
+        return a === 14 && b === 8;
+      })());
+    /* ① 战斗进场预热本场卡组 sheet 的第 0 排；无按排键（沙箱/开发树）必须静默跳过。
+       rel 字面量在 helper fxPreheatKeyRow0 里（不是 fxPreheatBattle），断言要落在 helper 上。 */
+    __ok('v1.1.17 特效预热：无按排键(沙箱)时静默不抛、行为与旧版一致',
+      typeof fxPreheatBattle === 'function' && typeof fxPreheatKeyRow0 === 'function' &&
+      __code(fxPreheatKeyRow0).indexOf("'fx/'+name+'_r0.png'") >= 0 &&
+      __code(fxPreheatKeyRow0).indexOf('ASSET_MAP') >= 0 &&
+      (function () { try { fxPreheatBattle(); return true; } catch (e) { return false; } })());
+    __ok('v1.1.17 特效预热接点：beginBattle(startBattle) 里调用了 fxPreheatBattle',
+      __code(startBattle).indexOf('fxPreheatBattle()') >= 0);
   })();
 
   rep.pass = _p; rep.fail = _f;

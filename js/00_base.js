@@ -228,10 +228,17 @@ let FX_LIVE = {};
    就是肉眼可见的掉帧。超过上限时淘汰**最老的那个**（t0 最小）——最新的那几个玩家最可能在看。
    上限给足 14：正常战斗同时活着的通常 3~6 个（一段 1 秒的动画 + 节拍步进 200ms），够不到这条线。 */
 const FX_MAX_LIVE = 14;
+/* v1.1.17（性能）：并发上限按「流畅模式」降档。
+   用户真机读数（longtask 在出牌/召唤那一下蹦几十~300ms、FPS 20~90 剧烈跳动）证实瓶颈在「出场那一刻」
+   的节点创建 + 解码，不在稳态播放 ⇒ 同时活体越少、那一拍的主线程构建越轻。
+   但降上限**有观感代价**（超限会把最老的活体当场掐断）⇒ 只挂到「流畅模式（低配机）」，普通档仍 14、
+   观感不变，把取舍交给玩家自己按机器定。
+   ⚠️ 取函数而非常量：SETTINGS 运行期可切（设置面板），常量就晚了。 */
+function fxMaxLive(){ return (typeof SETTINGS!=='undefined' && SETTINGS && SETTINGS.lowSpec) ? 8 : FX_MAX_LIVE; }
 /* 淘汰最老的一个活体。调用点只有 playFx。 */
 function fxEvictOldest(){
   const k=Object.keys(FX_LIVE);
-  if(k.length < FX_MAX_LIVE) return;
+  if(k.length < fxMaxLive()) return;
   let old=null;
   for(let i=0;i<k.length;i++){
     const st=FX_LIVE[k[i]];
@@ -606,6 +613,42 @@ function playFx(name, anchor, opts){
     st.raf=requestAnimationFrame(step);
   });
   return el;
+}
+/* ——— v1.1.17（性能）：**把「出牌那一刻」的解码尖峰提前到进场** ———
+   背景：playFx 每换一排才挂一次 backgroundImage，首次挂上时浏览器要**同步解码**那一排
+   （3840×480 ≈ 7 MB）⇒ 每张图第一次出场都顿一下。v1.0.9 的 preRow 只提前解**下一排**，
+   覆盖不了「这张图的第 0 排从没解过」那一次 —— 用户真机读数正是这套症状。
+   做法：战斗进场（beginBattle）时，把**本场卡组里会出特效的那些 sheet** 的第 0 排提前 decode()，
+   浏览器按 URL 缓存解码位图 ⇒ 之后 playFx 挂同一个 URL 直接命中缓存、不再解码。
+   范围**刻意收窄**（只第 0 排、只卡组会用的 sheet）：整批预热会把 390 排全解出来（注释里实测合计数
+   百 MB ~ 1GB），反而挤爆手机图片缓存、白忙一场。第 1 排起仍由 preRow 提前一排兜着。
+   非按排模式（开发树 / 冒烟宿主 ASSET_MAP 为空或 null）直接跳过，行为与改动前逐字节相同。 */
+const FX_PREHEAT={};
+function fxPreheatKeyRow0(name){
+  const S=fxSheet(name); if(!S) return;
+  const rel='fx/'+name+'_r0.png';
+  if(!(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP[rel])) return;   // 无按排键 ⇒ 跳过
+  const u=assetURL(rel, true); if(!u || FX_PREHEAT[u]) return;
+  FX_PREHEAT[u]=1;
+  try{ const im=new Image(); im.src=u; if(im.decode){ im.decode().catch(function(){}); } }catch(e){}
+}
+/* 本场卡组（抽牌堆 + 手牌 + 弃牌堆）里所有会出精灵图特效的 sheet，各预热第 0 排。 */
+function fxPreheatBattle(){
+  try{
+    if(typeof CARD_FX==='undefined' || !CARD_FX) return;
+    if(typeof fx!=='function' || !fx()) return;                  // 关特效 / 流畅模式的既有门禁（fx()）
+    if(typeof ASSET_MAP==='undefined' || !ASSET_MAP) return;     // 非按排产物 ⇒ 无预热意义
+    const cards=(typeof G!=='undefined' && G) ? (G.deck||[]).concat(G.hand||[]).concat(G.discard||[]) : [];
+    const seen={};
+    for(let i=0;i<cards.length;i++){
+      const c=cards[i]; const e=(c && c.id) ? CARD_FX[c.id] : null;
+      if(!e || !e.n || seen[e.n]) continue;
+      seen[e.n]=1; fxPreheatKeyRow0(e.n);
+    }
+    /* 卡组之外、但每场都会出现的几张（受击 / 多段斩 / 诅咒 / 灼烧 / 反伤 / 腐毒）：
+       它们由敌人回合与状态结算触发，不在卡组的 CARD_FX 里 —— 不预热就还是会顿。 */
+    ['hurt','multi_slash','curse','burn','damage_reflect','thorns','fudu_hit'].forEach(function(n){ fxPreheatKeyRow0(n); });
+  }catch(e){}
 }
 /* 纯 setter：把某特效**钉在**播放序列的第 i 帧（0 = 第一帧**画面**，已含 i0 偏移）——
    截图夹具专用（见上：headless 里 rAF 钉不住） */

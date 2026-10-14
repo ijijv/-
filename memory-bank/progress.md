@@ -10,6 +10,62 @@
 
 ## Update History
 
+### [Oct 14, 2026] ✅ v1.1.17：手机端出牌/召唤尖峰 —— 特效预处理三项（有条件的做，非无脑全量）
+<!-- ID: p_2026-10-14_v1117 -->
+
+用户真机读数：longtask 只在出牌/召唤/多特效释放那一下蹦几十~300ms，fps 20↔90 跳；判定为
+**首次图片解码 + 合成层创建在主线程同步发生**的尖峰，不是稳态填充瓶颈、更不是数值算法问题
+（v1.0.7/1.0.8/1.0.9 已解决稳态播放）。据此做三项，均带代价隔离：
+
+- **① 预热解码**：`js/00_base.js` 新增 `FX_PREHEAT` / `fxPreheatKeyRow0()` / `fxPreheatBattle()`，
+  `js/30_engine.js` 在 `beginBattle` 内、`render()` 之前调用。**只预热本场卡组（抽/手/弃）里
+  CARD_FX 涉及的 sheet 的第 0 排** ＋ 每场固定几张（hurt/multi_slash/curse/burn/damage_reflect/
+  thorns/fudu_hit）。刻意**不做全量**（390 排全解合计数百 MB~1GB，反而挤爆手机图片缓存）；
+  第 1 排起仍由 `preRow` 提前一排兜着。无按排键（开发树 / 冒烟宿主）静默跳过，行为与旧版逐字节相同。
+- **② 音频缓存池**：核查后确认**早已存在**（`loadSfxSamples` 在解锁手势把前 N 个采样预解码进
+  `SFX_BUF`，`playSample` 直读缓存，未命中回落合成音）⇒ 无解码尖峰，本项**无需改动**。
+- **③ 并发上限降档**：`FX_MAX_LIVE` 常量仍 14；新增 `fxMaxLive()`，`fxEvictOldest` 改用它 ——
+  **只挂「流畅模式（低配机）」降到 8**，普通档仍 14。理由：超上限会当场掐断最老的活体（观感代价），
+  不无脑降，把取舍交给玩家按机器定。
+
+**验证**：`node --check` 三段全过；run_smoke **pass=1532 fail=0**（v1.1.16 基线 1529，+3 条 F 组）。
+（修正：v1.1.17 预热断言初版误把 `'fx/'+name+'_r0.png'` 字面量查在 `fxPreheatBattle` 上，
+该字面量实际在 helper `fxPreheatKeyRow0` 里 —— 断言改查 helper 后转绿。）
+
+**Affected files:** `js/00_base.js` `js/30_engine.js` `_patch/smoke_runner.js`
+
+### [Oct 14, 2026] ✅ v1.1.16：真机报障 8 项（五雷法印弃牌 / 绿底费用 / 牌库铺展 / 锦囊返回 / 选角HUD / boss特效缩 2.0 / 里程碑调试）（接手 agent）
+<!-- ID: p_2026-10-14_v1116 -->
+
+用户真机试玩后逐条报障，本版一并落地（提交 071a4a9，已推 origin/main）：
+
+- **① 五雷法印弃牌**：手牌置换出的雷符，原牌既不入弃牌堆也不入抽牌堆 ⇒ 本关卡每换一次净少一张。
+  修法：`doSwap` 把被置换的原牌 `push` 进 `G.discard`（原生继续在本关牌循环里）。
+- **② 绿底费用芯片**：置换出的 0 费雷符副本，判据从 `id==='duanren_leifu'` 扩到
+  `(oneShot && id==='leifu')`，三处渲染器同步（cardBody / forgeCardHTML / handCardHTML）。
+- **③ 牌库铺展**：初始牌库改「单行、列数=牌数、居中」；所有牌库查看改「6 列 + 列隙 16px +
+  分布区左右各内缩 32px（2×隙）」，卡面面积随 1fr 单元格缩小；矮屏档同步收紧。
+- **④ 图标**：地图右下角牌库图标改 `素材/ui/deck_back.png`；锦囊/牌库两枚图标一起放大 1.5×。
+- **⑤ 锦囊返回**：战局外**所有**场景都在 #overlay 里、`showOverlay` 整块覆写 `#overlayContent`，
+  开锦囊即冲掉底下那层 ⇒ 返回无从还原、落到 #app 战斗骨架。修法：开锦囊前快照
+  （#overlay class + #overlayContent innerHTML），返回原样贴回；覆盖锻造（篝火/道观）/商店/事件房/地图。
+- **⑥ 选角界面**：`outHudSync` 显隐判据显式排除 `hero-scene`（选角屏不改 SCENE，只按 SCENE 判必漏）。
+- **⑦ 特效尺寸**：boss_vfx（b1~b9，`_link` 除外）＋ 反伤 `damage_reflect`/`thorns_light` ＋
+  `fudu_hit`/`guling_suck`/`relic_proc`/`lightning`，`scale 2.47→2.0`（面积约 -34%），fps 仍 30（时长仍约 1.07s）；
+  `thorns`（1.98）刻意不动。留档：卡顿主因是**每帧像素填充量**，不是帧率。
+- **⑧ 里程碑调试拉满（临时·发版必删）**：`DEBUG_MAX_MILE` + `debugMaxMile()`，只顶 pts=999999、
+  **绝不写 `SAVE.mileClaimed`** ⇒ 每档亮「可领取」，手点领取才验得到发放链路；60_boot 正式路径调用，
+  无头沙箱（`window.innerWidth` 为 undefined）自跳过。
+- **验证**：`node --check` 四段全过；run_smoke **pass=1529 fail=0**（旧 1519，+10 条 F 组）、
+  单文件产物 verify_dist / probe_dist bad=0 / _probe_cloud 全过。
+
+**Affected files:**
+- `js/20_data.js` `js/30_engine.js` `js/50_ui.js` `js/60_boot.js` `原型.html` `_patch/smoke_runner.js`
+
+**Tags:** `v1.1.16`, `五雷法印`, `jinnangBack快照`, `boss_vfx scale2.0`, `里程碑调试开关`
+
+---
+
 ### [Oct 14, 2026] ✅ v1.1.15：存档单档化 + 多段牌逐段平增减半 + boss_vfx 新规格（接手 agent）
 <!-- ID: p_2026-10-14_v1115 -->
 

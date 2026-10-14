@@ -1145,6 +1145,10 @@ function startBattle(keys){
       const _sw = G.drawPile.find(c=>c.id==='shi_wang');
       if(_sw){ G.drawPile = G.drawPile.filter(c=>c!==_sw); G.hand.push(_sw); log('【尸王】已在手牌，随时可召唤'); }
     }
+    /* v1.1.17（性能）：本场卡组里会出特效的那几条 sheet，第 0 排提前 decode —— 把「出牌那一刻」
+       的首次解码尖峰挪到进场（见 js/00_base.js 的 fxPreheatBattle 注释）。放在 render 之前，
+       与后面的建面板 / 发台词**重叠**解码，进场不会多等。 */
+    if(typeof fxPreheatBattle==='function') fxPreheatBattle();
     /* v0.69.0：startTurn 之前先 render 一次。startTurn 里玩家侧的 gainBlock/heal
        （见本文件 :390/:392 的 playFx('block'|'heal','player')）跑在它自己的 render 之前，
        而本函数此前**通篇没有 render** —— 一局的第一场战斗打到这儿时 #player-panel 还是空的
