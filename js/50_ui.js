@@ -847,13 +847,23 @@ function unknownRemove(){
      而不是再传 forge-scene：那条被 verify_dist 钉着「恰好两处调用」（道观 / 篝火）。 */
   showOverlay(`<h2>净 坛</h2><p>一座祭坛，香火缭绕。你可以焚掉一张牌，净化牌组。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`, undefined, 'pile-scene');
 }
+/* v1.1.19（用户报障「锻造界面手速快，可以在回到地图前连续锻造多张牌」）：同一时间只允许一张牌
+   处于「演出中」。锻造（forge）与焚符净坛（pile）都是「火焰动画播完才置 up / 移除并推进」，
+   动画窗内（锻造 650+470ms、净坛 800+370ms）其它牌的 onclick 原本仍然有效 ⇒ 手速快就能连锻多张。
+   修法：一枚**同步一次性锁** —— 进入时置位，演出结束（cardFxAnim 的 done）复位；同一张牌自身的
+   前置校验（已升级 / 不可升级 / 尸王不可删）都在置锁**之前**返回，所以不占锁、不改变既有行为。
+   无 DOM / 流畅模式时 cardFxAnim 同步收尾 ⇒ 锁同帧复位，冒烟与无头环境的行为逐字节不变。 */
+let CARD_ACT_BUSY=false;
 function doUnknownRemove(i){
+  if(CARD_ACT_BUSY) return;                       // 演出期不接第二次（见上方 CARD_ACT_BUSY 注释）
   const c=G.deck[i];
   if(c && c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
   /* v1.1.x（用户口径）：火焰从左下角烧到右上角、化为灰烬，动画走完才真正从牌组移除并推进。
      无 DOM / 流畅模式 ⇒ 同步收尾。 */
   let el=null; try{ el=document.querySelector('#overlay.pile-scene .reward-cards [data-fi="'+i+'"]'); }catch(e){}
+  CARD_ACT_BUSY=true;
   cardFxAnim(el, 'pile', ()=>{
+    CARD_ACT_BUSY=false;
     const cc=G.deck.splice(i,1)[0]; log(`焚符净坛：删除【${cc.name}】`);
     hideOverlay(); goNext();
   });
@@ -1484,6 +1494,7 @@ function canUpgrade(c){
   }catch(e){ return true; }
 }
 function forgeCard(i){
+  if(CARD_ACT_BUSY) return;                        // v1.1.19：演出期一次只允许锻一张（见 CARD_ACT_BUSY 注释）
   const c=G.deck[i];
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   if(!canUpgrade(c)){ floatMsg('不可升级'); log(`【${c.name}】没有可升级的变化，无法锻造`); return; }
@@ -1491,7 +1502,9 @@ function forgeCard(i){
   /* v1.1.x（用户口径）：火焰覆盖 → 一阵风吹散 → 升级卡牌亮相；动画走完才真正置 up 并推进。
      无 DOM / 流畅模式 ⇒ cardFxAnim 直接同步收尾（冒烟与无头环境照样推进）。 */
   let el=null; try{ el=document.querySelector('.reward-cards [data-fi="'+i+'"]'); }catch(e){}
+  CARD_ACT_BUSY=true;
   cardFxAnim(el, 'forge', ()=>{
+    CARD_ACT_BUSY=false;                           // 演出结束 → 解锁（无 DOM 时同帧就走到这里）
     c.up=true; log(`锻造升级【${c.name}】`);
     if(G.forgeFrom==='camp'){ G.campActed=true; G.forgeFrom=null; saveRun(); renderCampfire(); }
     else { G.forgeFrom=null; hideOverlay(); goNext(); }
@@ -2008,30 +2021,66 @@ function mileDetail(nodeId){
   /* 稍后再挂关闭监听，避免**开启它的那一次 pointerdown 冒泡上来**把它当场关掉。 */
   setTimeout(function(){ try{ host.addEventListener('pointerdown', close, true); }catch(e){} }, 80);
 }
-/* 里程轨横向拖动（鼠标；触屏走原生 overflow 滚动）。拖动中节流响「布面摩擦」。 */
-const _mlDrag={on:false,x:0,sl:0,el:null,last:0};
+/* 里程轨横向拖动（鼠标：按住拖 + **松手惯性 + 停稳缓出**；触屏走原生 overflow 滚动 ——
+   原生滚动自带惯性/缓出，别用自定义方案去抢它的手势）。
+   拖动中节流响「布面摩擦」；**松手后的惯性阶段照样在滚** ⇒ `onscroll` 继续触发 ⇒ 「唰唰唰」连贯。
+   v1.1.18（用户口径「里程碑的滑动要有轻微惯性来配合音效」）：鼠标松手后用 rAF 衰减，
+   衰减参数对齐 样式预览.html 的轨道 demo（速度 <30px/s 后衰减陡增 = 缓出，<1.2px/s 归零）。
+   ⚠️ 音效素材用户之后给：这里只复用现成的 `ui_drag`（mileDragSfx，110ms 节流），不新增声音。 */
+const _mlDrag={on:false,x:0,sl:0,el:null,last:0,v:0,raf:0,pt:0,px:0};
+function _mlNow(){ return (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now(); }
+function _mlStopInertia(){
+  if(_mlDrag.raf){ try{ cancelAnimationFrame(_mlDrag.raf); }catch(err){} _mlDrag.raf=0; }
+  _mlDrag.v=0;
+}
+/* 惯性循环：把速度按 dt 衰减着写进 scrollLeft。撞到两端（浏览器钳制后 scrollLeft 不再变）立刻收。 */
+function _mlInertia(){
+  _mlDrag.raf=0;
+  let last=_mlNow();
+  const step=function(now){
+    const dt=Math.max(1, now-last); last=now;
+    const el=_mlDrag.el;
+    if(!el||!_mlDrag.v){ _mlDrag.raf=0; return; }
+    const before=el.scrollLeft;
+    el.scrollLeft=before + _mlDrag.v*dt/1000;
+    if(el.scrollLeft===before){ _mlDrag.v=0; _mlDrag.raf=0; return; }   // 到头/到尾：停
+    const k=Math.abs(_mlDrag.v)<30 ? 0.00002 : 0.02;                    // 慢速段陡增衰减 ⇒ 缓出
+    _mlDrag.v*=Math.pow(k, dt/1000);
+    if(Math.abs(_mlDrag.v)<1.2) _mlDrag.v=0;
+    _mlDrag.raf=Math.abs(_mlDrag.v)?requestAnimationFrame(step):0;
+  };
+  _mlDrag.raf=requestAnimationFrame(step);
+}
 function mileDragStart(e){
   if(e&&e.pointerType&&e.pointerType!=='mouse') return;      // 触屏交给原生滚动，别抢手势
   const sc=e&&e.currentTarget; if(!sc) return;
   if(e.target&&e.target.closest&&e.target.closest('.ml-box')) return;   // 点奖励白框不算拖动
+  _mlStopInertia();                                          // 再次按住 ⇒ 先掐掉上一次的惯性
   _mlDrag.on=true; _mlDrag.x=e.clientX; _mlDrag.sl=sc.scrollLeft; _mlDrag.el=sc;
+  _mlDrag.pt=_mlNow(); _mlDrag.px=sc.scrollLeft;
   if(sc.classList) sc.classList.add('grabbing');
   try{ if(sc.setPointerCapture) sc.setPointerCapture(e.pointerId); }catch(err){}
 }
 function mileDragSfx(){
-  const now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+  const now=_mlNow();
   if(now-_mlDrag.last<110) return; _mlDrag.last=now; sfx('ui_drag');
 }
 function mileDragMove(e){
   if(!_mlDrag.on||!_mlDrag.el) return;
   const dx=e.clientX-_mlDrag.x;
   _mlDrag.el.scrollLeft=_mlDrag.sl-dx;
+  /* 顺带估个「松手速度」（scrollLeft 每秒变化量）：dt≥12ms 才更新，避免除零/高频抖动。 */
+  const now=_mlNow(), dt=now-_mlDrag.pt;
+  if(dt>=12){ _mlDrag.v=(_mlDrag.el.scrollLeft-_mlDrag.px)/dt*1000; _mlDrag.pt=now; _mlDrag.px=_mlDrag.el.scrollLeft; }
   if(Math.abs(dx)>4) mileDragSfx();
   if(e.preventDefault) e.preventDefault();
 }
 function mileDragEnd(){
   if(_mlDrag.el&&_mlDrag.el.classList) _mlDrag.el.classList.remove('grabbing');
-  _mlDrag.on=false; _mlDrag.el=null;
+  _mlDrag.on=false;
+  /* 轻放（速度 <30px/s，含「按住不动再松」）不起惯性，免得自己滑走；只有像样的甩动才滑。 */
+  if(_mlDrag.v && Math.abs(_mlDrag.v)>=30 && typeof requestAnimationFrame==='function') _mlInertia();
+  else { _mlDrag.v=0; _mlDrag.el=null; }
 }
 function viewMilestones(heroId){
   const heroes=(typeof HEROES!=='undefined'?HEROES:[]).filter(h=>h&&h.id);
@@ -2528,11 +2577,13 @@ function resolveConfirm(ok){
 }
 /* —— 六处 onclick 包装：前置校验不通过就直接飘字，通过才问「是/否」 —— */
 function askUnknownRemove(i){
+  if(CARD_ACT_BUSY) return;                        // v1.1.19：演出期不再弹确认框（见 CARD_ACT_BUSY 注释）
   const c=G.deck[i]; if(!c) return;
   if(c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
   askConfirm(`焚掉【${c.name}】？<br>它将离开你的牌组。`, ()=>doUnknownRemove(i));
 }
 function askForgeCard(i){
+  if(CARD_ACT_BUSY) return;                        // v1.1.19：演出期不再弹确认框（见 CARD_ACT_BUSY 注释）
   const c=G.deck[i]; if(!c) return;
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   if(!canUpgrade(c)){ floatMsg('不可升级'); log(`【${c.name}】没有可升级的变化，无法锻造`); return; }

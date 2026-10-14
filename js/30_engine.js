@@ -1611,22 +1611,20 @@ function syncBattleHpDom(){
     const lab=document.querySelector('#player-panel .pstat-hp .hpnum');
     if(lab) lab.textContent=G.hp+'/'+G.maxHp;
     /* v1.0.18：**格挡数值的轻量同步** —— 用户口径「敌人攻击玩家时，血条和格挡值都要时刻变化」。
-       节拍期不能 render()（会重建面板、抹掉正在播的出手动画），这里就地改格挡数字；
-       打光到 0 就把整块摘掉（与 render 的 `G.block>0||preBlock>0` 口径一致）。
-       ⚠️ **不许用 innerHTML**：整块重写会把 iconTag 的 <img class="bicon"> 抹掉（冒烟闸盯着这条）。 */
+       节拍期不能 render()（会重建面板、抹掉正在播的出手动画），这里就地改格挡数字。
+       ⚠️ **不许用 innerHTML**：整块重写会把 iconTag 的 <img class="bicon"> 抹掉（冒烟闸盯着这条）。
+       v1.1.19（用户报障）：芯片已改成**常驻占位**（见 60_boot.js 与 原型.html）—— 这里不再增删节点，
+       只改数字 + 切 .is-empty，获得/失去格挡都不再改变 `.pstats` 行宽（面板宽度与血条长度因此恒定）。 */
     const stats=document.querySelector('#player-panel .pstats');
     const blk=stats ? stats.querySelector('.pstat-block') : null;
-    if(blk && G.block>0){
+    if(blk){
       const tail=blk.lastChild;
-      if(tail && tail.nodeType===3) tail.nodeValue=String(G.block);
-      else if(tail) tail.textContent=String(G.block);
-    } else if(!blk && G.block>0 && stats){
-      /* 反震类「受击得格挡」可能把 0 → N：芯片本来就没画出来，这里补一块（与 render 同一段 HTML）。 */
-      const chip='<span class="pstat-block">'+iconTag('buff/block.png','<i></i>')+G.block+'</span>';
-      const hp=stats.querySelector('.pstat-hp');
-      if(hp && hp.insertAdjacentHTML) hp.insertAdjacentHTML('afterend', chip);
-      else if(stats.insertAdjacentHTML) stats.insertAdjacentHTML('beforeend', chip);
-    } else if(blk && blk.parentNode){ blk.parentNode.removeChild(blk); }
+      const v=String(Math.max(0,G.block));
+      if(tail && tail.nodeType===3) tail.nodeValue=v;
+      else if(tail) tail.textContent=v;
+      let pb=0; try{ if(typeof preBlockNextTurn==='function') pb=preBlockNextTurn()||0; }catch(e){}
+      blk.classList.toggle('is-empty', !(G.block>0 || pb>0));
+    }
     PLAYER_HP_PREV=pp;
     G.enemies.forEach(function(e){
       const el=enemyEl(e); if(!el) return;

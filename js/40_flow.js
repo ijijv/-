@@ -87,11 +87,25 @@ function settleVideo(mode, openFn){
   const v=document.createElement('video');
   v.src=assetURL(rel, true); v.autoplay=true; v.playsInline=true; v.preload='auto';
   v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline','');
-  v.style.cssText='position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;background:#000;pointer-events:none';
-  let fin=false;
-  const done=()=>{ if(fin) return; fin=true; openFn(); };
+  /* v1.1.18（用户 2026-10-14 报障：「战败动画出现前先闪一小段没有视频源的空图」）：
+     成因是 video 一创建就被 append，而素材还没解出首帧（单文件产物里这段 mp4 是几十 MB 的
+     data: URI，解码窗口更长）；此时 WebView 会把「视频未就绪、要点一下才播」的**原生播放按钮占位**
+     画出来，前后各配一帧纯黑 —— 那就是用户说的「无视频源的图片」。
+     处置（两条一起上，缺一仍有残留）：
+       ① 显式 v.controls=false —— 部分 WebView 会自作主张给视频挂原生控件条；
+       ② 首帧就绪前整块 opacity:0（不绘制 ⇒ 播放按钮占位根本没机会画出来），
+          屏幕上仍是刚刚的战局画面；loadeddata / playing 任一到达再淡入。
+     ⚠️ 不能改成「一开始就 muted」来绕：那会让本来能带声的结局片一律静音。
+        muted 只在 unmuted 自动播放被拦时作**重试**（见文件下方 play().catch 那一支）。 */
+  v.controls=false;
+  v.style.cssText='position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;background:#000;pointer-events:none;opacity:0;transition:opacity .24s ease-out';
+  let fin=false, shown=false;
+  const show=()=>{ if(shown) return; shown=true; v.style.opacity='1'; };
+  const done=()=>{ if(fin) return; fin=true; show(); openFn(); };
   const drop=()=>{ try{ v.parentNode&&v.parentNode.removeChild(v); }catch(e){} if(_settleVid===v) _settleVid=null; try{ document.body.classList.remove('settle-vid'); }catch(e){} };
   const fallback=()=>{ if(fin) return; fin=true; drop(); settleTransition('heavy', mode, openFn); };
+  v.addEventListener('loadeddata', show);     // 首帧解码完成 ⇒ 淡入
+  v.addEventListener('playing', show);        // 兜底：个别 WebView 不派 loadeddata
   v.addEventListener('ended', done);          // 播完**不摘**：停在末帧当结算面板的背景
   v.addEventListener('error', fallback);
   _settleVid=v;

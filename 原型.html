@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v1.1.17</title>
+<title>志怪塔 · 原型 v1.1.19</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -11,6 +11,16 @@
     --red:#b23b2e; --red2:#8c2b21; --gold:#e0b341; --green:#3fa060;
     --white:#cfc5b2; --blue:#6ea8d8; --purple:#b07fd8;
     --font-kai:"KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
+    /* v1.1.18（用户 2026-10-14 定稿「字体方案丙」）：**主要文字统一换毛笔体** ——
+       用的就是选角界面那支 MaShanZheng（base64 内嵌在下方 __RANK_FONT_BEGIN__ … __RANK_FONT_END__ 那对标记之间，不依赖外链）。
+       ⚠️ 上面那个标记名**只写名字、不写出注释起止符**（同本文件 §「要提这两个符号一律用文字描述」那条）——
+          写出来会把本段注释提前截断：`--font-brush` 的声明被当成垃圾声明吞掉 ⇒ body 的
+          `font-family:var(--font-brush)` 变无效值、**回落衬线体**（毛笔字当场失效）；
+          同时 gen_rank_font.py 的「标记必须唯一」守卫与 verify_dist 的「注释结构性配平」都会因此报错。
+       笔画偏细偏连笔 ⇒ 字越小越糊，所以 **≤13px 的小字（战斗日志 / 卡面描述 / 顶栏芯片 / 辅助提示）
+       回落纯楷体栈 --font-kai**（下方「小字」那一块统一覆盖）。毛笔缺字（如 TapTap 动态昵称）
+       也由 var(--font-brush) 兜底。 */
+    --font-brush:'MaShanZheng',"KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   /* v0.71.0 整页上锁 —— 用户点名的「严重问题」：界面永远不能上下滑。
@@ -30,7 +40,7 @@
      无障碍不受影响：键盘聚焦仍有 `button.btn:focus-visible` 的金色外框兜底。 */
   *, *::before, *::after{ -webkit-tap-highlight-color:transparent; }
   *{ -webkit-touch-callout:none; }
-  body{font-family:"Microsoft YaHei","PingFang SC",sans-serif; color:var(--text); height:100%; min-height:0; overflow:hidden;
+  body{font-family:var(--font-brush); color:var(--text); height:100%; min-height:0; overflow:hidden;
     background:
       radial-gradient(circle at 15% 12%, rgba(178,59,46,.10), transparent 40%),
       radial-gradient(circle at 85% 8%, rgba(224,179,65,.06), transparent 35%),
@@ -62,10 +72,13 @@
         战局里每一次进战斗、进地图都必经 setBg，卡在 at-menu 只可能是"人确实在主菜单"。
      安全网：continueRun 落进 camp/shop/unknown 三支时不经过 setBg，故在那三支前显式清一次。 */
   body.at-menu #app{display:none;}
-  h1.title{flex:0 0 auto; font-family:var(--font-kai); font-size:28px; letter-spacing:6px; color:var(--gold); margin-bottom:4px; text-align:center; text-shadow:0 0 18px rgba(224,179,65,.25); position:relative;}
-  h1.title small{color:var(--dim); font-size:12px; letter-spacing:0; font-family:"Microsoft YaHei",sans-serif;}
+  h1.title{flex:0 0 auto; font-family:var(--font-brush); font-size:28px; letter-spacing:6px; color:var(--gold); margin-bottom:4px; text-align:center; text-shadow:0 0 18px rgba(224,179,65,.25); position:relative;}
+  h1.title small{color:var(--dim); font-size:12px; letter-spacing:0; font-family:var(--font-kai);}
 
-  #topbar{flex:0 0 auto; display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:7px 14px; margin-bottom:6px;}
+  /* v1.1.18：顶栏内容改为**居中**（用户报「屏幕左侧留空比右边多」）。
+     ⚠️ 只加 justify-content —— flex-wrap/gap/align-items 一个字未动，
+        桌面与手机各档的换行行为不变，仅把每行内容由「靠左」改成「居中」。 */
+  #topbar{flex:0 0 auto; display:flex; flex-wrap:wrap; justify-content:center; gap:10px; align-items:center; background:var(--ink2); border:1px solid var(--ink3); border-radius:10px; padding:7px 14px; margin-bottom:6px;}
   .stat{font-size:14px;}
   .stat b{color:var(--gold); font-size:16px;}
   .stat-xuenu b{color:var(--red);}
@@ -84,13 +97,15 @@
      ⚠️ 素材地址**只**走 `--chip-flame` 自定义属性（由 renderTopbar 用 fxStripURL() 内联写死）：
         伪元素吃不到内联 style，只有自定义属性能继承进 ::before。这里**不留** CSS 相对地址兜底 ——
         单文件/TapTap 产物里整键 fx/shiqi_flame.png 已被按排切成 _r0.png，写整键必 404。 */
-  @keyframes fxChipFlame{from{background-position-x:0;} to{background-position-x:-352px;}}
+  @keyframes fxChipFlame{from{background-position-x:0;} to{background-position-x:-256px;}}
   .stat.relic-flame-blue,.stat.relic-flame-purple{position:relative; border-radius:6px;}
   .stat.relic-flame-blue{box-shadow:0 0 8px 1px rgba(70,150,255,.45);}
   .stat.relic-flame-purple{box-shadow:0 0 8px 1px rgba(160,80,255,.45);}
+  /* v1.1.19（用户 txt「shiqi_flame / xuenu_flame 特效太大」）：显示盒 44px→32px、
+     图宽 352px→256px（8 格 ×32）、keyframes 同步走到 -256px —— 三者必须同为 8×显示宽，改一个就会跳格。 */
   .stat.relic-flame-blue::before,.stat.relic-flame-purple::before{
-    content:''; position:absolute; left:50%; bottom:-12px; width:44px; height:44px; margin-left:-22px;
-    background-repeat:no-repeat; background-size:352px 44px; background-position:0 0;
+    content:''; position:absolute; left:50%; bottom:-9px; width:32px; height:32px; margin-left:-16px;
+    background-repeat:no-repeat; background-size:256px 32px; background-position:0 0;
     animation:fxChipFlame .72s steps(8) infinite; opacity:.92; pointer-events:none; z-index:-1;}
   .stat.relic-flame-blue::before{background-image:var(--chip-flame); filter:drop-shadow(0 0 4px rgba(70,150,255,.7));}
   .stat.relic-flame-purple::before{background-image:var(--chip-flame); filter:drop-shadow(0 0 4px rgba(170,90,255,.7));}
@@ -141,6 +156,12 @@
   /* 血条下方数值（血量+格挡） */
   .pstats{display:flex; gap:10px; justify-content:center; margin-top:3px; font-size:13px; font-weight:bold;}
   .pstat-hp,.pstat-block{display:inline-flex; align-items:center; gap:3px;}
+  /* v1.1.19（用户报障）：格挡芯片改成**常驻占位** —— 以前只在格挡>0 时渲染，一获得格挡
+     `.pstats` 行就变宽；而窄窗口档（@media max-width:520px）里 `#player-panel{flex:0 0 auto}`
+     的宽度是**内容驱动**的，行一宽面板跟着宽 ⇒ 血条（width:100%）变长、立绘（居中）左移。
+     现在芯片恒在（数值 0 时加 .is-empty 隐藏，不显示但仍占位），min-width 再兜住 1~3 位数的宽度差。 */
+  #player-panel .pstat-block{min-width:56px;}
+  #player-panel .pstat-block.is-empty{visibility:hidden;}
   /* v1.0.14：血量图标尺寸调大（用户口径「太小、不协调」）—— 9px → 16px。图到位后 <img> 同规格。 */
   /* v1.0.17：用户口径「所有图标大小都要调大使用，不然迷你好不清，至少要放大为原来的 2 倍」
      —— 下面这一整组图标尺寸（玩家面板 / 顶栏 / 敌人徽章 / 意图 / 档位徽章）全部按 2× 改写。
@@ -267,7 +288,7 @@
   @keyframes heroAttack{0%{transform:translateX(0) scale(1)}18%{transform:translateX(-7px) scale(.98)}55%{transform:translateX(26px) scale(1.06)}100%{transform:translateX(0) scale(1)}}
   @keyframes heroHit{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
   .hero-emoji{font-size:72px; opacity:.35;}
-  .pname{font-family:var(--font-kai); font-size:19px; color:var(--gold); letter-spacing:2px; margin-bottom:8px;}
+  .pname{font-family:var(--font-brush); font-size:19px; color:var(--gold); letter-spacing:2px; margin-bottom:8px;}
   .pmech{display:inline-block; font-size:12px; color:var(--gold); background:rgba(224,179,65,.08); border:1px solid var(--ink3); border-radius:20px; padding:2px 10px; margin-bottom:8px; letter-spacing:1px; cursor:default;}
   .prow{font-size:13px; color:var(--dim); margin:3px 0;}
   .prow b{color:var(--gold); font-size:15px;}
@@ -369,7 +390,7 @@
   .enemy.edepth .ename{opacity:.72;}
   .enemy.selected .eportrait{filter:drop-shadow(0 8px 16px rgba(0,0,0,.6)) drop-shadow(0 0 14px rgba(224,179,65,.6)) brightness(1.12);}
   .enemy.selected .ename{color:#ffd76a;}
-  .enemy .ename{font-family:var(--font-kai); font-size:19px; color:var(--red); letter-spacing:2px; margin-bottom:6px;}
+  .enemy .ename{font-family:var(--font-brush); font-size:19px; color:var(--red); letter-spacing:2px; margin-bottom:6px;}
   .badges{margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;}
   /* v1.1.9：buff 徽章不再套一层描边方框（用户口径）。边框改 `transparent` —— 保留 1px 占位，
      这样 `.badge.ybtarget` / `.badge.curse-max` 只覆写 border-color 就能各自亮出金圈，普通徽章则无框。 */
@@ -468,7 +489,7 @@
        z-index:9; transform:translateX(100%); transition:transform .22s ease;
        word-break:break-word;}
   body.log-open #log{transform:none;}
-  #log .log-head{color:var(--gold); font-family:var(--font-kai); font-size:14px; letter-spacing:2px; margin-bottom:6px; border-bottom:1px solid var(--ink3); padding-bottom:4px;}
+  #log .log-head{color:var(--gold); font-family:var(--font-brush); font-size:14px; letter-spacing:2px; margin-bottom:6px; border-bottom:1px solid var(--ink3); padding-bottom:4px;}
   #log .log-sep{color:#e0b060; font-weight:bold; margin:5px 0 2px;}
   #log .log-head{display:flex; align-items:center; flex-wrap:wrap; gap:4px;}
   /* v1.0.8：战报标题行的三枚筛选 chip（伤害 / 获得 / 状态）连样式一起取消（用户口径
@@ -579,7 +600,7 @@
   .card .cart-wrap{width:100%; height:80px; flex:0 0 auto; background:linear-gradient(160deg,#d9c9a8,#c3a97e); overflow:hidden; position:relative;}
   .card .cart-wrap .cart{width:100%; height:100%; object-fit:cover; display:block;}
   .card .cost{position:absolute; top:6px; left:6px; width:24px; height:24px; border-radius:50%; background:#2a2119; color:var(--gold); font-weight:bold; display:flex; align-items:center; justify-content:center; font-size:14px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.5);}
-  .card .cname{font-family:var(--font-kai); font-weight:bold; font-size:14px; letter-spacing:1px; padding:6px 8px 2px; z-index:1;}
+  .card .cname{font-family:var(--font-brush); font-weight:bold; font-size:14px; letter-spacing:1px; padding:6px 8px 2px; z-index:1;}
   .card .cdesc{flex:1; color:#4a3f2f; line-height:1.32; font-size:10.5px; padding:0 8px; overflow:hidden; word-break:break-word;}
   .card .ctype{font-size:9px; color:#7a6c52; padding:3px 8px 6px; letter-spacing:1px;}
   .reward-cards .card{height:auto; min-height:200px;}
@@ -772,7 +793,7 @@
     font-size:9.5px; line-height:1.2; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,.75);}
   .relic{width:150px; min-height:110px; background:var(--ink2); color:var(--text); border-radius:8px; padding:10px; display:flex; flex-direction:column; cursor:pointer; border:2px solid var(--ink3); text-align:left; font-size:12px; transition:border .1s;}
   .relic:hover{border-color:var(--gold);}
-  .relic .cname{font-family:var(--font-kai); font-weight:bold; font-size:15px; margin-bottom:6px; color:var(--gold); letter-spacing:1px;}
+  .relic .cname{font-family:var(--font-brush); font-weight:bold; font-size:15px; margin-bottom:6px; color:var(--gold); letter-spacing:1px;}
   .relic .cdesc{flex:1; color:var(--dim); line-height:1.5; font-size:11px;}
   .relic .ctype{font-size:10px; color:var(--dim); margin-top:6px; letter-spacing:1px;}
 
@@ -841,7 +862,7 @@
      ⚠️ `.relic` 的 150px 与 `.panel` 的 padding 都没动 ⇒ 卡片本身的长相零变化。 */
   #overlay.hero-scene #overlayWrap{max-width:700px;}
   .panel{background:var(--ink2); border:1px solid var(--ink3); border-radius:12px; padding:26px; text-align:center; width:100%; max-height:88vh; max-height:88dvh; overflow-y:auto; -webkit-overflow-scrolling:touch;}
-  .panel h2{font-family:var(--font-kai); font-size:24px; color:var(--gold); letter-spacing:3px; margin-bottom:14px;}
+  .panel h2{font-family:var(--font-brush); font-size:24px; color:var(--gold); letter-spacing:3px; margin-bottom:14px;}
   .panel p{color:var(--dim); line-height:1.8; margin-bottom:14px;}
   .reward-cards{display:flex; gap:10px; justify-content:center; margin:14px 0; flex-wrap:wrap;}
   /* v1.1.1 天师真传（t3）：开局抉择改「全牌库自由挑一张」时可滚动，避免几十张卡顶出屏幕。 */
@@ -940,19 +961,19 @@
   #overlay.overwrite-scene .panel{background:none; border:0; box-shadow:none;}
   #overlay.overwrite-scene .ow-box{display:flex; flex-direction:column; align-items:center; gap:2.2vh;
     text-align:center; padding:2vh 0;}
-  #overlay.overwrite-scene .ow-title{font-family:'MaShanZheng', var(--font-kai), serif;
+  #overlay.overwrite-scene .ow-title{font-family:'MaShanZheng', var(--font-brush), serif;
     font-size:clamp(24px,5.4vh,50px); color:#c8402f; letter-spacing:6px;
     text-shadow:0 0 14px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.8);}
-  #overlay.overwrite-scene .ow-warn{font-family:'MaShanZheng', var(--font-kai), serif;
+  #overlay.overwrite-scene .ow-warn{font-family:'MaShanZheng', var(--font-brush), serif;
     font-size:clamp(16px,3.2vh,30px); color:#c8402f; letter-spacing:3px;
     text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 3px rgba(0,0,0,.8);}
   #overlay.overwrite-scene .ow-info{display:flex; gap:2.5em; justify-content:center;
-    font-family:var(--font-kai); font-size:clamp(13px,2.3vh,21px); color:#fff; letter-spacing:2px;
+    font-family:var(--font-brush); font-size:clamp(13px,2.3vh,21px); color:#fff; letter-spacing:2px;
     text-shadow:0 0 10px rgba(0,0,0,.9), 0 1px 3px rgba(0,0,0,.8);}
   #overlay.overwrite-scene .ow-actions{display:flex; justify-content:space-between; width:100%;
     max-width:520px; margin-top:2vh;}
   #overlay.overwrite-scene .ow-btn{background:none; border:0; padding:0; cursor:pointer;
-    font-family:'MaShanZheng', var(--font-kai), serif; font-size:clamp(20px,4vh,38px); letter-spacing:4px;
+    font-family:'MaShanZheng', var(--font-brush), serif; font-size:clamp(20px,4vh,38px); letter-spacing:4px;
     text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.85);}
   #overlay.overwrite-scene .ow-btn.ow-go{color:var(--green);}
   #overlay.overwrite-scene .ow-btn.ow-back{color:#c8402f;}
@@ -1009,9 +1030,9 @@
   .hint{flex:0 0 auto; font-size:12px; color:var(--dim); text-align:center; margin-top:2px;}
   /* v0.61 B12：浮字改为小堆叠容器（最多 3 条并存，同类不再互相顶掉） */
   #float-msg{position:fixed; left:50%; top:34%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none; z-index:20;}
-  #float-msg .fm{font-family:var(--font-kai); font-size:26px; color:var(--gold); text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.8); letter-spacing:3px; white-space:nowrap; opacity:0; animation:floatUpItem 1.6s ease-out forwards;}
+  #float-msg .fm{font-family:var(--font-brush); font-size:26px; color:var(--gold); text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.8); letter-spacing:3px; white-space:nowrap; opacity:0; animation:floatUpItem 1.6s ease-out forwards;}
   @keyframes floatUpItem{0%{opacity:0; transform:translateY(10px);}12%{opacity:1;}100%{opacity:0; transform:translateY(-32px);}}
-  #turn-banner{position:fixed; left:50%; top:18%; transform:translate(-50%,-50%); font-family:var(--font-kai); font-size:22px; color:var(--gold); text-shadow:0 0 12px rgba(0,0,0,.9); pointer-events:none; opacity:0; z-index:19; letter-spacing:4px; white-space:nowrap;}
+  #turn-banner{position:fixed; left:50%; top:18%; transform:translate(-50%,-50%); font-family:var(--font-brush); font-size:22px; color:var(--gold); text-shadow:0 0 12px rgba(0,0,0,.9); pointer-events:none; opacity:0; z-index:19; letter-spacing:4px; white-space:nowrap;}
   #turn-banner.show{animation:turnBannerIn 1.2s ease-out forwards;}
   @keyframes turnBannerIn{0%{opacity:0; transform:translate(-50%,-50%) scale(.9)}15%{opacity:1; transform:translate(-50%,-50%) scale(1)}70%{opacity:1}100%{opacity:0; transform:translate(-50%,-50%) translateY(-18px)}}
 
@@ -1025,7 +1046,7 @@
     border-radius:8px; background:rgba(0,0,0,.28); border:1px solid var(--ink3);}
   .bcard.locked .bportrait{filter:grayscale(1) brightness(.35);}
   .bcard.locked{opacity:.55;}
-  .bcard .bname{font-family:var(--font-kai); font-size:17px; color:var(--gold); letter-spacing:2px;}
+  .bcard .bname{font-family:var(--font-brush); font-size:17px; color:var(--gold); letter-spacing:2px;}
   .bcard.locked .bname{color:var(--dim);}
   .bcard .bmeta{font-size:12px; color:var(--dim); margin:4px 0 8px; letter-spacing:1px;}
   .bcard .bstory{font-size:12px; color:#cbbf9e; line-height:1.7;}
@@ -1065,7 +1086,7 @@
   .pouch-root{flex:1 1 auto; min-height:0; display:flex; gap:12px;}
   .pouch-col{flex:1 1 50%; min-width:0; min-height:0; display:flex; flex-direction:column;
     background:rgba(20,15,10,.72); border:1px solid var(--ink3); border-radius:10px; padding:8px 10px;}
-  .pouch-col h3{flex:0 0 auto; margin:0 0 6px; font-family:var(--font-kai); color:var(--gold);
+  .pouch-col h3{flex:0 0 auto; margin:0 0 6px; font-family:var(--font-brush); color:var(--gold);
     font-size:15px; letter-spacing:3px; text-align:center;}
   .pouch-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
     touch-action:pan-y; display:flex; flex-direction:column; gap:7px;}
@@ -1131,7 +1152,7 @@
      会**永久压掉**基样式里的 transform —— 实测 1280×720 下标题左沿量到 640（=left:50% 处），
      等于"只居中了一半身位"，右沿顶到 947，肉眼明显偏右。换成 text-align 后不依赖 transform。 */
   .menu-titlebar{position:absolute; top:5%; left:0; right:0; z-index:3; pointer-events:none; text-align:center;}
-  .menu-title{margin:0; line-height:0; font-family:var(--font-kai); color:var(--gold);}
+  .menu-title{margin:0; line-height:0; font-family:var(--font-brush); color:var(--gold);}
   /* v0.68.1：标题放大到 1.5 倍 + 「特效渲染字迹边框」（用户：「应该在放大 1.5 倍左右，并且有特效渲染字迹边框」）。
      尺寸改**高度驱动**：topic.png 是 2.84:1 的横幅，只给宽度的话矮屏会出事 ——
      640×360 上 36vw = 230px 宽 ⇒ 81px 高，标题栏底沿压到 99px，离石碑只剩 24px 余量。
@@ -1147,7 +1168,7 @@
            drop-shadow(0 2px 6px rgba(0,0,0,.9));
     animation:menuTitleEdge 4.5s ease-in-out infinite alternate;}
   .menu-title small{display:block; line-height:1.6; margin-top:4px; color:var(--dim);
-    font-size:12px; letter-spacing:1px; font-family:"Microsoft YaHei",sans-serif;}
+    font-size:12px; letter-spacing:1px; font-family:var(--font-kai);}
   /* —— 左下两块石碑：**左右并排**（v0.68.1，用户：「这两个石碑图标你应该左右摆放」）——
      旧版是竖列（续在上、入塔在下，照抄 demo 的 bottom:15% / 48%）。改成 row + align-items:flex-end：
      两块石碑**底沿对齐**，「谁高谁大」因此一眼可读 —— 这正是用户要的
@@ -1231,7 +1252,7 @@
      有它才不会变成一个点不动的空框。 */
   .menu-fb{display:flex; align-items:center; justify-content:center; box-sizing:border-box;
     min-width:48px; min-height:48px; padding:12px 8px; writing-mode:vertical-rl; letter-spacing:6px;
-    font-family:var(--font-kai); color:var(--gold); background:rgba(26,23,20,.72);
+    font-family:var(--font-brush); color:var(--gold); background:rgba(26,23,20,.72);
     border:1px solid var(--ink3); border-radius:4px;}
   .menu-hit.is-start .menu-fb{color:#ff5040; font-size:22px; letter-spacing:10px;}
   .menu-hit.is-continue .menu-fb{font-size:20px;}
@@ -1344,7 +1365,7 @@
      —— 它正是 设计说明.md §04「塔内石阶通道两侧烛火」那张，也是本作地图页一直想用的图，
      v0.61.42 之前被黑幕盖住看不见，**不是没装**。 */
   .map-root{position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden;}
-  .map-plaque{flex:0 0 auto; text-align:center; padding:5px 0; font-family:var(--font-kai);
+  .map-plaque{flex:0 0 auto; text-align:center; padding:5px 0; font-family:var(--font-brush);
     font-size:15px; letter-spacing:4px; color:var(--gold); background:transparent;
     text-shadow:0 1px 4px rgba(0,0,0,.95);}
   .map-plaque small{color:var(--dim); font-size:11.5px; letter-spacing:1px; margin-left:8px;}
@@ -1420,7 +1441,7 @@
   .mt-col{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:4px;}
   .mt-row{display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-size:12px; color:var(--dim); line-height:1.2;}
   .mt-row b{color:var(--gold); font-size:13px;}
-  .mt-name{font-family:var(--font-kai); color:var(--gold); letter-spacing:1px; font-size:13.5px;}
+  .mt-name{font-family:var(--font-brush); color:var(--gold); letter-spacing:1px; font-size:13.5px;}
   .mt-hp{width:min(190px, 40vw); height:14px;}
   .mt-gold i{display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--gold); margin-right:3px; vertical-align:middle;}
   .mt-shiqi b{color:#b98bff;}
@@ -1468,10 +1489,24 @@
      transform 走合成器：几十帧只光栅化一次，之后每帧几乎零成本。 */
   .fx-sheet{position:absolute; pointer-events:none; overflow:hidden;}
   .fx-sheet-in{position:absolute; left:0; top:0; background-repeat:no-repeat; will-change:transform; backface-visibility:hidden;}
-  .fx-dmg{position:absolute; font-family:var(--font-kai); font-weight:bold; font-size:22px; color:#ff7b5a; text-shadow:0 0 8px rgba(0,0,0,.85), 0 2px 3px rgba(0,0,0,.6); animation:fxDmg .9s ease-out forwards; white-space:nowrap; letter-spacing:1px; transform:translate(-50%,-50%);}
-  .fx-dmg.to-player{color:#ff4b4b; font-size:24px;}
+  /* v1.1.18（用户 2026-10-14 定稿「浮字炸花 · 档 2（推荐）」）：字号 ×0.85、时长 0.9 → 1.06s。
+     数字是 PNG、尺寸按 em 走 ⇒ 只改字号即可，不需要美术另交一套素材。
+     三档字号同步缩放：22→18.7、to-player 24→20.4、crit 28→23.8（crit 见下方那条）。 */
+  .fx-dmg{position:absolute; font-family:var(--font-brush); font-weight:bold; font-size:18.7px; color:#ff7b5a; text-shadow:0 0 8px rgba(0,0,0,.85), 0 2px 3px rgba(0,0,0,.6); animation:fxDmg 1.06s ease-out forwards; white-space:nowrap; letter-spacing:1px; transform:translate(-50%,-50%);}
+  .fx-dmg.to-player{color:#ff4b4b; font-size:20.4px;}
   .fx-dmg.heal{color:var(--green);}
   @keyframes fxDmg{0%{opacity:0; transform:translate(-50%,-50%) scale(.5)}14%{opacity:1; transform:translate(-50%,-75%) scale(1.1)}100%{opacity:0; transform:translate(-50%,-180%) scale(1)}}
+  /* v1.1.18：**多段伤害炸花**（斩妖剑 / 钟馗镇魂 这类「主伤 + N 次引爆」的牌）。
+     同一组的多个浮字由 js/00_base.js 的 floatDamage 按段序写 --dx/--dy/--rot：
+     --dx 横向甩出、--dy 纵向（JS 里已 ×0.55 压扁 ⇒ 读起来像一束花而不是一个正圆）、
+     --rot 每段随机小幅旋转；错峰由 JS 写 inline animation-delay（段序 × 85ms）。
+     ⚠️ **单段伤害不加 .burst 类**，仍走上面的 fxDmg（朝正上方、不做无意义偏移）。 */
+  .fx-dmg.burst{animation:fxDmgBurst 1.06s cubic-bezier(.16,.7,.35,1) forwards;}
+  @keyframes fxDmgBurst{
+    0%  {opacity:0; transform:translate(-50%,-50%) translate(0,0) scale(.5) rotate(var(--rot,0deg));}
+    16% {opacity:1; transform:translate(-50%,-50%) translate(calc(var(--dx) * .5), calc(var(--dy) - .55em)) scale(1.08) rotate(var(--rot,0deg));}
+    100%{opacity:0; transform:translate(-50%,-50%) translate(var(--dx), calc(var(--dy) - 1.6em)) scale(1) rotate(var(--rot,0deg));}
+  }
   /* v1.1.x：罗汉伏虎 / 铁布衫 —— 蓝色元气从**角色格挡芯片**汇聚、带淡淡拖尾冲向目标后冲散。
      三层元气珠错开 60ms 追尾（--x0/--y0 起点、--x1/--y1 终点由 JS 按实时矩形写入）。 */
   .fx-yuanqi{position:fixed; inset:0; z-index:62; pointer-events:none;}
@@ -1793,9 +1828,9 @@
      分工：外层 .fx-dmg 管位移（fxDmg 的 translate/scale），内层 .fx-in 管抖动/闪烁 —— 不抢 transform */
   .fx-in{display:inline-block; animation:fxJitter .16s ease-in-out 2;}
   @keyframes fxJitter{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
-  /* 大伤害档：与打击音效 hit_crit 同阈值（isCritHit：击杀 或 ≥20）。抖动幅度 ×2 + 闪一下 + 字号抬到 28px；
+  /* 大伤害档：与打击音效 hit_crit 同阈值（isCritHit：击杀 或 ≥20）。抖动幅度 ×2 + 闪一下 + 字号抬到 23.8px（v1.1.18 随 0.85× 缩放，原 28px）；
      数字图随 em 自动缩放，**不需要美术多交一套尺寸**。 */
-  .fx-dmg.crit{font-size:28px;}
+  .fx-dmg.crit{font-size:23.8px;}
   .fx-dmg.crit .fx-in{animation:fxJitterBig .18s ease-in-out 3, fxFlash .22s ease-out 1;}
   @keyframes fxJitterBig{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
   @keyframes fxFlash{0%{filter:brightness(2.4)}100%{filter:brightness(1)}}
@@ -1894,7 +1929,7 @@
 
   /* —— 出卡动效：攻击=符箓+朱砂爆裂，防御=金光护体，召唤=黑雾聚形 —— */
   .fx-talisman{position:absolute; width:32px; height:44px; left:0; top:0; background:linear-gradient(180deg,#f0e2ac,#d8b45e); border:1px solid var(--red); border-radius:3px; box-shadow:0 0 14px rgba(224,179,65,.8); z-index:6; transition:transform .3s cubic-bezier(.3,.7,.4,1), opacity .3s; pointer-events:none;}
-  .fx-talisman::after{content:"符"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-kai); color:var(--red); font-size:20px; font-weight:bold;}
+  .fx-talisman::after{content:"符"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-brush); color:var(--red); font-size:20px; font-weight:bold;}
   .fx-burst{position:absolute; width:12px; height:12px; left:0; top:0; border-radius:50%; background:var(--red); box-shadow:0 0 20px 8px rgba(178,59,46,.7); transform:translate(-50%,-50%); animation:fxBurst .55s ease-out forwards; pointer-events:none;}
   @keyframes fxBurst{0%{opacity:1; transform:translate(-50%,-50%) scale(.4)}60%{opacity:.95; transform:translate(-50%,-50%) scale(2.4)}100%{opacity:0; transform:translate(-50%,-50%) scale(3.6)}}
   .fx-halo{position:absolute; left:0; top:0; border-radius:50%; border:3px solid var(--gold); box-shadow:0 0 28px 8px rgba(224,179,65,.5), inset 0 0 22px rgba(224,179,65,.3); transform:translate(-50%,-50%); animation:fxHalo .6s ease-out forwards; pointer-events:none;}
@@ -1925,7 +1960,7 @@
   #boss-intro.show{display:flex; opacity:1;}
   #boss-intro .boss-ink{position:absolute; inset:0; background:radial-gradient(circle at center, rgba(8,5,8,0) 15%, rgba(8,5,8,.92) 100%); animation:inkSpread 1.15s ease-out forwards;}
   @keyframes inkSpread{0%{opacity:0; transform:scale(.55)}55%{opacity:1}100%{opacity:1; transform:scale(1)}}
-  #boss-intro .boss-seal{position:relative; font-family:var(--font-kai); background:linear-gradient(160deg,#a02c20,#7c1f16); color:#f2e6c8; border:3px solid #5a1d16; border-radius:8px; padding:22px 34px; text-align:center; box-shadow:0 0 44px rgba(178,59,46,.65); animation:sealStamp .9s cubic-bezier(.2,.9,.3,1.35) forwards;}
+  #boss-intro .boss-seal{position:relative; font-family:var(--font-brush); background:linear-gradient(160deg,#a02c20,#7c1f16); color:#f2e6c8; border:3px solid #5a1d16; border-radius:8px; padding:22px 34px; text-align:center; box-shadow:0 0 44px rgba(178,59,46,.65); animation:sealStamp .9s cubic-bezier(.2,.9,.3,1.35) forwards;}
   #boss-intro .bs-name{font-size:44px; letter-spacing:10px; display:block; text-shadow:0 2px 6px rgba(0,0,0,.5);}
   #boss-intro .bs-sub{font-size:14px; letter-spacing:6px; opacity:.85; margin-top:8px; display:block;}
   /* v0.61.20(P4)：二阶段转场 —— 同一枚印章，换成「裂印 + 红目」：印面转暗红、两道裂纹透光、双瞳亮起 */
@@ -1986,20 +2021,20 @@
      两档排版：① 常规面板档（无视频兜底 / 低配 / 无头）用居中紧凑流式；
                ② body.settle-vid 档（真机播完结局视频）铺满整屏、四角分布。 */
   .settle-wrap{text-align:center;}
-  .settle-cap{font-family:var(--font-kai); font-size:13px; color:rgba(255,255,255,.72); letter-spacing:2px; margin-bottom:6px;}
+  .settle-cap{font-family:var(--font-brush); font-size:13px; color:rgba(255,255,255,.72); letter-spacing:2px; margin-bottom:6px;}
   .settle-rows{display:inline-block; text-align:left; min-width:212px;}
   .settle-row{display:flex; justify-content:space-between; align-items:baseline; gap:18px;
     font-size:13px; color:rgba(255,255,255,.82); line-height:1.9;
     opacity:0; transform:translateY(6px); transition:opacity .18s ease, transform .18s ease;}
   .settle-row.on{opacity:1; transform:none;}
   .settle-row .settle-lab{letter-spacing:1px;}
-  .settle-row .settle-val{font-family:var(--font-kai); font-weight:bold; color:#fff; letter-spacing:1px;}
+  .settle-row .settle-val{font-family:var(--font-brush); font-weight:bold; color:#fff; letter-spacing:1px;}
   .settle-row.settle-sum{border-top:1px solid rgba(255,255,255,.28); margin-top:4px; padding-top:3px; font-size:14px;}
   .settle-row.settle-sum .settle-lab{color:rgba(255,255,255,.9);}
   .settle-row.settle-sum .settle-val{color:var(--gold); font-size:17px;}
   /* 大号 num 浮字：容器字号决定字形大小（.fx-num 是 1.15em 高） */
   .settle-big{font-size:52px; line-height:1.15; margin-top:8px; white-space:nowrap; color:#fff;
-    font-family:var(--font-kai); font-weight:bold; letter-spacing:1px;}
+    font-family:var(--font-brush); font-weight:bold; letter-spacing:1px;}
   .settle-big .fx-num, .settle-big .settle-numfall{display:inline-block; opacity:0;
     transform:translateY(16px) scale(.6);
     transition:opacity .16s ease, transform .24s cubic-bezier(.2,1.5,.4,1);}
@@ -2013,7 +2048,7 @@
   .settle-mile .settle-big .settle-numfall{font-size:38px;}
   /* v1.1.8（用户口径）：「累计」= 里程界面该角色海报下的累计里程（milePts(hero)），
      本局得分是上面那行「里程」，两者并列。静态小字，不参与 settleAnim 的逐行弹出（不进 .settle-rows）。 */
-  .settle-acc{font-family:var(--font-kai); font-size:12px; color:rgba(255,255,255,.66);
+  .settle-acc{font-family:var(--font-brush); font-size:12px; color:rgba(255,255,255,.66);
     letter-spacing:1px; margin-top:6px;}
   .settle-acc b{color:var(--gold); font-size:15px; font-weight:bold;}
   .settle-actions{display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:16px;}
@@ -2075,7 +2110,7 @@
   #tip-bubble b{color:#f0e0b8;}
   /* v0.61.20(P3)：拖拽指向敌人时，目标头顶的受击预览。
      v0.61.33：卡面徽章已删，这里成为预伤的**唯一**显示处，且按「拖拽所见目标」实时算（previewDamage(c, e)）。 */
-  #drag-dmg{position:fixed; z-index:34; pointer-events:none; font-family:var(--font-kai); font-size:30px; font-weight:bold; letter-spacing:1px;
+  #drag-dmg{position:fixed; z-index:34; pointer-events:none; font-family:var(--font-brush); font-size:30px; font-weight:bold; letter-spacing:1px;
     color:#ff9a3c; text-shadow:0 0 12px rgba(0,0,0,.95), 0 2px 5px rgba(0,0,0,.9); transform:translate(-50%,-100%); transition:opacity .1s ease;}
   #drag-dmg.weak{color:#8fc6ff;}
   #drag-dmg.dyn{opacity:.9;}
@@ -2085,7 +2120,7 @@
      translate(-50%,-100%) 的锚点约定、同样的 .dyn 弱化标记。锚点换成玩家立绘（不是敌人）。
      字形走 num 素材的 **block 档**（与伤害飘字的格挡档同一套，颜色烤在图里），
      所以符号也必须是 block 档色，否则加号与数字两个蓝。 */
-  #drag-block{position:fixed; z-index:34; pointer-events:none; font-family:var(--font-kai); font-size:30px; font-weight:bold; letter-spacing:1px;
+  #drag-block{position:fixed; z-index:34; pointer-events:none; font-family:var(--font-brush); font-size:30px; font-weight:bold; letter-spacing:1px;
     color:#0398fa; text-shadow:0 0 12px rgba(0,0,0,.95), 0 2px 5px rgba(0,0,0,.9); transform:translate(-50%,-100%); transition:opacity .1s ease;}
   #drag-block .fx-sign{color:#0398fa;}
   #drag-block.dyn{opacity:.9;}
@@ -2110,7 +2145,7 @@
   #enemy-say{position:fixed; z-index:34; pointer-events:none; box-sizing:border-box; max-width:64vw;
     transform:translate(-50%,-100%) translateY(6px);
     background:rgba(14,11,9,.9); border:1px solid rgba(214,183,120,.42); border-radius:10px;
-    padding:6px 13px; color:#e9dcc0; font-family:var(--font-kai); font-size:14px; line-height:1.45;
+    padding:6px 13px; color:#e9dcc0; font-family:var(--font-brush); font-size:14px; line-height:1.45;
     letter-spacing:.5px; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,.9);
     box-shadow:0 4px 14px rgba(0,0,0,.5);
     opacity:0; transition:opacity .22s ease, transform .22s ease;}
@@ -2132,7 +2167,7 @@
   #achieve-toast{position:fixed; top:14px; left:50%; transform:translate(-50%,calc(-100% - 24px)); z-index:120; min-width:240px; max-width:86vw; text-align:center; background:rgba(24,18,12,.97); border:1px solid var(--gold); border-radius:12px; padding:12px 20px; box-shadow:0 8px 26px rgba(0,0,0,.65); transition:transform .4s cubic-bezier(.2,.8,.2,1); pointer-events:none;}
   #achieve-toast.show{transform:translate(-50%,0);}
   #achieve-toast .at-icon{font-size:26px; line-height:1;}
-  #achieve-toast .at-title{font-family:var(--font-kai); font-size:17px; color:var(--gold); letter-spacing:2px; margin-top:6px;}
+  #achieve-toast .at-title{font-family:var(--font-brush); font-size:17px; color:var(--gold); letter-spacing:2px; margin-top:6px;}
   #achieve-toast .at-sub{font-size:12px; color:var(--dim); margin-top:4px; letter-spacing:1px;}
   /* —— 手机端适配（地图/手牌/面板缩放） —— */
   @media (max-width:520px){
@@ -2580,10 +2615,10 @@
         只能用实拍夹具的 iframe 模式截图肉眼验。 */
   #rotate-tip{display:none; position:fixed; inset:0; z-index:200; background:#0b0a09;
     flex-direction:column; align-items:center; justify-content:center; gap:14px;
-    color:var(--gold); font-family:var(--font-kai); text-align:center;}
+    color:var(--gold); font-family:var(--font-brush); text-align:center;}
   #rotate-tip .rt-ico{font-size:52px; animation:rtSpin 2.4s ease-in-out infinite;}
   #rotate-tip .rt-main{font-size:22px; letter-spacing:6px;}
-  #rotate-tip .rt-sub{font-size:13px; color:var(--dim); letter-spacing:1px; font-family:"Microsoft YaHei",sans-serif;}
+  #rotate-tip .rt-sub{font-size:13px; color:var(--dim); letter-spacing:1px; font-family:var(--font-kai);}
   @keyframes rtSpin{0%,35%{transform:rotate(0)}65%,100%{transform:rotate(90deg)}}
   @media (orientation:portrait) and (pointer:coarse){
     #app, #overlay{display:none;}
@@ -2616,6 +2651,31 @@
   /* 面板层同样避开安全区：关闭✕在右上角，锻造/图鉴/牌库是整屏面板。 */
   #overlay{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px)
                    env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);}
+
+  /* —— v1.1.18：左右安全区取 max(safe-left, safe-right)（用户报「整屏比以前偏右」）——
+     横屏时刘海只压在一侧（常见 safe-left≈41~59、safe-right=0），上面那份逐边
+     取 env() 会把**左内边距**顶得比右边大 ⇒ #app 内容整体右移、「左侧留空比右边多」。
+     这里把左右**两侧都取 max(safe-left, safe-right)** ⇒ 两侧留白恒定相等，视觉居中。
+     ⚠️ 上面那份「只用 env()」的声明**必须原样留着**：不支持 max() 的老内核会把整条含
+        max() 的 calc 判为非法并**丢弃该声明** ⇒ 自动回落到 env() 版本（而不是塌成 0）。
+     ⚠️ 顺序与上面那块逐字一致（基档 → ≤520 宽 → ≤700 高 → ≤560 高），@media 不加特异度、
+        同属性靠书写更后取胜 —— 这条写在下面，支持 max() 的浏览器一律吃这条。 */
+  #app{padding:calc(10px + env(safe-area-inset-top,0px)) calc(14px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)))
+            calc(8px  + env(safe-area-inset-bottom,0px)) calc(14px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)));}
+  @media (max-width:520px){
+    #app{padding:calc(6px + env(safe-area-inset-top,0px)) calc(6px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)))
+              calc(24px + env(safe-area-inset-bottom,0px)) calc(6px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)));}
+  }
+  @media (max-height:700px){
+    #app{padding:calc(8px + env(safe-area-inset-top,0px)) calc(10px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)))
+              calc(12px + env(safe-area-inset-bottom,0px)) calc(10px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)));}
+  }
+  @media (max-height:560px){
+    #app{padding:calc(1px + env(safe-area-inset-top,0px)) calc(6px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)))
+              calc(1px + env(safe-area-inset-bottom,0px)) calc(6px + max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px)));}
+  }
+  #overlay{padding:env(safe-area-inset-top,0px) max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px))
+                   env(safe-area-inset-bottom,0px) max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px));}
 
   /* ===================== v0.76.1 界面修整（新增覆写块） =====================
      本节全部是「后写的覆写」，上方任何既有规则一个字都没动；同特异度靠书写顺序取胜。
@@ -2667,7 +2727,7 @@
   .hero-frame .hero-emoji{font-size:52px; opacity:.4; text-align:center; line-height:82px;}
   .hero-name{width:100%; height:30px; margin-top:7px; display:flex; align-items:center; justify-content:center;
     background:var(--ui-hero-name,url(素材/ui/btn_primary.png)) center/100% 100% no-repeat;
-    font-family:var(--font-kai); font-size:15px; font-weight:bold; letter-spacing:2px;
+    font-family:var(--font-brush); font-size:15px; font-weight:bold; letter-spacing:2px;
     color:#ffe7b8; text-shadow:0 1px 2px rgba(0,0,0,.75);}
   .hero-card:hover .hero-name{background-image:var(--ui-hero-name-on,url(素材/ui/btn_primary_press.png));}
   .hero-brief{font-size:11px; line-height:1.45; color:var(--dim); margin-top:7px; text-align:center;}
@@ -2699,7 +2759,7 @@
     cursor:pointer; background:rgba(0,0,0,.22); transition:border-color .15s, box-shadow .15s, background .15s;}
   .starter-deck:hover{border-color:var(--gold); background:rgba(224,179,65,.08);
     box-shadow:0 0 0 2px rgba(224,179,65,.35);}
-  .sd-title{font-family:var(--font-kai); font-size:15px; font-weight:bold; letter-spacing:2px;
+  .sd-title{font-family:var(--font-brush); font-size:15px; font-weight:bold; letter-spacing:2px;
     color:var(--gold); margin-bottom:7px;}
   .sd-title small{color:var(--dim); font-size:12px; font-weight:normal; letter-spacing:0; margin-left:8px;}
   .sd-row{display:flex; flex-wrap:nowrap; gap:4px; justify-content:flex-start;
@@ -2729,7 +2789,7 @@
 
   .hs-root{position:absolute; inset:0; overflow:hidden; background:#000;
     --hs-move:.46s; --hs-drop:.46s;   /* 符纸移动时长 / 背景降落时长（跟随符纸移动，两者一致） */
-    font-family:var(--font-kai); -webkit-user-select:none; user-select:none;}
+    font-family:var(--font-brush); -webkit-user-select:none; user-select:none;}
   /* 背景层：新立绘从屏幕顶部降落覆盖旧图，落地弹一下再稳住 */
   .hs-bgwrap{position:absolute; inset:0; overflow:hidden; background:#000;}
   .hs-bg{position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
@@ -2745,7 +2805,7 @@
   .hs-info{position:absolute; left:2.6%; top:3.4%; width:42%; z-index:5; pointer-events:none;
     color:#fff; text-align:left;
     text-shadow:0 2px 10px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.95);}
-  .hs-name{font-family:'MaShanZheng', var(--font-kai), serif; font-size:clamp(18px,3.3vh,34px);
+  .hs-name{font-family:'MaShanZheng', var(--font-brush), serif; font-size:clamp(18px,3.3vh,34px);
     line-height:1.12; letter-spacing:4px;}
   .hs-mech{margin-top:.35em; font-size:clamp(12px,2.1vh,20px); letter-spacing:2px; color:#f3d27a;}
   .hs-passive{margin-top:.5em; font-size:clamp(10px,1.9vh,15px); line-height:1.55; letter-spacing:.5px;
@@ -2754,7 +2814,7 @@
   .hs-ticket{position:absolute; left:50%; top:2.4%; transform:translateX(-50%); z-index:6;
     display:flex; align-items:center; gap:8px; pointer-events:none;}
   .hs-ticket img{width:clamp(26px,4.2vh,44px); height:auto; display:block; object-fit:contain;}
-  .hs-ticket b{font-family:'MaShanZheng', var(--font-kai), serif; font-size:clamp(16px,3vh,28px);
+  .hs-ticket b{font-family:'MaShanZheng', var(--font-brush), serif; font-size:clamp(16px,3vh,28px);
     color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.9);}
   /* 右上：初始牌组图标区 */
   .hs-deck{position:absolute; right:2.6%; top:3.4%; z-index:6;
@@ -2782,7 +2842,7 @@
   .hs-talismans .hs-tl.sel{transform:translateY(calc(var(--wave,0px) + 14px));}
   /* 左下返回 / 右下开始（大号红色毛笔纯字） */
   .hs-back,.hs-start{position:absolute; bottom:2.6%; z-index:7; background:none; border:0; cursor:pointer;
-    font-family:'MaShanZheng', var(--font-kai), serif; color:#c8402f;
+    font-family:'MaShanZheng', var(--font-brush), serif; color:#c8402f;
     text-shadow:0 2px 10px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.95);
     -webkit-tap-highlight-color:transparent;}
   .hs-back{left:2.6%; font-size:clamp(16px,2.6vh,30px); letter-spacing:3px;}
@@ -2824,7 +2884,7 @@
   #overlay.mile-scene.ov-enter #overlayWrap{animation:mileIn .42s cubic-bezier(.2,.8,.2,1) both;}
   @keyframes mileIn{from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:none;}}
   .ml-root{position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden;
-    font-family:var(--font-kai);
+    font-family:var(--font-brush);
     /* v1.0.25：海报列宽（--pw）与里程轨纵向落点（--rail-y）由这里统一下发 ——
        .ml-track 要用同一个 --pw 把节点整体右移出海报列，故不能只挂在 .ml-heroes 上。
        --rail-y 用 px 表达式**咬住「第 2 张与第 3 张海报之间的缝」**：卡片高 = --pw/3 + 22(信息条)，
@@ -3168,11 +3228,11 @@
        玩家面板比 .battle 矮，抬它**不占** .battle 的纵向预算（那点空间本来就在玩家头顶空着）。 */
     .hero-art-box{height:clamp(100px,calc(100px + (100vh - 360px)*0.58),172px);}
 
-    /* ⑥ 飘字随立绘抬一档（22/24/28 → 24/26/30）。数字是 PNG 字形、尺寸按 em 走
-       ⇒ 只改字号，不需要美术另交一套素材；位置本来就贴血条/立绘（见 js/00_base.js 的锚点）。 */
-    .fx-dmg{font-size:24px;}
-    .fx-dmg.to-player{font-size:26px;}
-    .fx-dmg.crit{font-size:30px;}
+    /* ⑥ 飘字随立绘抬一档（v1.1.18 随全局 0.85× 缩放：22/24/28→18.7/20.4/23.8，本档再抬回 20.4/22.1/25.5）。
+       数字是 PNG 字形、尺寸按 em 走 ⇒ 只改字号，不需要美术另交一套素材；位置本来就贴血条/立绘。 */
+    .fx-dmg{font-size:20.4px;}
+    .fx-dmg.to-player{font-size:22.1px;}
+    .fx-dmg.crit{font-size:25.5px;}
   }
 
   /* ===================== v1.0.3 手机横屏：顶部合行 + 左侧竖直窄栏（新增覆写块） =====================
@@ -3235,8 +3295,11 @@
              padding-left:calc(50px + env(safe-area-inset-left,0px));
              pointer-events:none;}
     h1.title small{display:none;}
-    /* 左内边距让开「V1.0.0（position:fixed，本来就在左上角）+ 志 怪 塔」。 */
-    #topbar{margin-top:-17px; padding-left:calc(104px + env(safe-area-inset-left,0px));}
+    /* v1.1.18（用户报「屏幕左侧留空比右边多」）：**去掉原先为让开左上角
+       「V1.0.0 + 志 怪 塔」而硬推的 104px 左内边距** —— 那是偏右的直因。
+       改由基档 `#topbar{justify-content:center}` 居中，左右留白交给 #app 的
+       安全区对称（见下方 max() 那块）。此处只保留把顶栏上提、与标题行合行。 */
+    #topbar{margin-top:-17px;}
 
     /* ② 战报 / 牌库 / 菜单 → 左侧竖直窄栏 */
     /* ⚠️ v1.0.8：top 从 27 抬到 48 —— 用户报「圆角屏四个角落别放按键」。贴角的
@@ -3406,7 +3469,7 @@
        ⚠️ 筹码条展开时的样式**一个字未改**（本文件 :2196 那条），这里只决定渲不渲染（由 JS 决定）。
        ⚠️ `::after` 撑命中区（与 .tb-toggle 同一手法）：9px 字号的本体只有 ~16px 高，手指够不到。 */
     .ps-fold{display:inline-flex; position:absolute; left:100%; bottom:0; margin-left:2px; z-index:3;
-             align-items:center; font-family:"Microsoft YaHei",sans-serif;
+             align-items:center; font-family:var(--font-kai);
              font-size:9px; line-height:1.1; padding:1px 4px; border-radius:8px;
              background:rgba(42,33,25,.9); color:var(--gold); border:1px solid var(--gold);
              white-space:nowrap; cursor:pointer; -webkit-tap-highlight-color:transparent;}
@@ -3555,6 +3618,34 @@
         见 verify_dist 的 CSS url 闸；**注释里也不许写出这种字面量**，闸会把注释一起扫进去）——
         改用 JS 的 artImg('ui/huangbang.png') 走 ASSET_MAP，与主菜单背景同一条路。 */
 
+  /* v1.1.18（「字体方案丙」下半段）：**≤13px 的小字统一回落纯楷体栈**。
+     毛笔体笔画偏细偏连笔，小字号下糊成一团 —— 这几类文字是「要读信息、不是要看书法」的，
+     所以保持书法味但换回清晰度更高的楷体：
+       ① 战斗日志（#log）② 卡面描述（.card .cdesc/.ctype/.oneuse）③ 顶栏芯片小字（.stat-pre* 等）
+       ④ 各处辅助提示（.hint/.pmech/.prow/.badge/.tooltip…）。
+     ⚠️ 只吃「字号」这一条口径，所以列表是按**元素**点名、不是按计算字号筛 —— 同名元素在
+        手机横屏档被 media 压到 8~13px 时，本条照样生效（media 只改 font-size，不改 family）。
+     ⚠️ `.card .cname`(14px) / `#log .log-head`(14px) / `.relic .cname`(15px) 这些**大字**不在此列，
+        它们靠自身规则（同文件上方）保持毛笔，本条的特异性也压不过带 ID 的那几条。 */
+  #log,
+  .card, .card .cdesc, .card .ctype, .card .oneuse, .card .noup,
+  .relic, .relic .cdesc, .relic .ctype,
+  .stat-preshiqi, .stat-rageaccum, .stat-prexuenu, .stat-deck, .stat-level,
+  .potion-chip, .potion-chip b, .pstat-preblock, .pstat-preheal,
+  .prelic-chip, .prelic-chip .prelic-name, .noup, .ps-fold,
+  h1.title small, .hint, .pmech, .prow, .prelics, .badge, .summon,
+  .map-node, .pile-n, #turn-summary, .pstats, .hp-label,
+  .title-actions .btn, button.btn.ghost, .tb-toggle,
+  #tooltip, #tooltip .tt-story, #tut-hint .tut-tag, #tip-bubble .tip-tag,
+  .settle-cap, .settle-acc, #perf,
+  #achieve-toast .at-sub, .bcard .bmeta, .bcard .bstory,
+  .pouch-name, .pouch-desc, .pouch-empty, .run-status, .kwlist,
+  .menu-title small, .menu-col .menu-tier.is-list .btn, .menu-tip,
+  .map-plaque small, #rotate-tip .rt-sub,
+  .reward-pile .rp-label, .drop-ui .drop-head p,
+  .hp-label, #drag-zone .dz-hint
+  { font-family:var(--font-kai); }
+
   /* 字体：离线子集（gen_rank_font.py 注入，见下方标记）。Ma Shan Zheng 毛笔体，
      回退 KaiTi —— 与 GAME_MIGRATION.md §4「字体离线化」一致，不依赖任何远程 CSS。 */
   /*__RANK_FONT_BEGIN__*/
@@ -3570,7 +3661,7 @@
   @media (prefers-reduced-motion: reduce){ #overlay.rank-scene.ov-enter #overlayWrap{animation:none;} }
 
   .rk-root{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    font-family:'MaShanZheng', var(--font-kai);
+    font-family:'MaShanZheng', var(--font-brush);
     background:radial-gradient(ellipse at 50% 12%, #242026 0%, #141217 46%, #0b0a0e 100%);}
   /* 皇榜卷轴：**2.34:1 定比**（= huangbang.png 原比例）⇒ 任何视口都不拉伸、且必定装在屏内。
      宽高两路上限由 min() 同时约束（96vw / 92vh×2.34），谁先到谁说话。 */
@@ -3726,7 +3817,7 @@
   .menu-col-rank{position:absolute; right:5%; bottom:9%; z-index:3; margin:0;}
   .menu-hit.is-rank .menu-art{display:block; width:clamp(150px, 23vw, 330px); height:auto;}
   .menu-rank-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    font-family:'MaShanZheng', var(--font-kai); font-size:clamp(15px, 3.2vh, 30px); letter-spacing:9px;
+    font-family:'MaShanZheng', var(--font-brush); font-size:clamp(15px, 3.2vh, 30px); letter-spacing:9px;
     color:#7c2118; text-shadow:0 1px 0 rgba(255,246,220,.9); pointer-events:none;}
   .menu-hit.is-rank .menu-fb{writing-mode:horizontal-tb; font-size:16px; letter-spacing:4px;}
   /* 金光：点亮那一刻外圈炸开一层金辉，再收成常驻的淡金描边（用户口径「点击时入口周边短暂金光」）。

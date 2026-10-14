@@ -106,7 +106,7 @@ const CARDS = [
       :G.hero==='yincha'?`造成 ${u?14:10} 伤害。若目标带有【诅咒】，额外造成 ${u?6:4} 伤害`
       :`造成 ${u?12:10} 伤害。引爆目标 2 层【诅咒】（每层 ${u?7:5} 伤害）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
-      if(G.hero==='tianshi'){ const boom=Math.min(2,t.curse||0); SEG_HALVE=true; try{ dealDamageTo(t,u?12:10); for(let i=0;i<boom;i++) dealDamageTo(t,u?7:5); }finally{ SEG_HALVE=false; } t.curse-=boom; if(boom>0){ sfx('kw_curse'); log(`斩妖剑引爆 ${boom} 层【诅咒】`); } return; }   // v0.61.32 / v1.1.15：多段牌每段增伤减半（SEG_HALVE）
+      if(G.hero==='tianshi'){ const boom=Math.min(2,t.curse||0); SEG_HALVE=true; floatGroupStart(1+boom); try{ dealDamageTo(t,u?12:10); for(let i=0;i<boom;i++) dealDamageTo(t,u?7:5); }finally{ SEG_HALVE=false; floatGroupEnd(); } t.curse-=boom; if(boom>0){ sfx('kw_curse'); log(`斩妖剑引爆 ${boom} 层【诅咒】`); } return; }   // v0.61.32 / v1.1.15：多段牌每段增伤减半（SEG_HALVE）；v1.1.18：主伤+引爆同刻 ⇒ floatGroupStart/End 让浮字炸花
       if(G.hero==='yincha'){ let dc=(u?14:10); if((t.curse||0)>0) dc+=(u?6:4); dealDamageTo(t,dc); return; }
       let d=(G.hero==='ganshiren')?(u?12:7):(u?12:8);   // v0.61.37 A 列基础 8 → 7（B 列仍 8）
       if(G.hero==='ganshiren') d+=2*G.summons.filter(s=>s.dur>0).length;
@@ -246,7 +246,7 @@ const CARDS = [
       if(G.hero==='yincha'){ sealEnemy(t,1); loseHp(5); let d=u?24:16; if(G.hp < G.maxHp*0.4){ d*=2; log('钟馗镇魂：生命低于 40%，伤害翻倍'); } dealDamageTo(t,d); return; }
       // v0.61.35：天师列按新卡池文件改为「主伤 16 固定（升级不变）+ 每层引爆 3/4」
       //           （v0.61.10(P5) 的 18/24 + 每层 5/6 作废；其余三列数值不动）
-      const c=t.curse||0; sealEnemy(t,1); SEG_HALVE=true; try{ dealDamageTo(t,16); for(let i=0;i<c;i++) dealDamageTo(t,u?4:3); }finally{ SEG_HALVE=false; } t.curse=0; if(c>0){ sfx('kw_curse'); log(`钟馗镇魂引爆 ${c} 层【诅咒】`); } }},   // v0.61.32 / v1.1.15：多段牌每段增伤减半（SEG_HALVE）
+      const c=t.curse||0; sealEnemy(t,1); SEG_HALVE=true; floatGroupStart(1+c); try{ dealDamageTo(t,16); for(let i=0;i<c;i++) dealDamageTo(t,u?4:3); }finally{ SEG_HALVE=false; floatGroupEnd(); } t.curse=0; if(c>0){ sfx('kw_curse'); log(`钟馗镇魂引爆 ${c} 层【诅咒】`); } }},   // v0.61.32 / v1.1.15：多段牌每段增伤减半（SEG_HALVE）；v1.1.18：主伤+引爆同刻 ⇒ floatGroupStart/End 让浮字炸花
 /* —— 防御 15~23 —— */
   {id:'jingang', name:'金刚符', type:'defense', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?(u?3:2):0,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?7:4} 点格挡。获得 ${u?2:1} 点【尸气】`
@@ -1192,14 +1192,14 @@ const FX_SHEETS = {
       `scale` 冒烟断言要求每条都 > 0：guling_suck / relic_proc 是 playFx 挂在玩家身上的大特效，
       原取与 heal/shiqi 同族的 2.47；v1.1.16 按用户口径**连同下面这张 lightning、fudu_hit 一起缩到 2.0**。
       两张火焰不进 playFx（尺寸由 CSS 的 background-size 定），scale 只是占位。 */
-  guling_suck: { c:8, f:48, rows:6, i0:0, scale:2.0 },   // 骨铃吸血：绿色魂气向内收束
-  heal:        { c:8, f:34, f0:43, rows:6, i0:3, scale:2.47, ox:0, oy:0.23 },   // 治疗回血　素材 43 帧，两端看不见的 9 帧不播
+  guling_suck: { c:8, f:16, rows:6, i0:0, scale:2.0, op:0.6 },   // 骨铃吸血：绿色魂气向内收束　v1.1.19（用户 txt）：只播前 1/3 帧（f 48→16）+ 整体降到 6 成透明度
+  heal:        { c:8, f:34, f0:43, rows:6, i0:3, scale:2.9, ox:0, oy:0.23 },   // 治疗回血　素材 43 帧，两端看不见的 9 帧不播　v1.1.19（用户 txt「特效太小」）2.47→2.9
   huo:         { c:8, f:18, f0:21, rows:4, scale:1.75, ox:0, oy:0.18 },   // 火符　素材 21 帧，两端看不见的 3 帧不播
   hurt:        { c:8, f:16, f0:17, rows:4, scale:2.15, ox:0, oy:0.23 },   // 玩家受击（帧数最短，17）　素材 17 帧，两端看不见的 1 帧不播
   jian:        { c:8, f:18, f0:21, rows:4, i0:1, scale:1.00, ox:0, oy:0.23 },   // 剑符 / 斩妖剑（提示词文档里本就是同一条）　素材 21 帧，两端看不见的 3 帧不播
   jiangshi:    { c:8, f:34, f0:40, rows:6, i0:5, scale:1.98, ox:0, oy:0.27 },   // 召唤僵尸手（僵王）　素材 40 帧，两端看不见的 6 帧不播
-  jinzhong:    { c:8, f:41, f0:43, rows:6, i0:1, scale:1.82, ox:0, oy:0.2 },   // 金光罩 / 金钟罩　素材 43 帧，两端看不见的 2 帧不播
-  lei:         { c:8, f:11, f0:19, rows:5, scale:1.05 },   // 雷符　素材 19 帧，两端看不见的 8 帧不播
+  jinzhong:    { c:8, f:24, f0:43, rows:6, i0:1, scale:2.3, ox:0, oy:0.2 },   // 金光罩 / 金钟罩　素材 43 帧，两端看不见的 2 帧不播　v1.1.19（用户 txt「特效长了 + 太小」）只播前 24 帧、1.82→2.3
+  lei:         { c:8, f:11, f0:19, rows:5, scale:1.35 },   // 雷符　素材 19 帧，两端看不见的 8 帧不播　v1.1.19（用户 txt「特效太小」）1.05→1.35
   /* v1.1.9 修正（用户实机报「列数/行数搞错了，特效错乱」）：
      ⚠️ 这两张与 boss_vfx 同一套出图规格 —— **8 列 × 4 行、单帧 480×720**（宽 3840、高 2880）。
         以前按「正方形格 480×480 ⇒ 6 行」切，纵偏移算成 480 的整数倍，实际每格高 720
@@ -1208,12 +1208,12 @@ const FX_SHEETS = {
      ⚠️ 帧率：同一出图管线是 **30fps**（README 规格），本仓其它自绘精灵图是 24fps（playFx 默认）。
         故这两条显式写 `fps:30`，播放时长才与出图一致（用户口径「注意帧间隔时间」）。
      lightning（雷谴符**逐段落雷**）：素材 32 帧 ⇒ f:32。scale 取与 burn/fudu_hit 同族的大特效档。 */
-  lightning:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.0, fps:30 },
+  lightning:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:1.5, fps:30 },   // v1.1.19（用户 txt「特效太大」）2.0→1.5
   /* 反伤 / 反震**共用**这张精灵图：画布 8 列 × 4 行、单帧 480×720；
      动作只占**前 24 帧**（末 8 帧是出图留白）⇒ f:24。
      玩家反伤给敌人（荆棘/罗汉拳套/铁壁…）→ 锚在**玩家**、基准朝向不动；
      敌人反震给玩家（fanzhen 词缀）→ 锚在**敌人**并**镜像**（playFx 的 opts.mirror）。 */
-  damage_reflect: { c:8, f:24, rows:4, ch:1.5, i0:0, scale:2.0, fps:30 },
+  damage_reflect: { c:8, f:24, rows:4, ch:1.5, i0:0, scale:1.2, fps:30 },   // v1.1.19（用户 txt「缩小为原来的 5 分之 3」）2.0→1.2
   lifesteal:   { c:8, f:34, f0:37, rows:5, i0:1, scale:1.43, ox:0.15, oy:0.17 },   // 吸血 / 渡魂归己　素材 37 帧，两端看不见的 3 帧不播
   /* v1.0.14 多段斩击：**一行 = 一个方向**（8 帧一记斩痕），6 行 = 6 个方向。
      播哪一行由 `opts.i0` 现定（`burstShow` 按斩击段数轮流取方向，i0 = 方向 × 8），
@@ -1221,16 +1221,16 @@ const FX_SHEETS = {
      ⚠️ 不能跑 `_patch/fx_tune.py` 重算这一条：它按「整张图两端裁空帧」的口径量，
      对这种「每行一个方向、每行都从第 0 格起播」的图会把 f 写成 48（跨 6 行）。已在那个脚本里跳过它。 */
   multi_slash: { c:8, f:8, rows:6, i0:0, scale:1.09 },
-  relic_proc:  { c:8, f:48, rows:6, i0:0, scale:2.0 },   // v1.0.17 自绘：遗物触发通用金光（金符纹扩散 + 上浮光点）
+  relic_proc:  { c:8, f:48, rows:6, i0:0, scale:2.5 },   // v1.0.17 自绘：遗物触发通用金光（金符纹扩散 + 上浮光点）　v1.1.19（用户 txt「特效太小」）2.0→2.5
   shiqi:       { c:8, f:40, f0:46, rows:7, i0:5, scale:2.47, ox:0, oy:0.23 },   // 尸气　素材 46 帧，两端看不见的 6 帧不播
   shiqi_flame: { c:8, f:8, rows:1, i0:0, scale:1 },   // v1.0.17 自绘：尸玉在场时尸气芯片的幽蓝火焰（8 帧 1 行，循环；scale 占位，不进 playFx）
   shiwang:     { c:8, f:46, f0:51, rows:7, i0:4, scale:1.98, ox:0, oy:0.28 },   // 尸王召唤　素材 51 帧，两端看不见的 5 帧不播
-  thorns:      { c:8, f:19, f0:24, rows:5, i0:4, scale:1.98, ox:0, oy:0.18 },   // 荆棘符 / 反震　素材 24 帧，两端看不见的 5 帧不播
+  thorns:      { c:8, f:19, f0:24, rows:5, i0:4, scale:2.4, ox:0, oy:0.18 },   // 荆棘符 / 反震　素材 24 帧，两端看不见的 5 帧不播　v1.1.19（用户 txt「特效太小」）1.98→2.4
   /* v1.1.4 自绘（_patch/mk_flame_sheets.py）：浅显荆棘 · 立绘叠图 —— 受到反伤时在**立绘上**闪一道
      很细的荆棘尖刺 + 微光（"浅显"= 低透明度、细线、不遮挡）。与 `thorns`（荆棘符本体那种大特效）分开：
      它是「受击时叠在立绘上的轻量提示」，不是一张牌打出去的本体演出。 */
-  thorns_light: { c:8, f:48, rows:6, i0:0, scale:2.0 },
-  tianlei:     { c:8, f:14, f0:21, rows:5, scale:1.00 },   // 天雷正法　素材 21 帧，两端看不见的 7 帧不播
+  thorns_light: { c:8, f:16, rows:6, i0:0, scale:2.0, op:0.5 },   // v1.1.19（用户 txt「特效长了 + 透明度要降低一点」）只播前 1/3 帧（f 48→16）、整体降到 5 成透明度
+  tianlei:     { c:8, f:14, f0:21, rows:5, scale:1.3 },   // 天雷正法　素材 21 帧，两端看不见的 7 帧不播　v1.1.19（用户 txt「特效太小」）1.00→1.3
   wangyou:     { c:8, f:42, f0:46, rows:6, i0:1, scale:2.82, ox:0, oy:0.23 },   // 忘忧汤（孟婆）　素材 46 帧，两端看不见的 4 帧不播
   wanjian:     { c:8, f:25, f0:36, rows:5, i0:1, scale:1.00, ox:0, oy:0.14 },   // 万剑归宗　素材 36 帧，两端看不见的 11 帧不播
   weak:        { c:8, f:38, f0:44, rows:6, i0:5, scale:2.54, ox:0, oy:0.23 },   // 虚弱　素材 44 帧，两端看不见的 6 帧不播
@@ -1239,9 +1239,9 @@ const FX_SHEETS = {
   xuenu_flame: { c:8, f:8, rows:1, i0:0, scale:1 },   // v1.0.17 自绘：血玉在场时血怒芯片的紫焰 + 暗红余烬（8 帧 1 行，循环；scale 占位，不进 playFx）
   yehuo:       { c:8, f:45, f0:47, rows:6, scale:2.47, ox:0, oy:0.23 },   // 业火（修罗王）　素材 47 帧，两端看不见的 2 帧不播
   yinbing:     { c:8, f:44, f0:51, rows:7, i0:4, scale:1.00, ox:0, oy:0.27 },   // 阴兵过境　素材 51 帧，两端看不见的 7 帧不播
-  zhenyaoling: { c:8, f:41, f0:43, rows:6, i0:1, scale:1.28, ox:0, oy:0.09 },   // 镇妖铃　素材 43 帧，两端看不见的 2 帧不播
+  zhenyaoling: { c:8, f:41, f0:43, rows:6, i0:1, scale:1.7, ox:0, oy:0.09 },   // 镇妖铃　素材 43 帧，两端看不见的 2 帧不播　v1.1.19（用户 txt「特效太小」）1.28→1.7
   zhiren:      { c:8, f:34, f0:42, rows:6, i0:6, scale:2.51, ox:0, oy:0.23 },   // 纸人召唤　素材 42 帧，两端看不见的 8 帧不播
-  zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.08 },   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播
+  zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.4 },   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播　v1.1.19（用户 txt「特效太小」）1.08→1.4
   /* ——— v1.1.10/11：boss_vfx 全部 9 幕 Boss 技能特效（用户交付的 46 段全接入）———
      前 34 段（第 1~6 幕）在 v1.1.10、后 12 段（第 7~9 幕 夜王/修罗王/阎罗天子）在 v1.1.12。
      v1.1.15 起换新规格（用户重出图）：8 列 × 4 行、**单帧 480×480**（整图 3840×1920，正方形格 ⇒ 不写 ch）、
@@ -1253,35 +1253,35 @@ const FX_SHEETS = {
      （由 00_base.js 的 bossLinkFx 自算盒宽），scale 只是「>0」的占位。
      挂点与触发时机见 30_engine.js 的 BOSS_VFX / bossSkillFx（_cast 挂 Boss、_hit 挂玩家、_self 挂 Boss）。 */
   /* 第一幕 · 僵王（爪击 / 吸食 / 召唤小僵尸） */
-  b1_jiangwang_attack_claw_cast:   { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b1_jiangwang_attack_claw_cast:   { c:8, f:19, rows:4, i0:0, scale:2.5, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧（32→19）+ 上移半个单帧宽度（oy 0.5）+「太小」2.0→2.5
   b1_jiangwang_attack_claw_hit:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b1_jiangwang_drain_feed_cast:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b1_jiangwang_drain_feed_hit:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b1_jiangwang_drain_feed_link:    { c:8, f:32, rows:4, i0:0, scale:1, fps:30 },
   b1_jiangwang_summon_minion_self: { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第一幕 · 旱魃（焰爪 / 灼烧施加 / 灼烧跳伤循环） */
-  b2_hanba_attack_flame_claw_cast: { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b2_hanba_attack_flame_claw_cast: { c:8, f:19, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧 + 上移半个单帧宽度
   b2_hanba_attack_flame_claw_hit:  { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b2_hanba_burn_apply_hit:         { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b2_hanba_burn_tick_hit:          { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第一幕 · 血尸（爪击 / 蓄力 / 蓄力重击 / 吸血） */
-  b3_xueshi_attack_claw_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b3_xueshi_attack_claw_cast:      { c:8, f:19, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧 + 上移半个单帧宽度
   b3_xueshi_attack_claw_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b3_xueshi_charge_self:           { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
-  b3_xueshi_heavy_smash_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b3_xueshi_heavy_smash_cast:      { c:8, f:16, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 2 分之 1 帧 + 上移半个单帧宽度
   b3_xueshi_heavy_smash_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
-  b3_xueshi_lifesteal_cast:        { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b3_xueshi_lifesteal_cast:        { c:8, f:32, rows:4, i0:0, scale:2.4, fps:30 },   // v1.1.19（用户 txt「特效太小」）2.0→2.4
   b3_xueshi_lifesteal_hit:         { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b3_xueshi_lifesteal_link:        { c:8, f:32, rows:4, i0:0, scale:1, fps:30 },
   /* 第二幕 · 谢必安（哭丧棒 / 勾魂 / 分化；分出的「必安」复用同一套） */
-  b4_xiebian_attack_staff_cast:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b4_xiebian_attack_staff_cast:    { c:8, f:19, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧 + 上移半个单帧宽度
   b4_xiebian_attack_staff_hit:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b4_xiebian_soul_hook_cast:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b4_xiebian_soul_hook_hit:        { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b4_xiebian_soul_hook_link:       { c:8, f:32, rows:4, i0:0, scale:1, fps:30 },
   b4_xiebian_split_self:           { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第二幕 · 判官王（惊堂木 / 记名 / 清算） */
-  b5_judge_attack_gavel_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b5_judge_attack_gavel_cast:      { c:8, f:19, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧 + 上移半个单帧宽度
   b5_judge_attack_gavel_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b5_judge_record_hit:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b5_judge_settle_cast:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
@@ -1293,17 +1293,17 @@ const FX_SHEETS = {
   b6_mengpo_forget_hit:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b6_mengpo_heal_self:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第三幕 · 夜王（暗刃 / 暗夜威压） */
-  b7_yewang_attack_blade_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b7_yewang_attack_blade_cast:     { c:8, f:19, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧 + 上移半个单帧宽度
   b7_yewang_attack_blade_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b7_yewang_pressure_hit:          { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第三幕 · 修罗王（业火斩 / 业火反噬 / 业火附体） */
-  b8_xiuluo_attack_slash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b8_xiuluo_attack_slash_cast:     { c:8, f:19, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧 + 上移半个单帧宽度
   b8_xiuluo_attack_slash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b8_xiuluo_backlash_self:         { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b8_xiuluo_karma_fire_self:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第三幕 · 阎罗天子（开局词缀 / 幽冥重击 / 轮回复活 / 召唤阴差） */
   b9_yanluo_affix_self:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
-  b9_yanluo_attack_smash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b9_yanluo_attack_smash_cast:     { c:8, f:19, rows:4, i0:0, scale:2.0, fps:30, oy:0.5 },   // v1.1.19（用户 txt）：只播前 5 分之 3 帧 + 上移半个单帧宽度
   b9_yanluo_attack_smash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b9_yanluo_revive_self:           { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b9_yanluo_summon_yinchai_self:   { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 }

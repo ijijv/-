@@ -503,6 +503,10 @@ function playFx(name, anchor, opts){
   const el=document.createElement('div');
   el.className='fx-sheet';
   el.style.width=box+'px'; el.style.height=(box*ch)+'px';
+  /* v1.1.19（用户 txt）：个别特效要「整体降低一点透明度」（骨铃吸血 0.6、浅显荆棘叠加 0.5）。
+     选项写在 FX_SHEETS 的 `op` 字段里 —— 落在**外层**（.fx-sheet 裁切窗）上，
+     内外层一并变淡，与 scale/ox/oy 都不冲突。 */
+  if(S.op!=null && S.op<1) el.style.opacity=String(S.op);
   /* v1.1.x：**镜像**（opts.mirror）—— 反伤精灵图有明确的方向性，玩家反伤敌人与敌人反震玩家要
      朝相反一侧翻面。翻在**外层**：内层管切格的 translate，翻它会把格序也翻反；外层无 transform
      （.fx-sheet 只 overflow:hidden），scaleX(-1) 绕自身中心翻面，盒子本就中心对齐锚点 ⇒ 不偏位。 */
@@ -675,11 +679,26 @@ function fxSeek(name, i, anchor, opts){
   }
   return el;
 }
+/* v1.1.18（用户 2026-10-14 定稿「浮字炸花 · 档 2（推荐）」）：多段伤害的浮字散成一束扇形。
+   档 2 参数（与 样式预览.html 的 BURST[2] **逐值一致，改了要两边同步**）：
+     扇形 ±38°、甩出半径 24~40px（纵向 ×0.55 压扁 ⇒ 像一束花而非一个正圆）、
+     错峰 85ms/段、起点抖动 ±6px、每段随机旋转 ±7°。关键帧在 原型.html 的 @keyframes fxDmgBurst。 */
+const FXBURST = { spread:38, rMin:24, rMax:40, stagger:85, jitter:6, rot:7 };
+/* 「同一组多段」的上下文：多段牌（斩妖剑 / 钟馗镇魂）在开打前 floatGroupStart(段数) 打开、
+   打完整段后在 finally 里 floatGroupEnd() 关掉。**只有 ≥2 段才真开**（单段保持原样、朝正上方）。
+   ⚠️ 只认与打开时同 kind 的浮字：这两张牌的主伤与每段引爆都是 kind=''，而组内顺带触发的
+      回血/格挡浮字是别的 kind（heal/block）⇒ 不会被吸进来跟着炸。 */
+let FLOAT_GROUP = null;  // { n, i, kind }
+function floatGroupStart(n, kind){ FLOAT_GROUP = (n>=2) ? { n:n, i:0, kind:(kind||'') } : null; }
+function floatGroupEnd(){ FLOAT_GROUP = null; }
 /* opts.crit：大伤害档（阈值与打击音效同源，见 10_audio.js 的 isCritHit） */
 function floatDamage(text, kind, anchor, opts){
   if(!fx()) return;
+  const g = (FLOAT_GROUP && (kind||'')===FLOAT_GROUP.kind) ? FLOAT_GROUP : null;
+  const seg = g ? g.i++ : -1;
+  const multi = !!(g && g.n>=2);
   const span=document.createElement('span');
-  span.className='fx-dmg '+kind+((opts && opts.crit) ? ' crit' : '');
+  span.className='fx-dmg '+kind+((opts && opts.crit) ? ' crit' : '')+(multi ? ' burst' : '');
   // v0.61.36：字形统一包一层 .fx-in —— 外层管位移（fxDmg 的 translate/scale），
   // 内层管抖动（translateX）与闪烁（filter），两条动画不抢同一个属性
   const inner=document.createElement('i'); inner.className='fx-in';
@@ -687,12 +706,31 @@ function floatDamage(text, kind, anchor, opts){
   if(!numAppend(inner, kind, text)) inner.textContent=text;
   span.appendChild(inner);
   fxLayer().appendChild(span);
+  /* v1.1.18：炸花 —— 按段序算扇形出射角（n 段在 -1..1 铺开、每段一个互不相同的角）+
+     随机甩出半径 + 每段随机旋转；错峰交给 inline animation-delay（段序 × stagger）。
+     ⚠️ 单段（multi 为假）**这里一个字都不加**：仍走 CSS 的 fxDmg（朝正上方、不做无意义偏移）。 */
+  let delay=0, jx=0, jy=0;
+  if(multi){
+    const t=(seg/(g.n-1)-0.5)*2;                 // n≥2 ⇒ 分母恒 ≥1，不会除零
+    const ang=(-90 + t*FXBURST.spread)*Math.PI/180;
+    const r=FXBURST.rMin + Math.random()*(FXBURST.rMax-FXBURST.rMin);
+    span.style.setProperty('--dx', (Math.cos(ang)*r).toFixed(1)+'px');
+    span.style.setProperty('--dy', (Math.sin(ang)*r*0.55).toFixed(1)+'px');
+    span.style.setProperty('--rot', ((Math.random()*2-1)*FXBURST.rot).toFixed(1)+'deg');
+    delay=seg*FXBURST.stagger;
+    span.style.animation='fxDmgBurst 1.06s cubic-bezier(.16,.7,.35,1) '+delay+'ms forwards';
+    jx=(Math.random()*2-1)*FXBURST.jitter;       // 起点抖动：交给 fxTrack 的像素偏移
+    jy=(Math.random()*2-1)*FXBURST.jitter;
+  }
   /* v0.69.0：飘字也进重锚表。ax/ay 取 0.5/0.4（**0.4 是历史值，不是 0.5，别顺手"修正"**）；
-     bx/by 恒 0 —— .fx-dmg 自带 `transform:translate(-50%,-50%)`（原型.html:769），left/top 就是中心。
+     bx/by 单段恒 0 —— .fx-dmg 自带 `transform:translate(-50%,-50%)`，left/top 就是中心；
+     炸花时拿 jx/jy 当起点抖动（fxSpot 里 bx/by 是像素偏移：正 bx 向左、正 by 向上）。
      无锚点时走百分比定位（50%/28%）并**不登记**：那种情况下它本就贴着视口，没有可漂的锚。 */
-  const st = anchor ? fxTrack(span, anchor, 0.5, 0.4, 0, 0) : null;
+  const st = anchor ? fxTrack(span, anchor, 0.5, 0.4, jx, jy) : null;
   if(!anchor){ span.style.left='50%'; span.style.top='28%'; }
-  setTimeout(()=>{ span.remove(); if(st) fxUntrack(st); }, 950);
+  /* v1.1.18：收尾时间随炸花错峰 + 新时长（1.06s）放宽 —— 原来恒 950 会把还在飞的后几段提前摘掉。 */
+  const life = multi ? (delay + 1060 + 400) : 950;
+  setTimeout(()=>{ span.remove(); if(st) fxUntrack(st); }, life);
 }
 function hurtVignette(){
   if(!fx()) return;

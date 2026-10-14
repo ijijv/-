@@ -6323,7 +6323,8 @@
       }));
     __ok('v0.64.0 **30 个特效全都裁掉了两端的空白帧**（素材末尾常有整格全透明，开头也有）——'
       + '不裁的话：按下后前 0.2 秒画面上什么都没有（像点了没反应），播完还挂着一个透明元素不删。'
-      + '裁掉的帧数合计 169（≈ 7.0 秒 @24fps，由 _patch/fx_tune.py 逐格扫 alpha 实量）',
+      + '裁掉的帧数合计 186（v0.64 实量 169 ≈ 7.0 秒 @24fps，由 _patch/fx_tune.py 逐格扫 alpha 实量；'
+      + 'v1.1.19 又按用户 txt「金钟罩特效长了」把 jinzhong 的 f 从 41 手动截到 24 ⇒ 再 +17）',
       (function () {
         var n = 0, cut = 0;
         Object.keys(FX_SHEETS).forEach(function (k) {
@@ -6331,7 +6332,7 @@
           if (!('f0' in s)) return;
           n++; cut += s.f0 - s.f;
         });
-        return n === 30 && cut === 169;
+        return n === 30 && cut === 186;
       })());
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
@@ -7759,17 +7760,41 @@
     __ok('v1.1.16 初始牌库铺展：单行（列数 = 牌数内联覆盖 6 列）',
       __code(hsDeckPreview).indexOf('repeat(${list.length}') >= 0);
 
-    /* ⑦ boss_vfx 那批 + 反伤 + fudu_hit / guling_suck / relic_proc / lightning 缩到 scale 2.0；thorns（1.98）刻意不动。 */
-    __ok('v1.1.16 boss_vfx 那批缩到 scale 2.0（_link 变体仍 1）＋ 反伤 damage_reflect/thorns_light 与 fudu_hit/guling_suck/relic_proc/lightning 也缩到 2.0',
+    /* ⑦ v1.1.19（用户特效反馈 txt）：boss_vfx 基准仍 2.0 —— 只有两处按「太小」上调
+       （僵王爪击 cast 2.5 / 血尸吸血 cast 2.4）；反伤 damage_reflect 按「缩小为原来的 5 分之 3」
+       从 2.0 收到 1.2；落雷 lightning「太大」2.0→1.5；遗物金光 relic_proc / 荆棘 thorns「太小」
+       上调到 2.5 / 2.4；fudu_hit / guling_suck / thorns_light 维持 2.0
+       （thorns_light 本轮只截帧 + 降透明度，尺寸按用户口径不动）。 */
+    __ok('v1.1.19 特效尺寸（txt 反馈）：boss_vfx 基准 2.0（僵王 cast 2.5 / 血尸吸血 cast 2.4）＋ 反伤 1.2 · 落雷 1.5 · 遗物金光 2.5 · 荆棘 2.4',
       Object.keys(FX_SHEETS).filter(function (k) { return /^b\d/.test(k); }).every(function (k) {
-        var s = FX_SHEETS[k]; return s.scale === 2.0 || s.scale === 1;
+        var s = FX_SHEETS[k];
+        return s.scale === 2.0 || s.scale === 1 ||
+               k === 'b1_jiangwang_attack_claw_cast' || k === 'b3_xueshi_lifesteal_cast';
       }) &&
-      FX_SHEETS.b1_jiangwang_attack_claw_cast.scale === 2.0 &&
+      FX_SHEETS.b1_jiangwang_attack_claw_cast.scale === 2.5 &&
+      FX_SHEETS.b3_xueshi_lifesteal_cast.scale === 2.4 &&
       FX_SHEETS.b9_yanluo_summon_yinchai_self.scale === 2.0 &&
-      FX_SHEETS.damage_reflect.scale === 2.0 && FX_SHEETS.thorns_light.scale === 2.0 &&
+      FX_SHEETS.damage_reflect.scale === 1.2 && FX_SHEETS.thorns_light.scale === 2.0 &&
       FX_SHEETS.fudu_hit.scale === 2.0 && FX_SHEETS.guling_suck.scale === 2.0 &&
-      FX_SHEETS.relic_proc.scale === 2.0 && FX_SHEETS.lightning.scale === 2.0 &&
-      FX_SHEETS.thorns.scale === 1.98);
+      FX_SHEETS.relic_proc.scale === 2.5 && FX_SHEETS.lightning.scale === 1.5 &&
+      FX_SHEETS.thorns.scale === 2.4);
+
+    /* ⑦′ v1.1.19（txt）：帧数截断 —— 「特效长了」的截到三分之一（骨铃吸血 / 浅显荆棘）、金钟罩 41→24、
+       「保留前 5 分之 3 帧」的 boss `_cast` 32→19（蓄力重击按「前 2 分之 1」32→16）；
+       这九个 `_cast` 还要「位置上移半个单帧宽度」= FX_SHEETS 的 oy:0.5（方格里 = 0.5 个格子宽）。 */
+    __ok('v1.1.19 帧数截断与位置上移（txt）：骨铃吸血/浅显荆棘/金钟罩截帧，boss 九个 _cast 保留前 5 分之 3（重击保一半）且上移半格',
+      FX_SHEETS.guling_suck.f === 16 && FX_SHEETS.thorns_light.f === 16 && FX_SHEETS.jinzhong.f === 24 &&
+      FX_SHEETS.b3_xueshi_heavy_smash_cast.f === 16 && FX_SHEETS.b3_xueshi_heavy_smash_cast.oy === 0.5 &&
+      ['b1_jiangwang_attack_claw_cast', 'b2_hanba_attack_flame_claw_cast', 'b3_xueshi_attack_claw_cast',
+       'b4_xiebian_attack_staff_cast', 'b5_judge_attack_gavel_cast', 'b7_yewang_attack_blade_cast',
+       'b8_xiuluo_attack_slash_cast', 'b9_yanluo_attack_smash_cast'].every(function (k) {
+        return FX_SHEETS[k].f === 19 && FX_SHEETS[k].oy === 0.5;
+      }));
+
+    /* ⑦″ v1.1.19（txt）：两处「降低一点透明度」—— 由 FX_SHEETS 的 `op` 字段落到 playFx 的外层盒上。 */
+    __ok('v1.1.19 降透明度（txt）：骨铃吸血 op 0.6、浅显荆棘 op 0.5，且 playFx 认这个字段',
+      FX_SHEETS.guling_suck.op === 0.6 && FX_SHEETS.thorns_light.op === 0.5 &&
+      (typeof playFx === 'function') && String(playFx).indexOf('S.op') >= 0);
 
     /* ⑧ 里程碑调试开关：存在且默认开，且**在无头沙箱里自动跳过**（不污染里程断言）。 */
     __ok('v1.1.16 里程碑调试开关：debugMaxMile 存在、DEBUG_MAX_MILE 默认开、拉满值很高',
