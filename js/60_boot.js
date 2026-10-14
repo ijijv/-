@@ -1079,7 +1079,8 @@ function perfStart(){
   let el=null;
   try{ el=document.getElementById('perf-hud'); }catch(e){}
   if(!el){ try{ el=document.createElement('div'); el.id='perf-hud'; document.body.appendChild(el); }catch(e){ el=null; } }
-  PERF={ el, t0:perfNow(), last:perfNow(), lastPaint:0, frames:0, maxGap:0, longN:0, longMax:0, obs:null, raf:0 };
+  PERF={ el, t0:perfNow(), last:perfNow(), lastPaint:0, frames:0, maxGap:0, longN:0, longMax:0, obs:null, raf:0,
+         lastText:'', lastCls:'' };   // v1.1.17：记住上次写到屏上的文本/类名，没变就不碰 DOM
   /* longtask：一次超过 50ms 的主线程任务（浏览器默认阈值），与「卡一下」的主观感受最贴合 */
   if(typeof PerformanceObserver!=='undefined'){
     try{
@@ -1096,14 +1097,17 @@ function perfStart(){
     if(!PERF) return;
     const now=perfNow(), gap=now-PERF.last; PERF.last=now; PERF.frames++;
     if(gap>PERF.maxGap) PERF.maxGap=gap;
-    if(now-PERF.lastPaint>=250){                 // 每秒最多刷 4 次，避免读数本身成为负担
+    if(now-PERF.lastPaint>=500){                 // v1.1.17：0.5 秒最多刷 1 次（原 250ms → 更省）
       PERF.lastPaint=now;
       const span=Math.max(1, now-PERF.t0);
       const fps=PERF.frames*1000/span;
       if(PERF.el){
-        PERF.el.textContent='FPS '+fps.toFixed(0)+' · 最长帧 '+PERF.maxGap.toFixed(0)+'ms · longtask '+PERF.longN
+        const txt='FPS '+fps.toFixed(0)+' · 最长帧 '+PERF.maxGap.toFixed(0)+'ms · longtask '+PERF.longN
           +(PERF.longMax?('(峰'+PERF.longMax.toFixed(0)+'ms)'):'');
-        PERF.el.className=(fps<45||PERF.maxGap>200)?'bad':'';
+        /* v1.1.17：文本/类名与上次相同就不写 —— 少了 4Hz 的无谓 DOM 变更与重排。 */
+        if(txt!==PERF.lastText){ PERF.el.textContent=txt; PERF.lastText=txt; }
+        const cls=(fps<45||PERF.maxGap>200)?'bad':'';
+        if(cls!==PERF.lastCls){ PERF.el.className=cls; PERF.lastCls=cls; }
       }
       PERF.t0=now; PERF.frames=0; PERF.maxGap=0; PERF.longN=0; PERF.longMax=0;
     }
@@ -1133,7 +1137,7 @@ function showSettings(){
     <input type="range" min="0" max="100" step="1" value="${sv}" oninput="setSfxVol(this.value)" onchange="sfx('relic')" style="width:100%">
     <p style="margin-top:16px">流畅模式（低配机）：<b style="color:${SETTINGS.lowSpec?'var(--green)':'var(--red)'}">${SETTINGS.lowSpec?'开':'关'}</b><br><small style="color:var(--dim);font-size:12px">开启后会关掉震屏 / 抖动 / <b>伤害飘字</b></small></p>
     <button class="btn ghost" onclick="toggleLowSpec()">${SETTINGS.lowSpec?'关闭流畅模式':'开启流畅模式'}</button>
-    <p style="margin-top:16px">性能读数（诊断用）：<b style="color:${SETTINGS.perfReadout?'var(--green)':'var(--red)'}">${SETTINGS.perfReadout?'开':'关'}</b><br><small style="color:var(--dim);font-size:12px">开启后屏幕右上角显示 FPS / 最长帧 / longtask，用来查卡顿；查完记得关掉</small></p>
+    <p style="margin-top:16px">性能读数（诊断用）：<b style="color:${SETTINGS.perfReadout?'var(--green)':'var(--red)'}">${SETTINGS.perfReadout?'开':'关'}</b><br><small style="color:var(--dim);font-size:12px">开启后屏幕右上角显示 FPS / 最长帧 / longtask，用来查卡顿。⚠️ 读数本身有开销（常驻帧循环 + 刷新文本）⇒ 开着会比关掉略卡，属正常现象，查完请关掉</small></p>
     <button class="btn ghost" onclick="togglePerfReadout()">${SETTINGS.perfReadout?'关闭性能读数':'开启性能读数'}</button>
     <p style="margin-top:16px">伤害飘字：<b style="color:${fx()?'var(--green)':'var(--red)'}">${fx()?'开':'关（流畅模式）'}</b></p>
     <p style="margin-top:16px">结束回合软提示：<b style="color:${SETTINGS.endTurnHint!==false?'var(--green)':'var(--red)'}">${SETTINGS.endTurnHint!==false?'开':'关'}</b></p>
