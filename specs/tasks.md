@@ -55,5 +55,5 @@
 ## H. 版本号与提交
 - [x] H1 版本号 bump 至 v1.1.15（原型.html `<title>` 为唯一落点，提交.py 从此读取；README.txt 里程碑表同步；`#ver-tag` 已作为开发者痕迹删除）
 - [x] H2 `git status` + `git diff` 复核，仅暂存本轮改动与新增素材
-- [ ] H3 `git commit`（conventional，中文说明）——暂存区与 `_commit_msg.txt` 已就绪，沙箱拦截 .git 写入，待用户手动执行 `git commit -F _commit_msg.txt`（或权限模式改自动批准后由 agent 重试）
+- [x] H3 `git commit`（conventional，中文说明）→ 提交 d34a7a3，已推送 origin/main
 - [x] H4 刷新 memory-bank（项目状态 + 本轮决策）
