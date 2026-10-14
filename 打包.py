@@ -85,9 +85,10 @@ FX_WHOLE_SKIP = {'daoxin_full'}
 # （verify_dist [2d] 报红），运行时纵偏移也错。这里按 key 显式给出真实排数。
 # ⚠️ 必须与 js/20_data.js 的 FX_SHEETS[key].rows 同口径（那边是唯一真相源）。
 FX_SPLIT_ROWS = {'lightning': 4, 'damage_reflect': 4}
-# v1.1.10：boss_vfx（b1~b6 幕主）同 specs —— 常规段 3840×2880（8 列 4 行、单帧 480×720，
-# 正方形口径会错切成 6 排）、连接段 3840×1024（单帧 480×256，连 H%480 都不为 0 ⇒ 直接返回 None、
-# 运行时请求 _r0 落空 404）。34 条全部显式给 4。v1.1.12：7~9 幕（夜王/修罗王/阎罗天子）12 条同追加。
+# v1.1.10：boss_vfx（b1~b6 幕主）同 specs —— v1.1.15 起换新规格：全部 3840×1920（8 列 4 行、单帧 480×480，
+# 含连接段；旧规格 3840×2880 / 连接段 3840×1024 作废）。新规格下正方形口径（H//480 = 4）本就切对，
+# 这里仍显式给 4 —— 与 js/20_data.js 的 FX_SHEETS[key].rows 保持「显式一致」，防将来再换非方格时静默错切。
+# 34 条 + v1.1.12 的 7~9 幕（夜王/修罗王/阎罗天子）12 条同口径。
 BOSS_VFX_KEYS = [
     'b1_jiangwang_attack_claw_cast', 'b1_jiangwang_attack_claw_hit',
     'b1_jiangwang_drain_feed_cast', 'b1_jiangwang_drain_feed_hit', 'b1_jiangwang_drain_feed_link',
@@ -104,7 +105,7 @@ BOSS_VFX_KEYS = [
     'b5_judge_settle_cast', 'b5_judge_settle_hit', 'b5_judge_settle_link',
     'b6_mengpo_attack_ladle_cast', 'b6_mengpo_attack_ladle_hit',
     'b6_mengpo_forget_hit', 'b6_mengpo_heal_self',
-    # v1.1.12：第 7~9 幕（无 _link 段，全部 3840×2880 常规段）
+    # v1.1.12：第 7~9 幕（无 _link 段；v1.1.15 起同换 3840×1920 新规格）
     'b7_yewang_attack_blade_cast', 'b7_yewang_attack_blade_hit', 'b7_yewang_pressure_hit',
     'b8_xiuluo_attack_slash_cast', 'b8_xiuluo_attack_slash_hit',
     'b8_xiuluo_backlash_self', 'b8_xiuluo_karma_fire_self',

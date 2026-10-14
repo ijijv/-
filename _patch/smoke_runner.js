@@ -2673,6 +2673,58 @@
     // 注意：这里用的是 CARDS 里的共享单例（此刻 up=false），所以是未升级的 12×2=24
     __ok('v0.60 D 预伤害 剑符(未升级) 诅咒≥3 → 24 且常显（v0.61.35：10×2；v1.0.18 全列 +2）', previewDamage(__card('jianfu')).d === 24 && previewDamage(__card('jianfu')).dynamic === true,
       'd=' + previewDamage(__card('jianfu')).d);
+
+    /* —— v1.1.15：多段攻击牌逐段平增减半（Q8 开天眼每段减半 / Q9 朱砂笔每段 +1 / Q10 敌人不受影响） —— */
+    (function () {
+      // 纯函数层：SEG_HALVE 窗口内 attackBuff / turnAtkBuff 分别 ⌊/2⌋ 再相加，窗口外全额
+      g = dt(); g.attackBuff = 3; g.turnAtkBuff = 4;
+      var e0 = g.enemies[0];
+      var full = calcDamageTo(e0, 10, false, false);
+      SEG_HALVE = true; var halved = calcDamageTo(e0, 10, false, false); SEG_HALVE = false;
+      __ok('v1.1.15 calcDamageTo：SEG_HALVE 内 10+⌊3/2⌋+⌊4/2⌋=13、窗口外全额 17、用后复位',
+        full === 17 && halved === 13 && SEG_HALVE === false, 'full=' + full + ' halved=' + halved);
+
+      // 源码层：三张多段牌的 eff 都带 SEG_HALVE 结算窗口；敌人出伤不经过它（Q10 天然免疫）
+      __ok('v1.1.15 雷谴符/斩妖剑/钟馗镇魂 eff 均内置 SEG_HALVE 窗口（try/finally 复位）',
+        __code(__card('leiqianfu').eff).indexOf('SEG_HALVE=true') >= 0 &&
+        __code(__card('zhanyaojian').eff).indexOf('SEG_HALVE=true') >= 0 &&
+        __code(__card('zhongkui').eff).indexOf('SEG_HALVE=true') >= 0 &&
+        __code(__card('leiqianfu').eff).indexOf('finally') >= 0, '');
+      __ok('v1.1.15 Q10：敌人多段攻击走 dealDamageToPlayer，不引用 SEG_HALVE（不受减半影响）',
+        __code(dealDamageToPlayer).indexOf('SEG_HALVE') < 0, '');
+
+      // 实战·雷谴符（未升级）：诅咒 3 层 = 3 段 × (2+⌊3/2⌋=1) = 9（旧口径每段 +3 = 15）， curse 清空、flag 复位
+      g = dt(); g.enemies[0].curse = 3; g.attackBuff = 3;
+      (function () { var t = g.enemies[0], bh = t.hp; __card('leiqianfu').eff(false);
+        __ok('v1.1.15 实战 雷谴符 curse3+朱砂笔：3×(2+1)=9（旧 3×5=15）', bh - t.hp === 9 && t.curse === 0 && SEG_HALVE === false,
+          'taken=' + (bh - t.hp) + ' curse=' + t.curse); })();
+
+      // 实战·斩妖剑·天师列（未升级）：主击 10+1 + 引爆 2 段 × (5+1) = 23（旧 13+2×8=29）
+      g = dt(); g.enemies[0].curse = 2; g.attackBuff = 3;
+      (function () { var t = g.enemies[0], bh = t.hp; __card('zhanyaojian').eff(false);
+        __ok('v1.1.15 实战 斩妖剑 curse2+朱砂笔：11+2×6=23（旧 29）', bh - t.hp === 23 && t.curse === 0 && SEG_HALVE === false,
+          'taken=' + (bh - t.hp) + ' curse=' + t.curse); })();
+
+      // 实战·钟馗镇魂·天师列（未升级，spirit 类型本就不吃朱砂笔）：开天眼 +4 ⇒ 主击 16+2 + 3 段 × (3+2) = 33（旧 20+3×7=41）
+      g = dt(); g.enemies[0].curse = 3; g.turnAtkBuff = 4;
+      (function () { var t = g.enemies[0], bh = t.hp; __card('zhongkui').eff(false);
+        __ok('v1.1.15 实战 钟馗镇魂 curse3+开天眼+4：18+3×5=33（旧 41）', bh - t.hp === 33 && t.curse === 0 && SEG_HALVE === false,
+          'taken=' + (bh - t.hp) + ' curse=' + t.curse); })();
+
+      // 预览与实战同式：朱砂笔走 hasRelic；多段牌加「⌊平增/2⌋ × 段数」，单段牌（雷符）全额对照
+      g = dt(); g.enemies[0].curse = 3; g.relics = ['zhushabi'];
+      __ok('v1.1.15 预览 雷谴符 curse3+朱砂笔：6+3×1=9', previewDamage(__card('leiqianfu')).d === 9,
+        'd=' + previewDamage(__card('leiqianfu')).d);
+      __ok('v1.1.15 预览 斩妖剑 curse3+朱砂笔：20+3×1=23', previewDamage(__card('zhanyaojian')).d === 23,
+        'd=' + previewDamage(__card('zhanyaojian')).d);
+      __ok('v1.1.15 预览 雷符 curse3+朱砂笔：9+3=12（单段不减半对照）', previewDamage(__card('leifu')).d === 12,
+        'd=' + previewDamage(__card('leifu')).d);
+      g.relics = []; g.turnAtkBuff = 4;
+      __ok('v1.1.15 预览 雷谴符 curse3+开天眼+4：6+3×2=12', previewDamage(__card('leiqianfu')).d === 12,
+        'd=' + previewDamage(__card('leiqianfu')).d);
+      __ok('v1.1.15 预览 斩妖剑 curse3+开天眼+4：20+3×2=26', previewDamage(__card('zhanyaojian')).d === 26,
+        'd=' + previewDamage(__card('zhanyaojian')).d);
+    })();
   })();
 
   /* ============ v0.60 战斗区下移（后排错落净空，别顶到顶部栏） ============ */
@@ -5207,10 +5259,10 @@
     /* ============ A. 地图素材表（唯一真相源 = NODE_ICON / NODE_ICON_LOCKED / MAP_ROAD_ICON）============ */
     var iconBad = SIX.filter(function (k) { return !/\.png$/.test(String(NODE_ICON[k] || '')); });
     __ok('v0.61.41 UI NODE_ICON 六键都是 .png 文件名（留空槽时代结束）', iconBad.length === 0, iconBad.join(','));
-    __ok('v0.61.41 UI NODE_ICON 指向真实交付的文件名（含用户原图的 ellite 拼法）',
-      NODE_ICON.fight === 'combat.png' && NODE_ICON.elite === 'ellite.png' &&
-      NODE_ICON.unknown === 'unknown.png' && NODE_ICON.camp === 'rest.png' &&
-      NODE_ICON.shop === 'shop.png' && NODE_ICON.boss === 'boss.png',
+    __ok('v1.1.14 UI NODE_ICON 指向 guanqia-logo 新图（商店仍用 map/shop.png）',
+      NODE_ICON.fight === 'guanqia-logo/combat.png' && NODE_ICON.elite === 'guanqia-logo/ellite.png' &&
+      NODE_ICON.unknown === 'guanqia-logo/unknown.png' && NODE_ICON.camp === 'guanqia-logo/rest.png' &&
+      NODE_ICON.shop === 'shop.png' && NODE_ICON.boss === 'guanqia-logo/boss.png',
       JSON.stringify(NODE_ICON));
     __ok('v0.61.41 UI 未解锁用 locked.png（用户给的锁图）', String(NODE_ICON_LOCKED) === 'locked.png');
     /* v0.61.42：MAP_ROAD_ICON 这张表**已退役**（路径回到代码自绘，见下面 B 段）。
@@ -5223,8 +5275,9 @@
       SIX.every(function (k) { return String(nodeHTML({ t: k })).indexOf('node-ico') >= 0; }));
     __ok('v0.61.41 UI 图标走 artImg/assetURL 而不是写死 素材/...（写死的话打包后丢图）',
       String(nodeIconHTML).indexOf('artImg') >= 0 && String(artImg).indexOf('assetURL') >= 0);
-    __ok('v0.61.41 UI showMap 未解锁的格子挂 locked.png（不再留白 / 不再显示 ? 剪影）',
-      String(showMap).indexOf('NODE_ICON_LOCKED') >= 0 && String(showMap).indexOf('map-node empty') < 0);
+    __ok('v1.1.14 UI showMap 未解锁格显示真实类型图标（不再挂锁图；也不留白）',
+      String(showMap).indexOf('NODE_ICON_LOCKED') < 0 && String(showMap).indexOf('map-node empty') < 0
+      && String(showMap).indexOf('nodeHTML(node)') >= 0);
     __ok('v0.61.41 UI 节点文案去掉了 emoji 前缀（改用图标表达类型）',
       Object.keys(NODE_LABEL).filter(function (k) { return /[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(NODE_LABEL[k]); }).length === 0,
       JSON.stringify(NODE_LABEL));
@@ -6252,8 +6305,9 @@
       + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480）；'
       + 'v1.1.x 起的 lightning 是用户素材：8 列 × 6 行、单元 480×480、48 帧；'
       + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 3 行、单元 480×480、24 帧；'
-      + 'v1.1.10 起的 boss_vfx b1~b6 幕主 34 张、v1.1.12 起 b7~b9 幕主 12 张：8 列 × 4 行、30fps、32 帧，'
-      + '常规段单元 480×720（ch=1.5）、连接段 480×256（ch≈0.5333））',
+      + 'v1.1.10 起的 boss_vfx b1~b6 幕主 34 张、v1.1.12 起 b7~b9 幕主 12 张：8 列 × 4 行、30fps、32 帧；'
+      + 'v1.1.15 起 46 张全部换新规格：单帧 480×480（正方形格，不写 ch；旧 480×720 / 连接段 480×256 作废，'
+      + 'lightning / damage_reflect 仍是 480×720、保留 ch=1.5）',
       Object.keys(FX_SHEETS).length === 85 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
@@ -6775,7 +6829,7 @@
       + '重写模板时最容易漏绑 onclick，这条就是防它；v1.0.14：排行榜入口已删；v1.0.16：加「解锁」入口）',
       (function () {
         var s = __code(showStartScreen);
-        var must = ['onclick="steleBreak(this,openSaves)"', 'onclick="steleBreak(this,startGame)"',
+        var must = ['onclick="steleBreak(this,resumeRun)"', 'onclick="steleBreak(this,startGame)"',
                     'onclick="talisOpen(this,viewBestiary)"',
                     'onclick="talisOpen(this,showSettings)"',
                     'onclick="talisOpen(this,viewMilestones)"'];
@@ -6799,6 +6853,35 @@
         var iBtn = s.indexOf('is-continue'), iDis = s.indexOf("hasRunSave()?'':' disabled'", iBtn);
         return iBtn >= 0 && iDis > iBtn && iDis - iBtn < 120;
       })());
+    /* ===================== v1.1.15：存档单档化（Q1~Q7 口径） ===================== */
+    __ok('v1.1.15 「续」直接续档：startGame 收敛为 ensureAudio+confirmNewGame，不再出现存档面板/空槽分配',
+      (function () {
+        var s = __code(startGame);
+        return s.indexOf('ensureAudio') >= 0 && s.indexOf('confirmNewGame') >= 0
+            && s.indexOf('showSavesPanel') < 0 && s.indexOf('firstFreeSlot') < 0;
+      })());
+    __ok('v1.1.15 旧多槽面板函数整块删除（openSaves/slotRowHTML/showSavesPanel/resumeSlot/newRunInSlot/deleteSlot）',
+      ['openSaves', 'slotRowHTML', 'showSavesPanel', 'resumeSlot', 'newRunInSlot', 'deleteSlot']
+        .every(function (f) { return typeof globalThis[f] === 'undefined'; }));
+    __ok('v1.1.15 normalizeSingleRunSave 存在（旧多档 → 保留最新落 0 号槽），RUN_SLOTS 仍 3 键（云端 runs 口径不动）',
+      typeof normalizeSingleRunSave === 'function' && RUN_SLOTS.length === 3);
+    __ok('v1.1.15 askOverwriteSave：覆盖提示面板含两段红字（大「目前有一个存档，是否继续」/ 中「【继续】会掩盖之前的【存档】」）',
+      (function () {
+        var s = __code(askOverwriteSave);
+        return s.indexOf('目前有一个存档，是否继续') >= 0 && s.indexOf('【继续】会掩盖之前的【存档】') >= 0;
+      })());
+    __ok('v1.1.15 settleResultHTML 增 abandon 分支：只有「返回」按钮（回选角界面）、无免费复活',
+      (function () {
+        var s = __code(settleResultHTML);
+        var i = s.indexOf("'abandon'");
+        if (i < 0) return false;
+        var j = s.indexOf('}else{', i);   // 只钉 abandon 分支体内：身后的默认分支本就有 reviveFree
+        var seg = s.slice(i, j > i ? j : i + 300);
+        return seg.indexOf('返回') >= 0 && seg.indexOf('showHeroSelect') >= 0
+            && seg.indexOf('reviveFree') < 0 && seg.indexOf('giveUp') < 0;
+      })());
+    __ok('v1.1.15 settleOverwrittenRun 存在（以旧档角色跳战败结算，算分+里程后删档）',
+      typeof settleOverwrittenRun === 'function' && typeof rehydrateRunForSettle === 'function');
     /* v0.68.1：石碑改**左右并排**（用户：「这两个石碑图标你应该左右摆放」）。
        旧版是竖列（续在上、入塔在下），DOM 顺序也是续在前。这里钉 DOM 顺序 ——
        光有 CSS 的 flex-direction:row 不够（那半边在产物门禁 verify_dist 里），

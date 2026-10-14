@@ -15,8 +15,13 @@
      打包.py 的 ASSET_MAP 内联不会生效，单文件产物里会变成丢图。 */
 const NODE_LABEL = { fight:'战斗', elite:'精英', unknown:'未知', camp:'篝火', shop:'商店', boss:'Boss' };
 const MAP_ICON_DIR = 'map/';
-const NODE_ICON  = { fight:'combat.png', elite:'ellite.png', unknown:'unknown.png', camp:'rest.png', shop:'shop.png', boss:'boss.png' };
-/* 没解锁的关卡：一律挂锁，**不泄露它的类型**（用户给的 locked.png） */
+/* v1.1.14（用户 2026-10-14）：关卡图标改用 素材/map/guanqia-logo/ 下的新图，按文件名映射类型；
+   商店图（shop.png）仍是 素材/map/shop.png —— guanqia-logo 里没有商店图。
+   ⚠️ 换图只改这张表，渲染逻辑一个字都不用动。 */
+const NODE_ICON  = { fight:'guanqia-logo/combat.png', elite:'guanqia-logo/ellite.png', unknown:'guanqia-logo/unknown.png', camp:'guanqia-logo/rest.png', shop:'shop.png', boss:'guanqia-logo/boss.png' };
+/* v1.1.14（用户口径「关卡不要用锁图标，把精英/Boss/篝火等类型都显示出来，方便玩家综观全局挑路线」）：
+   未解锁/未到达的关卡不再挂锁，一律**显示真实类型图标**，仅以灰化（.o-locked 描边档位）区分。
+   这条常量只保留「锁图在磁盘上的名字」这一事实（素材不擅自删），**渲染侧已不再引用**。 */
 const NODE_ICON_LOCKED = 'locked.png';
 /* 道路贴图（MAP_ROAD_ICON = path-left/right.png）在 v0.61.42 随「路径回到代码自绘」一并**退役**：
    曲线改由 drawMapLinks 用 SVG 二次贝塞尔现画（还要做沿路径延长的光边动画，贴图做不到）。
@@ -547,22 +552,20 @@ function showMap(opts){
     html+=`<div class="map-row ${rowCls}">`;
     for(let c=0;c<MAP[r].length;c++){
       const node=MAP[r][c], tier=fogTier(r,c), dc=`data-r="${r}" data-c="${c}"`;
-      // v0.61.41：未解锁的格子不再留白，改挂 NODE_ICON_LOCKED（用户给的 locked.png）——
-      // 每格都有内容 ⇒ 行高与坐标仍然恒定，解锁进度变化时不抖动；
-      // preview（下一步会亮）与 hidden（更远/同层走不到）都挂锁，只有 past/choice 才露出真实图标。
-      // v0.63.0：描边改成**跟着档位走**（nodeOutlineTier(tier)），所以 ocls 从「每行算一次」挪进格子循环
-      // —— 否则当前层里那些走不到的锁会拿到 o-reached，看着像能走却没有一条线。
+      // v1.1.14：未解锁/未到达的格子**不再挂锁**，一律显示真实类型图标（灰化区分），
+      // 让玩家综观全局挑路线。每格都有内容 ⇒ 行高与坐标仍然恒定，解锁进度变化时不抖动。
+      // 描边档位仍跟着 fogTier 走（nodeOutlineTier），hidden/preview 拿 o-locked（灰）。
       const tip=NODE_TIP[node.t]||'', ocls=' '+nodeOutlineTier(tier);
       if(breakSet[r+','+c]){
         // v0.62.0：刚解锁的格 —— 真实图标先挂上但**藏着**（.o-reveal），锁由 playLockBreak 的
         // canvas 画在上面；碎片飞散那一帧（t≈0.20）再让图标显形 + 描边淡入
         // = 用户要的「锁破裂后展示相连的下面关卡的对应图标」。
-        html+=`<button class="map-node breaking${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeIconHTML(NODE_ICON[node.t]||NODE_ICON_LOCKED,'o-reveal')}<span class="node-label">${nodeLabel(node)}</span></button>`;
+        html+=`<button class="map-node breaking${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeIconHTML(NODE_ICON[node.t]||NODE_ICON.fight,'o-reveal')}<span class="node-label">${nodeLabel(node)}</span></button>`;
         continue;
       }
-      if(tier==='hidden'){ html+=`<div class="map-node locked${ocls}" ${dc} style="${mapNodeStyle(node)}" title="尚未解锁">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
+      if(tier==='hidden'){ html+=`<div class="map-node locked${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}（尚未解锁）">${nodeHTML(node)}</div>`; continue; }
       if(tier==='choice'){ html+=`<button class="map-node${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
-      if(tier==='preview'){ html+=`<div class="map-node preview${ocls}" ${dc} style="${mapNodeStyle(node)}" title="下一步可以走到这里（尚未解锁）">${nodeIconHTML(NODE_ICON_LOCKED)}</div>`; continue; }
+      if(tier==='preview'){ html+=`<div class="map-node preview${ocls}" ${dc} style="${mapNodeStyle(node)}" title="下一步可以走到这里（尚未解锁）">${nodeHTML(node)}</div>`; continue; }
       // past：走过的 + **当时看过的兄弟格**（v0.63.0 起不再退回锁）—— 真图标、暗化、描边消失
       html+=`<div class="map-node past${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}">${nodeHTML(node)}</div>`;
     }
@@ -1855,12 +1858,29 @@ function mileNodesFor(heroId){
   }
   return out;
 }
-/* 填充进度：走到**最后一个已达标**的真实档位（need 未定的档位不参与）。 */
+/* 填充进度：**随里程数连续变化**（v1.1.14，用户 2026-10-14 报障「蓝色进度要到下一档才跳」）。
+   旧版是「走到最后一个已达标档位」⇒ 只有跨过 need 才跳一格。现按分段线性插值：
+     锚点 0   = (里程 0  → 0%)
+     锚点 i+1 = (第 i 档 need → 该档槽心 %)
+   当前 pts 落在哪一段就按比例插值；超过最后一档 need ⇒ 停在尾槽心（后续档位未定稿）。
+   ⚠️ need 为 null 的档位（骨架/神秘人）不参与 —— 它们的锚点直接跳过，天然不会出现。 */
 function mileFillPct(nodes, pts){
   const slots=nodes.length+1;
-  let idx=-1;
-  nodes.forEach((n,i)=>{ if(n.need!=null && pts>=n.need) idx=i; });
-  return idx<0 ? 0 : mileSlotPct(idx, slots);
+  const p0=Math.max(0, pts|0);
+  if(p0<=0) return 0;
+  const anchors=[{p:0, x:0}];
+  nodes.forEach((n,i)=>{ if(n.need!=null) anchors.push({p:n.need, x:mileSlotPct(i, slots)}); });
+  if(anchors.length<2) return 0;                    // 没有任何真实档位 ⇒ 无锚点，停在 0
+  for(let k=0;k<anchors.length;k++){
+    const a=anchors[k], b=anchors[k+1];
+    if(!b) return a.x;                              // 越过最后一档 ⇒ 停在尾槽
+    if(p0 < b.p){
+      const span=(b.p-a.p)||1;
+      const t=Math.max(0, Math.min(1, (p0-a.p)/span));
+      return a.x + (b.x-a.x)*t;
+    }
+  }
+  return anchors[anchors.length-1].x;
 }
 /* 点奖励白框 = 领取。到点（pts>=need）且未领 ⇒ 记一次 + 领取音；未到点 ⇒ 报错音。
    待定 / 未知 / 尾节点一律不可领（还没定稿，也没有里程数可比）。
@@ -2262,20 +2282,11 @@ function jinnangBack(){
 function viewDeck(){
   if(!G){ floatMsg('开局后可查看牌库'); return; } // v0.61 B11：原本静默无反应
   if(!G.deck.length){ floatMsg('牌库为空'); return; }
-  const m={}; const order=[];
-  G.deck.forEach(c=>{ if(!m[c.id]){ m[c.id]={card:c,total:0,up:0}; order.push(c.id); } m[c.id].total++; if(c.up) m[c.id].up++; });
-  const groups={attack:'攻击',defense:'防御',skill:'技能',spirit:'鬼怪'};
-  let html=`<h2>我的牌库（共 ${G.deck.length} 张）</h2><div class="kwlist">`;
-  for(const [type,label] of Object.entries(groups)){
-    const rows=order.filter(id=>m[id].card.type===type);
-    if(!rows.length) continue;
-    html+=`<div style="color:var(--gold);margin:8px 0 2px">— ${label} —</div>`;
-    html+=rows.map(id=>{ const {card,total,up}=m[id];
-      return `<div><span style="color:var(--dim)">${cardCost(card)}符文</span> <b>${card.name}</b>${exhaustChip(card)} ×${total}${up>0?` <span style="color:var(--green)">（升级 ${up}）</span>`:''} <span style="color:var(--dim)">· ${wrapKw(card.t(false))}</span>${up>0?`<div style="color:var(--green);font-size:12px;margin-left:12px">↳ 升级后：${wrapKw(card.t(true))}</div>`:''}</div>`;
-    }).join('');
-  }
-  html+=`</div>`;
-  showOverlay(html, true);
+  /* v1.1.14（用户口径「删掉目前的文字列表布局，采用 6 列分布一行一行展示所有牌面，大致铺满横屏」）：
+     每张牌直接渲染 cardBody（唯一牌面渲染器），不再按 id 合并成文字清单。
+     容器 .deck-grid（CSS 里 6 列网格）+ deck-scene（与 forge/pile 同一条加宽口径）。 */
+  const cards=G.deck.map(c=>`<div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div>`).join('');
+  showOverlay(`<h2>我的牌库（共 ${G.deck.length} 张）</h2><div class="deck-grid">${cards}</div>`, true, 'deck-scene');
 }
 
 /* v0.76.0：点抽牌堆 / 弃牌堆看牌堆内容。

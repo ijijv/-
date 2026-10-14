@@ -59,3 +59,28 @@
   （第一级唯一 game / game/index.html / js 相对外链 / ASSET_WEBP=true / 无绝对路径泄漏）。
   **待用户真机试传；试传结果（能跑/不能跑、缺什么）待回填。**
   若容器不认 Service Worker：第一排查方向 = 剥离 PWA 组件（只留 index.html + js/ + 素材/）。
+
+## v1.1.15 多段攻击牌逐段平增减半（SEG_HALVE 结算窗口）
+- **Date:** 2026-10-14
+- **Author:** HP（Q8/Q9/Q10 口径）+ 接手 agent（实现）
+- **Context:** 朱砂笔「攻击 +3」与开天眼/焚身咒/金刚酒的 turnAtkBuff 平增，原先对**每一段**多段伤害
+  全额叠加（6 段雷谴符 = +18），过强。用户定口径：Q8 开天眼对多段牌每段增伤减半（升级前后同步减半，
+  卡面写减半后数值）；Q9 朱砂笔对多段牌每段只 +1（⌊3/2⌋）；Q10 两条只作用玩家打出的攻击牌，
+  敌人多段攻击不受影响。
+- **Decision:** 引入全局开关 `SEG_HALVE`（30_engine.js L107）：`calcDamageTo` 在该窗口内把
+  attackBuff / turnAtkBuff 各按 ⌊/2⌋ 计入（分别 floor 再相加）。只有三张「一牌多击」攻击牌
+  （雷谴符 / 斩妖剑·天师列 / 钟馗镇魂·天师列）的 eff 在结算窗口内置 true（try/finally 兜底复位）。
+  预览侧新增 `CARD_SEGS`（与 eff 同式给段数），预览把「每段减半值 × 段数」加进总伤，
+  与实战逐段结算精确一致。敌人 multi 走 `dealDamageToPlayer` 不经 calcDamageTo 的玩家 buff 段，
+  天然满足 Q10，无需改动。
+- **Alternatives Considered:**
+  - 给 calcDamageTo 加「当前牌段数」参数 —— 被否：调用点几十处，改动面大且易漏；
+    全局开关 + try/finally 窗口只碰三张牌的 eff。
+  - 噬魂术（o.segs）/ 咒雨·武僧（point=true）一并纳入 —— 被否：它们本就把加成只在总伤烘焙一次，
+    逐字节等价，不动。
+- **Consequences:**
+  - 数值示例（未升级）：雷谴符 curse3+朱砂笔 15→9；斩妖剑 curse2+朱砂笔 29→23；
+    钟馗镇魂 curse3+开天眼+4 41→33。
+  - 卡面全文 t() 与短版 ts() 同步写明减半后数值（v0.69.0 数字闸要求逐元素相等 ⇒ 短版必须带数）。
+  - 冒烟新增 11 条 v1.1.15 断言（纯函数层 13/17、三张牌实战 hp 掉落、预览×朱砂笔/开天眼、
+    eff 源码含 SEG_HALVE 窗口、dealDamageToPlayer 不含 SEG_HALVE）。

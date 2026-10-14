@@ -301,6 +301,9 @@ function settleResultHTML(mode){
   if(mode==='win'){
     btns='<button class="btn" onclick="startGame()">再打一局</button>'
         +'<button class="btn ghost" onclick="showStartScreen()">返回主菜单</button>';
+  }else if(mode==='abandon'){
+    /* v1.1.15：覆盖存档的败局结算 —— 只有「返回」（回选角界面），不给免费复活。 */
+    btns='<button class="btn ghost" onclick="showHeroSelect()">返回</button>';
   }else{
     btns=(G.revivedFree?'':'<button class="btn" onclick="reviveFree()">免费复活</button>')
         +'<button class="btn ghost" onclick="giveUp()">放弃 · 结束本局</button>';
@@ -369,6 +372,38 @@ function settleAnim(R){
     })(k); }
   }, N*150+280);
 }
+/* v1.1.15：把一份存档数据**轻量水合**成「只为结算用」的临时局 ——
+   不做 buildActs / 牌堆复原（那些对算分与里程毫无意义），只覆写算分/里程/榜单读取的字段。
+   返回 null 表示这份档没法结算（调用方兜底删档回选角）。 */
+function rehydrateRunForSettle(d){
+  if(!d || typeof d!=='object') return null;
+  const t=newState();
+  t.hero=d.hero||'tianshi';
+  t.act=d.act||1; t.mapRow=d.mapRow||0;
+  t.killNormal=d.killNormal||0; t.killElite=d.killElite||0; t.killBoss=d.killBoss||0; t.killSummon=d.killSummon||0;
+  t.totalKills=d.totalKills||0;
+  t.gold=d.gold||0; t.hp=d.hp||0; t.maxHp=d.maxHp||60;
+  t.potions=(d.potions||[]).map(potionRestore).filter(Boolean);
+  t.accMs=(d.accMs!=null)?Math.max(0,d.accMs|0):0;
+  t.startTs=d.startTs||Date.now(); t.t0=Date.now();
+  return t;
+}
+/* v1.1.15（用户口径 Q3/Q4）：「继续」覆盖旧档 ⇒ 立即为**旧档里那个角色**补一场败局结算
+   （算分 + 里程 + 入榜，播旧角色的败局视频），随后删档；结算页只有「返回」，点它回选角界面。
+   ⚠️ 全程临时替换全局 G（选角界面那份新局态先存起来）。**settleVideo 必须在 G=t 期间调用**
+   —— 它同步读 G.hero 选片源；openFn 回调只碰已生成的 R（不读 G），故恢复 savedG 后触发也安全。 */
+function settleOverwrittenRun(d){
+  const savedG=G;
+  const t=rehydrateRunForSettle(d);
+  if(!t){ clearRunSave(0); showHeroSelect(); return; }
+  G=t;
+  G.score=calcScore(); G.dead=true; G.battleOver=true;
+  recordScoreRun(false); grantRunMilestones();
+  const R=settleResultHTML('abandon');
+  clearRunSave(0); if(typeof cloudMarkDirty==='function') cloudMarkDirty();
+  settleVideo('lose', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); });
+  G=savedG;
+}
 function loseGame(){
   if(G.dead) return; // 防止重复结算（多张怨气/连续判定）
   G.dead=true; G.battleOver=true; // v0.61 B4：胜负旗标统一收口
@@ -412,8 +447,12 @@ function revive(){
   G.discard=G.discard.concat(G.hand); G.hand=[];
   /* v0.74.0：复活回的是**同一场战斗** ⇒ 必须把战斗背景铺回去（失败屏刚把它换成了 bg_defeat）。
      漏掉这一句的表现是「血回满了、顶栏回来了，可背后还是那张败局图」，而且没有任何闸会响。
-     表达式与 startBattle 里那一行逐字相同 —— 别写成两个不同的判法。 */
-  hideOverlay(); setBg('act'+G.act); sfx('heal');
+     表达式与 startBattle 里那一行逐字相同 —— 别写成两个不同的判法。
+     v1.1.14（用户 2026-10-14 报障「复活后本关无背景音乐」）：失败屏把 BGM 一并换掉了
+     ⇒ 复活回同一场战斗，必须把**战斗轨**铺回去（与 startBattle 的选轨逐字同源：
+     交给 battleBgmFor(G.enemies) 判 Boss/精英/普通轨）。漏掉这一句的表现是
+     「血回满了、画面回来了，可整场战斗静音」，而且没有任何闸会响。 */
+  hideOverlay(); setBg('act'+G.act); setBGM(battleBgmFor(G.enemies)); sfx('heal');
   log('你复活了，重整旗鼓再战');
   startTurn();
 }
@@ -543,10 +582,25 @@ let RUN_SLOT=0;                                   // 当前进行中的槽位（
 let RUN_FINISHED=false;
 function runKeyOf(i){ const n=RUN_SLOTS.length; return RUN_SLOTS[Math.max(0, Math.min(n-1, i|0))]; }
 function setRunSlot(i){ const n=RUN_SLOTS.length; RUN_SLOT=Math.max(0, Math.min(n-1, i|0)); }
-function firstFreeSlot(){ for(let i=0;i<RUN_SLOTS.length;i++){ if(!readRun(i)) return i; } return -1; }
-function slotInfo(i){
-  const d=readRun(i); if(!d) return null;
-  return { act:d.act||1, row:(d.mapRow||0)+1, hp:d.hp||0, maxHp:d.maxHp||0, gold:d.gold||0, score:d.score||0, hero:d.hero||'' };
+/* v1.1.15：存档**单档化** —— 全机只留一份本局档（落 0 号槽）。
+   newestRunSlot：三槽里找 startTs 最大（最新）的那槽；并列取最小下标；全空返回 -1。 */
+function newestRunSlot(){
+  let best=-1, bestTs=-1;
+  for(let i=0;i<RUN_SLOTS.length;i++){
+    const d=readRun(i); if(!d) continue;
+    const ts=d.startTs||0;
+    if(ts>bestTs){ bestTs=ts; best=i; }
+  }
+  return best;
+}
+/* 单档归一：把最新那档搬进 0 号槽，其余槽清空；全空则只把当前槽指回 0。
+   旧多档玩家在 boot 时经它收敛一次，之后所有读写只碰 0 号槽。 */
+function normalizeSingleRunSave(){
+  const i=newestRunSlot();
+  if(i<0){ setRunSlot(0); return; }
+  if(i!==0){ try{ Store.setJSON(runKeyOf(0), readRun(i)); }catch(e){} }
+  for(let k=1;k<RUN_SLOTS.length;k++){ try{ Store.del(runKeyOf(k)); }catch(e){} }
+  setRunSlot(0);
 }
 /* —— 断点续玩：全场景实时存档（战斗/篝火/商店/地图） —— */
 let SCENE='menu';
@@ -642,9 +696,8 @@ function destroyRunSave(){
   try{ Store.del(runKeyOf(RUN_SLOT)); }catch(e){}
   if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }
 }
-/* v1.0.1：加载指定槽位。`slot` 省略时读当前槽（默认 0 号 = 旧键名），
-   所以「主菜单·续」不再直连这里 —— 它先开存档管理面板（openSaves → showSavesPanel），
-   由面板里的「续玩」带着槽号调进来。 */
+/* v1.1.15：单档化后「主菜单·续」由 resumeRun 直连这里（无槽号，读 0 号槽）。
+   `slot` 形参保留兼容旧调用；单档口径下永远落 0 号槽。 */
 function continueRun(slot){
   if(slot!=null) setRunSlot(slot);
   let d; try{ d=Store.getJSON(runKeyOf(RUN_SLOT)); }catch(e){}

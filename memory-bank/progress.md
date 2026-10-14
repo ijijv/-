@@ -10,6 +10,32 @@
 
 ## Update History
 
+### [Oct 14, 2026] ✅ v1.1.15：存档单档化 + 多段牌逐段平增减半 + boss_vfx 新规格（接手 agent）
+<!-- ID: p_2026-10-14_v1115 -->
+
+按 `specs/spec.md` + `specs/tasks.md`（A→H）整轮落地：
+
+- **存档单档化**：startGame 收敛为 ensureAudio+confirmNewGame；旧多槽面板六函数删除；
+  覆盖确认走 overwrite-scene 纯文字面板；abandon 结算只有「返回」回选角界面。
+- **SEG_HALVE**：朱砂笔/开天眼类平增对三张多段牌（雷谴符/斩妖剑·天师/钟馗镇魂·天师）
+  逐段 ⌊/2⌋；预览 CARD_SEGS 与实战同式；敌人多段不受影响（Q10）。
+- **boss_vfx**：46 张全换 3840×1920（8×4、单帧 480×480），FX_SHEETS 删 ch 字段。
+- **低耦合批**：复活 BGM、里程碑进度条连续、符纸上移、初始牌组+牌库 6 列、
+  锦囊/牌堆图标、地图类型图标换 guanqia-logo。
+- **打包三口径**：单文件 90.36 MB / dist/web 70.3 MB / TapTap zip 67.64 MB（593 文件）。
+- **五道闸全绿新基线**：verify_dist / probe_dist / verify_web / _probe_cloud 全过，
+  run_smoke **pass=1519 fail=0**（+17 条新断言）。
+- 版本号 bump：原型.html <title> = v1.1.15（唯一落点）+ README.txt 里程碑表同步。
+
+**Affected files:**
+- `js/00_base.js` `js/20_data.js` `js/30_engine.js` `js/40_flow.js` `js/50_ui.js` `js/60_boot.js`
+- `原型.html` `打包.py` `README.txt` `_patch/smoke_runner.js` `memory-bank/*` `specs/*`
+- `素材/fx/b*.png` ×46（覆盖更新）、`素材/map/guanqia-logo/`（新增）、`素材/map/{boss,combat,ellite,rest,unknown}.png`（删除）
+
+**Tags:** `v1.1.15`, `存档单档化`, `SEG_HALVE`, `boss_vfx新规格`, `五道闸`
+
+---
+
 ### [Oct 13, 2026] ✅ Feature: 拆包产物重打 + 五道闸全绿 + TapTap 多文件 zip 产出（接手 agent）
 <!-- ID: p_2026-10-13_handover2b -->
 

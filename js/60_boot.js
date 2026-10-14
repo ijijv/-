@@ -802,7 +802,11 @@ function hsDeckPreviewClose(){
 function heroSelectStart(){
   const h=hsHero(HS_SEL); if(!h) return;
   sfx('key_press');
-  if(mileOn('hero', HS_SEL)){ pickHero(HS_SEL); return; }
+  if(mileOn('hero', HS_SEL)){
+    /* v1.1.15：已有存档 ⇒ 先弹覆盖提示（继续=为旧档补败局结算并删档；返回=回选角）。 */
+    if(hasRunSave()){ askOverwriteSave(HS_SEL); return; }
+    pickHero(HS_SEL); return;
+  }
   if(mileTickets()<1){ sfx('error'); floatMsg('没有【入门符纸】'); return; }
   askConfirm(`消耗 1 张【入门符纸】解锁【${hsEscape(h.name)}】？<br>当前持有 ${mileTickets()} 张。`, ()=>{
     if(unlockHeroWithTicket(HS_SEL)){
@@ -848,21 +852,20 @@ function backToHeroSelect(){                 // 开局抉择 → 选角
   G.hero=null; G.deck=[]; G.openingPicks=null;
   showHeroSelect();
 }
-/* v1.0.1：多存档。3 个槽位，1 号槽沿用旧键名（老档天然落进 1 号槽，无需迁移）。
-   开始新局优先用**第一个空槽**；3 个都满了才弹「存档已满」让玩家挑一个覆盖。 */
+/* v1.1.15：存档**单档化** —— 不再挑槽、不再有存档管理面板。
+   「入塔」直接开新局态并保留旧档（供选角后的覆盖提示）；「续」由 resumeRun 直进续档。 */
 function startGame(){
   ensureAudio();
-  const free=firstFreeSlot();
-  if(free>=0){ setRunSlot(free); confirmNewGame(); return; }
-  /* 都满了：原来这里是原生 `confirm()`（浏览器纯白弹窗，与志怪美术割裂），
-     现改成游戏内自制的存档管理面板（覆盖模式）。 */
-  showSavesPanel('overwrite');
+  confirmNewGame();
 }
-function confirmNewGame(slot){
+/* v1.1.15：主菜单「续」—— 直进续档（单档 ⇒ 永远是 0 号槽），不再开面板。 */
+function resumeRun(){ ensureAudio(); continueRun(); }
+function confirmNewGame(opts){
   try {
-    if(slot!=null) setRunSlot(slot);
-    const d=readRun(RUN_SLOT);
-    if(d){ clearRunSave(RUN_SLOT); }   // v1.0.14：排行榜已删 ⇒ 覆盖前直接清档（不再把旧档成绩记入榜）
+    /* v1.1.15：默认**保留旧档**（heroSelectStart 的覆盖提示要读它）；
+       仅「重新开始」显式传 {clear:true} 时才清档。 */
+    if(opts && opts.clear) clearRunSave(0);
+    setRunSlot(0);
     RUN_FINISHED=false;                // v1.0.17b：新局开工 ⇒ 解除「已终结」拒写（见 40_flow.js saveRun 守卫）
     G=newState(); G.mapRow=0;
     G.startTs=Date.now();                        // v1.0.1：本局开局时刻（结算时算本局用时，随存档往返）
@@ -874,46 +877,32 @@ function confirmNewGame(slot){
     showHeroSelect();
   } catch(e){ console.error('confirmNewGame error:', e); showStartScreen(); }
 }
-/* ===================== 存档管理面板（v1.0.1 多存档） =====================
-   mode='manage'    ：主菜单「续」——每个槽可续玩 / 删除，空槽可新建。
-   mode='overwrite' ：3 个槽都满时从「开始爬塔」进来——每个槽可覆盖并新建。 */
-function openSaves(){ showSavesPanel('manage'); }
-function slotRowHTML(i, mode){
-  const s=slotInfo(i);
-  const title=`<b style="color:var(--gold)">存档 ${i+1}</b>`;
-  if(!s){
-    const add=(mode==='manage')
-      ? ` <button class="btn ghost" style="margin:0;padding:4px 12px;font-size:12px" onclick="newRunInSlot(${i})">新建</button>`
-      : '';
-    return `<div style="padding:9px 0;border-bottom:1px solid var(--ink3)">${title} <span style="color:var(--dim)">— 空 —</span>${add}</div>`;
-  }
-  /* v1.0.14：排行榜模块（js/56_rank.js）已删，rankHeroName 不再存在 ⇒ 就地查表（不再新增全局函数）。 */
-  const _hero=HEROES.find(x=>x.id===s.hero);
-  const hero=_hero?_hero.name:'';
-  const desc=`第 ${s.act} 幕 第 ${s.row} 层 · 生命 ${s.hp}/${s.maxHp} · 金币 ${s.gold} · 得分 ${s.score}`;
-  const go=(mode==='overwrite')
-    ? `<button class="btn" style="margin:0;padding:4px 12px;font-size:12px" onclick="newRunInSlot(${i})">覆盖并新建</button>`
-    : `<button class="btn" style="margin:0;padding:4px 12px;font-size:12px" onclick="resumeSlot(${i})">续玩</button>`;
-  return `<div style="padding:9px 0;border-bottom:1px solid var(--ink3)">${title}${hero?` · ${hero}`:''}
-    <div style="color:var(--dim);font-size:12px;margin-top:2px">${desc}</div>
-    <div style="margin-top:8px">${go} <button class="btn ghost" style="margin:0;padding:4px 12px;font-size:12px" onclick="deleteSlot(${i})">删除</button></div></div>`;
+/* ===================== v1.1.15：覆盖存档提示（单档化） =====================
+   选角点「开始游戏」且已有存档时弹出：大号毛笔红主提示 + 中号毛笔红警告 +
+   小号毛笔白旧档三段信息（角色/进度/血量），左下绿「继续」、右下红「返回」。
+   全部纯文字、无边框无纯色底板（样式见 原型.html #overlay.overwrite-scene）。 */
+function askOverwriteSave(heroId){
+  const d=readRun(0);
+  if(!d){ pickHero(heroId||HS_SEL); return; }
+  const _h=HEROES.find(x=>x.id===d.hero);
+  const heroName=_h?_h.name:'未知角色';
+  const progress=`第 ${d.act||1} 幕 第 ${(d.mapRow||0)+1} 层`;
+  const hp=`生命 ${d.hp||0}/${d.maxHp||0}`;
+  showOverlay(
+    '<div class="ow-box">'
+    +'<div class="ow-title">目前有一个存档，是否继续</div>'
+    +'<div class="ow-warn">【继续】会掩盖之前的【存档】</div>'
+    +'<div class="ow-info"><span>'+heroName+'</span><span>'+progress+'</span><span>'+hp+'</span></div>'
+    +'<div class="ow-actions">'
+    +'<button class="ow-btn ow-go" onclick="overwriteAndStart(\''+(heroId||HS_SEL||'')+'\')">继续</button>'
+    +'<button class="ow-btn ow-back" onclick="overwriteBack()">返回</button>'
+    +'</div></div>', undefined, 'overwrite-scene');
 }
-function showSavesPanel(mode){
-  const overwrite=(mode==='overwrite');
-  const rows=RUN_SLOTS.map((k,i)=>slotRowHTML(i, overwrite?'overwrite':'manage')).join('');
-  showOverlay(`<h2>${overwrite?'存 档 已 满':'存 档'}</h2>
-    <p style="font-size:13px;color:var(--dim)">${overwrite
-      ? '3 个存档位都已占用，请选择要覆盖哪一位（旧进度将被清除）。'
-      : '选择一个存档继续爬塔，或删除不需要的进度。'}</p>
-    <div class="kwlist">${rows}</div>
-    <button class="btn ghost" onclick="showStartScreen()">返回主菜单</button>`);
-}
-function resumeSlot(i){ continueRun(i); }
-function newRunInSlot(i){ setRunSlot(i); confirmNewGame(); }
-function deleteSlot(i){
-  clearRunSave(i);
-  floatMsg('已删除存档 '+(i+1));
-  if(hasRunSave()) showSavesPanel('manage'); else showStartScreen();
+function overwriteBack(){ if(G) G.hero=HS_SEL; showHeroSelect(); }
+function overwriteAndStart(heroId){
+  const d=readRun(0);
+  if(!d){ showHeroSelect(); return; }
+  settleOverwrittenRun(d);   // 40_flow.js：为旧档角色补一场败局结算（算分+里程+入榜+删档）
 }
 function showOpeningChoice(){
   // 临时设置奖励层级为starter，以便使用正确的权重
@@ -1022,7 +1011,7 @@ function showStartScreen(){
         <button class="menu-hit is-start" aria-label="开始爬塔"
                 onclick="steleBreak(this,startGame)"><span class="menu-artbox">${artImg('ui/menu/start.png','<span class="menu-fb">入塔</span>','menu-art')}${menuShardsHTML('ui/menu/start.png')}</span></button>
         <button class="menu-hit is-continue" aria-label="继续上次爬塔"${hasRunSave()?'':' disabled'}
-                onclick="steleBreak(this,openSaves)"><span class="menu-artbox">${artImg('ui/menu/continue.png','<span class="menu-fb">续</span>','menu-art')}${menuShardsHTML('ui/menu/continue.png')}</span></button>
+                onclick="steleBreak(this,resumeRun)"><span class="menu-artbox">${artImg('ui/menu/continue.png','<span class="menu-fb">续</span>','menu-art')}${menuShardsHTML('ui/menu/continue.png')}</span></button>
       </div>
 
       <div class="menu-row-talis menu-tier is-list" style="--i:2">
@@ -1496,7 +1485,7 @@ function resumeGame(){
 }
 function confirmRestart(){
   showOverlay(`<h2>重新开始？</h2><p>重新开始本局，当前进度将被覆盖。</p>
-    <button class="btn" onclick="confirmNewGame()">确定 · 重新开始</button>
+    <button class="btn" onclick="confirmNewGame({clear:true})">确定 · 重新开始</button>
     <button class="btn ghost" onclick="openMenu()">返回</button>`);
 }
 function confirmQuit(){
@@ -1591,6 +1580,7 @@ numPrewarm();   // v0.61.41：四档字形开局就预加载 —— 否则本局
 applyCosmetics();
 pileInit();     // v0.69.0：把 back.png / side.png 的地址写进 CSS 变量（抽牌堆·弃牌堆）
 trackLaunch();
+normalizeSingleRunSave();   // v1.1.15：单档化收敛 —— 旧多档只留最新那份，搬进 0 号槽
 document.addEventListener('DOMContentLoaded', showStartScreen);
 /* v0.76.2 云存档：非 TapTap 环境直接 return；TapTap 端延迟 2s 拉一次云端列表，
    若云端比本机新（换设备 / 清缓存），弹一次「恢复云端存档」。 */

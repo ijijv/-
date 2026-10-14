@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v1.0.0</title>
+<title>志怪塔 · 原型 v1.1.15</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -917,6 +917,43 @@
         与全局 `.card{width:132px}`、矮屏 `.reward-cards .card{width:104px}` 是同一处真相。
         改了卡宽必须同步这里，否则 forge 探针的「组宽」判据立刻报红。 */
   #overlay.pile-scene .reward-cards{--cell-w:132px;}
+  /* v1.1.14 我的牌库（deck-scene，点右下角牌堆查看主牌库）：**6 列固定网格**，一行一行铺满横屏。
+     与 forge/pile 共用「加宽 #overlayWrap」口径；但列数是**写死的 6**（用户口径），
+     不是 auto-fit ⇒ 单元格宽由 1fr 流式分配，卡高按 132:200 高宽比撑起（卡片子元素全是
+     百分比定位，必须有确定高度，故用 aspect-ratio 而不是 height:auto 裸放）。 */
+  #overlay.deck-scene #overlayWrap{max-width:none; width:100%;}
+  #overlay.deck-scene .panel{padding:22px 14px;}
+  #overlay.deck-scene .deck-grid{display:grid; grid-template-columns:repeat(6, minmax(0, 1fr));
+    gap:12px 10px; justify-items:center;}
+  #overlay.deck-scene .deck-grid .card{width:100%; height:auto; aspect-ratio:132/200;}
+  @media (max-height:560px){
+    #overlay.deck-scene .panel{padding:12px 10px;}
+    #overlay.deck-scene .deck-grid{gap:8px 10px; margin:4px 0;}
+    #overlay.deck-scene .panel h2{margin-bottom:4px;}
+  }
+  /* v1.1.15 覆盖存档提示（overwrite-scene）：**全部纯文字** —— 透明底、无边框、无纯色底板。
+     大号毛笔红 = 主提示与两个按钮（用户 Q5 口径）；中号毛笔红 = 警告行；小号毛笔白 = 旧档三段信息。
+     按钮：左下绿「继续」、右下红「返回」（ow-actions 横排两端）。 */
+  #overlay.overwrite-scene #overlayWrap{background:transparent;}
+  #overlay.overwrite-scene .panel{background:none; border:0; box-shadow:none;}
+  #overlay.overwrite-scene .ow-box{display:flex; flex-direction:column; align-items:center; gap:2.2vh;
+    text-align:center; padding:2vh 0;}
+  #overlay.overwrite-scene .ow-title{font-family:'MaShanZheng', var(--font-kai), serif;
+    font-size:clamp(24px,5.4vh,50px); color:#c8402f; letter-spacing:6px;
+    text-shadow:0 0 14px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.8);}
+  #overlay.overwrite-scene .ow-warn{font-family:'MaShanZheng', var(--font-kai), serif;
+    font-size:clamp(16px,3.2vh,30px); color:#c8402f; letter-spacing:3px;
+    text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 3px rgba(0,0,0,.8);}
+  #overlay.overwrite-scene .ow-info{display:flex; gap:2.5em; justify-content:center;
+    font-family:var(--font-kai); font-size:clamp(13px,2.3vh,21px); color:#fff; letter-spacing:2px;
+    text-shadow:0 0 10px rgba(0,0,0,.9), 0 1px 3px rgba(0,0,0,.8);}
+  #overlay.overwrite-scene .ow-actions{display:flex; justify-content:space-between; width:100%;
+    max-width:520px; margin-top:2vh;}
+  #overlay.overwrite-scene .ow-btn{background:none; border:0; padding:0; cursor:pointer;
+    font-family:'MaShanZheng', var(--font-kai), serif; font-size:clamp(20px,4vh,38px); letter-spacing:4px;
+    text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.85);}
+  #overlay.overwrite-scene .ow-btn.ow-go{color:var(--green);}
+  #overlay.overwrite-scene .ow-btn.ow-back{color:#c8402f;}
   .forge-pair{display:flex; align-items:center; gap:9px;}
   .forge-arrow{display:flex; align-items:center; justify-content:center; flex:0 0 auto; opacity:.85;}
   .forge-arrow svg{display:block;}
@@ -2664,14 +2701,17 @@
   .sd-title small{color:var(--dim); font-size:12px; font-weight:normal; letter-spacing:0; margin-left:8px;}
   .sd-row{display:flex; flex-wrap:nowrap; gap:4px; justify-content:flex-start;
     overflow-x:auto; padding-bottom:2px;}
-  .sd-thumb{position:relative; flex:0 0 auto; width:52px; height:79px; overflow:hidden; border-radius:5px;}
-  .sd-thumb .card{transform:scale(.394); transform-origin:top left; cursor:inherit; box-shadow:none; touch-action:pan-x;}
+  /* v1.1.14（用户口径「初始卡牌的显示不要挤压成一块那么小，根据屏幕展开、大致铺满横屏，
+     6 列一行一行铺」）：`.sd-thumb` 从 52×79 的缩放小框改成**流式格子**，里面直接放整张
+     `.card`（宽 100%、按 132:200 高宽比撑高）—— 不再 transform:scale，也就不用外框裁剪。 */
+  .sd-thumb{position:relative; width:100%;}
+  .sd-thumb .card{width:100%; height:auto; aspect-ratio:132/200; cursor:inherit; box-shadow:none; touch-action:pan-x;}
   @media (max-height:560px){
     .starter-decks{gap:8px; margin:8px 0 4px;}
     .starter-deck{padding:6px 8px 8px;}
     .sd-title{font-size:13px; margin-bottom:5px;}
-    .sd-thumb{width:42px; height:64px;}
-    .sd-thumb .card{transform:scale(.318);}
+    .sd-thumb{width:100%;}
+    .sd-thumb .card{width:100%; aspect-ratio:132/200;}
   }
 
   /* ===== v1.1.13 选角界面重构（用户 2026-10-13 定稿）=====
@@ -2723,8 +2763,9 @@
   .hs-deckbtn.on{border-color:#ffcf6a;
     box-shadow:0 0 0 2px rgba(255,207,106,.55), 0 0 16px rgba(255,207,106,.5);}
   .hs-deck-cap{font-size:9px; letter-spacing:1px; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.95);}
-  /* 底部中央：4 张符纸（波浪错落、互不遮挡；白色纸面半透明、黑字保留） */
-  .hs-talismans{position:absolute; left:0; right:0; bottom:1.5%;
+  /* 中下位置：4 张符纸（v1.1.14 用户口径「移到中下位置，不要如此靠近底部」——
+     原 bottom:1.5% 贴底，现抬到 ~20% 屏高；波浪错落、互不遮挡；白色纸面半透明、黑字保留） */
+  .hs-talismans{position:absolute; left:0; right:0; bottom:20%;
     display:flex; align-items:flex-end; justify-content:center; gap:clamp(8px,2vw,30px);
     pointer-events:none; z-index:4;}
   .hs-tl{pointer-events:auto; flex:0 0 auto; width:clamp(78px,11.5vw,150px); padding:0;
@@ -2756,7 +2797,9 @@
   .hs-prev-layer{display:flex; flex-direction:column; align-items:center; gap:6px; max-width:96%;}
   .hs-prev-title{font-size:clamp(13px,2.6vh,20px); letter-spacing:3px; color:#f3d27a;}
   .hs-prev-title small{margin-left:8px; font-size:.72em; color:#cbbf9e; letter-spacing:1px;}
-  .hs-prev-row{display:flex; flex-wrap:wrap; gap:4px; justify-content:center; max-width:94vw;}
+  /* v1.1.14：整组概览改 **6 列网格**，一行一行铺满横屏（不再 wrap 成一小撮缩略图）。 */
+  .hs-prev-row{display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px;
+    justify-items:center; width:94vw; max-width:1180px;}
   @media (max-height:560px){
     .hs-info{width:46%;}
     .hs-tl{width:clamp(66px,10vw,112px);}

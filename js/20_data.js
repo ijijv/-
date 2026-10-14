@@ -106,7 +106,7 @@ const CARDS = [
       :G.hero==='yincha'?`造成 ${u?14:10} 伤害。若目标带有【诅咒】，额外造成 ${u?6:4} 伤害`
       :`造成 ${u?12:10} 伤害。引爆目标 2 层【诅咒】（每层 ${u?7:5} 伤害）`,
     eff:(u)=>{ const t=curEnemy(); if(!t) return;
-      if(G.hero==='tianshi'){ dealDamageTo(t,u?12:10); const boom=Math.min(2,t.curse||0); for(let i=0;i<boom;i++) dealDamageTo(t,u?7:5); t.curse-=boom; if(boom>0){ sfx('kw_curse'); log(`斩妖剑引爆 ${boom} 层【诅咒】`); } return; }   // v0.61.32
+      if(G.hero==='tianshi'){ const boom=Math.min(2,t.curse||0); SEG_HALVE=true; try{ dealDamageTo(t,u?12:10); for(let i=0;i<boom;i++) dealDamageTo(t,u?7:5); }finally{ SEG_HALVE=false; } t.curse-=boom; if(boom>0){ sfx('kw_curse'); log(`斩妖剑引爆 ${boom} 层【诅咒】`); } return; }   // v0.61.32 / v1.1.15：多段牌每段增伤减半（SEG_HALVE）
       if(G.hero==='yincha'){ let dc=(u?14:10); if((t.curse||0)>0) dc+=(u?6:4); dealDamageTo(t,dc); return; }
       let d=(G.hero==='ganshiren')?(u?12:7):(u?12:8);   // v0.61.37 A 列基础 8 → 7（B 列仍 8）
       if(G.hero==='ganshiren') d+=2*G.summons.filter(s=>s.dur>0).length;
@@ -246,7 +246,7 @@ const CARDS = [
       if(G.hero==='yincha'){ sealEnemy(t,1); loseHp(5); let d=u?24:16; if(G.hp < G.maxHp*0.4){ d*=2; log('钟馗镇魂：生命低于 40%，伤害翻倍'); } dealDamageTo(t,d); return; }
       // v0.61.35：天师列按新卡池文件改为「主伤 16 固定（升级不变）+ 每层引爆 3/4」
       //           （v0.61.10(P5) 的 18/24 + 每层 5/6 作废；其余三列数值不动）
-      const c=t.curse||0; sealEnemy(t,1); dealDamageTo(t,16); for(let i=0;i<c;i++) dealDamageTo(t,u?4:3); t.curse=0; if(c>0){ sfx('kw_curse'); log(`钟馗镇魂引爆 ${c} 层【诅咒】`); } }},   // v0.61.32
+      const c=t.curse||0; sealEnemy(t,1); SEG_HALVE=true; try{ dealDamageTo(t,16); for(let i=0;i<c;i++) dealDamageTo(t,u?4:3); }finally{ SEG_HALVE=false; } t.curse=0; if(c>0){ sfx('kw_curse'); log(`钟馗镇魂引爆 ${c} 层【诅咒】`); } }},   // v0.61.32 / v1.1.15：多段牌每段增伤减半（SEG_HALVE）
 /* —— 防御 15~23 —— */
   {id:'jingang', name:'金刚符', type:'defense', rarity:'white', cost:1, hpCost:(u)=>G.hero==='yincha'?(u?3:2):0,
     t:(u)=>G.hero==='ganshiren'?`获得 ${u?7:4} 点格挡。获得 ${u?2:1} 点【尸气】`
@@ -431,10 +431,10 @@ const CARDS = [
       G.ranhunHeal = u ? ((G.hero==='wuseng'||G.hero==='tianshi')?3:4) : 2; // A/C 2→4；B/D 2→3
       G.ranhunSelf=c; floatMsg('燃魂 · 已点燃'); }},
   {id:'kaitianyan', name:'开天眼', type:'skill', rarity:'blue', cost:1,
-    t:(u)=>G.hero==='ganshiren'?`本回合攻击牌伤害 +${u?5:3}。场上每有 1 个召唤单位，额外 +1`
-      :G.hero==='wuseng'?`本回合攻击牌伤害 +${u?4:2}。每有 ${u?2:3} 点格挡，额外 +1（上限 +5）`
-      :G.hero==='yincha'?`本回合攻击牌伤害 +${u?5:3}。每层【血怒】使额外伤害 +1（上限 +${u?10:8}），打出后消耗对应【血怒】`
-      :`本回合攻击牌伤害 +${u?6:4}`,
+    t:(u)=>G.hero==='ganshiren'?`本回合攻击牌伤害 +${u?5:3}（多段牌每段 +${u?2:1}）。场上每有 1 个召唤单位，额外 +1`
+      :G.hero==='wuseng'?`本回合攻击牌伤害 +${u?4:2}（多段牌每段 +${u?2:1}）。每有 ${u?2:3} 点格挡，额外 +1（上限 +5）`
+      :G.hero==='yincha'?`本回合攻击牌伤害 +${u?5:3}（多段牌每段 +${u?2:1}）。每层【血怒】使额外伤害 +1（上限 +${u?10:8}），打出后消耗对应【血怒】`
+      :`本回合攻击牌伤害 +${u?6:4}（多段牌每段 +${u?3:2}）`,   // v1.1.15：卡面写明多段牌减半后数值
     eff:(u)=>{ let val;
       if(G.hero==='ganshiren') val=(u?5:3)+G.summons.filter(s=>s.dur>0).length;
       else if(G.hero==='wuseng') val=(u?4:2)+Math.min(5,Math.floor((G.block||0)/(u?2:3)));
@@ -619,6 +619,10 @@ const CARDS = [
       : `对全体敌人按其各自的【诅咒】层数各打 2 点雷击（6 层 = 12 伤），随后清空各自的【诅咒】`,
     eff:(u)=>{ const es=aliveEnemies().slice(); if(!es.length) return; let any=false;
       const step=90;   // v1.1.x：多段雷击更紧凑（原 dealDamageTo 默认 110）
+      /* v1.1.15：雷谴符是「多段牌」—— 每段各走一次 calcDamageTo，朱砂笔/开天眼类平增
+         原先每段全额叠加（6 层 = +18），过强；结算窗口内置 SEG_HALVE ⇒ 每段只加减半值。 */
+      SEG_HALVE=true;
+      try{
       es.forEach(t=>{ const c=t.curse||0; if(c<=0) return; any=true;
         const uid=t.uid, snapEl=enemyEl(t);
         /* v1.1.x：**逐段雷击** —— 每段各自扣血 / 各自飘字 / 各自触发逐击反应，
@@ -644,6 +648,7 @@ const CARDS = [
           })(i,d);
         }
         t.curse=0; });
+      }finally{ SEG_HALVE=false; }
       if(any) log('雷谴符：清算全体敌人身上的【诅咒】为雷击');
       if(any && enemyActBeats()){
         setTimeout(function(){ try{ syncBattleHpDom(); if(!G.battleOver && G.hp>0 && aliveEnemies().length===0) winFight(); }catch(e){} }, 6*step+40);
@@ -708,7 +713,7 @@ const CARDS = [
       dealDamageTo(t,(u?8:4)+3*rageSpend(3,6));    // 消耗在后：rageSpend(3,6) 最多吃 2 层 ⇒ +6
       if(_hp0>0 && t.hp<=0){ gainRage(2); log('饮血刃：击杀敌人，获得 2 层【血怒】'); } }},
   {id:'fenshenzhou', name:'焚身咒', type:'skill', rarity:'purple', cost:0, hero:'yincha', mile:'yincha_t3', exhaust:true, hpCost:(u)=>G.hero==='yincha'?3:0,
-    t:(u)=>`失去 3 点生命。本回合你的攻击牌伤害 +${u?5:3}`,
+    t:(u)=>`失去 3 点生命。本回合你的攻击牌伤害 +${u?5:3}（多段牌每段 +${u?2:1}）`,
     eff:(u)=>{ loseHp(3); G.turnAtkBuff=(G.turnAtkBuff||0)+(u?5:3); floatMsg(`攻击 +${u?5:3}`); log(`焚身咒：失去 3 点生命，本回合攻击牌伤害 +${u?5:3}`); }},
 ];
 /* v1.0.17：把【断刃雷符】对齐到【雷符】本体 —— 只换 id 与名字，rarity / t / eff
@@ -870,12 +875,12 @@ const SHORT_TEXT = {
           ? `失 6，抽 3。本回合每打出 1 张技能牌回 ${u ? 4 : 2}`
           : `失 ${u ? 4 : 6}，抽 3。本回合每打出 1 张攻击牌回 ${u ? 3 : 2}`,
   kaitianyan:(u)=>G.hero === 'ganshiren'
-      ? `本回合攻击牌伤+${u ? 5 : 3}。每有召唤 1 个再+1`
+      ? `本回合攻击牌伤+${u ? 5 : 3}（多段每段+${u ? 2 : 1}）。每有召唤 1 个再+1`
       : G.hero === 'wuseng'
-        ? `本回合攻击牌伤+${u ? 4 : 2}。每 ${u ? 2 : 3} 格挡再+1（上限+5）`
+        ? `本回合攻击牌伤+${u ? 4 : 2}（多段每段+${u ? 2 : 1}）。每${u ? 2 : 3}格挡再+1（上限+5）`
         : G.hero === 'yincha'
-          ? `本回合攻击牌伤+${u ? 5 : 3}。每层【血怒】再+1（上限+${u ? 10 : 8}），打出耗对应层`
-          : `本回合攻击牌伤+${u ? 6 : 4}`,
+          ? `本回合攻击牌伤+${u ? 5 : 3}（多段每段+${u ? 2 : 1}）。血怒每层+1（上限+${u ? 10 : 8}）`
+          : `本回合攻击牌伤+${u ? 6 : 4}（多段每段+${u ? 3 : 2}）`,   // v1.1.15：短版同步多段减半数值（v0.69.0 数字闸要求与全文逐元素相等）
   shihun:(u)=>G.hero === 'ganshiren'
       ? `耗 ${u ? 2 : 4}【尸气】，伤 ${u ? 18 : 14}。本回合召唤过则费用-1`
       : G.hero === 'wuseng'
@@ -1238,67 +1243,68 @@ const FX_SHEETS = {
   zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.08 },   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播
   /* ——— v1.1.10/11：boss_vfx 全部 9 幕 Boss 技能特效（用户交付的 46 段全接入）———
      前 34 段（第 1~6 幕）在 v1.1.10、后 12 段（第 7~9 幕 夜王/修罗王/阎罗天子）在 v1.1.12。
-     与 lightning / damage_reflect 同一套出图规格：8 列 × 4 行、**单帧 480×720**（ch:1.5）、
-     **30fps** ⇒ 32 帧 ≈ 1.07s。连接段 `_link` 单帧 **480×256**（ch = 256/480 = 0.5333）、同为 8 列 4 行。
+     v1.1.15 起换新规格（用户重出图）：8 列 × 4 行、**单帧 480×480**（整图 3840×1920，正方形格 ⇒ 不写 ch）、
+     **30fps** ⇒ 32 帧 ≈ 1.07s。连接段 `_link` 同为 8 列 4 行、单帧 480×480。
+     （lightning / damage_reflect 仍是旧的 480×720 格、保留 ch:1.5，不随这次换。）
      这些图**没有两端空帧**（出图校验：首帧非空、末帧覆盖率 0）⇒ 一律 i0:0、f:32。
-     scale 沿用同为该规格的 lightning / damage_reflect 档（2.47）；_link 不进 playFx
+     scale 沿用原 boss_vfx 档（2.47）；_link 不进 playFx
      （由 00_base.js 的 bossLinkFx 自算盒宽），scale 只是「>0」的占位。
      挂点与触发时机见 30_engine.js 的 BOSS_VFX / bossSkillFx（_cast 挂 Boss、_hit 挂玩家、_self 挂 Boss）。 */
   /* 第一幕 · 僵王（爪击 / 吸食 / 召唤小僵尸） */
-  b1_jiangwang_attack_claw_cast:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b1_jiangwang_attack_claw_hit:    { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b1_jiangwang_drain_feed_cast:    { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b1_jiangwang_drain_feed_hit:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b1_jiangwang_drain_feed_link:    { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
-  b1_jiangwang_summon_minion_self: { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_attack_claw_cast:   { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_attack_claw_hit:    { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_drain_feed_cast:    { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_drain_feed_hit:     { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b1_jiangwang_drain_feed_link:    { c:8, f:32, rows:4, i0:0, scale:1, fps:30 },
+  b1_jiangwang_summon_minion_self: { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
   /* 第一幕 · 旱魃（焰爪 / 灼烧施加 / 灼烧跳伤循环） */
-  b2_hanba_attack_flame_claw_cast: { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b2_hanba_attack_flame_claw_hit:  { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b2_hanba_burn_apply_hit:         { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b2_hanba_burn_tick_hit:          { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b2_hanba_attack_flame_claw_cast: { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b2_hanba_attack_flame_claw_hit:  { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b2_hanba_burn_apply_hit:         { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b2_hanba_burn_tick_hit:          { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
   /* 第一幕 · 血尸（爪击 / 蓄力 / 蓄力重击 / 吸血） */
-  b3_xueshi_attack_claw_cast:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b3_xueshi_attack_claw_hit:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b3_xueshi_charge_self:           { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b3_xueshi_heavy_smash_cast:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b3_xueshi_heavy_smash_hit:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b3_xueshi_lifesteal_cast:        { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b3_xueshi_lifesteal_hit:         { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b3_xueshi_lifesteal_link:        { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
+  b3_xueshi_attack_claw_cast:      { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_attack_claw_hit:       { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_charge_self:           { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_heavy_smash_cast:      { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_heavy_smash_hit:       { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_lifesteal_cast:        { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_lifesteal_hit:         { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b3_xueshi_lifesteal_link:        { c:8, f:32, rows:4, i0:0, scale:1, fps:30 },
   /* 第二幕 · 谢必安（哭丧棒 / 勾魂 / 分化；分出的「必安」复用同一套） */
-  b4_xiebian_attack_staff_cast:    { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b4_xiebian_attack_staff_hit:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b4_xiebian_soul_hook_cast:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b4_xiebian_soul_hook_hit:        { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b4_xiebian_soul_hook_link:       { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
-  b4_xiebian_split_self:           { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_attack_staff_cast:    { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_attack_staff_hit:     { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_soul_hook_cast:       { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_soul_hook_hit:        { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b4_xiebian_soul_hook_link:       { c:8, f:32, rows:4, i0:0, scale:1, fps:30 },
+  b4_xiebian_split_self:           { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
   /* 第二幕 · 判官王（惊堂木 / 记名 / 清算） */
-  b5_judge_attack_gavel_cast:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b5_judge_attack_gavel_hit:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b5_judge_record_hit:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b5_judge_settle_cast:            { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b5_judge_settle_hit:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b5_judge_settle_link:            { c:8, f:32, rows:4, ch:0.5333333, i0:0, scale:1, fps:30 },
+  b5_judge_attack_gavel_cast:      { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b5_judge_attack_gavel_hit:       { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b5_judge_record_hit:             { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b5_judge_settle_cast:            { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b5_judge_settle_hit:             { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b5_judge_settle_link:            { c:8, f:32, rows:4, i0:0, scale:1, fps:30 },
   /* 第二幕 · 孟婆（汤勺 / 忘忧 / 汲血） */
-  b6_mengpo_attack_ladle_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b6_mengpo_attack_ladle_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b6_mengpo_forget_hit:            { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b6_mengpo_heal_self:             { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b6_mengpo_attack_ladle_cast:     { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b6_mengpo_attack_ladle_hit:      { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b6_mengpo_forget_hit:            { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b6_mengpo_heal_self:             { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
   /* 第三幕 · 夜王（暗刃 / 暗夜威压） */
-  b7_yewang_attack_blade_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b7_yewang_attack_blade_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b7_yewang_pressure_hit:          { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b7_yewang_attack_blade_cast:     { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b7_yewang_attack_blade_hit:      { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b7_yewang_pressure_hit:          { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
   /* 第三幕 · 修罗王（业火斩 / 业火反噬 / 业火附体） */
-  b8_xiuluo_attack_slash_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b8_xiuluo_attack_slash_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b8_xiuluo_backlash_self:         { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b8_xiuluo_karma_fire_self:       { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
+  b8_xiuluo_attack_slash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b8_xiuluo_attack_slash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b8_xiuluo_backlash_self:         { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b8_xiuluo_karma_fire_self:       { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
   /* 第三幕 · 阎罗天子（开局词缀 / 幽冥重击 / 轮回复活 / 召唤阴差） */
-  b9_yanluo_affix_self:            { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b9_yanluo_attack_smash_cast:     { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b9_yanluo_attack_smash_hit:      { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b9_yanluo_revive_self:           { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 },
-  b9_yanluo_summon_yinchai_self:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:2.47, fps:30 }
+  b9_yanluo_affix_self:            { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_attack_smash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_attack_smash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_revive_self:           { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 },
+  b9_yanluo_summon_yinchai_self:   { c:8, f:32, rows:4, i0:0, scale:2.47, fps:30 }
 };
 /* `锁_破裂` **故意不在这张表里**：v0.62.0 已用移植 canvas 代码实现（playLockBreak），
    不接精灵图；30 条提示词文档里也没有它。 */
@@ -1566,7 +1572,7 @@ function returnShiWangCard(){
    ⚠️ 新遗物必须配 素材/relic/<id>.png，缺图会静默空白（relicIcon → artImg onerror）。 */
 const RELICS = [
   {id:'zhaohunfan', name:'招魂幡', rarity:'white', desc:'每场战斗结束额外恢复 4 点生命'},
-  {id:'zhushabi', name:'朱砂笔', rarity:'white', desc:'攻击牌伤害 +3'},
+  {id:'zhushabi', name:'朱砂笔', rarity:'white', desc:'攻击牌伤害 +3（多段牌每段 +1）'},
   {id:'jifengfu', name:'疾风符', rarity:'purple', desc:'每回合第 1 张技能牌符文 -1（最低 0）'},
   {id:'taomujian', name:'桃木剑', rarity:'blue', desc:'对鬼怪/僵尸类敌人伤害 +25%'},
   {id:'yinyangjing', name:'阴阳镜', rarity:'purple', desc:'每回合多抽 1 张牌'},
@@ -1722,7 +1728,7 @@ const POTIONS = [
   {id:'huangquanjiu', name:'黄泉酒', ic:'🍶', desc:'获得 2 点符文', eff:()=>{ G.energy+=2; floatMsg('符文 +2'); }},
   {id:'zhenhunshui', name:'镇魂水', ic:'🛡️', desc:'获得 10 点格挡', eff:()=>gainBlock(10)},
   {id:'mengpotang', name:'孟婆汤', ic:'🃏', desc:'抽 2 张牌', eff:()=>drawCards(2)},
-  {id:'jingangjiu', name:'金刚酒', ic:'👊', desc:'本回合攻击牌 +4 伤害', eff:()=>{ G.turnAtkBuff=(G.turnAtkBuff||0)+4; floatMsg('攻击 +4'); }},
+  {id:'jingangjiu', name:'金刚酒', ic:'👊', desc:'本回合攻击牌 +4 伤害（多段牌每段 +2）', eff:()=>{ G.turnAtkBuff=(G.turnAtkBuff||0)+4; floatMsg('攻击 +4'); }},
   /* v1.0.19：用户口径「清心露效果跟佛渡一样，除清负面外还清废牌，只是只能在该回合生效」——逐条对齐 佛渡(fodu) 的清场三件套。 */
   {id:'qingxinlu', name:'清心露', ic:'✨', desc:'清除自身全部负面状态与废牌，本回合免疫负面效果', eff:()=>{ clearJunk(); clearPlayerDebuffs(); G.debuffImmune=1; floatMsg('本回合免疫负面效果'); }},
   {id:'fugusan', name:'腐骨散', ic:'☠️', desc:'对全体敌人施加 2 层【腐毒】（每回合开始按层数累进掉血）', eff:()=>applyPoisonAll(2)},

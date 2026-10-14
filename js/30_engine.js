@@ -97,10 +97,19 @@ function duhunBatchEnd(){ DUHUN_BATCH=false; duhunFlush(); }
 /* v1.0.14：把 dealDamageTo 拆成「算伤（纯函数）/ 落伤（逐击反应）」两半 ——
    分段伤害要「加成只烘焙一次、随后拆成 N 段各自结算」，必须能拿到**含全部加成**的总伤。
    非分段调用走的仍是这两半拼起来的同一条路，逐字节等价。 */
+/* v1.1.15：**多段攻击牌的逐段平增减半**（Q8/Q9/Q10）—— 雷谴符 / 斩妖剑·天师列 / 钟馗镇魂·天师列
+   这类「一牌多击」的攻击牌，每一段都会各自走一次 calcDamageTo，朱砂笔「攻击 +3」
+   与开天眼/焚身咒/金刚酒的 turnAtkBuff 原先**每段全额叠加**（6 段雷谴符 = +18），过强。
+   现改为：多段牌的每段只加**减半（向下取整）**后的值 —— 朱砂笔每段 +1、开天眼 +4→+2 / +6→+3。
+   只作用**玩家打出的攻击牌**：仅这三张牌的 eff 在结算窗口内置 SEG_HALVE=true（try/finally 兜底复位）；
+   敌人 multi 攻击走 dealDamageToPlayer，不经过这里，天然不受影响（Q10）。
+   引爆类（噬魂术 o.segs）与咒雨·武僧（point=true）本就把加成只在总伤上烘焙一次，不在此列。 */
+let SEG_HALVE=false;
 function calcDamageTo(e,n,ignoreBlock,point){
   let d=n;
   if(!point){
-    d+=(G.attackBuff||0)+(G.turnAtkBuff||0);
+    if(SEG_HALVE) d+=Math.floor((G.attackBuff||0)/2)+Math.floor((G.turnAtkBuff||0)/2);
+    else d+=(G.attackBuff||0)+(G.turnAtkBuff||0);
     if((e.kind==='ghost'||e.kind==='jiangshi') && hasRelic('taomujian')) d=Math.floor(d*1.25);
     if(e.kind==='yao' && hasRelic('tongqianjian')) d=Math.floor(d*1.25);
     /* 血魔刀[金·阴差]：生命低于最大生命 30% 时，攻击牌伤害 +25%（临界值随最大生命自动联动）。
@@ -372,6 +381,13 @@ const CARD_DMG = {
    共用引用（而不是抄一份）：以后调雷符预览，这里自动跟着走。 */
 CARD_DMG.duanren_leifu = CARD_DMG.leifu;
 const PER_TURN_SUMMONS = ['zhiren','xiaogui','yinbingguo','shi_wang'];
+/* v1.1.15：多段攻击牌的段数（预览用）—— 与 20_data.js 的 eff 同式。
+   朱砂笔/开天眼对多段牌每段减半 ⇒ 预览把「每段减半后的值 × 段数」加进总伤，与实战逐段结算对齐。 */
+const CARD_SEGS = {
+  leiqianfu: (u,e)=>{ const t=e||curEnemy(); return t ? (t.curse||0) : 0; },
+  zhanyaojian: (u,e)=>{ if(G.hero!=='tianshi') return 1; const t=e||curEnemy(); return t ? 1+Math.min(2,t.curse||0) : 1; },
+  zhongkui: (u,e)=>{ if(G.hero!=='tianshi') return 1; const t=e||curEnemy(); return t ? 1+(t.curse||0) : 1; },
+};
 function previewDamage(c, targetEnemy){
   /* v0.61.33：targetEnemy = 拖拽正指向的那只敌人。传了就用它，没传才回落 curEnemy()（= 当前目标）。
      这样「头顶预伤」永远算的是你真正要打的那只，而不是上次锁定的那只（天师 9/6 错的根因）。 */
@@ -399,10 +415,11 @@ function previewDamage(c, targetEnemy){
     return null;
   }
   let d = raw;
+  const _segs = (c.type==='attack' && CARD_SEGS[c.id]) ? CARD_SEGS[c.id](c.up, e) : 1;
   const zhusha = c.type==='attack' && hasRelic('zhushabi');
-  if(zhusha) d += 3;
+  if(zhusha) d += _segs>1 ? _segs*Math.floor(3/2) : 3;   // v1.1.15：朱砂笔对多段牌每段只 +1（⌊3/2⌋）
   const turnBuf = c.type==='attack' && G.turnAtkBuff>0;
-  if(turnBuf) d += G.turnAtkBuff;
+  if(turnBuf) d += _segs>1 ? _segs*Math.floor(G.turnAtkBuff/2) : G.turnAtkBuff;   // v1.1.15：开天眼类对多段牌每段减半
   const taomu = (e.kind==='ghost'||e.kind==='jiangshi') && hasRelic('taomujian');
   if(taomu) d=Math.floor(d*1.25);
   const tongqian = e.kind==='yao' && hasRelic('tongqianjian');
