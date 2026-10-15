@@ -216,7 +216,7 @@ function fxLayer(){
 function enemyEl(e){ return (e && document.querySelector) ? document.querySelector('#enemy-panel .enemy[data-uid="'+e.uid+'"]') : null; }
 
 /* ===================== v0.64.0：精灵图特效播放器 =====================
-   素材 `素材/fx/<name>.png`：8 列纵向精灵图、单元 480×480、帧数见 20_data.js 的 FX_SHEETS。
+   素材 `素材/fx/<name>.png`：8 列纵向精灵图、单元 240×240（v1.1.20r 起全量 ×0.5；原 480×480）、帧数见 20_data.js 的 FX_SHEETS。
    **为什么是精灵图不是那 30 个 mp4**：交付视频全是 h264/yuv420p + 纯黑底**无 alpha**，
    内联管线根本吃不下（打包.py 的 IMG_EXT 不含视频扩展名），贴上去还是黑方块 —— 真透明只在 PNG 里。
    **为什么用 background-position 而不是 canvas**：省一层离屏合成；而且 `fxSeek` 能直接钉帧，
@@ -263,7 +263,7 @@ function fxBoxSize(anchorShort, vw, vh){
 }
 /* 第 i 帧在精灵图里的左上角偏移（**纯函数**）：行优先，8 列。
    v1.1.9：第 4 参 ch = 单帧高/宽（默认 1 = 正方形格）。boss_vfx 同规格的 lightning /
-   damage_reflect 是 480×720 的**非方形格**（ch=1.5），纵偏移必须按 720 算，否则第 2 格起错位。 */
+   damage_reflect 是 480×720 的**非方形格**（ch=1.5；v1.1.20r 起全量 ×0.5 ⇒ 240×360），纵偏移必须按格高算，否则第 2 格起错位。 */
 function fxCellPos(i, cols, box, ch){
   const c=Math.max(1, cols||8), h=box*(ch||1);
   return { x:-(i%c)*box, y:-Math.floor(i/c)*h };
@@ -314,7 +314,12 @@ function fxAnchorRect(anchor){
 function bottomAnchor(el){
   if(!el || typeof el.getBoundingClientRect!=='function') return null;
   return { getBoundingClientRect:function(){
-    const r=el.getBoundingClientRect();
+    /* v1.1.20r（用户口径）：「立绘底部」= 人物**脚部**。敌人传进来的是整个 `.enemy`
+       （原型.html:355 flex 列：立绘 .eportrait + 血条 .enemyhpbar + 名字 .ename），它的下缘是**名字标签**
+       ⇒ 特效落到了脚下面一段距离。这里优先解析 `.eportrait`（立绘框，object-position:bottom center
+       ⇒ 其下缘就是脚部，同尺寸档差；原型.html:1463）。解不到（玩家侧已传独立立绘框 / 非敌人元素）退回 el 本身。 */
+    const p=(el.querySelector && el.querySelector('.eportrait')) || el;
+    const r=p.getBoundingClientRect();
     return { left:r.left, top:(r.bottom - r.height/2), width:r.width, height:r.height };
   } };
 }
@@ -469,7 +474,8 @@ function playFx(name, anchor, opts){
      朝相反一侧翻面。翻在**外层**：内层管切格的 translate，翻它会把格序也翻反；外层无 transform
      （.fx-sheet 只 overflow:hidden），scaleX(-1) 绕自身中心翻面，盒子本就中心对齐锚点 ⇒ 不偏位。 */
   if(opts.mirror) el.style.transform='scaleX(-1)';
-  /* v0.64.0：ox/oy 是**量出来的**「内容框中心相对格子中心」的偏移（占 480 单元的比例），
+  /* v0.64.0：ox/oy 是**量出来的**「内容框中心相对格子中心」的偏移（占单元边长的**比例**，无量纲
+     —— v1.1.20r 把单元 480→240 是等比重采样，比例不变，故这些数值不用改），
      由 _patch/fx_tune.py 用 PIL 扫每张图所有帧的 alpha 并集算得，写进 FX_SHEETS。
      不补这一步的后果：不少特效的画面本来就画在格子偏下 1/4 处（烟从地面升起那类），
      照格子中心贴到锚点上，scale 一放大就整块沉到单位脚底下。补完之后
@@ -485,18 +491,20 @@ function playFx(name, anchor, opts){
   if(isFinite(tp))  el.style.top =tp+'px';
   /* v1.0.7（手机端性能）：整张精灵图挂**内层**，靠 transform 平移切格；外层只当裁切窗（overflow:hidden）。
      为什么要动它：旧写法把整张图当外层的 background、每帧改 background-position —— 那不是合成属性，
-     每改一次都要主线程重新光栅化整块，而这张图 3840px 宽、盒子最大到数百 px。手机上实测每帧几十 ms、
+     每改一次都要主线程重新光栅化整块，而这张图（v1.1.20r 起 1920px 宽、原 3840px）盒子最大到数百 px。手机上实测每帧几十 ms、
      整段动画把帧率压到 15~31（longtask 273~313ms，录屏读数）。transform 在合成器上跑，
      几十帧只光栅化一次。可见区域仍是第 i 格，与非合成版逐像素一致。
      rows 用素材真实排数 S.rows；缺字段时按「最大要播到的帧」回推，免得内层不够高把末帧裁掉。 */
   const c0=Math.max(1, S.c||8);
   const rows=S.rows || (Math.floor(((S.i0||0)+Math.max(1,S.f||1)-1)/c0)+1);
   /* v1.0.9（手机端性能）：**按排拆分**的精灵图 —— 手机端「打出手牌那一瞬间卡」的正解。
-     单文件 / TapTap 产物里，打包.py 把每张 3840×2880 的整图按排切成 rows 张 3840×480 的小图
-     （键 fx/<name>_r<行>.png；只是横着切一刀，逐像素不变）。为什么要切：整图当 CSS background
-     挂上去时，浏览器要一次**解码 11.06 Mpx ≈ 42 MB** 的位图，30 张合计 1195 MB，手机图片缓存
+     单文件 / TapTap 产物里，打包.py 把每张精灵图按排切成 rows 张小图（键 fx/<name>_r<行>.png；
+     只是横着切一刀，逐像素不变）。为什么要切：整图当 CSS background 挂上去时，浏览器要一次
+     **解码整张位图**（480 时代是 3840 宽、整图 11.06 Mpx ≈ 42 MB；**v1.1.20r 起全量合成格
+     480→240** ⇒ 整图 1920×1440、2.76 Mpx ≈ 10.5 MB），30 张合计上百 MB～1 GB，手机图片缓存
      根本留不住 ⇒ 每次出牌都重解一遍（真机 100~200ms），录屏里那串 100~276ms 的尖峰正是它。
-     按排只解 1.8 Mpx（≈7 MB），内层合成层也从 4248×3717 缩到 4248×540，尖峰随之落到十几毫秒。
+     按排只解 1/rows（旧 480 格：单排 1.8 Mpx ≈ 7 MB；新 240 格：1920×240、0.46 Mpx ≈ 1.8 MB），
+     内层合成层也从整图高缩到一排高，尖峰随之落到十几毫秒。
      拆包产物 / 开发树没有按排键（ASSET_MAP 为空或 ASSET_MAP=null）⇒ strip=false ⇒ 走整图原逻辑，
      像素与行为完全不变（冒烟宿主里 ASSET_MAP 就是 null，走的正是这条老路）。 */
   const stripRel=function(r){ return 'fx/'+name+'_r'+r+'.png'; };
@@ -506,14 +514,14 @@ function playFx(name, anchor, opts){
   inner.style.width=(c0*box)+'px';
   inner.style.height=((strip?1:rows)*box*ch)+'px';
   /* v1.0.8（手机端性能）：这里必须带 wantBlob=true。单文件产物（TapTap 包）里不带第二参时，
-     assetURL 会返回**整张精灵图的 base64 字串**（3840px 宽，几百 KB），而它被塞进 CSS 的
+     assetURL 会返回**整张精灵图的 base64 字串**（v1.1.20r 起 1920px 宽、原 3840px；几百 KB），而它被塞进 CSS 的
      background-image，且**每次出牌都新建一个**：浏览器要逐字解析并保存这串值，真机上就是
      「每次释放卡牌卡一下」。拆包产物（ASSET_MAP=null）本来就返回短相对路径，带不带都一样。 */
   const i0=(opts.i0!=null ? opts.i0 : (S.i0||0));
   const row0=Math.floor(i0/c0);
   /* v1.0.9：**提前把下一排解好**。换排那一刻才挂上去的话，浏览器会有一两帧画不出这一排
      （background 还没解码完 ⇒ 该帧背景透明，肉眼就是「特效闪一下」）。提前一排（换排间隔
-     8 帧 ≈ 333ms，够解 1.8 Mpx）+ 同 URL 命中图片缓存（assetURL 的 blob 地址按 rel 缓存
+     8 帧 ≈ 333ms，够解一排（v1.1.20r 起 0.46 Mpx、旧 480 格时 1.8 Mpx）+ 同 URL 命中图片缓存（assetURL 的 blob 地址按 rel 缓存
      ⇒ 两次取到同一个 URL）⇒ 换排那一帧直接出画。只在按排模式下跑：冒烟里 strip=false，
      整个函数一次都不进（vm 沙箱没有 Image）。 */
   const preloaded={};
@@ -578,7 +586,7 @@ function playFx(name, anchor, opts){
 }
 /* ——— v1.1.17（性能）：**把「出牌那一刻」的解码尖峰提前到进场** ———
    背景：playFx 每换一排才挂一次 backgroundImage，首次挂上时浏览器要**同步解码**那一排
-   （3840×480 ≈ 7 MB）⇒ 每张图第一次出场都顿一下。v1.0.9 的 preRow 只提前解**下一排**，
+   （v1.1.20r 起 1920×240 ≈ 1.8 MB、旧 480 格时 3840×480 ≈ 7 MB）⇒ 每张图第一次出场都顿一下。v1.0.9 的 preRow 只提前解**下一排**，
    覆盖不了「这张图的第 0 排从没解过」那一次 —— 用户真机读数正是这套症状。
    做法：战斗进场（beginBattle）时，把**本场卡组里会出特效的那些 sheet** 的第 0 排提前 decode()，
    浏览器按 URL 缓存解码位图 ⇒ 之后 playFx 挂同一个 URL 直接命中缓存、不再解码。
@@ -707,7 +715,7 @@ function hurtVignette(){
      放到素材目录后自动生效，代码零改动。 */
 /* v1.0.14：**`素材/fx/` 里不是精灵图的整张素材**（唯一真相源，python 侧只取用不镜像）。
    现有 fx 闸（_patch/verify_dist.py 的 [2d]）默认要求 fx/ 下每张图都是
-   「8 列 × 480 单元、键名登记在 FX_SHEETS」的精灵图 —— 道心破碎用的是**一整张插图**
+   「8 列 × 240 单元（v1.1.20r 起；原 480）、键名登记在 FX_SHEETS」的精灵图 —— 道心破碎用的是**一整张插图**
    （1024×1024，靠 clip-path 切九宫），套不进那个规格，登记在这里豁免。
    ⚠️ 以后往 fx/ 里放任何「整张插画」都必须补进这张表，否则 [2d] 会红。 */
 const FX_WHOLE = { daoxin_full: 'fx/daoxin_full.png' };
@@ -848,6 +856,29 @@ function cardPlayFx(c){
     if(E.a==='enemy'){ anchor=enemyEl(curEnemy()) || 'field'; }   // 目标已死/找不到元素时兜底全场
     else if(E.a==='field') anchor='field';
     else if(E.a==='summon') anchor='summon';
+    /* v1.1.20r（用户跨轮口径）：万剑归宗这类「全体」特效要**逐只存活敌人**各播一份 ——
+       原来 a:'field' 只在战场中心放一个，用户要求「根据敌人数量分别施加在每个敌人身上」。
+       逐敌人并发时 key 必须带 uid 后缀：playFx 默认 key=name，同名会把先播的当场掐掉（见 playFx 注释），
+       循环里就会只剩最后一个敌人有特效。全死/量不到时退回 'field'（战场中心），与旧版行为一致。 */
+    else if(E.a==='enemies'){
+      const es=(typeof aliveEnemies==='function') ? aliveEnemies() : [];
+      if(es.length){
+        /* v1.1.20r2（用户口径「其他角色都要改为逐个叠加效果来搭配连击音效」）：
+           E.stg>0（毫秒）时**逐个叠加** —— 每个敌人各一份特效、按序隔 stg 毫秒落一个，
+           与连击音效的节奏对上（咒雨·苦僧那套逐点连击是 60~120ms 一发）。
+           key 必须带 uid 后缀：playFx 默认 key=name，同名会把先播的当场掐掉 ⇒ 循环里就只剩最后一个。
+           定时器里**现取元素**：这期间可能 render 过、敌人也可能已死 ⇒ 取不到退回战场中心（与无 stg 同口径）。 */
+        const stg=(E.stg|0)>0?(E.stg|0):0;
+        for(let i=0;i<es.length;i++){
+          if(stg && i>0){
+            const e=es[i];
+            setTimeout(function(){ playFx(E.n, enemyEl(e) || 'field', { scale:E.s, key:E.n+'@'+e.uid }); }, i*stg);
+          } else playFx(E.n, enemyEl(es[i]) || 'field', { scale:E.s, key:E.n+'@'+es[i].uid });
+        }
+      }
+      else playFx(E.n, 'field', { scale:E.s });
+      return;
+    }
     /* v1.1.20（用户 txt #5/#9/#10/#12）：手牌特效锚在**刚打出的那张牌**的牌面中部，
        牌飞走后特效留在原位播完（位置由 notePlayRect 在 doPlayCard 那一拍量下）。 */
     else if(E.a==='handcard') anchor=handCardAnchor() || 'summon';

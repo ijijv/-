@@ -228,7 +228,13 @@ SFX_TABLE.zhenyaoling = [['t',880,.24,'sine',.16,0,520],['t',1320,.20,'triangle'
    否则 verify_dist [2b] 会把磁盘上这个文件判成「未知键名」（176 个音效文件须键键登记在表）。
    与 N~Q 组同机制：下面这条仅是采样缺失 / 解码失败时的合成兜底。 */
 SFX_TABLE.relic_proc = [['b',.18,.40,1900,320],['t',880,.20,'triangle',.11,.05,520]];
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 122 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条 + 选角 4 条 + v1.1.20：+wanjian/gouhun/tianlei/lei/zhenyaoling 5 条 +relic_proc 1 条，−删掉遗留键 hit）
+/* S 组 · v1.1.20r（用户跨轮口径：指定两条真采样，文件名即键名）：
+     jinzhong  金钟罩 —— 挂点走 gainBlock 的「防御牌起盾」收口点（把该牌那一声从通用 card_defense 换成它自己）
+     wangyou  忘忧（孟婆·非 Boss 分支）—— 挂点走 30_engine.js 敌人【忘忧】意图分支（原来播的是通用 enemy_debuff）
+   与 N~R 组同机制：下面两条仅是采样缺失 / 解码失败时的**合成兜底**。 */
+SFX_TABLE.jinzhong = [['t',640,.30,'sine',.16,0,420],['b',.22,.30,1500,400]];
+SFX_TABLE.wangyou  = [['t',300,.34,'sine',.14,0,160],['b',.24,.28,1100,260]];
+const SFX_KEYS = Object.keys(SFX_TABLE);   // 124 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条 + 选角 4 条 + v1.1.20：+wanjian/gouhun/tianlei/lei/zhenyaoling 5 条 +relic_proc 1 条，−删掉遗留键 hit + v1.1.20r：+jinzhong/wangyou 2 条）
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;

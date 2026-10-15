@@ -26,7 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, '_patch'))
 
 from shot_fx import measure, fx_keys, coverage, live_range   # noqa: E402
-CELL = 480
+CELL = 240          # v1.1.20r：全量 fx 合成格 480→240（源图 ×0.5）后同步减半
 
 # 缩放规则：**一律**把内容的长边撑到盒子边长（scale = 1 / 最大含量），只设一个上限兜底。
 # 早先写的是「含量 < 0.5 才放大」，那是个**硬阈值**，结果是含量 0.51 的（僵尸手/荆棘/尸王）

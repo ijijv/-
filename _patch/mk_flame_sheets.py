@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 FX = os.path.join(ROOT, u'素材', u'fx')
 
-CELL = 480
+CELL = 240          # v1.1.20r：与 js/20_data.js 的合成格口径一致（480→240）
 COLS = 8
 ROWS = 6
 FRAMES = COLS * ROWS          # 48：一次性特效（guling_suck / relic_proc）用整张 6 行

@@ -3527,8 +3527,8 @@
     (function () {
       var i, j, k, s, ok, got, missing, bad, steps;
 
-      /* ① 分发表完整性：122 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 122 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键；v1.1.13：+选角 4 键 talisman_click/talisman_slide/key_press/poster_bounce_land；v1.1.20 特效批：+wanjian/gouhun 2 键；v1.1.20 音效批：−遗留键 hit，+tianlei/lei/zhenyaoling 3 键；v1.1.20 补登记：+relic_proc 1 键）', SFX_KEYS.length === 122, 'n=' + SFX_KEYS.length);
+      /* ① 分发表完整性：124 键，每步参数都齐 */
+      __ok('v0.61.25 音效表 124 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键；v1.1.13：+选角 4 键 talisman_click/talisman_slide/key_press/poster_bounce_land；v1.1.20 特效批：+wanjian/gouhun 2 键；v1.1.20 音效批：−遗留键 hit，+tianlei/lei/zhenyaoling 3 键；v1.1.20 补登记：+relic_proc 1 键；v1.1.20r：+jinzhong/wangyou 2 键）', SFX_KEYS.length === 124, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];
@@ -3692,7 +3692,7 @@
          词缀「勾魂」仍走 kw_gouhun（dealDamageToPlayer 那一路）。 */
       var IMAP = { attack: 'enemy_attack', multi: 'enemy_multi', charge: 'enemy_charge', block: 'enemy_block',
                    heal: 'enemy_heal', strength: 'enemy_strength', summon: 'enemy_summon', weak: 'kw_weak',
-                   gouhun: 'gouhun', discard: 'enemy_debuff', burn: 'enemy_debuff', wangyou: 'enemy_debuff',
+                   gouhun: 'gouhun', discard: 'enemy_debuff', burn: 'enemy_debuff', wangyou: 'wangyou',
                    yehuo: 'boss_yehuo', jiming: 'boss_ledger', qingsuan: 'enemy_qingsuan', dormant: 'enemy_dormant' };
       missing = [];
       for (k in IMAP) {
@@ -6310,8 +6310,10 @@
       + 'v1.1.10 起的 boss_vfx b1~b6 幕主 28 张（v1.1.20 删掉 6 条：4 条 _link + b2_hanba_burn_apply_hit + b3_xueshi_charge_self）、'
       + 'v1.1.12 起 b7~b9 幕主 12 张：8 列 × 4 行、30fps、32 帧；'
       + 'v1.1.15 起 40 张全部换新规格：单帧 480×480（正方形格，不写 ch；旧 480×720 / 连接段 480×256 作废，'
-      + 'lightning / damage_reflect 仍是 480×720、保留 ch=1.5）',
-      Object.keys(FX_SHEETS).length === 79 &&
+      + 'lightning / damage_reflect 仍是 480×720、保留 ch=1.5）；'
+      + 'v1.1.20r：**全量合成格 480→240**（源图统一 ×0.5，上句那些「单元 480×480」读数一律减半）、'
+      + '**10 条 boss `_cast` 起手另换 8 列 6 行新图**（f 32→48、rows 4→6）',
+      Object.keys(FX_SHEETS).length === 80 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
         return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
@@ -6341,7 +6343,7 @@
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
     __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
-      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 79);
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 80);
 
     /* ---------- F2. CARD_FX 接线 ---------- */
     __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
@@ -6349,16 +6351,16 @@
         var ids = {}; CARDS.forEach(function (c) { ids[c.id] = 1; });
         return Object.keys(CARD_FX).every(function (k) { return !!ids[k]; });
       })());
-    __ok('v0.64.0 CARD_FX 每个值的 n 都登记在 FX_SHEETS 里，a 都是五个合法锚点之一（v1.1.20：+handcard 手牌锚点）',
+    __ok('v0.64.0 CARD_FX 每个值的 n 都登记在 FX_SHEETS 里，a 都是六个合法锚点之一（v1.1.20：+handcard 手牌锚点；v1.1.20r：+enemies 逐只敌人锚点）',
       Object.keys(CARD_FX).every(function (k) {
         var e = CARD_FX[k];
-        return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon', 'handcard'].indexOf(e.a) >= 0;
+        return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon', 'handcard', 'enemies'].indexOf(e.a) >= 0;
       }));
     __ok('v0.64.0 CARD_FX 没有覆盖全部卡（59 张）—— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
       + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；32 张是有素材的那批（v1.0.13 加断刃雷符，v1.0.20 加阴兵过境，'
       + 'v1.1.2 加天师里程碑的雷谴符/五雷法印，v1.1.3 加赶尸人里程碑的赶尸令/万尸朝宗，'
       + 'v1.1.4 加武僧里程碑的罗汉伏虎/化甲为毒，v1.1.5 加阴差里程碑的饮血刃，v1.1.x 加 0 费【阴兵】本体）',
-      Object.keys(CARD_FX).length === 32 && CARDS.length === 59);
+      Object.keys(CARD_FX).length === 33 && CARDS.length === 59);
 
     /* ---------- F3. 纯函数：盒子尺寸 ---------- */
     __ok('v0.64.0 fxBoxSize 下夹 96、上夹 min(vw,vh)×0.9（帧画布 960×960 四周留空，照锚点框贴必然偏大；'
@@ -7784,16 +7786,19 @@
       FX_SHEETS.thorns.scale === 2.4);
 
     /* ⑦′ v1.1.20（用户 txt「上述截断全部回调」）：v1.1.19 的帧数截断**全部撤回** ——
-       骨铃吸血 / 浅显荆棘回全长（f 48 = 整张图）、金钟罩回 41（43 帧去掉两端 2 帧空帧后的全长）、
-       boss 九个 `_cast` 回 32 帧（蓄力重击由 16 回 32）；但「位置上移」保留：九个 `_cast` 的
-       oy 仍为 0.25（v1.1.20 由 0.5 调低 —— 用户反馈半格移得太高）。 */
-    __ok('v1.1.20 帧数截断全部回调（txt）：骨铃吸血/浅显荆棘/金钟罩回全长、boss 九个 _cast 回 32 帧；上移量 oy 0.25 保留',
+       骨铃吸血 / 浅显荆棘回全长（f 48 = 整张图）、金钟罩回 41（43 帧去掉两端 2 帧空帧后的全长）。
+       ⑦‴ v1.1.20r（用户 txt「10 张 attack 起手换新图」）：那 **10 条 `_cast` 换成 8 列 6 行**新图
+       ⇒ f 48、rows 6（v1.1.20 那轮是 4 行 / 32 帧）。
+       ⑦⁗ v1.1.20r2（用户真机复核「位置偏上」）：**这 10 条不再带 oy**（v1.1.19 的上移量 0.25 撤销）——
+       oy 不写 = 0，回到「内容框中心落在锚点中心」的正常水平；孟婆 ladle_cast 本来就没有。 */
+    __ok('v1.1.20r2：boss 十条 _cast 换 6 行新图（f 48 / rows 6）且**已撤 oy 0.25**；骨铃吸血/浅显荆棘 f 48、金钟罩 f 41 不变',
       FX_SHEETS.guling_suck.f === 48 && FX_SHEETS.thorns_light.f === 48 && FX_SHEETS.jinzhong.f === 41 &&
-      FX_SHEETS.b3_xueshi_heavy_smash_cast.f === 32 && FX_SHEETS.b3_xueshi_heavy_smash_cast.oy === 0.25 &&
+      FX_SHEETS.b3_xueshi_heavy_smash_cast.f === 48 && FX_SHEETS.b3_xueshi_heavy_smash_cast.rows === 6 &&
       ['b1_jiangwang_attack_claw_cast', 'b2_hanba_attack_flame_claw_cast', 'b3_xueshi_attack_claw_cast',
-       'b4_xiebian_attack_staff_cast', 'b5_judge_attack_gavel_cast', 'b7_yewang_attack_blade_cast',
-       'b8_xiuluo_attack_slash_cast', 'b9_yanluo_attack_smash_cast'].every(function (k) {
-        return FX_SHEETS[k].f === 32 && FX_SHEETS[k].oy === 0.25;
+       'b3_xueshi_heavy_smash_cast', 'b4_xiebian_attack_staff_cast', 'b5_judge_attack_gavel_cast',
+       'b6_mengpo_attack_ladle_cast', 'b7_yewang_attack_blade_cast', 'b8_xiuluo_attack_slash_cast',
+       'b9_yanluo_attack_smash_cast'].every(function (k) {
+        return FX_SHEETS[k].f === 48 && FX_SHEETS[k].rows === 6 && !('oy' in FX_SHEETS[k]);
       }));
 
     /* ⑦″ v1.1.19（txt）那处「降低一点透明度」保留一处、撤回一处：骨铃吸血 op 0.6 保留；

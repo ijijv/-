@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATCH = os.path.join(ROOT, '_patch')
 ASSD = os.path.join(ROOT, '素材', 'fx')
 CHROME = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
-CELL = 480
+CELL = 240          # v1.1.20r：素材合成格 480→240 后同步减半（截图夹具按它算格位）
 COLS = 8
 
 

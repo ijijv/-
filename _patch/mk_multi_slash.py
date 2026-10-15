@@ -28,7 +28,7 @@ FX = os.path.join(ROOT, u'素材', u'fx')
 DST = os.path.join(FX, 'multi_slash.png')
 PREVIEW = os.path.join(HERE, '_ms_preview.png')
 
-CELL = 480
+CELL = 240          # v1.1.20r：与 js/20_data.js 的合成格口径一致（480→240）
 COLS = 8
 ANGLES = [0, 30, 60, 90, 120, 150]
 ALPHA_TH = 8                    # 与 mk_fx_sheets.py / shot_fx.py 同一口径

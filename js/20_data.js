@@ -1141,7 +1141,10 @@ const CARD_SFX = {
   zhanyaojian:'atk_slash',   tianlei:'tianlei',         wanjian:'wanjian',   // v1.1.20：万剑归宗改专用键（素材/sfx/wanjian.wav）；天雷正法改专用键 tianlei（用户 txt #7）
   tiebushan:'atk_blunt',     shihun:'atk_slash',        shixue:'thorns',   // v1.1.20（用户 2026-10-15 音效库口径「thorns 用于嗜血」）atk_slash→thorns
   taomufu:'atk_talisman',    shihunzhou:'atk_talisman', zhongkui:'atk_blunt',
-  qungui:'atk_aoe',          baigui:'atk_aoe',          zhouyu:'atk_aoe',
+  qungui:'atk_aoe',          baigui:'atk_aoe',          zhouyu:'atk_multi_each',
+  /* v1.1.20r2（用户口径「purple_rain 的音效要换成苦僧咒雨那个连击的音效」）：
+     咒雨出牌音 atk_aoe → **atk_multi_each**（＝苦僧咒雨那套逐点连击每一段响的那个音）；
+     咒雨是 4 个角色（天师/苦僧/赶尸人/阴差）共用的同一张牌 ⇒ 本条一改**全部角色同时生效**。 */
   yinbingguo:'atk_aoe',      shi_wang:'atk_aoe',
   /* D 组·自我强化：这些牌没有共性收口点（不是给格挡、不是召唤），只能逐张点名 */
   kaitianyan:'card_buff',    xueji:'card_buff',         ranxue:'card_buff',
@@ -1161,7 +1164,7 @@ const CARD_SFX = {
 function cardSfxFor(c){ return (c && CARD_SFX[c.id]) || null; }
 
 /* ——— v0.64.0：精灵图特效表 ———
-   素材 `素材/fx/<key>.png`，8 列纵向精灵图、单元 480×480，帧数由 `_patch/mk_fx_sheets.py`
+   素材 `素材/fx/<key>.png`，8 列纵向精灵图、单元 240×240（v1.1.20r 起全量 ×0.5；原 480×480），帧数由 `_patch/mk_fx_sheets.py`
    **按每格 alpha 实测**扫出来（8 列的末排常常是空的，不能拿 行×8 当帧数）。要改尺寸就改那个脚本。
    `scale` 默认 1.0，逐个可调 —— 值由 `_patch/shot_fx.py` 的实拍对照图定，不许拍脑袋。 */
 const FX_SHEETS = {
@@ -1174,18 +1177,20 @@ const FX_SHEETS = {
   fodu:        { c:8, f:38, f0:41, rows:6, i0:1, scale:1.75, ox:0, oy:0.17 },   // 佛渡（净化）　素材 41 帧，两端看不见的 3 帧不播
   /* v1.1.6 腐毒发作（腐骨散 / 化甲为毒）：用户提供的素材原始排布是 5 列 × 4 行、单元 768×720、
      实际 16 帧（末行只有 1 格），**不是**工程的 8 列 × 480 约定 —— 已按排重排成 8 列 × 2 行、
-     单元 480×480（`_patch` 外的临时脚本重采样，逐帧 LANCZOS 缩放、原样保留在格内位置）。
+     单元 480×480（`_patch` 外的临时脚本重采样，逐帧 LANCZOS 缩放、原样保留在格内位置。
+     v1.1.20r 起全量合成格再 ×0.5 ⇒ 单元 240×240）。
      ox/oy 由重采样后逐帧 alpha 并集实量（cell-local 内容框中心 − 格中心）：0.01 / 0.06。
      与 burn（同为 DoT 跳伤、同锚点敌人）取同一 scale，观感才连得上。 */
   fudu_hit:    { c:8, f:16, rows:2, i0:0, scale:2.0, ox:0.01, oy:0.06 },
-  gouhun:      { c:8, f:36, rows:6, i0:0, scale:1.83, ox:0.22 },   // 勾魂　v1.1.20（用户 txt #17「特效不明显，需要更换」）：换 8 列 6 行新素材（hand_grab_full_8lie6hang_480x480.png，整图 3840×2880）；素材帧 36 全播（i0:0，无两端空帧）；内容占格子 55%×45% ⇒ 实测 scale 1.83、ox 0.22
+  gouhun:      { c:8, f:36, rows:6, i0:0, scale:1.83, ox:0.22 },   // 勾魂　v1.1.20（用户 txt #17「特效不明显，需要更换」）：换 8 列 6 行新素材（hand_grab_full_8lie6hang_480x480.png，v1.1.20r 起全量 ×0.5 ⇒ 整图 1920×1440）；素材帧 36 全播（i0:0，无两端空帧）；内容占格子 55%×45% ⇒ 实测 scale 1.83、ox 0.22
+  purple_rain: { c:8, f:48, rows:6, i0:0, scale:1.01 },   // 咒雨　v1.1.20r（用户跨轮口径：新加的咒雨特效）：8 列 6 行新素材（purple_rain_full_8lie6hang_480x480.png，v1.1.20r 起全量 ×0.5 ⇒ 整图 1920×1440）；素材帧 48 全播（i0:0，逐帧 alpha 实测无空帧）；内容逐帧铺满格子（宽 99.2%、高 98.3%）⇒ 实测 scale 1.01、ox/oy 0
   /* v1.0.17 新增（程序绘制，`_patch/mk_flame_sheets.py`）：下面 4 张都是自绘精灵图、
      每一格都有内容（不存在「两端空帧」）⇒ **不写 f0**（f0 是「素材原帧数 − 裁掉的两端空帧」的记账字段，
      只在 `_patch/fx_tune.py` 扫外部素材时才有意义；自绘图 f0 == f，写进去只会让冒烟那条
      「f0 ≥ i0+f 且 f0 > f」的自洽断言误报）。i0 也一律 0。**帧数分两档**：
        · guling_suck / relic_proc —— 一次性演出，48 帧 6 行（f = 48）；
        · shiqi_flame / xuenu_flame —— 芯片上的**无限循环**，只出 8 帧 1 行（f = 8）。
-         为什么火焰不是 48 帧：循环只要一个周期；48 帧＝3840×2880（3.4MB），而 `打包.py` 会**按排**
+         为什么火焰不是 48 帧：循环只要一个周期；48 帧＝1920×1440（v1.1.20r 起全量 ×0.5 后的尺寸），而 `打包.py` 会**按排**
          切成 `fx/<名>_r0..r5.png`，多出来的 5 排永远没人请求（CSS 只循环第 0 排），
          还会被 verify_dist 的「从未被请求的素材」咬一口。8 帧 1 排 = 拆出来正好 `_r0.png` 一张。
          ⚠️ 正因如此，芯片火焰的地址**不能**按整键取 —— 见 `fxStripURL()`（js/00_base.js）。
@@ -1201,7 +1206,8 @@ const FX_SHEETS = {
   jinzhong:    { c:8, f:41, f0:43, rows:6, i0:1, scale:2.3, ox:0, oy:0.2 },   // 金光罩 / 金钟罩　素材 43 帧，两端看不见的 2 帧不播　v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 24→41）；放大 1.82→2.3 保留
   lei:         { c:8, f:11, f0:19, rows:5, scale:1.35 },   // 雷符　素材 19 帧，两端看不见的 8 帧不播　v1.1.19（用户 txt「特效太小」）1.05→1.35
   /* v1.1.9 修正（用户实机报「列数/行数搞错了，特效错乱」）：
-     ⚠️ 这两张与 boss_vfx 同一套出图规格 —— **8 列 × 4 行、单帧 480×720**（宽 3840、高 2880）。
+     ⚠️ 这两张与 boss_vfx 同一套出图规格 —— **8 列 × 4 行、单帧 480×720**（v1.1.20r 起全量 ×0.5
+        ⇒ 单帧 240×360、宽 1920、高 1440；`ch` 是比例 1.5，与本条几何描述无关，仍写 ch:1.5）。
         以前按「正方形格 480×480 ⇒ 6 行」切，纵偏移算成 480 的整数倍，实际每格高 720
         ⇒ 播到第 2 格起就整体错位一格半。修法：progress 里新增 `ch`（单帧高/宽 = 720/480 = 1.5）
         字段，fxCellPos / playFx 按非方形格算纵偏移与内层高（见 js/00_base.js）。
@@ -1209,7 +1215,7 @@ const FX_SHEETS = {
         故这两条显式写 `fps:30`，播放时长才与出图一致（用户口径「注意帧间隔时间」）。
      lightning（雷谴符**逐段落雷**）：素材 32 帧 ⇒ f:32。scale 取与 burn/fudu_hit 同族的大特效档。 */
   lightning:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:1.5, fps:30 },   // v1.1.19（用户 txt「特效太大」）2.0→1.5
-  /* 反伤 / 反震**共用**这张精灵图：画布 8 列 × 4 行、单帧 480×720；
+  /* 反伤 / 反震**共用**这张精灵图：画布 8 列 × 4 行、单帧 480×720（v1.1.20r 起全量 ×0.5 ⇒ 240×360）；
      动作只占**前 24 帧**（末 8 帧是出图留白）⇒ f:24。
      玩家反伤给敌人（荆棘/罗汉拳套/铁壁…）→ 锚在**玩家**、基准朝向不动；
      敌人反震给玩家（fanzhen 词缀）→ 锚在**敌人**并**镜像**（playFx 的 opts.mirror）。 */
@@ -1232,7 +1238,7 @@ const FX_SHEETS = {
   thorns_light: { c:8, f:48, rows:6, i0:0, scale:2.0 },   // 浅显荆棘·立绘叠图（见上）　v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 16→48）、透明度回调（撤 op 0.5）
   tianlei:     { c:8, f:14, f0:21, rows:5, scale:1.3 },   // 天雷正法　素材 21 帧，两端看不见的 7 帧不播　v1.1.19（用户 txt「特效太小」）1.00→1.3
   wangyou:     { c:8, f:42, f0:46, rows:6, i0:1, scale:2.82, ox:0, oy:0.23 },   // 忘忧汤（孟婆）　素材 46 帧，两端看不见的 4 帧不播
-  wanjian:     { c:8, f:45, f0:46, rows:6, i0:0, scale:1.04 },   // 万剑归宗　v1.1.20（用户 txt #8「换个特效」）：换 8 列 6 行新素材（wanjian_full_8lie6hang_480x480.png，整图 3840×2880）；素材帧 46、实播 45（i0:0）；内容占格子 96% ⇒ 实测 scale 1.04
+  wanjian:     { c:8, f:45, f0:46, rows:6, i0:0, scale:1.04 },   // 万剑归宗　v1.1.20（用户 txt #8「换个特效」）：换 8 列 6 行新素材（wanjian_full_8lie6hang_480x480.png，v1.1.20r 起全量 ×0.5 ⇒ 整图 1920×1440）；素材帧 46、实播 45（i0:0）；内容占格子 96% ⇒ 实测 scale 1.04
   weak:        { c:8, f:38, f0:44, rows:6, i0:5, scale:2.54, ox:0, oy:0.23 },   // 虚弱　素材 44 帧，两端看不见的 6 帧不播
   xiaogui:     { c:8, f:35, f0:42, rows:6, i0:5, scale:2.51, ox:0, oy:0.23 },   // 小鬼召唤　素材 42 帧，两端看不见的 7 帧不播
   xuenu:       { c:8, f:32, f0:41, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },   // 血怒　素材 41 帧，两端看不见的 9 帧不播
@@ -1244,61 +1250,67 @@ const FX_SHEETS = {
   zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.4 },   // 钟馗镇魂　素材 38 帧，两端看不见的 7 帧不播　v1.1.19（用户 txt「特效太小」）1.08→1.4
   /* ——— v1.1.10/11：boss_vfx 全部 9 幕 Boss 技能特效（用户交付的 46 段全接入）———
      前 34 段（第 1~6 幕）在 v1.1.10、后 12 段（第 7~9 幕 夜王/修罗王/阎罗天子）在 v1.1.12。
-     v1.1.15 起换新规格（用户重出图）：8 列 × 4 行、**单帧 480×480**（整图 3840×1920，正方形格 ⇒ 不写 ch）、
-     **30fps** ⇒ 32 帧 ≈ 1.07s。
+     v1.1.15 起换新规格（用户重出图）：`_hit` / `_self` 段 8 列 × 4 行、**单帧 480×480**（整图 3840×1920，
+     正方形格 ⇒ 不写 ch；v1.1.20r 起全量 ×0.5 ⇒ 单帧 240×240、整图 1920×960）、**30fps** ⇒ 32 帧 ≈ 1.07s。
+     v1.1.20r：**10 条 `_cast` 换 8 列 6 行新图** ⇒ 单帧 240×240、整图 1920×1440、f 48。
      （lightning / damage_reflect 仍是旧的 480×720 格、保留 ch:1.5，不随这次换。）
-     这些图**没有两端空帧**（出图校验：首帧非空、末帧覆盖率 0）⇒ 一律 i0:0、f:32。
+     这些 `_hit` / `_self` 图**没有两端空帧**（出图校验：首帧非空、末帧覆盖率 0）⇒ 一律 i0:0、f:32。
      scale：v1.1.16 起按用户口径把 boss_vfx 那批**整体缩到 2.0**（原 2.47 偏大、手机端偏卡；
      卡顿主因是像素填充量而非帧率 ⇒ 本条只缩尺寸，fps 仍 30）。
      v1.1.20（用户 txt「删掉这个」）：4 条连接段 `_link` 全部删除（键位 + 素材 + bossLinkFx 平铺播放器一并摘掉），
      连同 `b2_hanba_burn_apply_hit` / `b3_xueshi_charge_self` 两条独立段 —— 46 段 → 40 段。
+     v1.1.20r（用户 txt 第三批）：**10 条 `_cast` 起手换新图**（用户重出 8 列 6 行精灵图 ⇒ rows 4→6、f 32→48）；
+     只换 `_cast` 这一套（同一技能挂角色/挂 Boss 的两份里 `_hit` 那套逐字节不动）。
+     v1.1.20r2（用户真机复核）：**撤掉这 10 条 `_cast` 的 oy 0.25**（v1.1.19 ③ 加的「上移半个单帧宽」→ v1.1.20 ⑥ 收到
+     0.25），实机观感仍偏上 ⇒ 改回正常水平（oy 不写 = 0）；scale 原样保留。
+     同批 **全量 fx 精灵图合成格 480→240**（源图统一 ×0.5 重采样；playFx 的屏上尺寸由锚点盒决定、与源图格尺寸无关 ⇒ 观感不变）。
      挂点与触发时机见 30_engine.js 的 BOSS_VFX / bossSkillFx（_cast 挂 Boss、_hit 默认挂玩家、_self 挂 Boss）。 */
   /* 第一幕 · 僵王（爪击 / 吸食 / 召唤小僵尸） */
-  b1_jiangwang_attack_claw_cast:   { c:8, f:32, rows:4, i0:0, scale:2.5, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）与「太小」2.0→2.5 保留
+  b1_jiangwang_attack_claw_cast:   { c:8, f:48, rows:6, i0:0, scale:2.5, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 2.5 保留、**撤掉 oy 0.25**（同批起手图观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b1_jiangwang_attack_claw_hit:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b1_jiangwang_drain_feed_cast:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b1_jiangwang_drain_feed_hit:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b1_jiangwang_summon_minion_self: { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第一幕 · 旱魃（焰爪 / 灼烧施加 / 灼烧跳伤循环） */
-  b2_hanba_attack_flame_claw_cast: { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b2_hanba_attack_flame_claw_cast: { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b2_hanba_attack_flame_claw_hit:  { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b2_hanba_burn_tick_hit:          { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第一幕 · 血尸（爪击 / 蓄力 / 蓄力重击 / 吸血） */
-  b3_xueshi_attack_claw_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b3_xueshi_attack_claw_cast:      { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b3_xueshi_attack_claw_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
-  b3_xueshi_heavy_smash_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 16→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b3_xueshi_heavy_smash_cast:      { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b3_xueshi_heavy_smash_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b3_xueshi_lifesteal_cast:        { c:8, f:32, rows:4, i0:0, scale:2.4, fps:30 },   // v1.1.19（用户 txt「特效太小」）2.0→2.4
   b3_xueshi_lifesteal_hit:         { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第二幕 · 谢必安（哭丧棒 / 勾魂 / 分化；分出的「必安」复用同一套） */
-  b4_xiebian_attack_staff_cast:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b4_xiebian_attack_staff_cast:    { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b4_xiebian_attack_staff_hit:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b4_xiebian_soul_hook_cast:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b4_xiebian_soul_hook_hit:        { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b4_xiebian_split_self:           { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第二幕 · 判官王（惊堂木 / 记名 / 清算） */
-  b5_judge_attack_gavel_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b5_judge_attack_gavel_cast:      { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b5_judge_attack_gavel_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b5_judge_record_hit:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b5_judge_settle_cast:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b5_judge_settle_hit:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第二幕 · 孟婆（汤勺 / 忘忧 / 汲血） */
-  b6_mengpo_attack_ladle_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b6_mengpo_attack_ladle_cast:     { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；本条本无 oy，保持无
   b6_mengpo_attack_ladle_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b6_mengpo_forget_hit:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b6_mengpo_heal_self:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第三幕 · 夜王（暗刃 / 暗夜威压） */
-  b7_yewang_attack_blade_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b7_yewang_attack_blade_cast:     { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b7_yewang_attack_blade_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b7_yewang_pressure_hit:          { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第三幕 · 修罗王（业火斩 / 业火反噬 / 业火附体） */
-  b8_xiuluo_attack_slash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b8_xiuluo_attack_slash_cast:     { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b8_xiuluo_attack_slash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b8_xiuluo_backlash_self:         { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b8_xiuluo_karma_fire_self:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   /* 第三幕 · 阎罗天子（开局词缀 / 幽冥重击 / 轮回复活 / 召唤阴差） */
   b9_yanluo_affix_self:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
-  b9_yanluo_attack_smash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },   // v1.1.20（用户 txt「截断全部回调」）帧数回全长（f 19→32）；上移四分之一单帧宽度（oy 0.25）保留
+  b9_yanluo_attack_smash_cast:     { c:8, f:48, rows:6, i0:0, scale:2.0, fps:30 },   // v1.1.20r：换 8 列 6 行新图（f 32→48）；v1.1.20r2：scale 保留、**撤掉 oy 0.25**（实机观感偏上 ⇒ 改回正常水平，oy 不写 = 0）
   b9_yanluo_attack_smash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b9_yanluo_revive_self:           { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
   b9_yanluo_summon_yinchai_self:   { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 }
@@ -1309,7 +1321,9 @@ const FX_SHEETS = {
 /* ——— v0.64.0：卡牌 → 特效 ———
    只登记「有对应素材」的牌（23/48）。**没登记的牌自动退回 v0.43 的 CSS 四件套**（符箓/护体/黑雾/脉冲），
    所以这里漏一张的后果只是「那张牌没有精灵图特效」，不是「那张牌没有特效」。
-   a = 锚点：enemy 单体敌人 / field 战场（全体） / player 玩家面板 / summon 屏幕中心（召唤位） /
+   a = 锚点：enemy 单体敌人 / field 战场（全体） / enemies 逐只存活敌人（全体牌一张对各敌各播一份，
+               由 cardPlayFx 遍历 aliveEnemies() 落点；v1.1.20r 用户口径：万剑归宗要按敌人数分别施加） /
+       player 玩家面板 / summon 屏幕中心（召唤位） /
        handcard 刚打出的那张手牌（v1.1.20 用户 txt #5/#9/#10/#12：尸王/纸人/小鬼/阴兵这几张的精灵图是**手牌特效**，
                               打在牌面中部，牌挪走后特效留在原位播完）。
    s = 覆写 FX_SHEETS 的 scale（默认不写，由对照图定）。 */
@@ -1320,7 +1334,8 @@ const CARD_FX = {
   jianfu:{n:'jian',a:'enemy'},        zhanyaojian:{n:'jian',a:'enemy'},
   tianlei:{n:'tianlei',a:'enemy'},
   /* 攻击 · 全体 */
-  wanjian:{n:'wanjian',a:'field'},    baigui:{n:'baigui',a:'field'},
+  wanjian:{n:'wanjian',a:'enemies'},  baigui:{n:'baigui',a:'field'},   // v1.1.20r：万剑归宗 a:'enemies' —— 逐只存活敌人各播一份（原来 a:'field' 只在战场中心播一个）
+  zhouyu:{n:'purple_rain',a:'enemies',stg:120},   // v1.1.20r：落点「逐只存活敌人」；v1.1.20r2（用户口径「其他角色都要改为逐个叠加效果来搭配连击音效」）：stg 120 ⇒ **逐个叠加**（每个敌人隔 120ms 落一份、key 带 uid 各自独立叠加）—— 咒雨 4 个角色共用本条目，一改全部生效
   /* 防御 · 护盾系（基础盾 block / 高级盾 jinzhong / 反伤 thorns / 净化 fodu） */
   jingang:{n:'block',a:'player'},     yinshen:{n:'block',a:'player'},
   tongpi:{n:'block',a:'player'},      xiejiashengyuan:{n:'block',a:'player'},

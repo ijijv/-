@@ -654,7 +654,7 @@ function gainBlock(n){
      两键并存，block 没有退役。 */
   /* v0.64.0：格挡精灵图。**同名重播**（不是叠加）—— 五通神每回合 tick、武僧回合格挡会被反复触发，
      若叠加会在玩家身上堆出十几个元素。*/
-  if(n>0){ G.blockGainedTurn=(G.blockGainedTurn||0)+n; sfx(cardPlayWindow?'card_defense':'block'); playFx('block', 'player'); floatDamage('+'+n, 'block', document.querySelector('#player-panel .hpbar')); }
+  if(n>0){ G.blockGainedTurn=(G.blockGainedTurn||0)+n; sfx(cardPlayWindow ? ((G._playCardId==='jinzhong'||G._playCardId==='jinguang') ? 'jinzhong' : 'card_defense') : 'block'); playFx('block', 'player'); floatDamage('+'+n, 'block', document.querySelector('#player-panel .hpbar')); }   // v1.1.20r（用户口径「jinzhong 用 jinzhong.mp3」）：金钟罩/金光罩这一声改走自己的专用采样，其余防御牌仍 card_defense
   /* 金刚杵[紫·武僧·t4]：**本场战斗内累计获得过的格挡总量**（跨战斗清零，否则读档/换关会串）。
      每满 50 清零、并往手牌塞 1 张**临时【铁布衫】**（oneShot ⇒ 不进牌库循环，照五雷法印的 0 费雷符口径）；
      之后重新累积，可以多次触发。「获得即是累积」= 就在这个格挡唯一收口点累加，不做任何延迟结算。 */
@@ -1691,7 +1691,7 @@ function enemyActOne(e, atkDly){
       // v0.61.01：连击不吃蓄力加值，也不消耗已存的蓄力（用户拍板口径）
       // v1.0.12：出手动作按**段**重播（n 段 = 抽动 n 下），并接上「依次行动」的屏序错峰
       case 'multi': { if(e.vfxHeavy){ e.vfxHeavy=false; bossSkillFx(e,'heavy'); } else bossSkillFx(e,'multi'); enemyAttackAnim(e,e.intent.n||1,__atkDly); for(let i=0;i<e.intent.n;i++){ if(G.hp<=0) break; dealDamageToPlayer(e.intent.v,e,i*140,{multi:true}); } break; }
-      case 'discard': enemyActAnim(e,'cast',__atkDly); sfx('enemy_debuff'); if(!G.debuffImmune){ G.pendingDiscard++; floatMsg('下回合随机弃 1 张牌'); log(`${e.name} 缠绕你：下回合开始随机弃 1 张牌`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【缠绕】`); break;
+      case 'discard': enemyActAnim(e,'cast',__atkDly); sfx('enemy_debuff'); if(!G.debuffImmune){ G.pendingDiscard++; playFx('gouhun', 'player'); floatMsg('下回合随机弃 1 张牌'); log(`${e.name} 缠绕你：下回合开始随机弃 1 张牌`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【缠绕】`); break;   // v1.1.20r（用户口径「勾魂和弃牌的效果都要有的特效gouhun」）：弃牌（缠绕 intent）原来只有 sfx、无 FX，补上与勾魂同款的 gouhun 特效
       case 'attackBlock': { sfx('enemy_attack'); enemyAttackAnim(e,1,__atkDly); dealDamageToPlayer(e.intent.v,e); if(e.intent.block>0) enemyGainBlock(e, e.intent.block); break; }   // v1.0.13：格挡余量走漏斗（原先裸赋值，无飘字/特效）
       case 'summon': { enemyActAnim(e,'call',__atkDly); const __sv=bossVfxKey(e,'summon'); if(__sv) sfx(__sv); else sfx('enemy_summon'); const uk=e.intent.unit||'xiaojianshi'; const un=ENEMIES[uk].name; let added=0; const __new=[]; /* v1.0.9：上限判据改用**存活**数 —— 敌人阵亡只置 dying 标记、从不从 G.enemies 移除，
                    旧判据 `G.enemies.length>=5` 会被尸体占满 ⇒ 几轮后僵王再也召不出小僵尸（招牌机制哑火）。 */
@@ -1710,7 +1710,7 @@ function enemyActOne(e, atkDly){
       case 'qingsuan': { enemyActAnim(e,'rite',__atkDly); if(bossVfxKey(e,'qingsuan')) bossSkillFx(e,'qingsuan'); else sfx('enemy_qingsuan'); const ledger=e.ledgerDmg||0; const dmg=Math.min(24, Math.floor(ledger*0.3)); if(e.ledgerAffix){ const a=AFFIXES.find(x=>x.id===e.ledgerAffix.id); if(a){ if(!e.affixes) e.affixes=[]; e.affixes.push({id:a.id, tier:1}); if(a.id==='pingbi'){ e.pingbi=(e.pingbi||0)+8; enemyGainBlock(e, 8); } log(`${e.name} 清算：【${a.name}】生效——${a.desc}`); } } e.ledgerActive=false; e.ledgerDmg=0; e.ledgerAffix=null; if(dmg>0){ floatMsg('生死簿 · 清算'); const dead=directDamage(dmg, `${e.name} 清算生死簿：反弹 ${dmg} 点伤害`); if(dead) return 'dead'; /* v0.61 B10：判负已在 directDamage→loseGame 幂等收口，棋盘停格属正常终局，不再续跑其余敌人 */ } else log(`${e.name} 翻开生死簿：无账可清`); break; }
       /* v0.61.32：业火附体是修罗王招牌机制，从通用 buff 拆出 */
       case 'yehuo': { enemyActAnim(e,'cast',__atkDly); const _kvb=bossVfxKey(e,'karma'); if(_kvb) bossSelfFx(e,'karma'); else sfx('boss_yehuo'); if(!G.debuffImmune){ G.karmaFire=2; if(!_kvb) playFx('yehuo', 'player'); floatMsg('业火附体'); log(`${e.name} 业火附体：接下来 2 回合，你对它伤害 -30%，每次造成伤害反噬 1 点生命，它受到的诅咒层数翻倍`); playerDebuffReceived(); } else log(`佛渡免疫了${e.name}的【业火】`); break; }
-      case 'wangyou': enemyActAnim(e,'cast',__atkDly); if(bossVfxKey(e,'wangyou')) bossSkillFx(e,'wangyou'); else { sfx('enemy_debuff'); playFx('wangyou', playerBottomAnchor()||'player'); } G.wangyouTurns=2; G.wangyouDrunk=0; floatMsg('忘忧 · 两回合'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合开始时可选 1 张手牌「饮下」弃置，否则受 8 点真实伤害`); playerDebuffReceived(); break;
+      case 'wangyou': enemyActAnim(e,'cast',__atkDly); if(bossVfxKey(e,'wangyou')) bossSkillFx(e,'wangyou'); else { sfx('wangyou'); playFx('wangyou', playerBottomAnchor()||'player'); } G.wangyouTurns=2; G.wangyouDrunk=0; floatMsg('忘忧 · 两回合'); log(`${e.name} 奉上忘忧汤：接下来两回合，每回合开始时可选 1 张手牌「饮下」弃置，否则受 8 点真实伤害`); playerDebuffReceived(); break;
       case 'dormant': sfx('enemy_dormant'); log(`${e.name} 在观望`); break;
     }
     // v0.61 C1：一次魅惑 = 削减该敌人「一整次行动」的全部伤害（连击各段、蓄力重击都算），行动结束才消耗 1 层
@@ -1839,9 +1839,9 @@ function doPlayCard(i){
   const __stealPending = !!G.zhouhunSteal;
   if(G.hero==='wuseng' && G.zhouhunSteal && c.type==='attack'){ G.stealWatch=true; G.stealAccum=0; }
   duhunBatchBegin(); // v0.61.33：渡魂归己按「这一张牌造成的真实总伤害」结算（群伤/多段只取整一次）
-  cardPlayWindow=true;
+  cardPlayWindow=true; G._playCardId=c.id;   // v1.1.20r：把「正在结算的这张牌」告知收口点（gainBlock 据此给金钟罩/金光罩换专用音）
   const effResult = c.eff(c.up, c, xuenuBonus, i);
-  cardPlayWindow=false;
+  cardPlayWindow=false; G._playCardId=null;
   duhunBatchEnd();
   if(G.stealWatch){
     G.stealWatch=false; const __sh=G.stealAccum||0; G.stealAccum=0; G.zhouhunSteal=0;

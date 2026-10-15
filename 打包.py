@@ -80,13 +80,16 @@ WEB_IMG_EXT = {'.png', '.jpg', '.jpeg', '.bmp'}
 # 会被 fx_row_datauris 误拆成 8 行 → 运行时请求的 fx/daoxin_full.png 整键反而消失（破碎动画 404）。
 FX_WHOLE_SKIP = {'daoxin_full'}
 # v1.1.9：**非方形格**精灵图的真实排数（单帧 480×720、8 列 4 行）。默认按正方形格切
-# （cell = W//8 = 480，排数 = H//480），但 lightning / damage_reflect 与 boss_vfx 同规格：
-# 高 2880 = 4×720，正方形口径会错切成 6 排 ⇒ 产物里的按排键与 FX_SHEETS.rows 对不上
+# （cell = W//8，排数 = H//cell），但 lightning / damage_reflect 与 boss_vfx 同规格：
+# 高 = 4×单帧高，正方形口径会把 4 排错切 ⇒ 产物里的按排键与 FX_SHEETS.rows 对不上
 # （verify_dist [2d] 报红），运行时纵偏移也错。这里按 key 显式给出真实排数。
+# ⚠️ v1.1.20r 起全量 fx 合成格 480→240（源图统一 ×0.5）：cell 随之从 480 变 240，
+# 但「排数」只由高/单帧高决定，与合成格尺寸无关 ⇒ 下面这些 rows 数值**不变**。
 # ⚠️ 必须与 js/20_data.js 的 FX_SHEETS[key].rows 同口径（那边是唯一真相源）。
 FX_SPLIT_ROWS = {'lightning': 4, 'damage_reflect': 4}
-# v1.1.10：boss_vfx（b1~b6 幕主）同 specs —— v1.1.15 起换新规格：全部 3840×1920（8 列 4 行、单帧 480×480，
+# v1.1.10：boss_vfx（b1~b9 幕主）同 specs —— v1.1.15 起换新规格：8 列 4 行（单帧 480×480、整图 3840×1920，
 # 含连接段；旧规格 3840×2880 / 连接段 3840×1024 作废）。新规格下正方形口径（H//480 = 4）本就切对，
+# v1.1.20r 起全量 ×0.5 ⇒ 这些段现在是 1920×960（单帧 240×240）。
 # 这里仍显式给 4 —— 与 js/20_data.js 的 FX_SHEETS[key].rows 保持「显式一致」，防将来再换非方格时静默错切。
 # 28 条（v1.1.20：删掉 6 条 —— 4 条 `_link` 连接段 + b2_hanba_burn_apply_hit + b3_xueshi_charge_self）
 # + v1.1.12 的 7~9 幕（夜王/修罗王/阎罗天子）12 条同口径。
@@ -115,6 +118,17 @@ BOSS_VFX_KEYS = [
 ]
 for _k in BOSS_VFX_KEYS:
     FX_SPLIT_ROWS[_k] = 4
+# v1.1.20r：**10 条 `_cast` 起手换 8 列 6 行新图** ⇒ 真实排数 6（其余 boss_vfx 段仍是 4）。
+# 必须与 js/20_data.js 的 FX_SHEETS[key].rows 一致 —— 那条闸的真相源在 js 侧（verify_dist 读 fxRows）。
+BOSS_VFX_CAST6_KEYS = [
+    'b1_jiangwang_attack_claw_cast', 'b2_hanba_attack_flame_claw_cast',
+    'b3_xueshi_attack_claw_cast', 'b3_xueshi_heavy_smash_cast',
+    'b4_xiebian_attack_staff_cast', 'b5_judge_attack_gavel_cast',
+    'b6_mengpo_attack_ladle_cast', 'b7_yewang_attack_blade_cast',
+    'b8_xiuluo_attack_slash_cast', 'b9_yanluo_attack_smash_cast',
+]
+for _k in BOSS_VFX_CAST6_KEYS:
+    FX_SPLIT_ROWS[_k] = 6
 
 
 def human(n):
@@ -150,15 +164,16 @@ def img_datauri(path, quality, maxdim):
 def fx_row_datauris(path, quality, cols=8, rows=None):
     """特效精灵图 → **按排**的 WebP data URI 列表；不是 8 列整图就返回 None。
 
-    v1.0.9（手机端性能）：单文件产物原来是「一个特效 = 一张 3840×2880 整图」，
-    每次出牌把它当 CSS background 挂上去，浏览器就要解 **11 Mpx / 42 MB** 的位图；
-    30 张合计 1195 MB，手机图片缓存根本留不住 ⇒ **每次出牌都重新解一遍 100~200ms**，
-    正是用户报的「打出手牌那一瞬间卡」。
-    拆成按排小图（3840×480 = 1.8 Mpx）后每次只解 1/6，**像素逐字节不变**（只是切了一刀），
+    v1.0.9（手机端性能）：单文件产物原来是「一个特效 = 一张整图」（480 时代 3840×2880、
+    单张要解 **11 Mpx / 42 MB**，30 张合计 1195 MB，手机图片缓存根本留不住 ⇒ **每次出牌都重新
+    解一遍 100~200ms**，正是用户报的「打出手牌那一瞬间卡」）。
+    拆成按排小图后每次只解 1/rows，**像素逐字节不变**（只是切了一刀），
     出牌尖峰随之降到十几毫秒。运行时的取法见 js/00_base.js 的 playFx（<name>_r<行>.png）。
+    v1.1.20r：全量 fx 合成格 480→240（源图统一 ×0.5）⇒ 同一张图现在是 1920 宽、整图 2.76 Mpx、
+    单排 1920×240（0.46 Mpx）；本函数**只做等高横切，与合成格尺寸无关**，故代码未改。
     默认尺寸从图自己量（不写死 480）：单元边长 = 宽/cols，排数 = 高/单元边长。
     v1.1.9：`rows` 显式给定时按「高 / rows」等高横切 —— 用于单帧**非方形**（480×720）的图，
-    正方形口径（H//480）会把 4 排错算成 6 排。"""
+    正方形口径（H//480）会把它错切。"""
     im = Image.open(path)
     if im.mode in ('P', 'LA', 'L'):
         im = im.convert('RGBA' if 'transparency' in im.info or im.mode == 'LA' else 'RGB')
@@ -592,7 +607,8 @@ def main():
     for rel, path in files:
         ext = os.path.splitext(path)[1].lower()
         if ext in IMG_EXT:
-            # v1.0.9（手机端性能）：`素材/fx/<key>.png` 是 8 列 3840×2880 的整图，
+            # v1.0.9（手机端性能）：`素材/fx/<key>.png` 是 8 列纵向精灵图（v1.1.20r 起
+            # 合成格 240 ⇒ 整图 1920 宽；480 时代是 3840×2880），
             # 一次挂上去要解 11 Mpx（真机上出牌那一下 100~200ms）⇒ 内联时按排切成小图，
             # 运行时只挂当前那一排（见 js/00_base.js 的 playFx）。画质逐像素不变。
             _fxm = re.match(r'^fx/([a-z][a-z0-9_]*)\.png$', rel)
@@ -628,7 +644,7 @@ def main():
           % (len(amap), stat['n_img'], stat['n_aud'], len(_sfx), _sfxsz / 1024.0,
              human(stat['in']), human(stat['out'])))
     if fxsplit[0]:
-        print('  fx 精灵图 %d 张 → 按排 %d 张小图（整图一次解 11 Mpx → 按排 1.8 Mpx）'
+        print('  fx 精灵图 %d 张 → 按排 %d 张小图（整图一次解 2.76 Mpx → 按排 0.46 Mpx；v1.1.20r 起合成格 240）'
               % (fxsplit[0], fxsplit[1]))
 
     # ---- 2. 收集脚本（v0.61.05：源码已拆成 js/*.js，按文档顺序合回单文件） ----
