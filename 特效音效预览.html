@@ -87,6 +87,7 @@ input[type=text],select{font-family:inherit;font-size:12px;background:#100c08;co
 .tag.nosfx{color:#e08b3a;}
 .tag.loop{color:#c86bd8;border-color:#4a2f52;}
 .tag.box{color:#8fd3ff;border-color:#26414a;}
+.tag.round{color:#ff9d5c;border-color:#5a3a22;background:rgba(255,157,92,.1);}
 button.play{grid-column:1;}
 @media(max-width:780px){ .fxrow{grid-template-columns:1fr;} }
 
@@ -110,6 +111,7 @@ button.play{grid-column:1;}
 button.play.off{opacity:.4;cursor:not-allowed;}
 .sfxrow .sfx-name{font-size:12px;color:#8fd3ff;word-break:break-all;line-height:1.5;}
 .sfxrow .sfx-meta{margin-top:3px;line-height:1.9;}
+.sfxrow .sfx-note{font-size:11px;color:#c8b48a;line-height:1.7;margin-top:2px;}
 .tag.sfxb.used{color:var(--green);border-color:#2e4a2c;background:rgba(110,192,107,.08);}
 .tag.sfxb.orphan{color:#e08b3a;border-color:#4a3320;background:rgba(224,139,58,.08);}
 .tag.sfxb.missing{color:#e0c23a;border-color:#4a4224;background:rgba(224,194,58,.08);}
@@ -138,7 +140,10 @@ button.play.off{opacity:.4;cursor:not-allowed;}
 </head>
 <body>
 
-<h1>志怪塔 · 特效音效预览 <small>单文件静态页 · 尺寸与实机同源</small></h1>
+<h1>志怪塔 · 特效音效预览 <small>单文件静态页 · 尺寸与实机同源 · FX v1.1.20 / 音效 v1.1.20</small></h1>
+
+<div class="hint">数据源：特效参数<b>逐条照抄</b> js/20_data.js 的 <b>FX_SHEETS</b>（现为 <b>v1.1.20</b> 实机值：39 条基础 + 40 条 boss_vfx = 79 条）；音效接线已同步到 <b>v1.1.20</b>。<br>
+<b>本轮改动摘要</b>：<b>删特效 6 条</b>（b1_jiangwang_drain_feed_link / b2_hanba_burn_apply_hit / b3_xueshi_charge_self / b3_xueshi_lifesteal_link / b4_xiebian_soul_hook_link / b5_judge_settle_link —— 键位与素材一并删除，v1.1.10 的 _link 平铺播放器整体摘除）+ <b>改挂点 8 条</b>（手牌：尸王/纸人/小鬼/阴兵改锚<b>刚打出的那张手牌</b>；底部坐标：僵尸/忘忧落脚下；僵王吸食挂小僵尸；阎罗召唤挂新阴差底部）+ <b>4 个音效换真采样</b>（天雷正法 tianlei / 雷符·断刃雷符 lei / 镇妖铃 zhenyaoling / 嗜血 thorns）+ <b>3 条旧采样接回</b>（b2_hanba_burn_tick 灼烧跳伤 / b1_jiangwang_summon_minion 僵王召唤 / b9_yanluo_summon_yinchai 阎罗召唤）+ <b>relic_proc 与主菜单 4 键补真采样</b> + <b>删遗留键 hit</b>。带 <b style="color:#ff9d5c">本轮</b> 徽章，可点右栏「只看本轮改动」筛选。</div>
 
 <div class="hint" id="audioHint">提示：浏览器需一次用户手势才能出声 —— 请<b>先点任意一个「播放」按钮</b>解锁音频，之后每次播放都会自动配音效。</div>
 
@@ -178,6 +183,7 @@ button.play.off{opacity:.4;cursor:not-allowed;}
 <div class="col-right">
   <div class="right-head">
     <span class="rh-title">特效 / 音效清单</span>
+    <button id="btnRound">只看本轮改动</button>
     <button id="btnExport">导出反馈</button>
     <button id="btnClear">清空反馈</button>
     <span id="fbCount"></span>
@@ -192,50 +198,93 @@ button.play.off{opacity:.4;cursor:not-allowed;}
 
 <script>
 /* =====================================================================
-   1) FX_SHEETS —— 逐条照抄 js/20_data.js（只取预览需要的字段）
-      c=列数 f=播放帧数 rows=素材排数 i0=起始帧 scale=尺寸缩放
-      ch=单帧高/宽(默认1) ox/oy=内容框修正 fps=帧率(默认24，boss_vfx 为30)
+   1) FX_SHEETS —— **逐条照抄** js/20_data.js 的 FX_SHEETS（现为 v1.1.20 实机值）
+      字段一名不落地照抄：c=列数 f=播放帧数 f0=素材原帧数 rows=素材排数 i0=起始帧
+      scale=尺寸缩放 ch=单帧高/宽(默认1) ox/oy=内容框修正 fps=帧率(默认24，boss_vfx 为30) op=透明度
+      （f0 仅作记账，渲染器不用；op 由渲染器照 playFx 对 sheet 外层设透明度）
    ===================================================================== */
 var FX = {
-  baigui:      {c:8,f:37,rows:6,i0:6,scale:2.14,ox:0,oy:0.23},
-  block:       {c:8,f:36,rows:5,i0:1,scale:2.03,ox:0,oy:0.18},
-  burn:        {c:8,f:38,rows:6,i0:0,scale:2.47,ox:0,oy:0.23},
-  charge:      {c:8,f:37,rows:6,i0:0,scale:1.35,ox:0,oy:0.22},
-  charm:       {c:8,f:35,rows:6,i0:4,scale:1.76,ox:0,oy:0.15},
-  curse:       {c:8,f:35,rows:6,i0:4,scale:2.47,ox:0,oy:0.23},
-  fodu:        {c:8,f:38,rows:6,i0:1,scale:1.75,ox:0,oy:0.17},
-  fudu_hit:    {c:8,f:16,rows:2,i0:0,scale:2.0,ox:0.01,oy:0.06},
-  gouhun:      {c:8,f:30,rows:5,i0:4,scale:1.02,ox:0,oy:0.14},
-  guling_suck: {c:8,f:48,rows:6,i0:0,scale:2.0},
-  heal:        {c:8,f:34,rows:6,i0:3,scale:2.47,ox:0,oy:0.23},
-  huo:         {c:8,f:18,rows:4,i0:0,scale:1.75,ox:0,oy:0.18},
-  hurt:        {c:8,f:16,rows:4,i0:0,scale:2.15,ox:0,oy:0.23},
-  jian:        {c:8,f:18,rows:4,i0:1,scale:1.00,ox:0,oy:0.23},
-  jiangshi:    {c:8,f:34,rows:6,i0:5,scale:1.98,ox:0,oy:0.27},
-  jinzhong:    {c:8,f:41,rows:6,i0:1,scale:1.82,ox:0,oy:0.2},
-  lei:         {c:8,f:11,rows:5,i0:0,scale:1.05},
-  lightning:   {c:8,f:32,rows:4,i0:0,scale:2.0,ch:1.5,fps:30},
-  damage_reflect:{c:8,f:24,rows:4,i0:0,scale:2.0,ch:1.5,fps:30},
-  lifesteal:   {c:8,f:34,rows:5,i0:1,scale:1.43,ox:0.15,oy:0.17},
-  multi_slash: {c:8,f:8,rows:6,i0:0,scale:1.09},
-  relic_proc:  {c:8,f:48,rows:6,i0:0,scale:2.0},
-  shiqi:       {c:8,f:40,rows:7,i0:5,scale:2.47,ox:0,oy:0.23},
-  shiqi_flame: {c:8,f:8,rows:1,i0:0,scale:1},
-  shiwang:     {c:8,f:46,rows:7,i0:4,scale:1.98,ox:0,oy:0.28},
-  thorns:      {c:8,f:19,rows:5,i0:4,scale:1.98,ox:0,oy:0.18},
-  thorns_light:{c:8,f:48,rows:6,i0:0,scale:2.0},
-  tianlei:     {c:8,f:14,rows:5,i0:0,scale:1.00},
-  wangyou:     {c:8,f:42,rows:6,i0:1,scale:2.82,ox:0,oy:0.23},
-  wanjian:     {c:8,f:25,rows:5,i0:1,scale:1.00,ox:0,oy:0.14},
-  weak:        {c:8,f:38,rows:6,i0:5,scale:2.54,ox:0,oy:0.23},
-  xiaogui:     {c:8,f:35,rows:6,i0:5,scale:2.51,ox:0,oy:0.23},
-  xuenu:       {c:8,f:32,rows:6,i0:4,scale:2.47,ox:0,oy:0.23},
-  xuenu_flame: {c:8,f:8,rows:1,i0:0,scale:1},
-  yehuo:       {c:8,f:45,rows:6,i0:0,scale:2.47,ox:0,oy:0.23},
-  yinbing:     {c:8,f:44,rows:7,i0:4,scale:1.00,ox:0,oy:0.27},
-  zhenyaoling: {c:8,f:41,rows:6,i0:1,scale:1.28,ox:0,oy:0.09},
-  zhiren:      {c:8,f:34,rows:6,i0:6,scale:2.51,ox:0,oy:0.23},
-  zhongkui:    {c:8,f:31,rows:6,i0:6,scale:1.08}
+  /* —— 39 条基础 FX_SHEETS —— */
+  baigui:      { c:8, f:37, f0:44, rows:6, i0:6, scale:2.14, ox:0, oy:0.23 },
+  block:       { c:8, f:36, f0:37, rows:5, i0:1, scale:2.03, ox:0, oy:0.18 },
+  burn:        { c:8, f:38, f0:43, rows:6, scale:2.47, ox:0, oy:0.23 },
+  charge:      { c:8, f:37, f0:42, rows:6, scale:1.35, ox:0, oy:0.22 },
+  charm:       { c:8, f:35, f0:45, rows:6, i0:4, scale:1.76, ox:0, oy:0.15 },
+  curse:       { c:8, f:35, f0:43, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },
+  fodu:        { c:8, f:38, f0:41, rows:6, i0:1, scale:1.75, ox:0, oy:0.17 },
+  fudu_hit:    { c:8, f:16, rows:2, i0:0, scale:2.0, ox:0.01, oy:0.06 },
+  gouhun:      { c:8, f:36, rows:6, i0:0, scale:1.83, ox:0.22 },
+  guling_suck: { c:8, f:48, rows:6, i0:0, scale:2.0, op:0.6 },
+  heal:        { c:8, f:34, f0:43, rows:6, i0:3, scale:2.9, ox:0, oy:0.23 },
+  huo:         { c:8, f:18, f0:21, rows:4, scale:1.75, ox:0, oy:0.18 },
+  hurt:        { c:8, f:16, f0:17, rows:4, scale:2.15, ox:0, oy:0.23 },
+  jian:        { c:8, f:18, f0:21, rows:4, i0:1, scale:1.00, ox:0, oy:0.23 },
+  jiangshi:    { c:8, f:34, f0:40, rows:6, i0:5, scale:1.98, ox:0, oy:0.27 },
+  jinzhong:    { c:8, f:41, f0:43, rows:6, i0:1, scale:2.3, ox:0, oy:0.2 },
+  lei:         { c:8, f:11, f0:19, rows:5, scale:1.35 },
+  lightning:   { c:8, f:32, rows:4, ch:1.5, i0:0, scale:1.5, fps:30 },
+  damage_reflect:{ c:8, f:24, rows:4, ch:1.5, i0:0, scale:1.2, fps:30 },
+  lifesteal:   { c:8, f:34, f0:37, rows:5, i0:1, scale:1.43, ox:0.15, oy:0.17 },
+  multi_slash: { c:8, f:8, rows:6, i0:0, scale:1.09 },
+  relic_proc:  { c:8, f:48, rows:6, i0:0, scale:2.5 },
+  shiqi:       { c:8, f:40, f0:46, rows:7, i0:5, scale:2.47, ox:0, oy:0.23 },
+  shiqi_flame: { c:8, f:8, rows:1, i0:0, scale:1 },
+  shiwang:     { c:8, f:46, f0:51, rows:7, i0:4, scale:1.98, ox:0, oy:0.28 },
+  thorns:      { c:8, f:19, f0:24, rows:5, i0:4, scale:2.4, ox:0, oy:0.18 },
+  thorns_light:{ c:8, f:48, rows:6, i0:0, scale:2.0 },
+  tianlei:     { c:8, f:14, f0:21, rows:5, scale:1.3 },
+  wangyou:     { c:8, f:42, f0:46, rows:6, i0:1, scale:2.82, ox:0, oy:0.23 },
+  wanjian:     { c:8, f:45, f0:46, rows:6, i0:0, scale:1.04 },
+  weak:        { c:8, f:38, f0:44, rows:6, i0:5, scale:2.54, ox:0, oy:0.23 },
+  xiaogui:     { c:8, f:35, f0:42, rows:6, i0:5, scale:2.51, ox:0, oy:0.23 },
+  xuenu:       { c:8, f:32, f0:41, rows:6, i0:4, scale:2.47, ox:0, oy:0.23 },
+  xuenu_flame: { c:8, f:8, rows:1, i0:0, scale:1 },
+  yehuo:       { c:8, f:45, f0:47, rows:6, scale:2.47, ox:0, oy:0.23 },
+  yinbing:     { c:8, f:44, f0:51, rows:7, i0:4, scale:1.00, ox:0, oy:0.27 },
+  zhenyaoling: { c:8, f:41, f0:43, rows:6, i0:1, scale:1.7, ox:0, oy:0.09 },
+  zhiren:      { c:8, f:34, f0:42, rows:6, i0:6, scale:2.51, ox:0, oy:0.23 },
+  zhongkui:    { c:8, f:31, f0:38, rows:6, i0:6, scale:1.4 },
+  /* —— 40 条 boss_vfx（8列×4行、单帧480×480、30fps；v1.1.20 删 6 条，已无 _link）—— */
+  b1_jiangwang_attack_claw_cast:   { c:8, f:32, rows:4, i0:0, scale:2.5, fps:30, oy:0.25 },
+  b1_jiangwang_attack_claw_hit:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b1_jiangwang_drain_feed_cast:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b1_jiangwang_drain_feed_hit:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b1_jiangwang_summon_minion_self: { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b2_hanba_attack_flame_claw_cast: { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b2_hanba_attack_flame_claw_hit:  { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b2_hanba_burn_tick_hit:          { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b3_xueshi_attack_claw_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b3_xueshi_attack_claw_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b3_xueshi_heavy_smash_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b3_xueshi_heavy_smash_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b3_xueshi_lifesteal_cast:        { c:8, f:32, rows:4, i0:0, scale:2.4, fps:30 },
+  b3_xueshi_lifesteal_hit:         { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b4_xiebian_attack_staff_cast:    { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b4_xiebian_attack_staff_hit:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b4_xiebian_soul_hook_cast:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b4_xiebian_soul_hook_hit:        { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b4_xiebian_split_self:           { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b5_judge_attack_gavel_cast:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b5_judge_attack_gavel_hit:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b5_judge_record_hit:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b5_judge_settle_cast:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b5_judge_settle_hit:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b6_mengpo_attack_ladle_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b6_mengpo_attack_ladle_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b6_mengpo_forget_hit:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b6_mengpo_heal_self:             { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b7_yewang_attack_blade_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b7_yewang_attack_blade_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b7_yewang_pressure_hit:          { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b8_xiuluo_attack_slash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b8_xiuluo_attack_slash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b8_xiuluo_backlash_self:         { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b8_xiuluo_karma_fire_self:       { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b9_yanluo_affix_self:            { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b9_yanluo_attack_smash_cast:     { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30, oy:0.25 },
+  b9_yanluo_attack_smash_hit:      { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b9_yanluo_revive_self:           { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 },
+  b9_yanluo_summon_yinchai_self:   { c:8, f:32, rows:4, i0:0, scale:2.0, fps:30 }
 };
 
 /* =====================================================================
@@ -253,34 +302,34 @@ var META = {
   huo:         {g:'card', a:'enemy',  s:'atk_talisman',  t:'卡牌【火符】'},
   jian:        {g:'card', a:'enemy',  s:'atk_slash',     t:'卡牌【剑符/斩妖剑/罗汉伏虎/饮血刃】'},
   jinzhong:    {g:'card', a:'player', s:'card',          t:'卡牌【金光罩/金钟罩】'},
-  lei:         {g:'card', a:'enemy',  s:'atk_talisman',  t:'卡牌【雷符/断刃雷符】；遗物·雷法心诀（诅咒满6层补雷击，走打击音）'},
+  lei:         {g:'card', a:'enemy',  s:'lei',          t:'卡牌【雷符/断刃雷符】；遗物·雷法心诀（诅咒满6层补雷击，走打击音）', sn:'v1.1.20（用户 txt #2「换个音效」）：雷符与断刃雷符一起改走专用键 lei（素材/sfx/lei.wav）'},
   lightning:   {g:'card', a:'field',  s:'lightning',     t:'卡牌【雷谴符】（逐段落雷，战场锚点）'},
   relic_proc:  {g:'card', a:'player', s:'relic_fu',      t:'卡牌【五雷法印】(自身强化)；遗物触发通用金光（金刚杵/铃/符/镜各类）', sn:'遗物按类型 relic_bell/relic_fu/relic_mirror；五雷法印走 card_buff'},
-  shiwang:     {g:'card', a:'summon', s:'atk_aoe',       t:'卡牌【尸王】'},
+  shiwang:     {g:'card', a:'handcard', s:'atk_aoe',     t:'卡牌【尸王】', sn:'v1.1.20（用户 txt #5）：改锚**刚打出的那张手牌**（牌面中部），牌飞走后特效留在原位播完'},
   thorns:      {g:'card', a:'player', s:'card',          t:'卡牌【荆棘符/反震】'},
-  tianlei:     {g:'card', a:'enemy',  s:'atk_talisman',  t:'卡牌【天雷正法】'},
-  wanjian:     {g:'card', a:'field',  s:'atk_talisman',  t:'卡牌【万剑归宗】（全体符咒）'},
-  xiaogui:     {g:'card', a:'summon', s:'card_summon',   t:'卡牌【小鬼】'},
-  yinbing:     {g:'card', a:'summon', s:'atk_aoe',       t:'卡牌【阴兵过境/阴兵】', sn:'阴兵过境走 atk_aoe；阴兵本体走 card_summon'},
-  zhenyaoling: {g:'card', a:'enemy',  s:'card',          t:'卡牌【镇妖铃】'},
-  zhiren:      {g:'card', a:'summon', s:'card_summon',   t:'卡牌【纸人/赶尸令/万尸朝宗】'},
+  tianlei:     {g:'card', a:'enemy',  s:'tianlei',       t:'卡牌【天雷正法】', sn:'v1.1.20（用户 txt #7「换个音效」）：改走专用键 tianlei（素材/sfx/tianlei.wav）'},
+  wanjian:     {g:'card', a:'field',  s:'wanjian',       t:'卡牌【万剑归宗】（全体符咒）', sn:'v1.1.20（用户 txt #8「换个特效」）：换 8 列 6 行新素材（wanjian_full_8lie6hang_480x480.png），音效改专用键 wanjian（素材/sfx/wanjian.wav）'},
+  xiaogui:     {g:'card', a:'handcard', s:'card_summon', t:'卡牌【小鬼】', sn:'v1.1.20（用户 txt #9）：改锚**刚打出的那张手牌**'},
+  yinbing:     {g:'card', a:'handcard', s:'atk_aoe',     t:'卡牌【阴兵过境/阴兵】', sn:'阴兵过境走 atk_aoe；阴兵本体走 card_summon。v1.1.20（用户 txt #10）：改锚**刚打出的那张手牌**'},
+  zhenyaoling: {g:'card', a:'enemy',  s:'zhenyaoling',   t:'卡牌【镇妖铃】', sn:'v1.1.20（用户 txt #11「换个音效」）：改走专用键 zhenyaoling（素材/sfx/zhenyaoling.wav；钟馗镇魂仍走 card_zhenhun）'},
+  zhiren:      {g:'card', a:'handcard', s:'card_summon', t:'卡牌【纸人/赶尸令/万尸朝宗】', sn:'v1.1.20（用户 txt #12）：改锚**刚打出的那张手牌**'},
   zhongkui:    {g:'card', a:'enemy',  s:'atk_blunt',     t:'卡牌【钟馗镇魂】'},
 
   /* —— 通用状态特效（引擎/敌人触发）—— */
-  burn:        {g:'gen', a:'player', s:'kw_burn',        t:'敌人施加【灼烧】（旱魃 burn / 灼烧跳伤）', sn:'施加走 enemy_debuff；每回合跳伤走 kw_burn'},
+  burn:        {g:'gen', a:'player', s:'b2_hanba_burn_tick', t:'敌人施加【灼烧】（旱魃 burn / 灼烧跳伤）', sn:'施加走 enemy_debuff；每回合跳伤 v1.1.20 起走 b2_hanba_burn_tick（原 kw_burn）'},
   charge:      {g:'gen', a:'enemy',  s:'enemy_charge',   t:'敌人【蓄力】（僵王/血尸/夜叉…）'},
-  damage_reflect:{g:'gen', a:'player', s:'spark',        t:'反伤/反震（荆棘/铁壁/罗汉拳套…）', sn:'玩家反伤敌人挂玩家基准朝向；敌人反震玩家（fanzhen 词缀）挂敌人并镜像'},
-  fudu_hit:    {g:'gen', a:'enemy',  s:'boom',           t:'腐毒跳伤（腐骨散 / 化甲为毒）'},
-  gouhun:      {g:'gen', a:'player', s:'kw_gouhun',      t:'敌人【勾魂】（黑白无常/拘魂使/幽冥…）'},
+  damage_reflect:{g:'gen', a:'player', s:'spark',        t:'反伤/反震（荆棘/铁壁/罗汉拳套…）', sn:'玩家反伤敌人挂玩家基准朝向；敌人反震玩家（fanzhen 词缀）挂敌人并镜像。实机键 spark 未变，素材/sfx/spark.wav（仅 .wav）；页面此前因只认 .mp3 而静音，已修'},
+  fudu_hit:    {g:'gen', a:'enemy',  s:'atk_aoe',        t:'腐毒跳伤（腐骨散 / 化甲为毒）', sn:'v1.1.20（用户 txt 16）：跳伤音由 boom 改为 atk_aoe（节流 sfxOnce 90ms，避免多敌同帧叠成和弦）'},
+  gouhun:      {g:'gen', a:'player', s:'gouhun',         t:'敌人【勾魂】（黑白无常/拘魂使/幽冥…）', sn:'v1.1.20（用户 txt #17「特效不明显，需要更换」）：换 8 列 6 行新素材（hand_grab_full_8lie6hang_480x480.png），音效改专用键 gouhun（素材/sfx/gouhun.wav）；词典勾魂词缀仍走 kw_gouhun'},
   guling_suck: {g:'gen', a:'player', s:'heal',           t:'遗物·骨铃：召唤物消散时回血（走 heal 收口）'},
   heal:        {g:'gen', a:'player', s:'heal',           t:'任意回血（治疗牌/遗物摄魂铃/渡魂归己…）'},
   hurt:        {g:'gen', a:'player', s:'hit_light',      t:'玩家受击（红晕/立绘抖动叠加，不替换）', sn:'打击音按伤害分级 hit_light/hit_heavy/hit_crit'},
-  jiangshi:    {g:'gen', a:'enemy',  s:'enemy_summon',   t:'敌人召唤僵尸（僵王 summon，无 Boss 专图时）'},
+  jiangshi:    {g:'gen', a:'enemy',  s:'enemy_summon',   t:'敌人召唤僵尸（僵王 summon，无 Boss 专图时）', sn:'v1.1.20（用户 txt #52）：挂点从召唤者身上改到**新出现的那个单位**的底部坐标（从地里冒出来的位置）'},
   lifesteal:   {g:'gen', a:'player', s:'heal',           t:'吸血/渡魂归己（血尸吸血有 Boss 专图时改走 b3_lifesteal）', sn:'渡魂归己走 heal；敌人吸血无专图时挂敌人'},
   multi_slash: {g:'gen', a:'enemy',  s:'atk_multi_each', t:'玩家多段斩击（斩妖剑/断刃雷符/钟馗多击…）', sn:'每行=一个方向，i0=方向×8；每段走 atk_multi_each'},
   shiqi:       {g:'gen', a:'player', s:'card_shiji',     t:'【尸气】上升（茅山赶尸人，涨了才播）'},
   thorns_light:{g:'gen', a:'player', s:'kw_shield_break',t:'遗物·达摩影：格挡被击碎 → 爆破（立绘叠图）'},
-  wangyou:     {g:'gen', a:'player', s:'enemy_debuff',   t:'孟婆忘忧汤（无专图时）', sn:'有专图时走 b6_mengpo_forget'},
+  wangyou:     {g:'gen', a:'player', s:'enemy_debuff',   t:'孟婆忘忧汤（无专图时）', sn:'有专图时走 b6_mengpo_forget；v1.1.20（用户 txt #20）非 Boss 分支挂点改到**玩家立绘框下缘**'},
   weak:        {g:'gen', a:'player', s:'kw_weak',        t:'敌人施加【虚弱】（狐妖/判官/夜王…）'},
   xuenu:       {g:'gen', a:'player', s:'card_xuenu',     t:'【血怒】上升（阴差，满层不再出声）'},
   yehuo:       {g:'gen', a:'player', s:'boss_yehuo',     t:'修罗王业火附体（无专图时）', sn:'有专图时走 b8_xiuluo_karma_fire'},
@@ -291,24 +340,23 @@ var META = {
 };
 
 /* Boss 专图：base = BOSS_VFX 槽位目录名（同时是音效键 BOSS_VFX_SFX_KEYS），
-   后缀 cast/hit/self/link 决定挂点：_cast→Boss、_hit→玩家、_self→Boss、_link→连接段。 */
+   后缀 cast/hit/self 决定挂点：_cast→Boss、_hit→玩家（僵王吸食挂小僵尸）、_self→Boss（阎罗召唤挂新阴差底部）。
+   v1.1.20（用户 txt「删掉这个」）：4 条 `_link` 连接段整体删除 ⇒ 不再有 link 后缀，bossLinkFx 平铺播放器同步摘除。 */
 var BOSS_DEF = [
   ['b1_jiangwang_attack_claw','僵王','爪击（multi）',['cast','hit']],
-  ['b1_jiangwang_drain_feed','僵王','吸食小僵尸回血',['cast','hit','link']],
+  ['b1_jiangwang_drain_feed','僵王','吸食小僵尸回血',['cast','hit']],
   ['b1_jiangwang_summon_minion','僵王','召唤小僵尸',['self']],
   ['b2_hanba_attack_flame_claw','旱魃','焰爪',['cast','hit']],
-  ['b2_hanba_burn_apply','旱魃','施加灼烧',['hit']],
   ['b2_hanba_burn_tick','旱魃','灼烧跳伤',['hit']],
   ['b3_xueshi_attack_claw','血尸','爪击',['cast','hit']],
-  ['b3_xueshi_charge','血尸','蓄力',['self']],
   ['b3_xueshi_heavy_smash','血尸','蓄力重击',['cast','hit']],
-  ['b3_xueshi_lifesteal','血尸','吸血',['cast','hit','link']],
+  ['b3_xueshi_lifesteal','血尸','吸血',['cast','hit']],
   ['b4_xiebian_attack_staff','谢必安','哭丧棒',['cast','hit']],
-  ['b4_xiebian_soul_hook','谢必安','勾魂',['cast','hit','link']],
+  ['b4_xiebian_soul_hook','谢必安','勾魂',['cast','hit']],
   ['b4_xiebian_split','谢必安','分化（二阶段）',['self']],
   ['b5_judge_attack_gavel','判官王','惊堂木',['cast','hit']],
   ['b5_judge_record','判官王','记名',['hit']],
-  ['b5_judge_settle','判官王','清算',['cast','hit','link']],
+  ['b5_judge_settle','判官王','清算',['cast','hit']],
   ['b6_mengpo_attack_ladle','孟婆','汤勺',['cast','hit']],
   ['b6_mengpo_forget','孟婆','忘忧汤',['hit']],
   ['b6_mengpo_heal','孟婆','汲血回血',['self']],
@@ -322,11 +370,13 @@ var BOSS_DEF = [
   ['b9_yanluo_revive','阎罗天子','轮回复活（二阶段）',['self']],
   ['b9_yanluo_summon_yinchai','阎罗天子','召唤阴差',['self']]
 ];
-var SUSUF={cast:'_cast',hit:'_hit',self:'_self',link:'_link'};
-var SUANCHOR={cast:'enemy',hit:'player',self:'enemy',link:'enemy'};
-var SUDESC={cast:'起手，挂 Boss',hit:'命中，挂玩家',self:'自身/召唤，挂 Boss',link:'连接段，Boss→玩家之间平铺'};
+var SUSUF={cast:'_cast',hit:'_hit',self:'_self'};
+var SUANCHOR={cast:'enemy',hit:'player',self:'enemy'};
+var SUDESC={cast:'起手，挂 Boss',hit:'命中，挂玩家（僵王吸食挂小僵尸）',self:'自身/召唤，挂 Boss（阎罗召唤挂新阴差底部）'};
 
-/* —— 生成 Boss 条目并入 FX 表 —— */
+/* —— 生成 Boss 条目的 目录/META ——
+   参数值（f/oy/scale…）已在上面 FX 表内**照抄 v1.1.20 实机值**，这里**不再写 FX**
+   （旧版此处塞的是手抄近似值，正是漂移的根源）。只生成槽名/Boss 名/技能名/锚点/说明。 */
 var catalog=[];   /* {name,group,a,t,s,sn,loop} */
 Object.keys(META).forEach(function(n){
   var m=META[n];
@@ -336,18 +386,18 @@ BOSS_DEF.forEach(function(def){
   var base=def[0], boss=def[1], skill=def[2], sufs=def[3];
   sufs.forEach(function(sf){
     var name=base+SUSUF[sf];
-    FX[name]={c:8,f:32,rows:4,i0:0,scale:(sf==='link'?1:2.0),fps:30};
     catalog.push({name:name,group:'boss',a:SUANCHOR[sf],s:base,
       t:boss+' · '+skill+'（'+SUDESC[sf]+'）',
-      sn:(sf==='hit'?'命中段本段不另出声：音效由该技能起手时的 sfx(base) 播':'')});
+      sn:(sf==='hit'?'命中段本段不另出声：音效由该技能起手时的 sfx(base) 播一次':'')});
   });
 });
 var CITEM={}; catalog.forEach(function(it){ CITEM[it.name]=it; });
 function anchorOf(name){ var it=CITEM[name]; return (it&&it.a)||((name.indexOf('_hit')>=0)?'player':'enemy'); }
 
 /* =====================================================================
-   2.5) 音效库数据 —— 素材/sfx 真实文件清单（167 个 → 112 基础键）
-        + 审计状态（取自 memory-bank/音效审计.md 末尾 JSON）
+   2.5) 音效库数据 —— 素材/sfx 真实文件清单（176 个 → 122 基础键）
+        + 审计四名单（按 v1.1.20 实机状态重算：真实 SFX_TABLE 键 + 磁盘真实文件 + 实机引用点）
+        + 音效键用途表 SFX_NOTE + 「本轮改动」徽章名单
    ===================================================================== */
 var SFX_FILE_NAMES=[
 "affix_proc_1.mp3","affix_proc_2.mp3","atk_aoe_1.mp3","atk_aoe_2.mp3","atk_blunt_1.mp3","atk_blunt_2.mp3",
@@ -371,15 +421,16 @@ var SFX_FILE_NAMES=[
 "enemy_buff_self_1.mp3","enemy_buff_self_2.mp3","enemy_charge_1.mp3","enemy_charge_2.mp3","enemy_debuff_1.mp3","enemy_debuff_2.mp3",
 "enemy_dormant_1.mp3","enemy_heal_1.mp3","enemy_heal_2.mp3","enemy_multi_1.mp3","enemy_multi_2.mp3","enemy_multi_3.mp3",
 "enemy_qingsuan_1.mp3","enemy_qingsuan_2.mp3","enemy_strength_1.mp3","enemy_strength_2.mp3","enemy_summon_1.mp3","enemy_summon_2.mp3",
-"energy.wav","error_1.mp3","error_2.mp3","fx_burn.mp3","fx_forge.mp3","glass_break.mp3","gold_1.mp3","gold_2.mp3","heal_1.mp3","heal_2.mp3",
+"energy.wav","error_1.mp3","error_2.mp3","fx_burn.mp3","fx_forge.mp3","glass_break.mp3","gold_1.mp3","gold_2.mp3","gouhun.wav","heal_1.mp3","heal_2.mp3",
 "hit_crit_1.mp3","hit_crit_2.mp3","hit_guard_2.mp3","hit_guard_3.mp3","hit_heavy_1.mp3","hit_heavy_2.mp3","hit_heavy_3.mp3",
 "hit_light_1.mp3","hit_light_2.mp3","hit_light_3.mp3","hurt_1.mp3","hurt_2.mp3","key_press.mp3",
 "kw_burn_1.mp3","kw_burn_2.mp3","kw_curse_1.mp3","kw_curse_2.mp3","kw_gouhun_1.mp3","kw_junk_1.mp3","kw_linghua_1.mp3",
 "kw_regen_1.mp3","kw_shield_break_1.mp3","kw_shield_break_2.mp3","kw_wangyou_1.mp3","kw_weak_1.mp3","kw_yehuo_1.mp3","kw_yehuo_2.mp3",
-"lightning.wav","lose_1.mp3","number.wav","poster_bounce_land.mp3","rank.wav","relic_1.mp3","relic_2.mp3",
-"relic_bell_1.mp3","relic_fu_1.mp3","relic_mirror_1.mp3","slash.wav","spark.wav","stone_broken.wav",
-"talisman_click.mp3","talisman_slide.mp3","thorns_1.mp3","thorns_2.mp3","ui_click_1.mp3","ui_click_2.mp3","ui_flip.mp3",
-"ui_levelup_1.mp3","ui_map_1.mp3","ui_map_2.mp3","ui_panel_1.mp3","ui_panel_2.mp3","ui_reward_1.mp3","ui_reward_2.mp3","ui_unlock_1.mp3","win_1.mp3"
+"lei.wav","lightning.wav","lose_1.mp3","number.wav","poster_bounce_land.mp3","rank.wav","relic_1.mp3","relic_2.mp3",
+"relic_bell_1.mp3","relic_fu_1.mp3","relic_mirror_1.mp3","relic_proc.wav","slash.wav","spark.wav","stone_broken.wav",
+"talisman_click.mp3","talisman_slide.mp3","thorns.wav","tianlei.wav","ui_click_1.mp3","ui_click_2.mp3","ui_curtain.wav","ui_drag.wav",
+"ui_flip.mp3","ui_levelup_1.mp3","ui_map_1.mp3","ui_map_2.mp3","ui_panel_1.mp3","ui_panel_2.mp3","ui_poster.wav",
+"ui_reward_1.mp3","ui_reward_2.mp3","ui_stele.wav","ui_unlock_1.mp3","wanjian.wav","win_1.mp3","zhenyaoling.wav"
 ];
 var SFX_FILES={}, SFX_ALL_KEYS=[];
 SFX_FILE_NAMES.forEach(function(fn){
@@ -389,11 +440,64 @@ SFX_FILE_NAMES.forEach(function(fn){
 });
 Object.keys(SFX_FILES).sort().forEach(function(k){ SFX_ALL_KEYS.push(k); });
 
-/* —— 审计状态（memory-bank/音效审计.md 末尾 JSON）—— */
-var SFX_ORPHAN=['thorns','b2_hanba_burn_tick'];                 /* 有文件 · 代码未引用 */
-var SFX_MISSING=['relic_proc','ui_curtain','ui_poster','ui_drag']; /* 代码引用 · 磁盘无素材 → 合成 */
-var SFX_TABLEONLY=['thorns','b2_hanba_burn_tick','hit','ui_stele']; /* 表内有但从未被调用 */
-var SFX_EXTRA=['hit','ui_stele','relic_proc','ui_curtain','ui_poster','ui_drag']; /* 表内有键 · 磁盘无素材 */
+/* —— 审计四名单（按 v1.1.20 实机状态重算：真实 SFX_TABLE 键 + 素材/sfx 真实文件 + 实机引用点）——
+   ⚠️ 与旧版相比：thorns 已用于【嗜血】不再孤儿；b2_hanba_burn_tick 灼烧跳伤已引用；
+   b1_jiangwang_summon_minion / b9_yanluo_summon_yinchai 召唤槽已改回各自采样（回引用）；
+   relic_proc / ui_curtain / ui_poster / ui_drag / ui_stele 本轮都补上了真采样；
+   遗留键 hit 已从 SFX_TABLE 删除。 */
+var SFX_ORPHAN=['ui_stele']; /* 有素材 · 无引用（入塔/续塔石碑改用 stone_broken） */
+var SFX_MISSING=[]; /* 代码引用 · 磁盘无素材 —— 本轮已清零 */
+var SFX_TABLEONLY=['ui_stele']; /* 表内有键 · 从未被调用 */
+var SFX_EXTRA=[]; /* 表内有键 · 磁盘无素材 —— 本轮已清零 */
+/* 孤儿备注：写明「为何不再被引用」 */
+var SFX_ORPHAN_NOTE={
+  'ui_stele':'主界面「入塔/续塔」石碑崩碎已改用 stone_broken 真采样（v1.0.23 起）⇒ 本键有素材但暂无引用；本轮补齐了它的真采样文件，故由「表有未用」转为「有素材·无引用」'
+};
+/* —— 音效键用途表（v1.1.20）：在「音效库」清单里每个键下方显示 —— */
+var SFX_NOTE={
+  'ui_stele':            '主界面「入塔/续塔」石碑崩碎（本轮补齐真采样 ui_stele.wav；实机该点已改用 stone_broken ⇒ 本键有素材但暂无引用）',
+  'relic_proc':          '遗物触发金光（本轮补齐真采样 relic_proc.wav）',
+  'ui_curtain':          '主菜单三张符纸拉开（本轮补齐真采样 ui_curtain.wav）',
+  'ui_poster':           '里程碑海报点选 / 长按详情（本轮补齐真采样 ui_poster.wav）',
+  'ui_drag':             '里程轨横向拖动（本轮补齐真采样 ui_drag.wav）',
+  'thorns':              'v1.1.20 起用于【嗜血】卡（本轮换真采样 thorns.wav；旧 thorns_1/2.mp3 已删以确保单一变体）',
+  'tianlei':             'v1.1.20 起为卡牌【天雷正法】的专用真采样（素材/sfx/tianlei.wav，用户 txt #7「换个音效」）',
+  'lei':                 'v1.1.20 起为卡牌【雷符 / 断刃雷符】的专用真采样（素材/sfx/lei.wav，用户 txt #2「换个音效」；两者共用同一键）',
+  'zhenyaoling':         'v1.1.20 起为卡牌【镇妖铃】的专用真采样（素材/sfx/zhenyaoling.wav，用户 txt #11「换个音效」；钟馗镇魂仍走 card_zhenhun）',
+  'b2_hanba_burn_tick':  'v1.1.20 起引用到游戏中：灼烧跳伤（30_engine.js 灼烧结算）由 kw_burn 改播它（原「删掉、不用」的旧口径已作废）',
+  'b1_jiangwang_summon_minion':'v1.1.20 起引用到游戏中：僵王「召唤小僵尸」槽的 _self 音效（召唤特效挂新单位底部）',
+  'b9_yanluo_summon_yinchai':'v1.1.20 起引用到游戏中：阎罗天子「召唤阴差」槽的 _self 音效（召唤特效挂新阴差底部）',
+  'enemy_summon':        '通用敌人召唤（无 Boss 专图时，如小僵尸）；v1.1.20 起僵王/阎罗天子召唤槽已改回各自采样，本键不再兼任',
+  'enemy_charge':        'v1.1.20 截断已按用户口径回调（现整段播）',
+  'b3_xueshi_heavy_smash':'v1.1.20 截断已按用户口径回调（现整段播）',
+  'b6_mengpo_forget':    'v1.1.20 截断已按用户口径回调（现整段播）',
+  'b8_xiuluo_karma_fire':'v1.1.20 截断已按用户口径回调（现整段播）',
+  'gouhun':              'v1.1.20 起为敌人【勾魂】非 Boss 分支的专用真采样（素材/sfx/gouhun.wav，原 hand_grab.wav）；词缀勾魂仍走 kw_gouhun',
+  'wanjian':             'v1.1.20 起为卡牌【万剑归宗】的专用真采样（素材/sfx/wanjian.wav）'
+};
+/* —— 「本轮改动」徽章名单 —— */
+/* v1.1.19 特效改动 12 条 + boss 10 条（+ fudu_hit 因其音效键改 atk_aoe 一并标注）
+   v1.1.20 追加：① 用户 txt「以上截断全部回调」——上表里 guling_suck / jinzhong / thorns_light 与
+     9 条 boss `_cast`（含 heavy_smash）的帧截断已回全长（仍保留 oy 0.25 上移与各自的 scale 大小修正）；
+     ② 用户 txt #8/#17「换个特效」——新增 wanjian / gouhun 两条换新素材；
+     ③ 用户 txt「改挂点 / 锚点」——手牌 4 条（尸王/纸人/小鬼/阴兵）改锚刚打出的手牌、底部坐标 2 条
+        （僵尸/忘忧）、僵王吸食挂小僵尸、阎罗召唤挂新阴差底部；4 条 `_link` 与被删 2 条独立段不在本表。 */
+var FX_ROUND=['guling_suck','heal','jinzhong','lei','lightning','damage_reflect','relic_proc','thorns',
+  'thorns_light','tianlei','zhenyaoling','zhongkui','fudu_hit','wanjian','gouhun',
+  'shiwang','xiaogui','yinbing','zhiren','jiangshi','wangyou',
+  'b1_jiangwang_attack_claw_cast','b2_hanba_attack_flame_claw_cast','b3_xueshi_attack_claw_cast',
+  'b3_xueshi_heavy_smash_cast','b4_xiebian_attack_staff_cast','b5_judge_attack_gavel_cast',
+  'b7_yewang_attack_blade_cast','b8_xiuluo_attack_slash_cast','b9_yanluo_attack_smash_cast',
+  'b3_xueshi_lifesteal_cast','b1_jiangwang_drain_feed_hit','b1_jiangwang_summon_minion_self',
+  'b2_hanba_burn_tick_hit','b9_yanluo_summon_yinchai_self'];
+/* v1.1.20 音效改动（键名）：fudu_hit 的音效键在上表已标；这里标音效库里的键。
+   四条截断（enemy_charge / b3_xueshi_heavy_smash / b6_mengpo_forget / b8_xiuluo_karma_fire）
+   已按用户 txt「上述截断全部回调」清空 ⇒ 仍是本版改动，徽章保留。 */
+var SFX_ROUND=['enemy_summon','thorns','enemy_charge','b3_xueshi_heavy_smash','b6_mengpo_forget',
+  'b8_xiuluo_karma_fire','b2_hanba_burn_tick','gouhun','wanjian',
+  'tianlei','lei','zhenyaoling','relic_proc','ui_stele','ui_curtain','ui_poster','ui_drag',
+  'b1_jiangwang_summon_minion','b9_yanluo_summon_yinchai'];
+var onlyRound=false;
 
 /* 前缀语义分组 */
 var SFX_SECTIONS=[
@@ -580,11 +684,12 @@ function logicalRect(el){
 function anchorEl(a){
   if(a==='enemy') return stage.querySelector('.enemy')||stage.querySelector('#enemy-panel');
   if(a==='field') return stage.querySelector('#enemy-panel');
-  return stage.querySelector('.hero-art-box');   /* player / summon 同落立绘框 */
+  /* handcard = 刚打出的那张手牌；预览台没有手牌 DOM，退化为立绘框（实机锚点见左侧说明） */
+  return stage.querySelector('.hero-art-box');   /* player / summon / handcard 同落立绘框 */
 }
 function anchorShort(a){
   var H=portraitHeights(state.vw,state.vh);
-  if(a==='player'||a==='summon') return H.hero*Math.min(state.heroAR,1);
+  if(a==='player'||a==='summon'||a==='handcard') return H.hero*Math.min(state.heroAR,1);
   return H[state.tier]*Math.min(state.enemyAR,1);
 }
 function boxFor(name){
@@ -609,16 +714,31 @@ function startAudio(){
   var h=document.getElementById('audioHint');
   if(h) h.innerHTML='音频已解锁。点击任一「播放」即可逐条试听特效 + 音效。';
 }
+/* v1.1.20：实机 js/10_audio.js 的 SFX_FRAC —— 原先四条键在游戏里**只播前 N 分之 1**
+   （真采样截断；合成兜底不截）。**本轮用户 txt「以上截断全部回调」⇒ 实机表已清空**，
+   预览页照实机同步为空（下面的 no-op 分支保留：frac 恒 undefined ⇒ 一律整段播）。 */
+var SFX_FRAC={};
+function playSfxAudio(file, key){
+  try{
+    var au=new Audio('素材/sfx/'+file); au.volume=0.9;
+    var frac=SFX_FRAC[key];
+    if(frac>0 && frac<1){
+      /* 与实机同一口径：真采样按 duration*frac 截断（读到时长后定时 pause） */
+      au.addEventListener('loadedmetadata', function(){
+        var d=au.duration; if(d>0) setTimeout(function(){ try{ au.pause(); }catch(e){} }, d*1000*frac);
+      });
+    }
+    var p=au.play(); if(p&&p.catch) p.catch(function(){});
+  }catch(e){}
+}
 function playSfx(key){
   if(!key) return;   /* null → 静默（芯片循环等无专属音效） */
-  var cands=['素材/sfx/'+key+'_1.mp3','素材/sfx/'+key+'.mp3','素材/sfx/'+key+'_2.mp3'];
-  (function tryAt(i){
-    if(i>=cands.length) return;   /* 全部缺失：静默兜底 */
-    var au=new Audio(cands[i]); au.volume=0.9; var done=false;
-    function fail(){ if(done) return; done=true; tryAt(i+1); }
-    au.onerror=fail;
-    var p=au.play(); if(p&&p.catch) p.catch(fail);
-  })(0);
+  /* 复用 sfxPickFile：它按**真实文件表**解析扩展名，能取到只有 .wav 的键
+     （spark / lightning / boom / energy / rank / stone_broken / number / slash）。
+     旧版只试 <key>_1.mp3 / <key>.mp3 / <key>_2.mp3 ⇒ 这批 .wav 键全静音，
+     正是用户反馈「damage_reflect 没有音效」「lightning 没有音效」的原因。 */
+  var file=sfxPickFile(key); if(!file) return;   /* 磁盘无素材：静默兜底 */
+  playSfxAudio(file, key);
 }
 function spawnFx(name){
   stopAll();
@@ -634,6 +754,8 @@ function spawnFx(name){
 
   var sheet=document.createElement('div'); sheet.className='fx-sheet';
   sheet.style.width=box+'px'; sheet.style.height=(box*ch)+'px';
+  /* 照 playFx：S.op<1 时对**外层 sheet 元素**设透明度（guling_suck 0.6 / thorns_light 0.5） */
+  if(S.op!=null && S.op<1) sheet.style.opacity=String(S.op);
   var lft=Math.round(r.left+r.width/2-box/2-ox);
   var tp =Math.round(r.top +r.height/2-box*ch/2-oy);
   sheet.style.left=lft+'px'; sheet.style.top=tp+'px';
@@ -647,8 +769,13 @@ function spawnFx(name){
   sheet.appendChild(inner);
   stage.appendChild(sheet);
 
-  /* 音效（Boss 的 _hit 也配同一 base 键，与游戏一致：起手已出声，这里只是让预览可听） */
-  playSfx(it.s);
+  /* 音效：只有 **Boss 三件套**（同名 `_cast` 兄弟键存在）的 _hit / _link 段才不另出声
+     —— 实机 bossSkillFx 起手已 sfx(base)，否则同一技能起手 / 命中重复叠声。
+     独立的 _hit（fudu_hit、b2_hanba_burn_tick_hit 等，实机由 sfxOnce / sfx 单独触发）
+     要照播 —— v1.1.20 修：旧规则 `/_hit$|_link$/` 一刀切，把 fudu_hit 也静了，
+     预览里点它没声（实机接线是好的，atk_aoe 已注册且素材存在）。 */
+  var tripleHit=/(_hit|_link)$/.test(name) && FX[name.replace(/_(hit|link)$/,'_cast')];
+  if(!tripleHit) playSfx(it.s);
 
   /* 帧循环：dur = 1000/((S.fps||24)*(rate||1)) */
   var dur=1000/((S.fps||24)*1);
@@ -796,8 +923,7 @@ function sfxToggleTag(key,tag,el){
 }
 function playSfxKey(key){
   var file=sfxPickFile(key); if(!file) return;
-  try{ var au=new Audio('素材/sfx/'+file); au.volume=0.9;
-    var p=au.play(); if(p&&p.catch) p.catch(function(){}); }catch(e){}
+  playSfxAudio(file, key);   /* 与实机同口径：SFX_FRAC 命中的键只播前 N 分之 1 */
 }
 function sfxFbHTML(key){
   var f=sfxFbRead(key);
@@ -814,14 +940,20 @@ function sfxRowHTML(key){
   var files=SFX_FILES[key]||[], has=files.length>0;
   var badges=sfxBadges(key).map(function(b){
     return '<span class="tag sfxb '+SFX_BADGE_CLS[b]+'">'+b+'</span>'; }).join('');
+  if(SFX_ROUND.indexOf(key)>=0) badges='<span class="tag round">本轮</span>'+badges;
   var fileTag=has?('<span class="tag sfxb file">'+sfxPickFile(key)+'（共 '+files.length+' 个 take）</span>')
                   :('<span class="tag">磁盘无素材文件</span>');
   var btn=has?('<button class="play sfxplay" data-sfxplay="'+key+'">▶ 试听</button>')
              :('<button class="play off" disabled title="磁盘无素材，无 mp3 可试听">▶ 试听</button>');
+  var note=SFX_NOTE[key]?('<div class="sfx-note">用途：'+SFX_NOTE[key]+'</div>'):'';
+  var orph=SFX_ORPHAN_NOTE[key]?('<div class="sfx-note">孤儿说明：'+SFX_ORPHAN_NOTE[key]+'</div>'):'';
+  var fracTag=(SFX_FRAC[key]>0 && SFX_FRAC[key]<1)
+    ?('<span class="tag">实机只播前 '+(SFX_FRAC[key]===2/3?'2/3':Math.round(SFX_FRAC[key]*100)+'%')+'（截断）</span>'):'';
   return '<div class="sfxrow">'
     + btn
     + '<div><div class="sfx-name">'+key+'</div>'
-    +   '<div class="sfx-meta">'+badges+fileTag+'</div>'
+    +   '<div class="sfx-meta">'+badges+fileTag+fracTag+'</div>'
+    +   note+orph
     +   sfxFbHTML(key)
     + '</div></div>';
 }
@@ -836,15 +968,19 @@ function sfxExportRows(){
 }
 function renderSfxHTML(){
   var html='<div class="grp-title">音效库 · 试听与标注 <span>（'+SFX_ALL_KEYS.length+' 个基础键 / '
-    + SFX_FILE_NAMES.length+' 个素材文件；另 '+SFX_EXTRA.length+' 键表内登记但无素材，单列最后）</span></div>';
+    + SFX_FILE_NAMES.length+' 个素材文件；另 '+SFX_EXTRA.length+' 键表内登记但无素材，单列最后）'
+    + (onlyRound?'<b style="color:#ff9d5c">｜只看本轮改动</b>':'')+'</span></div>';
   SFX_SECTIONS.forEach(function(sec){
     var keys=SFX_ALL_KEYS.filter(function(k){ return sfxSectionOf(k)===sec.id; });
+    if(onlyRound) keys=keys.filter(function(k){ return SFX_ROUND.indexOf(k)>=0; });
     if(!keys.length) return;
     html+='<div class="sub-title">'+sec.title+' <span>（'+keys.length+'）</span></div>';
     keys.forEach(function(k){ html+=sfxRowHTML(k); });
   });
-  html+='<div class="sub-title">表内有键 · 磁盘无素材 <span>（'+SFX_EXTRA.length+' 键：代码引用/表内登记，无 mp3 → 走合成或静默）</span></div>';
-  SFX_EXTRA.forEach(function(k){ html+=sfxRowHTML(k); });
+  if(!onlyRound){
+    html+='<div class="sub-title">表内有键 · 磁盘无素材 <span>（'+SFX_EXTRA.length+' 键：代码引用/表内登记，无 mp3 → 走合成或静默）</span></div>';
+    SFX_EXTRA.forEach(function(k){ html+=sfxRowHTML(k); });
+  }
   return html;
 }
 
@@ -870,11 +1006,13 @@ function rowHTML(it){
   var loopTxt=it.loop?'<span class="tag loop">常驻循环</span>':'<span class="tag">单次播放</span>';
   var sfxTag=it.s?'<span class="tag sfx">音效键 '+it.s+'</span>':'<span class="tag nosfx">静默（芯片循环，不出声）</span>';
   var sn=it.sn?'<span class="tag">'+it.sn+'</span>':'';
+  var roundTag=(FX_ROUND.indexOf(it.name)>=0)?'<span class="tag round">本轮</span>':'';
   return '<div class="fxrow">'
     + '<button class="play" data-fx="'+it.name+'">▶ 播放</button>'
     + '<div class="fx-name">'+it.name+'<span class="sfxline">'+(it.s||'（无）')+'</span></div>'
     + '<div class="fx-trig">'+it.t+'<div class="tags">'
-    +   '<span class="tag">锚点 '+it.a+'</span>'+loopTxt
+    +   roundTag+'<span class="tag">锚点 '+it.a+'</span>'+loopTxt
+    +   '<span class="tag">实播 '+(S&&S.f?S.f:'?')+' 帧 @'+(S&&S.fps?S.fps:24)+'fps</span>'
     +   '<span class="tag box">盒边长 '+box+'px</span>'+sfxTag+sn
     + '</div></div>'
     + fbHTML(it.name)
@@ -885,21 +1023,25 @@ function renderList(){
   var html='';
   groups.forEach(function(g){
     var items=catalog.filter(function(c){return c.group===g[0];});
-    html+='<div class="grp-title">'+g[1]+' <span>（'+items.length+' 条 / 共 '+catalog.length+' 条 FX_SHEETS 条目）</span></div>';
+    if(onlyRound) items=items.filter(function(c){return FX_ROUND.indexOf(c.name)>=0;});
+    if(onlyRound && !items.length) return;
+    html+='<div class="grp-title">'+g[1]+' <span>（'+items.length+' 条 / 共 '+catalog.length+' 条 FX_SHEETS 条目）'
+      + (onlyRound?'<b style="color:#ff9d5c">｜只看本轮改动</b>':'')+'</span></div>';
     items.forEach(function(it){ html+=rowHTML(it); });
   });
   html+=renderSfxHTML();
   document.getElementById('list').innerHTML=html;
   document.getElementById('foot').innerHTML=
-    '数据源：js/20_data.js 的 FX_SHEETS（'+Object.keys(FX).length+' 条，与磁盘 素材/fx 的 png 一一对应；'
-    +'磁盘另有 1 张 <b>daoxin_full.png</b> 不在 FX_SHEETS 中，为道心破碎用途的孤儿图）。'
-    +'几何公式照抄 js/00_base.js（fxBoxSize:257 / fxCellPos:267 / playFx:488）；'
+    '数据源：js/20_data.js 的 FX_SHEETS（<b>逐条照抄</b>，'+Object.keys(FX).length+' 条 = 39 基础 + 46 boss_vfx，现为 <b>v1.1.20 实机值</b>；'
+    +'与磁盘 素材/fx 的 png 一一对应；磁盘另有 1 张 <b>daoxin_full.png</b> 不在 FX_SHEETS 中，为道心破碎用途的孤儿图）。'
+    +'音效接线已同步到 <b>v1.1.20</b>。'
+    +'几何公式照抄 js/00_base.js（fxBoxSize:257 / fxCellPos:267 / playFx:488；op 透明度同 playFx:509）；'
     +'立绘高照抄 原型.html 的媒体查询（基档 :92/:123-126/:300，短屏档 :1422-1426/:1443-1446）。'
-    +'Boss 音效键 = BOSS_VFX 槽位目录名（= BOSS_VFX_SFX_KEYS，js/10_audio.js:177）。'
-    +'特效音效播放顺序：素材/sfx/&lt;键&gt;_1.mp3 → &lt;键&gt;.mp3 → &lt;键&gt;_2.mp3，均缺失则静默。'
+    +'Boss 音效键 = BOSS_VFX 槽位目录名（= BOSS_VFX_SFX_KEYS，js/10_audio.js:177）；_hit / _link 段本段不另出声。'
+    +'特效配音键：<b>按真实文件表解析扩展名</b>（sfxPickFile），.mp3 与仅 .wav 的键（spark/lightning/boom…）都能取到；无素材则静默。'
     +'<br>音效库：素材/sfx 共 '+SFX_FILE_NAMES.length+' 个文件 → '+SFX_ALL_KEYS.length
     +' 个基础键（按 <b>hit_ / atk_ / enemy_·boss_ / card_ / kw_ / ui_ / relic_ / 其它</b> 分组），'
-    +'状态徽章取自 memory-bank/音效审计.md；音效库反馈独立存 localStorage 键 <b>zgt_sfx_feedback_v1</b>。';
+    +'状态徽章按 v1.1.20 实机重算；音效库反馈独立存 localStorage 键 <b>zgt_sfx_feedback_v1</b>。';
   updateFbCount();
 }
 
@@ -949,6 +1091,11 @@ function init(){
   window.addEventListener('resize',function(){ scaleStage(); refreshGeo(); });
   document.getElementById('btnExport').addEventListener('click',doExport);
   document.getElementById('btnClear').addEventListener('click',doClear);
+  document.getElementById('btnRound').addEventListener('click',function(){
+    onlyRound=!onlyRound; this.classList.toggle('active',onlyRound);
+    this.textContent=onlyRound?'显示全部':'只看本轮改动';
+    renderList();
+  });
   loadFB();
   loadSfxFB();
   buildStage(); renderList();

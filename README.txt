@@ -56,6 +56,53 @@
   版本号只有**一个落点**：原型.html 的 <title>（提交.py 从这里读；v1.1.x 起常驻页面左上角的
   `#ver-tag` 也作为开发者痕迹摘除 —— 进游戏就看不见的那枚水印不算给玩家看的版本号）。
 
+  v1.1.20  音效接线批（用户 2026-10-15 txt「先把挂账的音效做了」）+ 预览页重做：
+             ① 腐毒跳伤音 boom→atk_aoe（txt 16）；僵王 / 阎罗天子「召唤」槽 `_self` 音效一度改用
+                通用 enemy_summon（txt 29/52）—— **⑨ 已按用户口径改回各自采样**；【嗜血】卡音效 atk_slash→thorns
+                （音效库口径「thorns 用于嗜血」，thorns 由孤儿文件转正）
+             ② 「音效保留前 N 分之 1」四条落地（txt 35/36/47/50）：新增 `SFX_FRAC` per-key 截断表，
+                `playSample` 支持 `frac` —— 真采样按 `buf.duration*frac` 截断、合成兜底不截
+                （血尸蓄力重击 1/2、孟婆忘忧 2/3、修罗王业火附体 1/2）；txt 14「敌人蓄力音长了」暂取 0.6
+             ③ `b2_hanba_burn_tick` 一度标「弃用」（勘误：它从来没有发射点，灼烧跳伤播的是 kw_burn）
+                —— 键位保留不动，零引用；**⑨ 已按用户后续口径改回「引用到游戏中」，本条旧口径作废**
+             ④ 特效音效预览.html 重做：FX 参数表**逐条照抄** `js/20_data.js` 的 `FX_SHEETS`
+                （消灭手抄漂移，此前停在 v1.1.18）、渲染支持 `op` 字段、`playSfx` 认 `.wav`
+                （修掉「damage_reflect / lightning 没有音效」的**假报障** —— 这两个键只有 .wav，
+                旧预览只试 .mp3 故静音，游戏内一直正常）、Boss `_hit`/`_link` 段不另出声
+             ⑤ 挂账项（**⑧ 已按用户拍板逐条落地**）：4 条「换个音效」已换真采样、其余 10 条继续保留观望；
+                8 条「改挂点 / 锚点」已落地；「删掉这个」五处 + lifesteal_link 共 6 条特效已删（键位与素材一并删）；
+                `damage_reflect` 保留 spark 不动（见下 ⑧）
+             ⑥ 当天复核补丁：boss 九条 `_cast` 的「上移量」由半个单帧宽（oy 0.5）调低到四分之一
+                （oy 0.25，用户反馈 0.5 移得太高）；预览页 `_hit` 静音规则放宽为「Boss 三件套才静」
+                —— 旧规则 `/_hit$|_link$/` 一刀切，把独立的 fudu_hit（腐毒跳伤 → atk_aoe）也静了，
+                预览里点它没声（实机接线本就正常：atk_aoe 已注册、素材存在）
+             ⑦ 同日追加（用户跨轮口径）：**帧截断与音效截断全部回调** —— 骨铃吸血 / 浅显荆棘回全长
+                （f 48，荆棘同时撤销降透明度）、金钟罩 24→41、9 条 boss `_cast` 回 32 帧（蓄力重击
+                16→32）、`SFX_FRAC` 四条清空；保留 oy 0.25（上移量）与各处 scale（大小修正）不动。
+                另：万剑归宗 / 勾魂「换个特效」换 8 列 6 行新精灵图（scale / ox 按 PIL alpha 含量实测量）；
+                两者音效改用用户指定采样，新增 `SFX_TABLE` 键 `wanjian` / `gouhun`（SFX_KEYS 117→119，
+                勾魂非 Boss 分支 kw_gouhun→gouhun，词缀勾魂仍走 kw_gouhun）
+             ⑧ 同日第二轮（用户跨轮口径「先改这 4 个音效，剩余 10 个保留；那 5 条特效可以删去，改挂点 /
+                锚点 8 条也进行去」）：**4 个音效换真采样** —— 天雷正法 `tianlei`、雷符·断刃雷符 `lei`、
+                镇妖铃 `zhenyaoling`、嗜血 `thorns`（旧 thorns_1/2.mp3 已删，确保单一变体不随机串播）；
+                **删特效 6 条**（4 条 `_link` 连接段 + b2_hanba_burn_apply_hit + b3_xueshi_charge_self +
+                b3_xueshi_lifesteal_link）：FX_SHEETS 键 85→79（39 基础 + 40 boss）、素材 png 删除、
+                20_data 的 BOSS_DEF 对应槽去掉、`bossLinkFx` 平铺播放器整体摘除、打包.py 对应项删去；
+                **改挂点 8 条** —— 手牌 4 条（尸王 / 纸人 / 小鬼 / 阴兵）改锚「刚打出的那张手牌」中部
+                （新增 `handcard` 锚点，位置复用 `notePlayRect` 量下的 `LAST_PLAY_RECT`，牌飞走后特效留在原位播完）、
+                僵尸 / 忘忧落「底部坐标」（新增 `bottomAnchor` / `playerBottomAnchor`，矩形尺寸不变故特效大小不缩水）、
+                僵王吸食挂小僵尸身上、阎罗召唤挂新阴差底部；`damage_reflect` 音效保持 spark 不变；
+                `relic_proc` 补上真采样
+             ⑨ 三条旧采样「引用到游戏中」：`b2_hanba_burn_tick`（灼烧跳伤由 kw_burn 改播它）、
+                `b1_jiangwang_summon_minion` / `b9_yanluo_summon_yinchai`（召唤槽改回各自采样，
+                `bossSelfFx` 去掉音效覆盖参数）；另补 relic_proc / ui_stele / ui_curtain / ui_poster / ui_drag
+                五条真采样（ui_stele 因实机该点已走 stone_broken，暂列「有素材·无引用」）
+             ⑩ 删遗留键 `hit`（新代码按伤害分级走 hit_light/hit_heavy/hit_crit，hit 仅供兼容、实际不再触发）：
+    SFX_TABLE −1 +4（tianlei / lei / zhenyaoling / relic_proc）⇒ 119→122。
+    `relic_proc` 此前既无采样也不在表内（命中 sfxWarnUnknown 静默吞掉，30_engine.js:666 金刚杵），
+    用户补采样后必须**同时补登记** —— verify_dist [2b] 要求 176 个音效文件「键键登记在表」，
+    否则磁盘上这个 wav 会被判成「未知键名」（本轮首跑即在此处报红）。
+    冒烟基线 1534→1533（金快照少 1 键；`leifu` 点名音由 atk_talisman 改判 lei）
   v1.1.19  修障 + 特效反馈批（用户 2026-10-15 txt，特效 52 条 / 音效 8 条）：
              ① 观感批全部并入本版：全量文案改毛笔字（MaShanZheng 子集，≤13px 小字回落楷体栈）
                 + 顶栏内容居中、左右安全区统一取 max(safe-left,safe-right)（修「整屏偏右」）

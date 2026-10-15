@@ -3480,7 +3480,7 @@
        与改造前的快照逐条比对：序列必须完全一致，参数个数也必须一致
        （旧代码里 tone 有 4/5/7 参三种叫法，转发时不能用默认值填充）。 */
     globalThis.__probeSfx = function (keys) {
-      var K = keys || ['card', 'error', 'block', 'death', 'hit', 'hurt',
+      var K = keys || ['card', 'error', 'block', 'death', 'hurt',
                        'heal', 'gold', 'relic', 'win', 'lose', 'boss'];
       var _t = tone, _b = boom, out = {}, log = [], i;
       var _snd = SETTINGS.sound, _vol = SETTINGS.sfxVol;
@@ -3502,7 +3502,7 @@
        存档见 _patch/sfx_golden_v61_24.json（12 键 / 27 步）。
        只要这块绿着，就证明「switch → 分发表」没动过任何一条现有音效的听感参数 ——
        包括参数个数（旧代码 tone 有 4/5/7 参三种叫法，转发时不能用默认值填充）。 */
-    var __GOLD = {"card":[["t",360,0.06,"triangle",0.18],["b",0.04,0.12,4000,800]],"error":[["t",200,0.12,"square",0.18,0,120]],"block":[["t",300,0.09,"triangle",0.16,0,500]],"death":[["b",0.3,0.4,1200,100],["t",160,0.18,"sawtooth",0.18,0,60]],"hit":[["b",0.14,0.5,2000,160],["t",150,0.12,"square",0.2,0,70]],"hurt":[["b",0.22,0.6,1400,110],["t",110,0.2,"sawtooth",0.25,0,55]],"heal":[["t",520,0.16,"sine",0.14,0,760]],"gold":[["t",880,0.1,"sine",0.16],["t",1320,0.12,"sine",0.14,0.06]],"relic":[["t",660,0.12,"sine",0.18],["t",990,0.16,"sine",0.14,0.08]],"win":[["b",0.3,0.4,2000,300],["t",523,0.16,"triangle",0.16,0],["t",659,0.16,"triangle",0.16,0.1],["t",784,0.16,"triangle",0.16,0.2],["t",1047,0.16,"triangle",0.16,0.30000000000000004]],"lose":[["b",0.4,0.45,1500,120],["t",400,0.2,"sawtooth",0.14,0],["t",300,0.2,"sawtooth",0.14,0.13],["t",220,0.2,"sawtooth",0.14,0.26],["t",150,0.2,"sawtooth",0.14,0.39]],"boss":[["b",0.42,0.5,800,110],["t",120,0.34,"sawtooth",0.22,0,58]]};
+    var __GOLD = {"card":[["t",360,0.06,"triangle",0.18],["b",0.04,0.12,4000,800]],"error":[["t",200,0.12,"square",0.18,0,120]],"block":[["t",300,0.09,"triangle",0.16,0,500]],"death":[["b",0.3,0.4,1200,100],["t",160,0.18,"sawtooth",0.18,0,60]],"hurt":[["b",0.22,0.6,1400,110],["t",110,0.2,"sawtooth",0.25,0,55]],"heal":[["t",520,0.16,"sine",0.14,0,760]],"gold":[["t",880,0.1,"sine",0.16],["t",1320,0.12,"sine",0.14,0.06]],"relic":[["t",660,0.12,"sine",0.18],["t",990,0.16,"sine",0.14,0.08]],"win":[["b",0.3,0.4,2000,300],["t",523,0.16,"triangle",0.16,0],["t",659,0.16,"triangle",0.16,0.1],["t",784,0.16,"triangle",0.16,0.2],["t",1047,0.16,"triangle",0.16,0.30000000000000004]],"lose":[["b",0.4,0.45,1500,120],["t",400,0.2,"sawtooth",0.14,0],["t",300,0.2,"sawtooth",0.14,0.13],["t",220,0.2,"sawtooth",0.14,0.26],["t",150,0.2,"sawtooth",0.14,0.39]],"boss":[["b",0.42,0.5,800,110],["t",120,0.34,"sawtooth",0.22,0,58]]};
     (function () {
       var now = globalThis.__probeSfx() || {};
       var gk = Object.keys(__GOLD), i, diffs = [], steps = 0;
@@ -3512,7 +3512,7 @@
         if (a !== b) diffs.push(k);
         steps += (__GOLD[k] || []).length;
       }
-      __ok('v0.61.25 金快照 · 覆盖 12 键 / 27 步（探针自检）', gk.length === 12 && steps === 27,
+      __ok('v0.61.25 金快照 · 覆盖 11 键 / 25 步（探针自检）', gk.length === 11 && steps === 25,
         'keys=' + gk.length + ' steps=' + steps);
       for (i = 0; i < gk.length; i++) {
         var kk = gk[i];
@@ -3520,15 +3520,15 @@
         __ok('v0.61.25 金快照 · ' + kk + ' 调用序列未变', aa === bb,
           aa === bb ? '' : ('now=' + aa + ' gold=' + bb));
       }
-      __ok('v0.61.25 金快照 · 12 键整体一致', diffs.length === 0, diffs.join(','));
+      __ok('v0.61.25 金快照 · 11 键整体一致', diffs.length === 0, diffs.join(','));
     })();
 
     /* ===== v0.61.25 音效包：分发表 / 采样通路 / 高频接线 ===== */
     (function () {
       var i, j, k, s, ok, got, missing, bad, steps;
 
-      /* ① 分发表完整性：80 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 117 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键；v1.1.13：+选角 4 键 talisman_click/talisman_slide/key_press/poster_bounce_land）', SFX_KEYS.length === 117, 'n=' + SFX_KEYS.length);
+      /* ① 分发表完整性：122 键，每步参数都齐 */
+      __ok('v0.61.25 音效表 122 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键；v1.1.13：+选角 4 键 talisman_click/talisman_slide/key_press/poster_bounce_land；v1.1.20 特效批：+wanjian/gouhun 2 键；v1.1.20 音效批：−遗留键 hit，+tianlei/lei/zhenyaoling 3 键；v1.1.20 补登记：+relic_proc 1 键）', SFX_KEYS.length === 122, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];
@@ -3570,7 +3570,7 @@
       var _t0 = tone, _b0 = boom, _tc = 0, _bc = 0, _eA = null;
       tone = function () { _tc++; }; boom = function () { _bc++; };
       SETTINGS.sound = true; SETTINGS.sfxVol = 0;
-      try { __realSfx('hit'); __realSfx('card'); __realSfx('win'); }
+      try { __realSfx('hit_light'); __realSfx('card'); __realSfx('win'); }
       catch (e) { _eA = String((e && e.message) || e); }
       var _t0c = _tc, _b0c = _bc;                    // 正对照：把音量开回来必须出声
       SETTINGS.sfxVol = 1;
@@ -3687,10 +3687,12 @@
         });
       }
       /* v0.61.32：weak / gouhun / yehuo 按素材清单.md 拆成专属键；
-         jiming（判官王生死簿记账）在 v0.61.25 时整段静默、根本没进这张表，一并补上。 */
+         jiming（判官王生死簿记账）在 v0.61.25 时整段静默、根本没进这张表，一并补上。
+         v1.1.20（用户 txt #17）：勾魂非 Boss 分支的音效由 kw_gouhun 改专用键 gouhun（素材/sfx/gouhun.wav）；
+         词缀「勾魂」仍走 kw_gouhun（dealDamageToPlayer 那一路）。 */
       var IMAP = { attack: 'enemy_attack', multi: 'enemy_multi', charge: 'enemy_charge', block: 'enemy_block',
                    heal: 'enemy_heal', strength: 'enemy_strength', summon: 'enemy_summon', weak: 'kw_weak',
-                   gouhun: 'kw_gouhun', discard: 'enemy_debuff', burn: 'enemy_debuff', wangyou: 'enemy_debuff',
+                   gouhun: 'gouhun', discard: 'enemy_debuff', burn: 'enemy_debuff', wangyou: 'enemy_debuff',
                    yehuo: 'boss_yehuo', jiming: 'boss_ledger', qingsuan: 'enemy_qingsuan', dormant: 'enemy_dormant' };
       missing = [];
       for (k in IMAP) {
@@ -4022,7 +4024,7 @@
 
     /* —— 3. 关键词与状态 —— */
     got = __rec(function () { G = __base('ganshiren'); G.burn = 2; G.hp = 50; startTurn(); });
-    __ok('v0.61.32 关键词·灼烧跳伤 → kw_burn', got.indexOf('kw_burn') >= 0, got.join(','));
+    __ok('v0.61.32 关键词·灼烧跳伤 → b2_hanba_burn_tick（v1.1.20：由 kw_burn 改走旱魃灼烧采样）', got.indexOf('b2_hanba_burn_tick') >= 0, got.join(','));
     got = __rec(function () { G = __base('wuseng'); G.hand = [__card('leifu')]; G.wangyouPool = G.hand.slice(); drinkWangyou(0); });
     __ok('v0.61.32 关键词·忘忧饮下 → kw_wangyou（「奉汤」是 enemy_debuff，两者不同）',
       got.indexOf('kw_wangyou') >= 0, got.join(','));
@@ -4076,7 +4078,7 @@
       (got.indexOf('boss_yehuo') >= 0 || got.indexOf('b8_xiuluo_karma_fire') >= 0) && got.indexOf('enemy_buff_self') < 0, got.join(','));
 
     /* —— 6. 出牌时的逐张点名音（CARD_SFX 的唯一消费点，走真 doPlayCard） —— */
-    var PLAY_CASES = [['leifu', 'atk_talisman'], ['zhanyaojian', 'atk_slash'], ['tiebushan', 'atk_blunt'],
+    var PLAY_CASES = [['leifu', 'lei'], ['zhanyaojian', 'atk_slash'], ['tiebushan', 'atk_blunt'],
                       ['baigui', 'atk_aoe'], ['kaitianyan', 'card_buff']];
     var playMiss = [];
     PLAY_CASES.forEach(function (pc) {
@@ -6297,7 +6299,7 @@
        靠 `_patch/shot_fx.py` 的实拍对照图定 scale。 */
 
     /* ---------- F1. 表结构 ---------- */
-    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 85 条'
+    __ok('v0.64.0 FX_SHEETS 每条都是 8 列、f ≤ 8×rows、scale 为正，且正好 79 条'
       + '（帧数是 _patch/fx_tune.py 按每格 alpha 实扫的 —— 8 列末排常留空，拿 行×8 当帧数会播到空白格；'
       + 'v1.0.14 起的 multi_slash 是多方向图，由 _patch/mk_multi_slash.py 程序生成、不在 fx_tune 的重算范围内；'
       + 'v1.0.17 起的 guling_suck / relic_proc / shiqi_flame / xuenu_flame 四张、v1.1.4 起的 thorns_light 也是程序绘制，'
@@ -6305,10 +6307,11 @@
       + '原图 5 列 × 4 行（单元 768×720、16 帧）逐帧重采样成 8 列 × 2 行（单元 480×480）；'
       + 'v1.1.x 起的 lightning 是用户素材：8 列 × 6 行、单元 480×480、48 帧；'
       + 'v1.1.x 起的 damage_reflect 也是用户素材：8 列 × 3 行、单元 480×480、24 帧；'
-      + 'v1.1.10 起的 boss_vfx b1~b6 幕主 34 张、v1.1.12 起 b7~b9 幕主 12 张：8 列 × 4 行、30fps、32 帧；'
-      + 'v1.1.15 起 46 张全部换新规格：单帧 480×480（正方形格，不写 ch；旧 480×720 / 连接段 480×256 作废，'
+      + 'v1.1.10 起的 boss_vfx b1~b6 幕主 28 张（v1.1.20 删掉 6 条：4 条 _link + b2_hanba_burn_apply_hit + b3_xueshi_charge_self）、'
+      + 'v1.1.12 起 b7~b9 幕主 12 张：8 列 × 4 行、30fps、32 帧；'
+      + 'v1.1.15 起 40 张全部换新规格：单帧 480×480（正方形格，不写 ch；旧 480×720 / 连接段 480×256 作废，'
       + 'lightning / damage_reflect 仍是 480×720、保留 ch=1.5）',
-      Object.keys(FX_SHEETS).length === 85 &&
+      Object.keys(FX_SHEETS).length === 79 &&
       Object.keys(FX_SHEETS).every(function (k) {
         var s = FX_SHEETS[k];
         return s.c === 8 && s.f > 0 && s.f <= 8 * s.rows && s.rows >= 1 && s.scale > 0;
@@ -6321,10 +6324,11 @@
         if ('f0' in s && !(s.f0 >= i0 + s.f)) return false;
         return ('f0' in s) === (s.f0 > s.f);
       }));
-    __ok('v0.64.0 **30 个特效全都裁掉了两端的空白帧**（素材末尾常有整格全透明，开头也有）——'
+    __ok('v0.64.0 **29 个特效裁掉了两端的空白帧**（素材末尾常有整格全透明，开头也有）——'
       + '不裁的话：按下后前 0.2 秒画面上什么都没有（像点了没反应），播完还挂着一个透明元素不删。'
-      + '裁掉的帧数合计 186（v0.64 实量 169 ≈ 7.0 秒 @24fps，由 _patch/fx_tune.py 逐格扫 alpha 实量；'
-      + 'v1.1.19 又按用户 txt「金钟罩特效长了」把 jinzhong 的 f 从 41 手动截到 24 ⇒ 再 +17）',
+      + '裁掉的帧数合计 150（v0.64 实量 169 ≈ 7.0 秒 @24fps，由 _patch/fx_tune.py 逐格扫 alpha 实量；'
+      + 'v1.1.20 用户 txt「上述截断全部回调」把 jinzhong 从 24 回 41 ⇒ -17；'
+      + '换素材的 wanjian（新图 f0:46/f:45 ⇒ 1）与 gouhun（新图 36 帧全播、两端无空帧 ⇒ 不再计 f0）按新图实测重算）',
       (function () {
         var n = 0, cut = 0;
         Object.keys(FX_SHEETS).forEach(function (k) {
@@ -6332,12 +6336,12 @@
           if (!('f0' in s)) return;
           n++; cut += s.f0 - s.f;
         });
-        return n === 30 && cut === 186;
+        return n === 29 && cut === 150;
       })());
     __ok('v0.64.0 FX_SHEETS 的键名都符合素材命名闸 ^[a-z][a-z0-9_]*$（对应 素材/fx/<key>.png）',
       Object.keys(FX_SHEETS).every(function (k) { return /^[a-z][a-z0-9_]*$/.test(k); }));
     __ok('v0.64.0 锁_破裂**不在** FX_SHEETS 里（v0.62.0 已用移植 canvas 代码实现，不接精灵图）',
-      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 85);
+      !('suopoli' in FX_SHEETS) && !('lock' in FX_SHEETS) && Object.keys(FX_SHEETS).length === 79);
 
     /* ---------- F2. CARD_FX 接线 ---------- */
     __ok('v0.64.0 CARD_FX 的每个键都是**真实卡 id**（打错字会变成一张永远不播特效的牌，还不报错）',
@@ -6345,10 +6349,10 @@
         var ids = {}; CARDS.forEach(function (c) { ids[c.id] = 1; });
         return Object.keys(CARD_FX).every(function (k) { return !!ids[k]; });
       })());
-    __ok('v0.64.0 CARD_FX 每个值的 n 都登记在 FX_SHEETS 里，a 都是四个合法锚点之一',
+    __ok('v0.64.0 CARD_FX 每个值的 n 都登记在 FX_SHEETS 里，a 都是五个合法锚点之一（v1.1.20：+handcard 手牌锚点）',
       Object.keys(CARD_FX).every(function (k) {
         var e = CARD_FX[k];
-        return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon'].indexOf(e.a) >= 0;
+        return !!(e && e.n && FX_SHEETS[e.n]) && ['enemy', 'field', 'player', 'summon', 'handcard'].indexOf(e.a) >= 0;
       }));
     __ok('v0.64.0 CARD_FX 没有覆盖全部卡（59 张）—— **没登记的牌退回 CSS 四件套**（符箓/护体/黑雾/脉冲），'
       + '所以漏一张的后果是「没精灵图特效」而不是「没特效」；32 张是有素材的那批（v1.0.13 加断刃雷符，v1.0.20 加阴兵过境，'
@@ -6558,7 +6562,7 @@
           var slots = BOSS_VFX[ek];
           Object.keys(slots).forEach(function (slot) {
             var base = slots[slot];
-            ['', '_cast', '_hit', '_self', '_link'].forEach(function (sfx) { used[base + sfx] = 1; });
+            ['', '_cast', '_hit', '_self'].forEach(function (sfx) { used[base + sfx] = 1; });
           });
         });
         var orphan = Object.keys(FX_SHEETS).filter(function (k) { return !used[k] && !CSS_ONLY_FX[k]; });
@@ -7779,21 +7783,23 @@
       FX_SHEETS.relic_proc.scale === 2.5 && FX_SHEETS.lightning.scale === 1.5 &&
       FX_SHEETS.thorns.scale === 2.4);
 
-    /* ⑦′ v1.1.19（txt）：帧数截断 —— 「特效长了」的截到三分之一（骨铃吸血 / 浅显荆棘）、金钟罩 41→24、
-       「保留前 5 分之 3 帧」的 boss `_cast` 32→19（蓄力重击按「前 2 分之 1」32→16）；
-       这九个 `_cast` 还要「位置上移半个单帧宽度」= FX_SHEETS 的 oy:0.5（方格里 = 0.5 个格子宽）。 */
-    __ok('v1.1.19 帧数截断与位置上移（txt）：骨铃吸血/浅显荆棘/金钟罩截帧，boss 九个 _cast 保留前 5 分之 3（重击保一半）且上移半格',
-      FX_SHEETS.guling_suck.f === 16 && FX_SHEETS.thorns_light.f === 16 && FX_SHEETS.jinzhong.f === 24 &&
-      FX_SHEETS.b3_xueshi_heavy_smash_cast.f === 16 && FX_SHEETS.b3_xueshi_heavy_smash_cast.oy === 0.5 &&
+    /* ⑦′ v1.1.20（用户 txt「上述截断全部回调」）：v1.1.19 的帧数截断**全部撤回** ——
+       骨铃吸血 / 浅显荆棘回全长（f 48 = 整张图）、金钟罩回 41（43 帧去掉两端 2 帧空帧后的全长）、
+       boss 九个 `_cast` 回 32 帧（蓄力重击由 16 回 32）；但「位置上移」保留：九个 `_cast` 的
+       oy 仍为 0.25（v1.1.20 由 0.5 调低 —— 用户反馈半格移得太高）。 */
+    __ok('v1.1.20 帧数截断全部回调（txt）：骨铃吸血/浅显荆棘/金钟罩回全长、boss 九个 _cast 回 32 帧；上移量 oy 0.25 保留',
+      FX_SHEETS.guling_suck.f === 48 && FX_SHEETS.thorns_light.f === 48 && FX_SHEETS.jinzhong.f === 41 &&
+      FX_SHEETS.b3_xueshi_heavy_smash_cast.f === 32 && FX_SHEETS.b3_xueshi_heavy_smash_cast.oy === 0.25 &&
       ['b1_jiangwang_attack_claw_cast', 'b2_hanba_attack_flame_claw_cast', 'b3_xueshi_attack_claw_cast',
        'b4_xiebian_attack_staff_cast', 'b5_judge_attack_gavel_cast', 'b7_yewang_attack_blade_cast',
        'b8_xiuluo_attack_slash_cast', 'b9_yanluo_attack_smash_cast'].every(function (k) {
-        return FX_SHEETS[k].f === 19 && FX_SHEETS[k].oy === 0.5;
+        return FX_SHEETS[k].f === 32 && FX_SHEETS[k].oy === 0.25;
       }));
 
-    /* ⑦″ v1.1.19（txt）：两处「降低一点透明度」—— 由 FX_SHEETS 的 `op` 字段落到 playFx 的外层盒上。 */
-    __ok('v1.1.19 降透明度（txt）：骨铃吸血 op 0.6、浅显荆棘 op 0.5，且 playFx 认这个字段',
-      FX_SHEETS.guling_suck.op === 0.6 && FX_SHEETS.thorns_light.op === 0.5 &&
+    /* ⑦″ v1.1.19（txt）那处「降低一点透明度」保留一处、撤回一处：骨铃吸血 op 0.6 保留；
+       浅显荆棘的 op 0.5 随「截断全部回调」一并撤销（用户点名「前 1/3 + 降透明度」两条一起回）。 */
+    __ok('v1.1.20 降透明度：骨铃吸血 op 0.6 保留、浅显荆棘已回调（无 op），且 playFx 认这个字段',
+      FX_SHEETS.guling_suck.op === 0.6 && !('op' in FX_SHEETS.thorns_light) &&
       (typeof playFx === 'function') && String(playFx).indexOf('S.op') >= 0);
 
     /* ⑧ 里程碑调试开关：存在且默认开，且**在无头沙箱里自动跳过**（不污染里程断言）。 */

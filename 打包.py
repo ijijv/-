@@ -88,21 +88,22 @@ FX_SPLIT_ROWS = {'lightning': 4, 'damage_reflect': 4}
 # v1.1.10：boss_vfx（b1~b6 幕主）同 specs —— v1.1.15 起换新规格：全部 3840×1920（8 列 4 行、单帧 480×480，
 # 含连接段；旧规格 3840×2880 / 连接段 3840×1024 作废）。新规格下正方形口径（H//480 = 4）本就切对，
 # 这里仍显式给 4 —— 与 js/20_data.js 的 FX_SHEETS[key].rows 保持「显式一致」，防将来再换非方格时静默错切。
-# 34 条 + v1.1.12 的 7~9 幕（夜王/修罗王/阎罗天子）12 条同口径。
+# 28 条（v1.1.20：删掉 6 条 —— 4 条 `_link` 连接段 + b2_hanba_burn_apply_hit + b3_xueshi_charge_self）
+# + v1.1.12 的 7~9 幕（夜王/修罗王/阎罗天子）12 条同口径。
 BOSS_VFX_KEYS = [
     'b1_jiangwang_attack_claw_cast', 'b1_jiangwang_attack_claw_hit',
-    'b1_jiangwang_drain_feed_cast', 'b1_jiangwang_drain_feed_hit', 'b1_jiangwang_drain_feed_link',
+    'b1_jiangwang_drain_feed_cast', 'b1_jiangwang_drain_feed_hit',
     'b1_jiangwang_summon_minion_self',
     'b2_hanba_attack_flame_claw_cast', 'b2_hanba_attack_flame_claw_hit',
-    'b2_hanba_burn_apply_hit', 'b2_hanba_burn_tick_hit',
-    'b3_xueshi_attack_claw_cast', 'b3_xueshi_attack_claw_hit', 'b3_xueshi_charge_self',
+    'b2_hanba_burn_tick_hit',
+    'b3_xueshi_attack_claw_cast', 'b3_xueshi_attack_claw_hit',
     'b3_xueshi_heavy_smash_cast', 'b3_xueshi_heavy_smash_hit',
-    'b3_xueshi_lifesteal_cast', 'b3_xueshi_lifesteal_hit', 'b3_xueshi_lifesteal_link',
+    'b3_xueshi_lifesteal_cast', 'b3_xueshi_lifesteal_hit',
     'b4_xiebian_attack_staff_cast', 'b4_xiebian_attack_staff_hit',
-    'b4_xiebian_soul_hook_cast', 'b4_xiebian_soul_hook_hit', 'b4_xiebian_soul_hook_link',
+    'b4_xiebian_soul_hook_cast', 'b4_xiebian_soul_hook_hit',
     'b4_xiebian_split_self',
     'b5_judge_attack_gavel_cast', 'b5_judge_attack_gavel_hit', 'b5_judge_record_hit',
-    'b5_judge_settle_cast', 'b5_judge_settle_hit', 'b5_judge_settle_link',
+    'b5_judge_settle_cast', 'b5_judge_settle_hit',
     'b6_mengpo_attack_ladle_cast', 'b6_mengpo_attack_ladle_hit',
     'b6_mengpo_forget_hit', 'b6_mengpo_heal_self',
     # v1.1.12：第 7~9 幕（无 _link 段；v1.1.15 起同换 3840×1920 新规格）

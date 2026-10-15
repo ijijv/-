@@ -307,6 +307,23 @@ function fxAnchorRect(anchor){
   }
   return { left:window.innerWidth*0.5, top:window.innerHeight*0.42, width:0, height:0 };   // 量不到元素才落这里
 }
+/* v1.1.20（用户 txt「改挂点 / 锚点」）：两个「底部坐标」锚点助手。
+   fxBoxSize 取锚点的**短边**，所以只要矩形宽高不变、只把中心竖移到元素下缘，
+   特效该有的尺寸档差就完全不受影响（变的只有落点）。返回带 getBoundingClientRect 的代理对象，
+   走 fxAnchorSpec 的 kind:'el' ⇒ render() 重锚时按元素现量（元素挪走特效跟着挪，元素没了则冻结在原地）。 */
+function bottomAnchor(el){
+  if(!el || typeof el.getBoundingClientRect!=='function') return null;
+  return { getBoundingClientRect:function(){
+    const r=el.getBoundingClientRect();
+    return { left:r.left, top:(r.bottom - r.height/2), width:r.width, height:r.height };
+  } };
+}
+/* 玩家立绘框（与 fxAliasSel 的 'player' 同一处）的下缘 —— 忘忧汤这类「落在玩家脚下」的特效挂点。 */
+function playerBottomAnchor(){
+  const p=document.getElementById('player-panel');
+  const a=(p && p.querySelector) ? (p.querySelector('.hero-art-box') || p) : p;
+  return a ? bottomAnchor(a) : null;
+}
 /* ===================== v0.69.0：特效重锚 =====================
    用户报的 bug：三个敌人 / Boss 出场时玩家面板会上下移动，**特效跟不上**。
    根因是 playFx / floatDamage / defenseFx 都只在**调用那一刻**量一次锚点坐标就把
@@ -420,67 +437,8 @@ function fxStop(key){
   delete FX_LIVE[key];
 }
 function fxStopAll(){ Object.keys(FX_LIVE).forEach(fxStop); }
-/* ===================== v1.1.10：boss_vfx 连接段（_link）平铺播放器 =====================
-   游戏原本没有任何平铺机制，按 boss_vfx/README.md §1.3 手写：
-   素材是 8 列 × 4 行、单帧 **480×480**（v1.1.15 新规格；旧 480×256 的 ch≈0.5333 已随换图作废）、每帧第 0/479 列像素完全一致
-   ⇒ 可横向平铺。README 给的算法是「手动并排 N = ceil(d/480) 张」；这里用**一张 repeat-x 的图**等价实现，
-   只占一个元素、一个 DOM：
-     · 盒长 L = 两锚点中心的距离（含高度差），盒高 = box*ch；旋转角 = P→B 的方向（+X 指向 Boss）；
-     · inner 铺 background-repeat:repeat-x，图宽 = c0*box（一整排 8 帧）；每帧把 background-position-x
-       推进 box —— 图以 8*box 为周期循环，(k%8)*box 从 7box 跳回 0 恰好是「再前进一格」，天然无缝；
-     · 每 8 帧换一排（_r<row>），30fps ⇒ 一整段 32 帧 ≈ 1.07s，按 README 一直循环到技能结束（durMs）。
-   挂点：from = Boss（右）、to = 玩家（左）；by 为 `_hit` 的通用命中音效由既有打击分级管，这里只出画面。
-   与 FX_LIVE 同表 ⇒ 受 FX_MAX_LIVE 并发上限与 fxStopAll 统一回收（结构字段与 playFx 保持同形状）。 */
-function bossLinkFx(name, fromAnchor, toAnchor, durMs, opt){
-  if(!fx()) return null;
-  const S=fxSheet(name); if(!S) return null;
-  const ra=fxAnchorRect(fromAnchor), rb=fxAnchorRect(toAnchor);
-  const ax=ra.left+ra.width/2, ay=ra.top+ra.height/2;
-  const bx=rb.left+rb.width/2, by=rb.top+rb.height/2;
-  const dx=ax-bx, dy=ay-by;
-  const L=Math.hypot(dx,dy); if(!(L>24)) return null;
-  const ch=S.ch||1, c0=Math.max(1, S.c||8), f=Math.max(1, S.f||1);
-  const n=Math.max(1, Math.ceil(L/480));
-  const box=L/n, h=box*ch, w=L;
-  const dt=1000/(S.fps||24);
-  const key=(opt && opt.key)||('link@'+name);
-  const strip=!!(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP['fx/'+name+'_r0.png']);
-  const rowURL=function(r){ return strip ? assetURL('fx/'+name+'_r'+r+'.png', true) : assetURL('fx/'+name+'.png', true); };
-  fxStop(key); fxEvictOldest();
-  const el=document.createElement('div');
-  el.className='fx-sheet';
-  el.style.width=Math.round(w)+'px';
-  el.style.height=Math.round(h)+'px';
-  el.style.backgroundRepeat='repeat-x';
-  el.style.backgroundSize=(c0*box)+'px '+(strip?h:rows2BoxH())+'px';
-  el.style.left=Math.round((ax+bx)/2 - w/2)+'px';
-  el.style.top =Math.round((ay+by)/2 - h/2)+'px';
-  /* 旋转：+X 对齐 P→B（README：+X 指向 Boss）。角度 < 3° 就不转，省一层合成变换。 */
-  const deg=Math.atan2(dy, dx)*180/Math.PI;
-  if(Math.abs(deg)>3) el.style.transform='rotate('+deg+'deg)';
-  fxLayer().appendChild(el);
-  function rows2BoxH(){ return Math.round((S.rows||4)*box*ch); }
-  let row=-1;
-  const st={ el:el, key:key, dead:false, raf:0, t0:(window.performance&&performance.now?performance.now():Date.now()),
-             ax:0.5, ay:0.5, bx:0, by:0, lx:null, ly:null, pend:null };
-  FX_LIVE[key]=st;
-  const endAt=st.t0+(durMs||1200);
-  st.raf=requestAnimationFrame(function step(){
-    if(st.dead) return;
-    const now=(window.performance&&performance.now?performance.now():Date.now());
-    if(now>=endAt){ fxStop(key); return; }
-    const k=Math.floor((now-st.t0)/dt)%f;
-    const r=Math.floor(k/c0);
-    if(r!==row){
-      row=r;
-      el.style.backgroundImage='url("'+rowURL(r)+'")';
-      el.style.backgroundSize=(c0*box)+'px '+(strip?Math.round(h):rows2BoxH())+'px';
-    }
-    el.style.backgroundPosition=Math.round((k%c0)*box)+'px '+(strip?0:Math.round(-r*box*ch))+'px';
-    st.raf=requestAnimationFrame(step);
-  });
-  return el;
-}
+/* v1.1.20（用户 txt「删掉这个」）：4 条 `_link` 连接段全部删除 —— v1.1.10 引入的
+   bossLinkFx 平铺播放器随之摘掉；opt.link / opt.linkMs 一并作废（bossSkillFx / bossSelfFx 已不再读取）。 */
 /* 播放。opts：{key（同名并发键，默认=name；逐敌人特效要传 'curse@uid' 才不会互相顶掉）,
    scale（覆写表里的 scale）, rate（播放倍速）, still（钉帧模式：不排 rAF，交给 fxSeek）,
    mirror（v1.1.x：左右镜像，反向播放方向性特效，如敌人反震玩家时的反伤图）,
@@ -890,6 +848,9 @@ function cardPlayFx(c){
     if(E.a==='enemy'){ anchor=enemyEl(curEnemy()) || 'field'; }   // 目标已死/找不到元素时兜底全场
     else if(E.a==='field') anchor='field';
     else if(E.a==='summon') anchor='summon';
+    /* v1.1.20（用户 txt #5/#9/#10/#12）：手牌特效锚在**刚打出的那张牌**的牌面中部，
+       牌飞走后特效留在原位播完（位置由 notePlayRect 在 doPlayCard 那一拍量下）。 */
+    else if(E.a==='handcard') anchor=handCardAnchor() || 'summon';
     else anchor='player';
     playFx(E.n, anchor, { scale:E.s });
     return;
@@ -960,6 +921,13 @@ let LAST_PLAY_RECT=null;
 function notePlayRect(i){
   try{ LAST_PLAY_RECT=animRect(animHandElAt(i) || document.getElementById('hand')); }
   catch(e){ LAST_PLAY_RECT=null; }
+}
+/* v1.1.20（用户 txt #5/#9/#10/#12）：手牌特效的锚点 —— 「刚打出的那张牌」在屏上的矩形。
+   尺寸不变 ⇒ fxBoxSize 的短边档差照旧（不因改挂点而缩水）；矩形恒定 ⇒ 牌挪走后特效留在原位播完。 */
+function handCardAnchor(){
+  const r=LAST_PLAY_RECT; if(!r || !(r.w>0) || !(r.h>0)) return null;
+  const cx=r.cx, cy=r.cy, w=r.w, h=r.h;
+  return { getBoundingClientRect:function(){ return { left:cx-w/2, top:cy-h/2, width:w, height:h }; } };
 }
 /* v1.0.21：召唤黑雾按召唤物**上色**（用户口径：纸人白 / 小鬼黑 / 五通神紫 / 阴兵金 / 尸王红）。
    每个值是三色一组＝[主体亮心, 主体暗晕, ::before 内层偏光]，写成 3 个 CSS 变量喂给 .fx-summon-mist。

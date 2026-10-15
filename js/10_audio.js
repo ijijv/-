@@ -166,14 +166,13 @@ const SFX_TABLE = {
      lightning  雷谴符：逐段落雷（按分段层数多段、紧凑连绵） */
   spark:          [['b',.12,.34,3600,1200],['t',2400,.10,'triangle',.14,0,900]],
   slash:          [['b',.10,.30,4000,1100],['t',1600,.09,'sawtooth',.12,0,1400]],
-  lightning:      [['b',.30,.46,2600,300],['t',120,.28,'sawtooth',.20,0,70],['t',1800,.14,'square',.12,.06,600]],
-  /* 遗留键：新代码一律走 hit_light / hit_heavy / hit_crit 按伤害量分级，此键仅为兼容保留 */
-  hit:            [['b',.14,.5,2000,160],['t',150,.12,'square',.2,0,70]]
+  lightning:      [['b',.30,.46,2600,300],['t',120,.28,'sawtooth',.20,0,70],['t',1800,.14,'square',.12,.06,600]]
 };
 /* M 组 · v1.1.10/11：boss_vfx 全部 9 幕 Boss 技能音效（28 个 = 前 6 幕 19 + 后 3 幕 9）。
    真采样由用户交付（`素材/sfx/<键名>.mp3`，见 30_engine.js 的 BOSS_VFX）—— 下面这条只是
    **采样没到位 / 解码失败时的合成兜底**，不写的话 sfx() 会走 sfxWarnUnknown 静默吞掉。
-   键名与 boss_vfx/README 的技能 key 一一对应（_cast / _self / _link 播它；_hit 播通用 hit_light|hit_heavy）。 */
+   键名与 boss_vfx/README 的技能 key 一一对应（_cast / _self 播它；_hit 播通用 hit_light|hit_heavy。
+   v1.1.20：4 条 `_link` 连接段已按用户口径删除，故不再有 `_link` 后缀）。 */
 const BOSS_VFX_SFX_KEYS = [
   'b1_jiangwang_attack_claw','b1_jiangwang_drain_feed','b1_jiangwang_summon_minion',
   'b2_hanba_attack_flame_claw','b2_hanba_burn_apply','b2_hanba_burn_tick',
@@ -187,6 +186,9 @@ const BOSS_VFX_SFX_KEYS = [
 ];
 const _BOSS_SFX_FALLBACK = [['b',.18,.42,2200,320],['t',420,.12,'triangle',.10,.05,300]];
 BOSS_VFX_SFX_KEYS.forEach(function(k){ if(!SFX_TABLE[k]) SFX_TABLE[k]=_BOSS_SFX_FALLBACK; });
+/* v1.1.20（用户 2026-10-15 追加口径）：`b2_hanba_burn_tick` **引用到游戏中** ——
+   灼烧跳伤（30_engine.js:1194）由 kw_burn 改播它，素材/sfx/b2_hanba_burn_tick.mp3 从此真正发声。
+   （先前「删掉、不用这个」的口径作废；键位与 28 槽一一对应的断言不受影响。） */
 /* N 组 · v1.1.9（用户已交付真采样：素材/sfx/fx_forge.mp3、素材/sfx/fx_burn.mp3；
    挂点在 50_ui.js 的 cardFxAnim —— fx_forge 锻造升级（火焰覆盖→风吹散），
    fx_burn 净坛/篝火删牌（火焰左下烧到右上→化灰）。
@@ -204,7 +206,29 @@ SFX_TABLE.talisman_click     = [['t',560,.06,'triangle',.16,0,320],['b',.05,.14,
 SFX_TABLE.talisman_slide     = [['b',.14,.22,1800,500],['t',420,.10,'sine',.08,0,760]];
 SFX_TABLE.key_press          = [['t',520,.07,'triangle',.14,0,660],['t',780,.06,'sine',.10,.03,980]];
 SFX_TABLE.poster_bounce_land = [['b',.20,.42,1200,180],['t',180,.12,'triangle',.14,.06,90]];
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 117 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条 + 选角 4 条）
+/* P 组 · v1.1.20（用户 txt「换个特效」批配套交付的真采样，文件由用户指定）：
+     万剑归宗 → 素材/sfx/wanjian.wav（用户 2026-10-15 追加指定的那一版，不是先前说的 blade_slash_x2）
+     勾魂      → 素材/sfx/gouhun.wav（原 boss_vfx/audio/hand_grab.wav）
+   与 N/O 组同机制：下面两条仅是采样缺失 / 解码失败时的**合成兜底**。
+   挂点：`wanjian` 走 CARD_SFX.wanjian（出牌即响）；`gouhun` 走 30_engine.js 勾魂意图的**非 Boss** 分支
+   （Boss 的勾魂仍走 BOSS_VFX 的 b4_xiebian_soul_hook，不另立键）。 */
+SFX_TABLE.wanjian = [['b',.16,.30,3400,900],['t',700,.10,'triangle',.12,0,1600]];
+SFX_TABLE.gouhun  = [['t',420,.30,'sine',.15,0,130],['b',.20,.24,1300,300]];
+/* Q 组 · v1.1.20（用户 txt「换个音效」批第二轮：3 条真采样，文件名即键名）：
+     tianlei      天雷正法（天师·天雷符）—— CARD_SFX.tianlei，出牌即响
+     lei          雷符 / 断刃雷符 —— CARD_SFX.leifu / duanren_leifu（同一张雷击精灵图）
+     zhenyaoling  镇妖铃 —— 走 sealEnemy 收口点（钟馗镇魂仍走 card_zhenhun，两者分开）
+   与 K~P 组同机制：下面三条仅是采样缺失 / 解码失败时的合成兜底。 */
+SFX_TABLE.tianlei     = [['b',.30,.46,2600,300],['t',180,.22,'sawtooth',.18,0,90]];
+SFX_TABLE.lei         = [['b',.20,.34,2400,400],['t',300,.12,'square',.16,0,120]];
+SFX_TABLE.zhenyaoling = [['t',880,.24,'sine',.16,0,520],['t',1320,.20,'triangle',.10,.10,760]];
+/* R 组 · v1.1.20（补登记）：遗物通用金光音 `relic_proc` —— 键名早在 30_engine.js:666
+   （金刚杵：累计格挡满 50 时）就在用，但此前**既无磁盘采样、也不在表内**，命中 sfxWarnUnknown 静默吞掉。
+   v1.1.20 用户补了真采样 `素材/sfx/relic_proc.wav` ⇒ 必须补一条合成兜底登记，
+   否则 verify_dist [2b] 会把磁盘上这个文件判成「未知键名」（176 个音效文件须键键登记在表）。
+   与 N~Q 组同机制：下面这条仅是采样缺失 / 解码失败时的合成兜底。 */
+SFX_TABLE.relic_proc = [['b',.18,.40,1900,320],['t',880,.20,'triangle',.11,.05,520]];
+const SFX_KEYS = Object.keys(SFX_TABLE);   // 122 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条 + 选角 4 条 + v1.1.20：+wanjian/gouhun/tianlei/lei/zhenyaoling 5 条 +relic_proc 1 条，−删掉遗留键 hit）
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;
@@ -268,17 +292,22 @@ function pickVariant(name, n){
   _sfxLastVariant[name]=v+1;
   return v;
 }
-function playSample(name, rate){
+function playSample(name, rate, frac){
   if(sfxMode==='synth') return false;
   const list=SFX_BUF[name]; if(!list || !list.length) return false;
   const ac=ensureAudio(); if(!ac || !ac.createBufferSource || !ac.createGain) return false;
   try{
     const src=ac.createBufferSource();
-    src.buffer = list.length>1 ? list[pickVariant(name, list.length)] : list[0];
+    const buf = list.length>1 ? list[pickVariant(name, list.length)] : list[0];
+    src.buffer = buf;
     if(src.playbackRate) src.playbackRate.value = rate||1;
     const g=ac.createGain(); g.gain.value = (SETTINGS.sfxVol==null?1:SETTINGS.sfxVol);
     src.connect(g); g.connect(ac.destination);
-    src.start(0); return true;
+    /* v1.1.20：可选「只播前 frac 段」（用户 txt「音效保留前 N 分之 1」）。
+       frac∈(0,1) 时按 buf.duration*frac 截断真采样；合成兜底不截断（见 sfx）。 */
+    if(frac>0 && frac<1 && buf && buf.duration) src.start(0, 0, buf.duration*frac);
+    else src.start(0);
+    return true;
   }catch(e){ return false; }
 }
 /* 单个键：并行试完所有候选（含 2/3 变体），成功的进 SFX_BUF[name] */
@@ -349,6 +378,14 @@ function sfxStep(s, rate){
     return;
   }
 }
+/* v1.1.20（用户 2026-10-15 txt「音效保留前 N 分之 1」）：**per-key 截断表**。
+   值 = 保留比例（0~1）；只有**真采样**会被截断，合成兜底照旧整段播（不截）。
+   键名 = 发射点实播的音效键（Boss 槽一律是 BOSS_VFX 槽基名，后缀不另立键）。
+   ⚠️ 本轮按用户口径把四条截断**全部回调**（txt「上述截断全部回调」）⇒ 下表清空；
+   机制保留（playSample 的 frac 形参 + 本表结构），日后要再截某条键填一行即可。
+   空表 ⇒ sfx() 里 SFX_FRAC[name] 恒为 undefined ⇒ 一律整段播。 */
+const SFX_FRAC = {
+};
 /* sfx(键名, 可选参数)：opt 可传 { rate:1.2 } 或直接传数字（播放速率）。
    未知键名静默忽略（战斗中不能因拼错键名炸结算），开发期只 warn 一次。 */
 function sfx(name, opt){
@@ -357,7 +394,7 @@ function sfx(name, opt){
   // 0 是合法值（静音），必须真的静音；旧写法 (sfxVol||1) 会把 0 拉回 100%
   if(!(mul>0)) return;
   const rate=sfxRate(opt);
-  if(playSample(name, rate)) return;      // 有外置采样就用采样
+  if(playSample(name, rate, SFX_FRAC[name])) return;      // 有外置采样就用采样（按 SFX_FRAC 截断）
   const steps=SFX_TABLE[name];
   if(!steps){ sfxWarnUnknown(name); return; }
   for(let i=0;i<steps.length;i++) sfxStep(steps[i], rate);
