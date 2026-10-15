@@ -251,6 +251,20 @@ function fxEvictOldest(){
 function fxSheet(name){
   return (typeof FX_SHEETS!=='undefined' && FX_SHEETS) ? (FX_SHEETS[name] || null) : null;
 }
+/* v1.1.20r4（性能·拆包档同口径）：**「fx 精灵图是否按排拆」的注入清单**。
+   单文件 / TapTap 产物把按排图编进 ASSET_MAP（键 fx/<名>_r0.png）⇒ 判据走 ASSET_MAP；
+   拆包产物（dist/web）ASSET_MAP=null，改由打包.py 把下面这行替换成 {"<名>": <排数>, …}
+   （与 10_audio.js 的 ASSET_WEBP 桩同一套注入手法；打包.py --split 断言「恰有一个 js 含本桩」）。
+   ⚠️ 判定必须**同步**（见 fxRowKeyed）：异步探测会让首播先挂整图、白解一遍 10MB+。
+   开发树 / 冒烟宿主保持 null ⇒ 走整图老路，行为与改动前逐字节相同。 */
+var FX_ROW_KEYS = null;
+/* v1.1.20r4：按排拆 fx 的**统一判据** —— playFx / fxSeek / fxStripURL / fxPreheatKeyRow0 /
+   fxPreheatBattle 五处都走这里（少一处裸判据少一处漂点）。两处来源任一命中即算按排：
+   单文件在 ASSET_MAP 里命中按排键、拆包在注入的 FX_ROW_KEYS 里命中该键名。 */
+function fxRowKeyed(name){
+  if(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP['fx/'+name+'_r0.png']) return true;
+  return !!(typeof FX_ROW_KEYS!=='undefined' && FX_ROW_KEYS && FX_ROW_KEYS[name]);
+}
 /* 盒子边长（**纯函数，冒烟可测**）：锚点短边 × 1.15，下夹 96、上夹 min(vw,vh)×0.9。
    为什么两个夹：帧画布 960×960 且**四周留空**（提示词文档明写「特效居中、周围留空」），
    照锚点框贴必然偏大；上界保证再大的框也不会超出屏幕。 */
@@ -506,9 +520,12 @@ function playFx(name, anchor, opts){
      按排只解 1/rows（旧 480 格：单排 1.8 Mpx ≈ 7 MB；新 240 格：1920×240、0.46 Mpx ≈ 1.8 MB），
      内层合成层也从整图高缩到一排高，尖峰随之落到十几毫秒。
      拆包产物 / 开发树没有按排键（ASSET_MAP 为空或 ASSET_MAP=null）⇒ strip=false ⇒ 走整图原逻辑，
-     像素与行为完全不变（冒烟宿主里 ASSET_MAP 就是 null，走的正是这条老路）。 */
+     像素与行为完全不变（冒烟宿主里 ASSET_MAP 就是 null，走的正是这条老路）。
+     v1.1.20r4：**拆包产物（dist/web）现在也按排拆** —— 判据统一到 fxRowKeyed()（单文件看
+     ASSET_MAP、拆包看打包.py 注入的 FX_ROW_KEYS）；开发树 / 冒烟宿主两处皆无 ⇒ strip=false。
+     ⚠️ 必须**同步**判定，不能异步探 _r0 文件：异步会让首播先挂整图、白解一遍 10MB+。 */
   const stripRel=function(r){ return 'fx/'+name+'_r'+r+'.png'; };
-  const strip=!!(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP[stripRel(0)]);
+  const strip=fxRowKeyed(name);
   const inner=document.createElement('div');
   inner.className='fx-sheet-in';
   inner.style.width=(c0*box)+'px';
@@ -596,8 +613,8 @@ function playFx(name, anchor, opts){
 const FX_PREHEAT={};
 function fxPreheatKeyRow0(name){
   const S=fxSheet(name); if(!S) return;
+  if(!fxRowKeyed(name)) return;                        // 无按排键（开发树 / 冒烟宿主）⇒ 跳过
   const rel='fx/'+name+'_r0.png';
-  if(!(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP[rel])) return;   // 无按排键 ⇒ 跳过
   const u=assetURL(rel, true); if(!u || FX_PREHEAT[u]) return;
   FX_PREHEAT[u]=1;
   try{ const im=new Image(); im.src=u; if(im.decode){ im.decode().catch(function(){}); } }catch(e){}
@@ -607,7 +624,9 @@ function fxPreheatBattle(){
   try{
     if(typeof CARD_FX==='undefined' || !CARD_FX) return;
     if(typeof fx!=='function' || !fx()) return;                  // 关特效 / 流畅模式的既有门禁（fx()）
-    if(typeof ASSET_MAP==='undefined' || !ASSET_MAP) return;     // 非按排产物 ⇒ 无预热意义
+    /* v1.1.20r4：按排产物有两种来源 —— 单文件 ASSET_MAP、拆包注入的 FX_ROW_KEYS；两者皆无才跳过。 */
+    const _keyedMode=((typeof ASSET_MAP!=='undefined' && ASSET_MAP) || (typeof FX_ROW_KEYS!=='undefined' && FX_ROW_KEYS));
+    if(!_keyedMode) return;                                      // 非按排产物（开发树）⇒ 无预热意义
     const cards=(typeof G!=='undefined' && G) ? (G.deck||[]).concat(G.hand||[]).concat(G.discard||[]) : [];
     const seen={};
     for(let i=0;i<cards.length;i++){
@@ -635,7 +654,7 @@ function fxSeek(name, i, anchor, opts){
      多一处状态反而多一处漂点）。按排时先把 backgroundImage 换到 k 所在那一排，再横向平移。 */
   const inEl=el.firstChild;
   if(inEl){
-    if(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP['fx/'+name+'_r0.png']){
+    if(fxRowKeyed(name)){
       const r=Math.floor(k/c0);
       inEl.style.backgroundImage='url("'+assetURL('fx/'+name+'_r'+r+'.png', true)+'")';
       inEl.style.transform=fxCellTf({ x:-(k%c0)*box, y:0 });
@@ -733,12 +752,12 @@ const DAOXIN_PIECES=[
   {c:'inset(66.6% 0 0 66.6%)',        tx: 0.34, ty: 0.33, rot: 16}
 ];
 /* fx 精灵图地址解析：单文件 / TapTap 产物里，打包.py 把每张精灵图按排切成 fx/<名>_r0..rN.png，
-   **整键不存在** ⇒ 直接 assetURL('fx/<名>.png') 会落空（404）。这里先探 _r0 排键，命中就取该排，
-   否则回落到整键（拆包产物 / 开发树里 ASSET_MAP 为空或 null，走的正是这条）。
+   **整键不存在** ⇒ 直接 assetURL('fx/<名>.png') 会落空（404）。v1.1.20r4 起拆包产物同口径，
+   按排判据统一到 fxRowKeyed(base)：命中就取该排，否则回落整键（开发树走的正是这条）。
    ⚠️ 只服务「登记在 FX_SHEETS 的按排精灵图」；整张插画（FX_WHOLE）仍走原 assetURL。 */
 function fxStripURL(rel){
-  const r0=rel.replace(/\.png$/i,'_r0.png');
-  const hit=(typeof ASSET_MAP!=='undefined' && ASSET_MAP && ASSET_MAP[r0]) ? r0 : rel;
+  const base=rel.replace(/^.*\//,'').replace(/\.png$/i,'');    // 'fx/<名>.png' → <名>
+  const hit=fxRowKeyed(base) ? rel.replace(/\.png$/i,'_r0.png') : rel;
   return assetURL(hit, true);
 }
 function daoxinBurst(){

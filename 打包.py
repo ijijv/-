@@ -14,8 +14,11 @@
 ② 拆包（--split）—— 多文件目录，供**网页发布 / PWA / 小游戏上架**用（必须走 http，不能双击 file://）。
    产物: dist/web/（index.html + js/ + 素材/ + manifest + sw.js + icons/）
   它做了什么:
-    1. 脚本保持外链（js/*.js 原样拷过去，只把 10_audio.js 的 ASSET_WEBP 置 true）
-    2. 图片 PNG/JPG → WebP 落盘，音效/BGM 原样拷（音效已在 mp3，转码无益）
+    1. 脚本保持外链（js/*.js 原样拷过去，把 10_audio.js 的 ASSET_WEBP 置 true、
+       00_base.js 的 FX_ROW_KEYS 桩注入成按排清单）
+    2. 图片 PNG/JPG → WebP 落盘，音效/BGM 原样拷（音效已在 mp3，转码无益）；
+       v1.1.20r4：fx 精灵图（素材/fx/<键>.png）与单文件产物同口径**按排拆**成 <键>_r<i>.webp
+       （几何判定与单文件共用 fx_row_crops），整张插画（FX_WHOLE_SKIP）不拆
     3. 补 PWA 四件套：manifest.webmanifest（display:fullscreen + orientation:landscape）、
        sw.js（js/素材 缓存优先、index.html 网络优先、版本号随代码变）、icons/ 四张、注册脚本
     4. 横屏锁定（首次点按尽力一试）+ theme-color / apple-touch-icon 等移动端 meta
@@ -161,6 +164,30 @@ def img_datauri(path, quality, maxdim):
     return 'data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'), len(raw), os.path.getsize(path)
 
 
+def fx_row_crops(path, cols=8, rows=None):
+    """fx 精灵图 → [(行号, PIL.Image)]；不是 8 列整图（或排数与高不整除）就返回 None。
+
+    **只做等高横切，与合成格尺寸无关**（v1.1.20r 全量合成格 480→240 时本函数一行未改）：
+      · rows 显式给定时按「高 / rows」切 —— 用于单帧**非方形**的图（lightning /
+        damage_reflect / boss_vfx 的 480×720、480×256），正方形口径会把排数错切；
+      · 否则按正方形口径：单元边长 cell = 宽/cols、排数 = 高/cell。
+    v1.1.20r4：单文件（fx_row_datauris 编 data URI）与拆包（build_split 落 .webp）**共用这一处几何**，
+    别在第二处重抄这套判定 —— 抄两份必然漂（rows 口径 / 8 列约束）。"""
+    im = Image.open(path)
+    if im.mode in ('P', 'LA', 'L'):
+        im = im.convert('RGBA' if 'transparency' in im.info or im.mode == 'LA' else 'RGB')
+    W, H = im.size
+    if rows:
+        if W % cols or H % rows:
+            return None
+        rh = H // rows
+        return [(k, im.crop((0, k * rh, W, (k + 1) * rh))) for k in range(rows)]
+    cell = W // cols
+    if cell <= 0 or W != cols * cell or H % cell:
+        return None
+    return [(k, im.crop((0, k * cell, W, (k + 1) * cell))) for k in range(H // cell)]
+
+
 def fx_row_datauris(path, quality, cols=8, rows=None):
     """特效精灵图 → **按排**的 WebP data URI 列表；不是 8 列整图就返回 None。
 
@@ -171,32 +198,14 @@ def fx_row_datauris(path, quality, cols=8, rows=None):
     出牌尖峰随之降到十几毫秒。运行时的取法见 js/00_base.js 的 playFx（<name>_r<行>.png）。
     v1.1.20r：全量 fx 合成格 480→240（源图统一 ×0.5）⇒ 同一张图现在是 1920 宽、整图 2.76 Mpx、
     单排 1920×240（0.46 Mpx）；本函数**只做等高横切，与合成格尺寸无关**，故代码未改。
-    默认尺寸从图自己量（不写死 480）：单元边长 = 宽/cols，排数 = 高/单元边长。
-    v1.1.9：`rows` 显式给定时按「高 / rows」等高横切 —— 用于单帧**非方形**（480×720）的图，
-    正方形口径（H//480）会把它错切。"""
-    im = Image.open(path)
-    if im.mode in ('P', 'LA', 'L'):
-        im = im.convert('RGBA' if 'transparency' in im.info or im.mode == 'LA' else 'RGB')
-    W, H = im.size
-    if rows:
-        if W % cols or H % rows:
-            return None
-        rh = H // rows
-        out = []
-        for k in range(rows):
-            y0 = k * rh
-            buf = io.BytesIO()
-            im.crop((0, y0, W, y0 + rh)).save(buf, 'WEBP', quality=quality, method=6)
-            raw = buf.getvalue()
-            out.append(('data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'), len(raw)))
-        return out
-    cell = W // cols
-    if cell <= 0 or W != cols * cell or H % cell:
+    几何判定见 fx_row_crops（与拆包档共用同一份，不抄第二处）。"""
+    crops = fx_row_crops(path, cols, rows)
+    if not crops:
         return None
     out = []
-    for k in range(H // cell):
+    for _k, cim in crops:
         buf = io.BytesIO()
-        im.crop((0, k * cell, W, (k + 1) * cell)).save(buf, 'WEBP', quality=quality, method=6)
+        cim.save(buf, 'WEBP', quality=quality, method=6)
         raw = buf.getvalue()
         out.append(('data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'), len(raw)))
     return out
@@ -374,9 +383,10 @@ def build_split(args):
         shutil.rmtree(WEB_OUTD)
     os.makedirs(WEB_OUTD)
 
-    # ---- 1. 素材：图片 → WebP 落盘；音频原样拷；enemy_backup 不打包 ----
+    # ---- 1. 素材：图片 → WebP 落盘；音频原样拷；enemy_backup 不打包；fx 精灵图**按排拆** ----
     files = collect()
     st = {'in': 0, 'out': 0, 'n_img': 0, 'n_aud': 0}
+    fx_row_keys = {}          # {fx 键名: 排数} —— 注入运行时 FX_ROW_KEYS（见 js/00_base.js）
     for rel, path in files:
         ext = os.path.splitext(path)[1].lower()
         if ext not in WEB_IMG_EXT and ext not in AUD_MIME and ext not in VID_MIME:
@@ -385,6 +395,25 @@ def build_split(args):
                 sys.exit(1)
             print('  跳过非素材文件: %s' % rel)
             continue
+        # v1.1.20r4（性能·拆包档同口径）：`素材/fx/<键>.png` 精灵图**按排拆**落成
+        # 素材/fx/<键>_r<i>.webp，**整图 .webp 不再落盘** —— 与单文件产物同口径（那里由
+        # fx_row_datauris 编成 data URI）。几何判定与单文件共用 fx_row_crops（不抄第二份）。
+        # 运行时「按排 or 整图」的判据见 js/00_base.js 的 fxRowKeyed()：拆包档 ASSET_MAP=null，
+        # 改由下面注入的 FX_ROW_KEYS 承载。整张插画（FX_WHOLE_SKIP，如 daoxin_full）不拆。
+        _fxm = re.match(r'^fx/([a-z][a-z0-9_]*)\.png$', rel)
+        if _fxm and not args.no_webp and _fxm.group(1) not in FX_WHOLE_SKIP:
+            _crops = fx_row_crops(path, rows=FX_SPLIT_ROWS.get(_fxm.group(1)))
+            if _crops:
+                _key = _fxm.group(1)
+                fx_row_keys[_key] = len(_crops)
+                for _k, _cim in _crops:
+                    _rdst = os.path.join(WEB_OUTD, '素材', 'fx', '%s_r%d.webp' % (_key, _k))
+                    if not os.path.isdir(os.path.dirname(_rdst)):
+                        os.makedirs(os.path.dirname(_rdst))
+                    _cim.save(_rdst, 'WEBP', quality=args.quality, method=6)
+                    st['n_img'] += 1; st['out'] += os.path.getsize(_rdst)
+                st['in'] += os.path.getsize(path)
+                continue
         dst = os.path.join(WEB_OUTD, '素材', web_asset_name(rel).replace('/', os.sep))
         if not os.path.isdir(os.path.dirname(dst)):
             os.makedirs(os.path.dirname(dst))
@@ -403,23 +432,36 @@ def build_split(args):
         st['in'] += os.path.getsize(path); st['out'] += os.path.getsize(dst)
     print('素材 %d 个（图 %d → webp / 音 %d 原样）: %s → %s'
           % (st['n_img'] + st['n_aud'], st['n_img'], st['n_aud'], human(st['in']), human(st['out'])))
+    if fx_row_keys:
+        print('  fx 精灵图 %d 张 → 按排 %d 张 webp（整图一次解 2.76 Mpx → 按排 0.46 Mpx）'
+              % (len(fx_row_keys), sum(fx_row_keys.values())))
 
-    # ---- 2. 脚本：原样拷，只把 10_audio.js 的 ASSET_WEBP 置 true ----
+    # ---- 2. 脚本：原样拷，注入两处桩（10_audio.js 的 ASSET_WEBP、00_base.js 的 FX_ROW_KEYS） ----
     js_files = sorted(f for f in os.listdir(JSD) if f.lower().endswith('.js'))
     if not js_files:
         print('FAIL: %s 下没有 .js' % JSD); sys.exit(1)
     os.makedirs(os.path.join(WEB_OUTD, 'js'))
     stub_webp = 'var ASSET_WEBP = false;'
-    seen = []
+    stub_rowkeys = 'var FX_ROW_KEYS = null;'
+    rowkeys_lit = 'var FX_ROW_KEYS = ' + json.dumps(fx_row_keys, sort_keys=True) + ';'
+    seen_webp, seen_rowkeys = [], []
     for fn in js_files:
         s = io.open(os.path.join(JSD, fn), 'r', encoding='utf-8', newline='').read()
         if stub_webp in s:
-            seen.append(fn)
+            seen_webp.append(fn)
             s = s.replace(stub_webp, 'var ASSET_WEBP = true;')
+        if stub_rowkeys in s:
+            seen_rowkeys.append(fn)
+            s = s.replace(stub_rowkeys, rowkeys_lit)
         io.open(os.path.join(WEB_OUTD, 'js', fn), 'w', encoding='utf-8', newline='').write(s)
-    if len(seen) != 1:
-        print('FAIL: 期望恰有一个 js 含 "%s"，实际 %s' % (stub_webp, seen)); sys.exit(1)
-    print('脚本 %d 段 → js/（%s 的 ASSET_WEBP → true）' % (len(js_files), seen[0]))
+    if len(seen_webp) != 1:
+        print('FAIL: 期望恰有一个 js 含 "%s"，实际 %s' % (stub_webp, seen_webp)); sys.exit(1)
+    if len(seen_rowkeys) != 1:
+        print('FAIL: 期望恰有一个 js 含 "%s"，实际 %s' % (stub_rowkeys, seen_rowkeys)); sys.exit(1)
+    if not fx_row_keys:
+        print('FAIL: fx 按排清单为空 —— 拆包必须按排拆 fx（FX_WHOLE_SKIP 不该全命中）'); sys.exit(1)
+    print('脚本 %d 段 → js/（%s 的 ASSET_WEBP → true；%s 的 FX_ROW_KEYS → %d 条按排清单）'
+          % (len(js_files), seen_webp[0], seen_rowkeys[0], len(fx_row_keys)))
 
     # ---- 3. index.html：脚本保持外链；CSS url()/静态 img 的图片路径换 .webp；注入 PWA ----
     html = io.open(SRC, 'r', encoding='utf-8').read()

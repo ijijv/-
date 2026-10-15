@@ -7850,13 +7850,43 @@
       })());
     /* ① 战斗进场预热本场卡组 sheet 的第 0 排；无按排键（沙箱/开发树）必须静默跳过。
        rel 字面量在 helper fxPreheatKeyRow0 里（不是 fxPreheatBattle），断言要落在 helper 上。 */
-    __ok('v1.1.17 特效预热：无按排键(沙箱)时静默不抛、行为与旧版一致',
+    __ok('v1.1.17/v1.1.20r4 特效预热：无按排键(沙箱)时静默不抛、行为与旧版一致',
       typeof fxPreheatBattle === 'function' && typeof fxPreheatKeyRow0 === 'function' &&
+      typeof fxRowKeyed === 'function' &&
       __code(fxPreheatKeyRow0).indexOf("'fx/'+name+'_r0.png'") >= 0 &&
-      __code(fxPreheatKeyRow0).indexOf('ASSET_MAP') >= 0 &&
+      __code(fxPreheatKeyRow0).indexOf('fxRowKeyed') >= 0 &&
       (function () { try { fxPreheatBattle(); return true; } catch (e) { return false; } })());
     __ok('v1.1.17 特效预热接点：beginBattle(startBattle) 里调用了 fxPreheatBattle',
       __code(startBattle).indexOf('fxPreheatBattle()') >= 0);
+    /* v1.1.20r4：拆包档（ASSET_MAP=null）也按排拆 fx —— 判据统一到 fxRowKeyed()，
+       ASSET_MAP 与打包.py 注入的 FX_ROW_KEYS 两种来源都必须认；开发树/沙箱两者皆无 ⇒ false。
+       三个子场景都摆好再还原，避免污染后续断言。 */
+    __ok('v1.1.20r4 按排拆 fx 判据统一：fxRowKeyed 同时认 ASSET_MAP 与注入的 FX_ROW_KEYS',
+      typeof fxRowKeyed === 'function' &&
+      __code(fxRowKeyed).indexOf('ASSET_MAP') >= 0 &&
+      __code(fxRowKeyed).indexOf('FX_ROW_KEYS') >= 0 &&
+      __code(fxRowKeyed).indexOf("'_r0.png'") >= 0 &&
+      (function () {
+        var bM = ASSET_MAP, bK = (typeof FX_ROW_KEYS !== 'undefined') ? FX_ROW_KEYS : undefined, ok = true;
+        try {
+          ASSET_MAP = null; FX_ROW_KEYS = null;
+          ok = ok && fxRowKeyed('t') === false;                               // 两者皆无 ⇒ false（开发树口径）
+          ASSET_MAP = null; FX_ROW_KEYS = { t: 4 };
+          ok = ok && fxRowKeyed('t') === true && fxRowKeyed('u') === false;   // 只注入清单命中（拆包口径）
+          ASSET_MAP = { 'fx/t_r0.png': 'data:x' }; FX_ROW_KEYS = null;
+          ok = ok && fxRowKeyed('t') === true;                                // 只 ASSET_MAP 命中（单文件口径）
+        } catch (e) { ok = false; }
+        ASSET_MAP = bM; FX_ROW_KEYS = bK;
+        return ok;
+      })());
+    /* playFx / fxSeek / fxStripURL 三处也必须走同一判据（不许残留裸 ASSET_MAP 判据）。
+       注：判的是 __code(函数体)，不含函数上方的文档注释。 */
+    __ok('v1.1.20r4 playFx/fxSeek/fxStripURL 的按排判据都改走 fxRowKeyed（无裸 ASSET_MAP 判据）',
+      __code(playFx).indexOf('fxRowKeyed') >= 0 &&
+      __code(fxSeek).indexOf('fxRowKeyed') >= 0 &&
+      __code(fxStripURL).indexOf('fxRowKeyed') >= 0 &&
+      __code(fxSeek).indexOf('ASSET_MAP') < 0 &&
+      __code(fxStripURL).indexOf('ASSET_MAP') < 0);
   })();
 
   rep.pass = _p; rep.fail = _f;
