@@ -7762,6 +7762,21 @@
       __code(outHudSync).indexOf('hero-scene') >= 0 &&
       __code(outHudSync).indexOf('ui/deck_back.png') >= 0);
 
+    /* v1.1.20r3（用户报障「界面的锦囊 UI 和牌堆 UI 还是不用我给你的」）：
+       两枚图标必须**每次同步都按最新结果重写**。旧版锁在 `if(!OUT_HUD_BUILT)` 里只写一次，
+       而 iconTag() 的探图是异步的（首帧必回落），图 onload 之后只重跑 render()、
+       不重建 out-HUD ⇒ 用户交付的真图一辈子升不上来。这里钉死那次性闩不再存在，
+       并要求锦囊侧也走 iconTag（此前只有牌库那枚被断过）+ 回落串已由 emoji 改为文字。 */
+    __ok('v1.1.20r3 锦囊/牌堆图标每次同步重写（无 OUT_HUD_BUILT 一次性闩）',
+      __code(outHudSync).indexOf('OUT_HUD_BUILT') < 0 &&
+      __code(outHudSync).indexOf('ui/menu/jinnang-nobg.png') >= 0 &&
+      __code(outHudSync).indexOf('pi.innerHTML!==h') >= 0 &&
+      __code(outHudSync).indexOf('ci.innerHTML!==h') >= 0 &&
+      __code(outHudSync).indexOf('锦囊') >= 0 &&
+      __code(outHudSync).indexOf('牌堆') >= 0 &&
+      __code(outHudSync).indexOf('🧧') < 0 && __code(outHudSync).indexOf('🂠') < 0 &&
+      __code(hudIconPrewarm).indexOf('ui/deck_back.png') >= 0);
+
     /* ③ 初始牌库铺展单行（列数由 JS 按牌数内联，天然单行居中）。 */
     __ok('v1.1.16 初始牌库铺展：单行（列数 = 牌数内联覆盖 6 列）',
       __code(hsDeckPreview).indexOf('repeat(${list.length}') >= 0);

@@ -3788,8 +3788,12 @@
   .rk-seal.rk-av img{width:100%; height:100%; object-fit:cover; display:block;}
   .rk-pl b{font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#42361f;}
   .rk-tm{text-align:right; color:#7c2118;}
-  .rk-sc{text-align:right; color:#8a6a3c;}
-  .rk-dt{text-align:right; font-size:10px; color:#8a6a3c;}
+  /* v1.1.20r3（用户报障「排行榜的整局得分和留名日期怎么没有啊」）：数据一直在渲染，
+     真正的问题是颜色 —— 本机榜每一行都是「我」⇒ 整表套 .rk-tr.me 的深色底纹（实测 ≈ #8c7d55），
+     这两列原本的 #8a6a3c 与底纹几乎同色 ⇒ 对比度趋零、字看着像糊掉。按用户口径改成
+     与「通关用时」同一种红（顺手把三列统一，深浅底都读得清）。 */
+  .rk-sc{text-align:right; color:#7c2118;}
+  .rk-dt{text-align:right; font-size:10px; color:#7c2118;}
   .rk-empty{padding:16px 6px; text-align:center; font-size:12px; line-height:1.8; color:#8a6a3c;}
   .rk-online{font-size:10px; line-height:1.7; color:#8a6a3c;}
 
@@ -3945,10 +3949,11 @@
 <div id="dropUI" class="drop-ui hidden"></div>
 
 <!-- v1.1.8：战局外常驻 HUD（牌堆 / 锦囊）—— 地图 / 商店 / 营地 / 事件房 / 锻造 … 都常驻。
-     图标由 outHudSync()（js/50_ui.js）用 iconTag 换真图，未交付时回落 emoji。 -->
+     图标由 outHudSync()（js/50_ui.js）用 iconTag 换真图；未交付时回落**文字**「锦囊」「牌堆」
+     （v1.1.20r3 起 —— 原先写死的 emoji 占位已删，并改为开局 hudIconPrewarm 预热探测，杜绝先闪占位）。 -->
 <div id="outHud" class="out-hud" style="display:none">
-  <div class="out-pouch" id="outPouch" onclick="showJinnang()" title="锦囊" aria-label="锦囊"><span class="out-ico">🧧</span></div>
-  <div class="out-pile" id="outPile" onclick="viewDeck()" title="牌堆" aria-label="牌堆"><span class="out-ico">🂠</span><span class="out-n" id="outPileN">0</span></div>
+  <div class="out-pouch" id="outPouch" onclick="showJinnang()" title="锦囊" aria-label="锦囊"><span class="out-ico"></span></div>
+  <div class="out-pile" id="outPile" onclick="viewDeck()" title="牌堆" aria-label="牌堆"><span class="out-ico"></span><span class="out-n" id="outPileN">0</span></div>
 </div>
 
 <script src="js/00_base.js"></script>

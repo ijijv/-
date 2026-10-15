@@ -1582,6 +1582,7 @@ loadSettings();
 applyLowSpec();
 applyPerfReadout();   // v1.0.5：恢复上次的性能读数开关（默认关，桌面零变化）
 numPrewarm();   // v0.61.41：四档字形开局就预加载 —— 否则本局第一次飘字必然回落文字
+hudIconPrewarm();   // v1.1.20r3：锦囊 / 牌堆两枚 HUD 图标也开局预热（探图异步，免得进地图时先闪回落文字）
 applyCosmetics();
 pileInit();     // v0.69.0：把 back.png / side.png 的地址写进 CSS 变量（抽牌堆·弃牌堆）
 trackLaunch();

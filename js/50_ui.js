@@ -1097,7 +1097,6 @@ function alignRewardPile(){
    用户口径：战斗之外的每个场景（地图 / 商店 / 营地 / 事件房 / 锻造 …）都要常驻「牌堆」与
    「锦囊」两个图标；一有卡牌 / 遗物 / 灵汁收获，图标就从来源飞过去。
    #outHud 是静态 HTML（见 原型.html），z-index 高于 #overlay ⇒ 商店面板上照样看得见。 */
-let OUT_HUD_BUILT=false;
 function outHudSync(){
   try{
     const hud=document.getElementById('outHud'); if(!hud || !hud.style) return;
@@ -1109,16 +1108,26 @@ function outHudSync(){
     const show = (typeof G!=='undefined') && !!G && SCENE!=='menu' && SCENE!=='battle' && !heroOn;
     hud.style.display = show ? 'flex' : 'none';
     if(!show) return;
-    if(!OUT_HUD_BUILT){
-      OUT_HUD_BUILT=true;
-      const pp=document.getElementById('outPouch'), pl=document.getElementById('outPile');
-      const pi=(pp && pp.querySelector) ? pp.querySelector('.out-ico') : null;
-      if(pi) pi.innerHTML=iconTag('ui/menu/jinnang-nobg.png','🧧');
-      const ci=(pl && pl.querySelector) ? pl.querySelector('.out-ico') : null;
-      if(ci) ci.innerHTML=iconTag('ui/deck_back.png','🂠');
-    }
+    /* v1.1.20r3（用户报障「界面的锦囊 UI 和牌堆 UI 还是不用我给你的」）根因：
+       `iconTag()` 的探图是**异步**的 —— 首次调它时 `ICON_PROBE[rel]` 还没落定，必然返回回落串；
+       图 onload 之后只调 iconPokeRender() → render()，**不会**重建 out-HUD。
+       旧版把这两句锁在 `if(!OUT_HUD_BUILT)` 里（false→true 只走一次）⇒ 那次写进去的永远是回落串，
+       用户交付的 素材/ui/menu/jinnang-nobg.png、素材/ui/deck_back.png 一辈子升不上来。
+       改成与 syncJinnangIcons() 同一套口径：**每次同步都比对最新结果，变了才写**（无图时是恒等写入，无开销）。 */
+    const pp=document.getElementById('outPouch'), pl=document.getElementById('outPile');
+    const pi=(pp && pp.querySelector) ? pp.querySelector('.out-ico') : null;
+    if(pi){ const h=iconTag('ui/menu/jinnang-nobg.png','锦囊'); if(pi.innerHTML!==h) pi.innerHTML=h; }
+    const ci=(pl && pl.querySelector) ? pl.querySelector('.out-ico') : null;
+    if(ci){ const h=iconTag('ui/deck_back.png','牌堆'); if(ci.innerHTML!==h) ci.innerHTML=h; }
     const pn=document.getElementById('outPileN'); if(pn) pn.textContent=(G.deck||[]).length;
   }catch(e){}
+}
+/* v1.1.20r3（用户口径「emoji 全删了不就行啦吗」）：这两枚 HUD 图标的回落串由 emoji 🧧/🂠 改成
+   文字「锦囊」「牌堆」—— 与顶栏 syncJinnangIcons 的文字回落同口径，图缺时是「看得懂的文字」
+   而不是一个格子占位/福字方块；同时开局就**预热探测**（iconTag 的探图是异步的，等玩家进地图
+   才第一次调 outHudSync 的话，会先显示回落串再换成图）。与 numPrewarm（）同款做法。 */
+function hudIconPrewarm(){
+  try{ iconAvail('ui/menu/jinnang-nobg.png'); iconAvail('ui/deck_back.png'); }catch(e){}
 }
 /* 战局外场景的「牌堆」落点（对照 pouchButtonEl）。 */
 function pileButtonEl(){
@@ -1572,7 +1581,9 @@ function buyCard(i){
 
   /* v1.1.8（用户口径）：战局外买卡也要有「飞向牌堆」的收获动画（商店在战局外 ⇒ 落点 #outPile）。 */
   let el=null; try{ el=document.querySelector('.reward-cards .card[data-ri="'+i+'"]'); }catch(e){}
-  flyToPile(el, iconTag('ui/card/back.png','🂠'));
+  /* v1.1.20r3（用户口径「emoji 全删」）：回落串由牌背 emoji 🂠 改文字「牌堆」—— 与战局外 HUD 两枚
+     图标同口径（图缺时显示的是看得懂的文字，不是一个随设备渲染成方块/彩色格的 emoji）。 */
+  flyToPile(el, iconTag('ui/card/back.png','牌堆'));
 
   saveRun(); renderShop();
 }
