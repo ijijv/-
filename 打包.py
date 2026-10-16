@@ -138,6 +138,57 @@ def human(n):
     return '%.2f MB' % (n / 1048576.0) if n >= 1048576 else '%.0f KB' % (n / 1024.0)
 
 
+# ================= WebP 转码缓存（v1.1.25r：三档 / 跨次复用，不再各转一遍） =================
+# 背景（用户口径「一次弄好了，下次不会在前面基础上弄吗」）：单文件档与拆包档对同一张图用的是
+#   **同一套转码参数**（quality / maxdim / fx 按排几何），编码出的 WebP 字节逐字节相同。
+#   原先 ①单文件、②拆包 各自把 950 个素材整转一遍（method=6 是最慢编码档），时间白白翻倍。
+# 做法：把编码结果缓存起来，②直接取字节；缓存落 _build/webp_cache/（不进任何产物），
+#   键含源文件 mtime_ns+size ⇒ 素材一改自动失效；内存层 + 磁盘层，跨进程（链里三段是三个
+#   python 进程）也能复用，下次重打时上一轮的字节还在。
+CACHE_DIR = os.path.join(ROOT, '_build', 'webp_cache')
+_WEBP_MEM = {}
+
+
+def _webp_cache_key(path, quality, maxdim, rows, row):
+    """缓存键：源文件绝对路径 + 大小 + mtime(ns) + 编码参数（quality/maxdim/按排行号）。"""
+    ap = os.path.abspath(path)
+    try:
+        st = os.stat(path)
+        sig = '%s|%d|%d|q%s|d%s|r%s|i%s' % (ap, st.st_size, st.st_mtime_ns, quality, maxdim, rows, row)
+    except OSError:
+        sig = '%s|q%s|d%s|r%s|i%s' % (ap, quality, maxdim, rows, row)
+    return hashlib.sha1(sig.encode('utf-8')).hexdigest()
+
+
+def cached_webp(path, quality, maxdim, rows=None, row=None, encode=None):
+    """返回这张图（或它的第 row 排）的 WebP 字节；命中缓存就直接给字节，不重编码。
+
+    encode 是可调用对象：**只在未命中时**调用，由它产生字节（见 img_datauri / fx_row_datauris）。
+    命中优先级：内存层 → 磁盘层 → 真编码（编码后落盘 + 入内存）。"""
+    key = _webp_cache_key(path, quality, maxdim, rows, row)
+    b = _WEBP_MEM.get(key)
+    if b is not None:
+        return b
+    fp = os.path.join(CACHE_DIR, key + '.webp')
+    if os.path.isfile(fp):
+        try:
+            b = open(fp, 'rb').read()
+            _WEBP_MEM[key] = b
+            return b
+        except OSError:
+            pass
+    b = encode()
+    try:
+        if not os.path.isdir(CACHE_DIR):
+            os.makedirs(CACHE_DIR)
+        with open(fp, 'wb') as f:
+            f.write(b)
+    except OSError:
+        pass
+    _WEBP_MEM[key] = b
+    return b
+
+
 def collect():
     """列出 素材/ 下所有要打包的文件 → [(相对路径, 绝对路径)]，跳过 enemy_backup。"""
     out = []
@@ -150,18 +201,30 @@ def collect():
     return out
 
 
-def img_datauri(path, quality, maxdim):
-    """图片 → WebP data URI。返回 (uri, webp字节数, 原始字节数)。"""
+def _prep_image(path, maxdim):
+    """打开图片并按统一口径归一：调色板/灰度 → RGBA/RGB；超过 maxdim 就 LANCZOS 等比缩。"""
     im = Image.open(path)
     if im.mode in ('P', 'LA', 'L'):
         im = im.convert('RGBA' if 'transparency' in im.info or im.mode == 'LA' else 'RGB')
     if maxdim and max(im.size) > maxdim:
         r = maxdim / float(max(im.size))
         im = im.resize((max(1, int(im.width * r)), max(1, int(im.height * r))), Image.LANCZOS)
+    return im
+
+
+def _im_to_webp(im, quality):
+    """PIL.Image → WebP 字节（quality + method=6）——全项目**只此一处**编码参数。"""
     buf = io.BytesIO()
     im.save(buf, 'WEBP', quality=quality, method=6)
-    raw = buf.getvalue()
-    return 'data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'), len(raw), os.path.getsize(path)
+    return buf.getvalue()
+
+
+def img_datauri(path, quality, maxdim):
+    """图片 → WebP data URI。返回 (uri, webp字节数, 原始字节数)。走缓存，未命中才真编码。"""
+    raw = cached_webp(path, quality, maxdim, None, None,
+                      encode=lambda: _im_to_webp(_prep_image(path, maxdim), quality))
+    return ('data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'),
+            len(raw), os.path.getsize(path))
 
 
 def fx_row_crops(path, cols=8, rows=None):
@@ -204,9 +267,8 @@ def fx_row_datauris(path, quality, cols=8, rows=None):
         return None
     out = []
     for _k, cim in crops:
-        buf = io.BytesIO()
-        cim.save(buf, 'WEBP', quality=quality, method=6)
-        raw = buf.getvalue()
+        raw = cached_webp(path, quality, None, rows, _k,
+                          encode=lambda cim=cim: _im_to_webp(cim, quality))
         out.append(('data:image/webp;base64,' + base64.b64encode(raw).decode('ascii'), len(raw)))
     return out
 
@@ -410,21 +472,21 @@ def build_split(args):
                     _rdst = os.path.join(WEB_OUTD, '素材', 'fx', '%s_r%d.webp' % (_key, _k))
                     if not os.path.isdir(os.path.dirname(_rdst)):
                         os.makedirs(os.path.dirname(_rdst))
-                    _cim.save(_rdst, 'WEBP', quality=args.quality, method=6)
-                    st['n_img'] += 1; st['out'] += os.path.getsize(_rdst)
+                    _raw = cached_webp(path, args.quality, None, FX_SPLIT_ROWS.get(_key), _k,
+                                       encode=lambda cim=_cim: _im_to_webp(cim, args.quality))
+                    with open(_rdst, 'wb') as _f:
+                        _f.write(_raw)
+                    st['n_img'] += 1; st['out'] += len(_raw)
                 st['in'] += os.path.getsize(path)
                 continue
         dst = os.path.join(WEB_OUTD, '素材', web_asset_name(rel).replace('/', os.sep))
         if not os.path.isdir(os.path.dirname(dst)):
             os.makedirs(os.path.dirname(dst))
         if ext in WEB_IMG_EXT:
-            im = Image.open(path)
-            if im.mode in ('P', 'LA', 'L'):
-                im = im.convert('RGBA' if 'transparency' in im.info or im.mode == 'LA' else 'RGB')
-            if args.max_dim and max(im.size) > args.max_dim:
-                r = args.max_dim / float(max(im.size))
-                im = im.resize((max(1, int(im.width * r)), max(1, int(im.height * r))), Image.LANCZOS)
-            im.save(dst, 'WEBP', quality=args.quality, method=6)
+            _raw = cached_webp(path, args.quality, args.max_dim or None, None, None,
+                               encode=lambda: _im_to_webp(_prep_image(path, args.max_dim or None), args.quality))
+            with open(dst, 'wb') as _f:
+                _f.write(_raw)
             st['n_img'] += 1
         else:
             shutil.copyfile(path, dst)
@@ -620,17 +682,19 @@ def main():
                     help='TapTap 小游戏模式：先出单文件，再打成 dist/志怪塔_TapTap包体.zip')
     ap.add_argument('--taptap-split', action='store_true',
                     help='TapTap 多文件模式：把 dist/web/ 整体压成 dist/志怪塔_TapTap包体_多文件.zip（zip 内 game/* 相对路径）')
+    ap.add_argument('--all', action='store_true',
+                    help='一次跑完全部三档（单文件 → 拆包 dist/web → TapTap 多文件 zip），三段共用同一份 WebP 转码缓存')
     ap.add_argument('--quality', type=int, default=78, help='WebP 质量 1-100（默认 78）')
     ap.add_argument('--max-dim', type=int, default=0, help='图片最长边上限像素，0=不缩放（默认 0）')
     ap.add_argument('--no-webp', action='store_true', help='保留原格式，只做 base64 内联')
     ap.add_argument('--no-obfuscate', action='store_true', help='跳过 JS 混淆')
     args = ap.parse_args()
 
-    if args.taptap_split:
+    if args.taptap_split and not args.all:
         build_taptap_split(args)
         return
 
-    if args.split:
+    if args.split and not args.all:
         build_split(args)
         return
 
@@ -773,6 +837,15 @@ def main():
 
     if args.taptap:
         build_taptap(OUT)
+
+    if args.all:
+        # v1.1.25r（用户口径「一次弄好了，下次不会在前面基础上弄吗」）：三段同进程跑完，
+        # ②拆包 直接复用上面刚编好的 WebP 缓存（内存层命中），不再把 950 个素材重转一遍。
+        print('')
+        print('=== --all 第二段：拆包 dist/web（复用上面的 WebP 缓存） ===')
+        build_split(args)
+        print('=== --all 第三段：TapTap 多文件 zip ===')
+        build_taptap_split(args)
 
 
 if __name__ == '__main__':

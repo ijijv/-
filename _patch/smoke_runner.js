@@ -7610,6 +7610,26 @@
     __ok('v1.1.25r 教程跳过也照发试玩符纸：tutSkip / tutFinish 都走 grantTutTrialOnce（幂等，只发一次）',
       __code(tutSkip).indexOf('grantTutTrialOnce') >= 0 &&
       __code(tutFinish).indexOf('grantTutTrialOnce') >= 0);
+    /* v1.1.25r（用户口径）：兑换码功能 —— 设置页入口 + 内置码表（hijjust666 → 1 张【入门符纸】），
+       每个码只能兑一次（SAVE.redeemedCodes 守卫），奖励走既有 mileTickets。 */
+    __ok('v1.1.25r 兑换码：设置页有入口、码表含 hijjust666、奖励走 mileTickets（入门符纸）',
+      typeof showRedeemPanel === 'function' && typeof submitRedeem === 'function' && typeof redeemCode === 'function' &&
+      !!REDEEM_CODES['hijjust666'] && REDEEM_CODES['hijjust666'].kind === 'mileTicket' &&
+      REDEEM_CODES['hijjust666'].label === '入门符纸' &&
+      __code(redeemCode).indexOf('mileTickets()') >= 0 &&
+      __code(submitRedeem).indexOf('ui/rumenfuzhi.png') >= 0);
+    __ok('v1.1.25r 兑换码只能兑一次：hijjust666 首次 +1 张、再兑（含大写同码）返回 used 不叠加',
+      (function () {
+        var bak = SAVE;
+        SAVE = { progress: { pts: 0, heroes: {} }, mileTickets: 0, redeemedCodes: [] };
+        var a = redeemCode('hijjust666');            // 首次
+        var afterFirst = mileTickets();
+        var b = redeemCode('no-such-code');          // 无效码
+        var c = redeemCode('HIJJUST666');            // 大写 → 归一后与首次同码 ⇒ used
+        var r = a === 'ok' && afterFirst === 1 && b === 'invalid' && c === 'used' &&
+                mileTickets() === 1 && SAVE.redeemedCodes.length === 1;
+        SAVE = bak; return r;
+      })());
     __ok('v1.1.21 试玩弹窗：heroSelectStart 走「试玩符纸」分支（毛笔 brush + 试玩一次 / 永久解锁两个出口）',
       __code(heroSelectStart).indexOf('trialTickets()>=1') >= 0 &&
       __code(heroSelectStart).indexOf('是否要用【试玩符纸】获得') >= 0 &&

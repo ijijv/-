@@ -1189,6 +1189,7 @@ function showSettings(){
     <button class="btn ghost" onclick="showClearTimes()">榜 单</button>
     <button class="btn ghost" onclick="tutReplayAsk()">重玩新手教程</button>
     <button class="btn ghost" onclick="showCloudPanel()">云存档</button>
+    <button class="btn ghost" onclick="showRedeemPanel()">兑换码</button>
     <p style="margin-top:16px">成就上报（TapTap 平台）：<b style="color:${tapAchieveEnv().ok?'var(--green)':'var(--red)'}">${tapAchieveEnv().ok?'已接入':'未接入'}</b><br><small style="color:var(--dim);font-size:12px">v1.1.23：游戏内成就 / 卡背 / 头像框已删除；6 条成就（登塔！！！/ 初入第三幕 / 身经百战 / 全能降魔者 / 解锁并拥有所有角色 / 风云榜相聚）只上报到 TapTap 平台（玩家在 TapTap 游戏页看到点亮）。<br>${tapAchieveDiag()}</small></p>
     <button class="btn ghost" onclick="menuBack()">返回菜单</button>`, undefined, 'scroll-scene');
 }

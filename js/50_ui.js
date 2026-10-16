@@ -1924,8 +1924,10 @@ function loadSave(){
     SAVE.mileTickets = Math.max(0, SAVE.mileTickets|0);
     /* v1.1.21（用户 2026-10-16）：【试玩符纸】—— trialTickets = 手上张数（一张换「某角色试玩一次」）。 */
     SAVE.trialTickets = Math.max(0, SAVE.trialTickets|0);
+    /* v1.1.25r：兑换码 —— 已兑换过的码（小写、去空格）列表，每个码只能兑一次。 */
+    if(!Array.isArray(SAVE.redeemedCodes)) SAVE.redeemedCodes=[];
   }
-  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], unlockedHeroes:[], mileTickets:0, trialTickets:0, trialGiftV1:false, mileResetV2:true}; }
+  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], unlockedHeroes:[], mileTickets:0, trialTickets:0, trialGiftV1:false, redeemedCodes:[], mileResetV2:true}; }
   /* v1.1.25r（用户口径「撤回开发者权限 / 里程数恢复正常值」）：v1.1.16 的「里程碑调试拉满」开关
      （DEBUG_MAX_MILE / debugMaxMile）已整块删除（原位置改成下面的 mileCleanupDebugSentinel）。
      但旧开关**每次加载都把 pts 写死哨兵值并落盘** ⇒ 真机上跑过它的存档里 pts 至今仍卡在那个哨兵值，
@@ -1982,6 +1984,64 @@ function mileTickets(){ return Math.max(0, (SAVE && SAVE.mileTickets)|0); }
    **不写 SAVE.unlockedHeroes**，故局末即失效、角色在选角页照旧显示上锁。 */
 const TRIAL_GIFT_N = 3;
 function trialTickets(){ return Math.max(0, (SAVE && SAVE.trialTickets)|0); }
+/* ===================== v1.1.25r 兑换码 =====================
+   用户口径：「兑换码的功能加入游戏，并且加入兑换码 hijjust666，可以获得一张『入门符纸』」。
+   · 码表内置（key 一律小写；输入时自动 trim + toLowerCase，大小写 / 空格都容错）。
+   · 每个码只能兑一次：已兑过的码记进 SAVE.redeemedCodes（与 mileTickets / trialGiftV1 同侧落盘）。
+   · 奖励走既有口径：kind='mileTicket' ⇒ SAVE.mileTickets + n（=1 张【入门符纸】，选角页解锁一名角色）。 */
+const REDEEM_CODES = {
+  'hijjust666': { label:'入门符纸', kind:'mileTicket', n:1,
+                  desc:'选角页解锁一名未解锁角色' },
+};
+function redeemedCodes(){
+  if(!SAVE) return [];
+  if(!Array.isArray(SAVE.redeemedCodes)) SAVE.redeemedCodes=[];
+  return SAVE.redeemedCodes;
+}
+function codeRedeemed(code){ return redeemedCodes().indexOf(code)>=0; }
+/* 兑换一个码。返回 'ok' | 'empty' | 'invalid' | 'used'。成功即发奖 + 落盘。 */
+function redeemCode(raw){
+  const code=String(raw==null?'':raw).trim().toLowerCase();
+  if(!code) return 'empty';
+  const def=REDEEM_CODES[code];
+  if(!def) return 'invalid';
+  if(codeRedeemed(code)) return 'used';
+  if(def.kind==='mileTicket') SAVE.mileTickets = mileTickets() + (def.n|0);
+  redeemedCodes().push(code);
+  persistSave();
+  log(`兑换码 ${code} 生效：+${def.n|0} 张【${def.label}】`);
+  return 'ok';
+}
+/* 兑换面板：设置页「兑换码」入口。成功后弹一张奖励卡（收下 → 回设置）。 */
+function showRedeemPanel(){
+  showOverlay(`<h2>兑 换 码</h2>
+    <p>输入兑换码，领取奖励：<br><small style="color:var(--dim);font-size:12px">每个码只能兑换一次</small></p>
+    <input id="redeemInput" type="text" placeholder="在此输入兑换码" autocapitalize="off" autocomplete="off"
+           style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--gold);background:rgba(0,0,0,.35);color:var(--fg);font-size:16px;text-align:center;letter-spacing:2px"
+           onkeydown="if(event.key==='Enter')submitRedeem()">
+    <button class="btn" onclick="submitRedeem()">兑 换</button>
+    <button class="btn ghost" onclick="showSettings()">返回设置</button>`, undefined, 'scroll-scene');
+  const el=document.getElementById('redeemInput');
+  if(el){ try{ el.focus(); }catch(e){} }
+}
+function submitRedeem(){
+  const el=document.getElementById('redeemInput');
+  const code=String((el&&el.value)||'').trim().toLowerCase();
+  const def=REDEEM_CODES[code];
+  const r=redeemCode(el?el.value:'');
+  if(r==='ok'){
+    sfx('ui_reward');
+    floatMsg(`兑换成功 · +${def.n|0} 张【${def.label}】`);
+    showOverlay(`<h2>兑 换 成 功</h2>
+      <p>获得 <b style="color:var(--gold)">${def.n|0}</b> 张【${def.label}】：<br><small style="color:var(--dim);font-size:12px">${def.desc}；共 ${mileTickets()} 张</small></p>
+      <div class="reward-cards"><div class="relic r-gold">${artImg('ui/rumenfuzhi.png','','')}<div class="cname">${def.label}</div><div class="cdesc">${def.desc}</div><div class="ctype">符纸</div></div></div>
+      <button class="btn" onclick="showSettings()">收 下</button>`);
+    return;
+  }
+  if(r==='empty'){ floatMsg('请输入兑换码'); return; }
+  if(r==='used'){ floatMsg('该兑换码已兑换过'); return; }
+  floatMsg('兑换码无效');
+}
 /* 本局是否正在试玩该角色（G.trialHero 只在试玩局里落定，回选角 / 开新局即清）。 */
 function trialHeroOn(id){ return !!(G && G.trialHero && id && G.trialHero===id); }
 /* 是否为「已用符纸解锁」的角色（tianshi 由 mileOn 单独恒开）。 */
