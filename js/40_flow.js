@@ -302,6 +302,9 @@ function tutFinish(){
   if(typeof stopVoice==='function') stopVoice();
   if(G&&G.tutorial) G.tutorial.on=false;
   markTutorialSeen();
+  /* v1.1.25r：教程结束**兜底**发放那 3 张【试玩符纸】（幂等 —— 打完僵王若已在奖励界面点过
+     「收下」，这里 grantTutTrialOnce 直接返回 0；玩家中途没点也保证到手）。 */
+  if(typeof grantTutTrialOnce==='function'){ try{ grantTutTrialOnce(); }catch(e){} }
   try{ grantRunMilestones(); }catch(e){}   // 里程照算（用户口径：教程局仅不入榜）
   hideOverlay();
   confirmNewGame();   // 开新局 → 选角界面（用户拍板）
@@ -313,6 +316,12 @@ function tutSkip(){
   if(typeof narrateClear==='function') narrateClear();
   if(typeof tutSkipShow==='function') tutSkipShow(false);
   markTutorialSeen();
+  /* v1.1.25r（用户口径「跳过当然也能照样得到哇」）：**跳过教程也照发**那 3 张【试玩符纸】——
+     与「打完僵王领奖励」走同一个 grantTutTrialOnce()（trialGiftV1 守卫，只领一次，重玩不再给）。 */
+  if(typeof grantTutTrialOnce==='function'){
+    const got=grantTutTrialOnce();
+    if(got>0 && typeof floatMsg==='function') floatMsg(`获得 ${got} 张【试玩符纸】`);
+  }
   hideOverlay();
   confirmNewGame();
 }

@@ -7607,6 +7607,9 @@
       __code(afterReward).indexOf('G.tutorial.on') >= 0 &&
       __code(afterReward).indexOf('showTutTrialReward()') >= 0 &&
       __code(afterReward).indexOf('showForgePicker') >= 0);
+    __ok('v1.1.25r 教程跳过也照发试玩符纸：tutSkip / tutFinish 都走 grantTutTrialOnce（幂等，只发一次）',
+      __code(tutSkip).indexOf('grantTutTrialOnce') >= 0 &&
+      __code(tutFinish).indexOf('grantTutTrialOnce') >= 0);
     __ok('v1.1.21 试玩弹窗：heroSelectStart 走「试玩符纸」分支（毛笔 brush + 试玩一次 / 永久解锁两个出口）',
       __code(heroSelectStart).indexOf('trialTickets()>=1') >= 0 &&
       __code(heroSelectStart).indexOf('是否要用【试玩符纸】获得') >= 0 &&
