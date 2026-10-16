@@ -7584,9 +7584,29 @@
     __ok('v1.1.21 试玩符纸：回选角（showHeroSelect）即清 G.trialHero ⇒ 角色重新上锁、票不返还',
       __code(showHeroSelect).indexOf('G.trialHero=null') >= 0 &&
       (function () { G.trialHero = null; return mileOn('hero', 'ganshiren') === false && trialTickets() === 1; })());
-    __ok('v1.1.21 首启赠 3 张：TRIAL_GIFT_N=3、loadSave 一次性送（trialGiftV1 落盘后不再发）',
+    /* v1.1.25r（用户口径）：3 张试玩符纸不再「首启自动送」，改成教程打完僵王的奖励界面里领取，
+       且只能领一次（trialGiftV1 守卫 ⇒ 设置里重玩教程也不会再发）。 */
+    __ok('v1.1.25r 教程奖励：TRIAL_GIFT_N=3、发放改到 grantTutTrialOnce、loadSave 已撤走首启赠送',
       TRIAL_GIFT_N === 3 && typeof trialTickets === 'function' && typeof trialHeroOn === 'function' &&
-      __code(loadSave).indexOf('TRIAL_GIFT_N') >= 0 && __code(loadSave).indexOf('trialGiftV1') >= 0);
+      typeof showTutTrialReward === 'function' && typeof claimTutTrial === 'function' &&
+      typeof grantTutTrialOnce === 'function' &&
+      __code(loadSave).indexOf('TRIAL_GIFT_N') < 0 && __code(loadSave).indexOf('trialGiftV1') >= 0 &&
+      __code(grantTutTrialOnce).indexOf('TRIAL_GIFT_N') >= 0 && __code(grantTutTrialOnce).indexOf('trialGiftV1') >= 0);
+    __ok('v1.1.25r 教程奖励只能领一次：首次实发 3 张、再领不叠加（trialGiftV1 守卫）',
+      (function () {
+        var bak = SAVE;
+        SAVE = { progress: { pts: 0, heroes: {} }, trialTickets: 0, trialGiftV1: false };
+        var a = grantTutTrialOnce();          // 首次（教程打完僵王）
+        var afterFirst = trialTickets();
+        var b = grantTutTrialOnce();          // 设置里重玩教程再走到这一步
+        var r = a === 3 && afterFirst === 3 && b === 0 && trialTickets() === 3 && SAVE.trialGiftV1 === true;
+        SAVE = bak; return r;
+      })());
+    __ok('v1.1.25r 教程结尾不再锻造：afterReward 里教程 boss 分叉到 showTutTrialReward、'
+      + '已领过则直接 goNext（不出锻造界面）',
+      __code(afterReward).indexOf('G.tutorial.on') >= 0 &&
+      __code(afterReward).indexOf('showTutTrialReward()') >= 0 &&
+      __code(afterReward).indexOf('showForgePicker') >= 0);
     __ok('v1.1.21 试玩弹窗：heroSelectStart 走「试玩符纸」分支（毛笔 brush + 试玩一次 / 永久解锁两个出口）',
       __code(heroSelectStart).indexOf('trialTickets()>=1') >= 0 &&
       __code(heroSelectStart).indexOf('是否要用【试玩符纸】获得') >= 0 &&
@@ -8139,20 +8159,28 @@
       FX_SHEETS.guling_suck.op === 0.6 && !('op' in FX_SHEETS.thorns_light) &&
       (typeof playFx === 'function') && String(playFx).indexOf('S.op') >= 0);
 
-    /* ⑧ 里程碑调试开关：存在且默认开，且**在无头沙箱里自动跳过**（不污染里程断言）。 */
-    __ok('v1.1.16 里程碑调试开关：debugMaxMile 存在、DEBUG_MAX_MILE 默认开、拉满值很高',
-      typeof debugMaxMile === 'function' && DEBUG_MAX_MILE === true && DEBUG_MAX_MILE_PTS >= 11000);
-    __ok('v1.1.16 里程碑调试开关：无头沙箱里 debugMaxMile 自跳过（pts 不被改写）',
+    /* ⑧ v1.1.25r（用户口径「撤回开发者权限 / 里程数恢复正常值」）：v1.1.16 的「里程碑调试拉满」
+       开关（DEBUG_MAX_MILE / DEBUG_MAX_MILE_PTS / debugMaxMile）已整块删除；
+       改为 loadSave 里的一次性**定向清理**（识别旧哨兵 pts 999999 ⇒ 只把点数归零）。 */
+    __ok('v1.1.25r 调试拉满开关已移除：debugMaxMile / DEBUG_MAX_MILE / DEBUG_MAX_MILE_PTS 全不存在',
+      typeof debugMaxMile === 'undefined' && typeof DEBUG_MAX_MILE === 'undefined' &&
+      typeof DEBUG_MAX_MILE_PTS === 'undefined' &&
+      typeof mileCleanupDebugSentinel === 'function' &&
+      __code(loadSave).indexOf('mileCleanupDebugSentinel') >= 0 &&
+      __code(loadSave).indexOf('mileResetV3') >= 0);
+    __ok('v1.1.25r 里程定向清理：旧哨兵 pts 归零、已解锁档位 / 已领奖励 / 符纸原样不动',
+      typeof MILE_DEBUG_SENTINEL === 'number' && MILE_DEBUG_SENTINEL >= 11000 &&
       (function () {
         var bak = SAVE;
-        SAVE = { progress: { pts: 0, heroes: {} } };
-        debugMaxMile();
-        var r = SAVE.progress.pts === 0 && !SAVE.progress.heroes.tianshi;
+        SAVE = { progress: { pts: 999999, heroes: { tianshi: { pts: 999999 }, yincha: { pts: 120 } } },
+                 mile: ['adv_card'], mileClaimed: ['adv_card'], mileTickets: 2, trialTickets: 1 };
+        mileCleanupDebugSentinel();
+        var r = SAVE.progress.pts === 0 && SAVE.progress.heroes.tianshi.pts === 0 &&
+                SAVE.progress.heroes.yincha.pts === 120 &&
+                SAVE.mile.length === 1 && SAVE.mileClaimed.length === 1 &&
+                SAVE.mileTickets === 2 && SAVE.trialTickets === 1;
         SAVE = bak; return r;
       })());
-    /* 调试开关只拉 pts，绝不写 mileClaimed（不自动领取 ⇒ 玩家手点才能验奖励发放链路）。 */
-    __ok('v1.1.16 里程碑调试开关：只改 pts，不写 SAVE.mileClaimed',
-      __code(debugMaxMile).indexOf('mileClaimed') < 0 && __code(debugMaxMile).indexOf('persistSave') >= 0);
 
     /* ===== v1.1.17 性能 ===== */
     /* ③ 并发上限按「流畅模式」降档（普通 14 / 低配 8），常量本身不动。 */

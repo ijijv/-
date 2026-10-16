@@ -1590,7 +1590,6 @@ function sysSafeInit(){
 }
 sysSafeInit();
 loadSave();
-debugMaxMile();   // v1.1.16：里程碑调试拉满（临时调试开关，正式发版移除；无头沙箱里自跳过）
 loadSettings();
 applyLowSpec();
 applyPerfReadout();   // v1.0.5：恢复上次的性能读数开关（默认关，桌面零变化）

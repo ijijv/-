@@ -1441,7 +1441,17 @@ function afterReward(){
        · 精英：额外来一件遗物（三选一，选中那件飞进锦囊）。
        · 普通关：直接进地图。
      ⚠️ 最后一幕最后一关 boss 早在 winFight 就 advanceAct() 走了，压根不到这儿。 */
-  if(G.battleResult && G.battleResult.isBoss){ G.pendingRelic=false; sfx('ui_map'); showForgePicker('boss'); return; }
+  /* v1.1.25r（用户口径）：**教程**最后一关（山门·僵王）打完 ⇒ 不再进锻造（「都结束了锻造没有实际意义」），
+     改成「本来该在新玩家登录时发」的【试玩符纸】奖励界面（见 showTutTrialReward）。
+     已领过（trialGiftV1）⇒ 直接出师，不再重看奖励页 —— 防止到设置里「重玩新手教程」反复刷符纸。 */
+  if(G.battleResult && G.battleResult.isBoss){
+    G.pendingRelic=false; sfx('ui_map');
+    if(G.tutorial && G.tutorial.on){
+      if(SAVE && !SAVE.trialGiftV1){ showTutTrialReward(); return; }
+      goNext(); return;
+    }
+    showForgePicker('boss'); return;
+  }
   if(G.pendingRelic){ G.pendingRelic=false; showRelicReward(); return; }
   goNext();
 }
@@ -1735,6 +1745,36 @@ function tutBuyRelic(){
   if(typeof narrate==='function') narrate('tut_2e','tut_2f');
   renderShop();
 }
+/* ===================== v1.1.25r 教程 · 结尾奖励（试玩符纸） =====================
+   用户口径：「将新手教程的最后打完 boss 的锻造换成获得 3 张试玩符纸的奖励界面」；
+   「这个奖励就是之前新玩家登录送的，只是放到这里领取」「只能领取一次，避免玩家到设置中
+   重新体验教程卡 bug，不断刷这个试玩符纸」。⇒ 奖励图形沿用选角页的符纸风
+   （素材 ui/shiwanfuzhi.png），发放由 SAVE.trialGiftV1 守卫（与旧「首启赠送」同一旗标）。 */
+function showTutTrialReward(){
+  const n=TRIAL_GIFT_N;
+  const cards=Array.from({length:n}).map(()=>`<div class="relic r-gold">${artImg('ui/shiwanfuzhi.png','','')}<div class="cname">试玩符纸</div><div class="cdesc">选角页对一名未解锁角色试玩一局</div><div class="ctype">符纸</div></div>`).join('');
+  showOverlay(`<h2>试 玩 符 纸</h2>`
+    +`<p>破了僵王，为师赏你 <b style="color:var(--gold)">${n}</b> 张【试玩符纸】：<br>`
+    +`往后在选角页，可对一名未解锁的角色<b>试玩一局</b>（进度 / 图鉴 / 排行榜照常计入）。</p>`
+    +`<div class="reward-cards">${cards}</div>`
+    +`<button class="btn" onclick="claimTutTrial()">收下 · 正式入塔</button>`);
+}
+/* 只做「一次性发放」这件事（无 UI、无跳转）—— 供上面奖励界面与冒烟断言复用。
+   返回本次实发张数（已领过 ⇒ 0）。 */
+function grantTutTrialOnce(){
+  if(!SAVE || SAVE.trialGiftV1) return 0;
+  SAVE.trialTickets=trialTickets()+TRIAL_GIFT_N;
+  SAVE.trialGiftV1=true;
+  persistSave();
+  return TRIAL_GIFT_N;
+}
+/* 点「收下」：首次发 3 张（已领过则静默不发），然后推进到出师。 */
+function claimTutTrial(){
+  const got=grantTutTrialOnce();
+  if(got>0){ sfx('ui_reward'); floatMsg(`获得 ${got} 张【试玩符纸】 · 共 ${trialTickets()} 张`); log(`教程奖励：获得 ${got} 张试玩符纸`); }
+  hideOverlay();
+  goNext();   // 教程局 ⇒ tutAdvance ⇒ 出师
+}
 function buyCard(i){
   const c=G.shopWares[i]; const p=priceFor(c);
   if(G.gold<p){ floatMsg(`金币不足（需 ${p}）`); log(`金币不足（需 ${p}）`); return; }
@@ -1886,49 +1926,36 @@ function loadSave(){
     SAVE.trialTickets = Math.max(0, SAVE.trialTickets|0);
   }
   catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], unlockedHeroes:[], mileTickets:0, trialTickets:0, trialGiftV1:false, mileResetV2:true}; }
-  /* v1.1.21（用户口径「首启自动发 3 张试玩符纸」）：一次性赠送 —— 新档 / 老档 / 坏档一律在
-     首次 loadSave 时补 TRIAL_GIFT_N 张，trialGiftV1 落盘后永不再发（老玩家也只有这一次）。 */
-  if(SAVE && !SAVE.trialGiftV1){
-    SAVE.trialTickets = trialTickets() + TRIAL_GIFT_N;
-    SAVE.trialGiftV1 = true;
-    persistSave();
-  }
+  /* v1.1.25r（用户口径「撤回开发者权限 / 里程数恢复正常值」）：v1.1.16 的「里程碑调试拉满」开关
+     （DEBUG_MAX_MILE / debugMaxMile）已整块删除（原位置改成下面的 mileCleanupDebugSentinel）。
+     但旧开关**每次加载都把 pts 写死哨兵值并落盘** ⇒ 真机上跑过它的存档里 pts 至今仍卡在那个哨兵值，
+     不清理的话「恢复正常值」不会生效。这里做一次**定向**清理：只把点数归零，已解锁档位 / 已领奖励 /
+     符纸一律不动（避免把玩家已到手的东西重新锁回去）。mileResetV3 落盘后永不再触发；新档（pts 本就 0）不受影响。 */
+  if(!SAVE.mileResetV3){ mileCleanupDebugSentinel(); SAVE.mileResetV3=true; persistSave(); }
+  /* v1.1.25r：v1.1.21「首启自动发 3 张试玩符纸」的**一次性赠送已从这里撤走** ——
+     用户口径「这个奖励就是之前新玩家登录送的，只是放到（教程打完僵王的）奖励界面里领取」。
+     现改由教程末尾的 showTutTrialReward() / grantTutTrialOnce() 发放，**同一个 trialGiftV1 旗标**
+     继续做「只能领一次」的守卫（防止玩家到设置里重玩教程反复刷符纸）。 */
+  SAVE.trialGiftV1 = !!SAVE.trialGiftV1;
 }
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
   if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }   // v0.76.2 云存档：同上
 }
-/* ==== v1.1.16 里程碑调试开关（**临时功能 · 正式发版必须移除**）====
-   用户口径：「为了目前的开发调试，我要你先给游戏的里程默认拉满，我要试试所有奖励是否有 bug，
-   以及里程数的积累是否有 bug」，并明确「拉满是『只把 pts 拉到很高』」——不自动领取奖励。
-   ⇒ 这里只把全局 pts 与**每个角色各自的 pts** 顶到 DEBUG_MAX_MILE_PTS，
-      **绝不写 SAVE.mileClaimed** ⇒ 里程界面上每一档都亮成「可领取」状态，
-      玩家逐档手点「领取」，才真正验得到奖励发放链路（符纸 / 牌 / 遗物 / 被动）。
-   卸载方式：把 DEBUG_MAX_MILE 置 false（或连同 debugMaxMile 与 60_boot 里那一行调用一起删）。
-   ⚠️ 只在真机 / 浏览器生效：无头冒烟沙箱里 `window.innerWidth` 为 undefined（见 vm_host.js 的
-      桩，与 animLive 的判据同源）⇒ 恒跳过，免得污染「loadSave 老档 ⇒ pts 应为 0」那类断言。 */
-const DEBUG_MAX_MILE = true;
-const DEBUG_MAX_MILE_PTS = 999999;
-function debugMaxMile(){
-  try{
-    if(!DEBUG_MAX_MILE) return;
-    if(typeof window==='undefined' || !(window.innerWidth>0)) return;   // 无头沙箱 ⇒ 跳过
-    if(!SAVE || typeof SAVE!=='object') return;
-    if(!SAVE.progress || typeof SAVE.progress!=='object' || Array.isArray(SAVE.progress)) SAVE.progress={};
-    const p=SAVE.progress;
-    p.pts=DEBUG_MAX_MILE_PTS;
-    if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
-    /* 覆盖「有真角色表」与「有里程档位表」两种口径的并集 —— 用哪张表都能带出全部角色 id。 */
-    const ids=[];
-    if(typeof HEROES!=='undefined' && HEROES) HEROES.forEach(h=>{ if(h && h.id && ids.indexOf(h.id)<0) ids.push(h.id); });
-    if(typeof MILE_TIER_NEED!=='undefined' && MILE_TIER_NEED) Object.keys(MILE_TIER_NEED).forEach(id=>{ if(ids.indexOf(id)<0) ids.push(id); });
-    ids.forEach(id=>{
-      const cur=p.heroes[id];
-      if(!cur || typeof cur!=='object' || Array.isArray(cur)) p.heroes[id]={pts:0,runs:0,wins:0};
-      p.heroes[id].pts=DEBUG_MAX_MILE_PTS;
-    });
-    persistSave();
-  }catch(e){}
+/* ==== v1.1.25r：v1.1.16 的「里程碑调试拉满」开关（DEBUG_MAX_MILE / DEBUG_MAX_MILE_PTS /
+   debugMaxMile）**已整块删除** —— 用户口径「撤回开发者权限 / 里程数恢复正常值」。
+   旧开关把 pts 写死哨兵值 999999 并落盘，故保留下面这个**一次性定向清理**：识别旧哨兵值 ⇒ 只归零点数
+   （调用点在 loadSave 里，由 mileResetV3 守卫、只跑一次；老档 pts 卡在 999999 时才会命中）。 */
+const MILE_DEBUG_SENTINEL = 999999;
+function mileCleanupDebugSentinel(){
+  if(!SAVE || typeof SAVE!=='object') return;
+  const p=SAVE.progress;
+  if(!p || typeof p!=='object') return;
+  if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
+  /* 只归零**命中哨兵**的那几项（旧开关把全局 + 每角色都写到哨兵值，故实际等于全清）；
+     任何正常小值原样保留，避免误伤。 */
+  if((p.pts|0)>=MILE_DEBUG_SENTINEL) p.pts=0;
+  Object.keys(p.heroes).forEach(k=>{ const h=p.heroes[k]; if(h && (h.pts|0)>=MILE_DEBUG_SENTINEL) h.pts=0; });
 }
 /* ===================== 里程碑判定（渐进门禁制 · v1.0.15） =====================
    真相源表在 js/20_data.js 的 MILESTONES；点数公式在 20_data.js 的 milePointsFor()。
