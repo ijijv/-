@@ -662,7 +662,13 @@ function hsInfoInner(h){
     + `<div class="hs-mech">${hsTermHTML(h.mech||'')}</div>`
     + `<div class="hs-passive">${hsTermHTML(h.passive||h.desc||'')}</div>`;
 }
-function hsTicketInner(){ return artImg('ui/rumenfuzhi.png','','') + `<b>${mileTickets()}</b>`; }
+/* v1.1.21（用户口径「试玩符纸」沿用入门符纸的符纸风）：顶部存量条并排两名 ——
+   左【入门符纸】= 永久解锁用（mileTickets），右【试玩符纸】= 试玩一次用（trialTickets）。 */
+function hsTicketInner(){
+  return artImg('ui/rumenfuzhi.png','','') + `<b>${mileTickets()}</b>`
+    + `<span class="hs-ticket-sep"></span>`
+    + artImg('ui/shiwanfuzhi.png','','') + `<b>${trialTickets()}</b>`;
+}
 function hsBgImg(id, drop){
   return `<img class="hs-bg${drop?' hs-bgdrop':''}" src="${assetURL(HS_BG[id], true)}" draggable="false" alt="" onerror="this.style.display='none'">`;
 }
@@ -708,6 +714,9 @@ function hsRootHTML(){
 }
 function showHeroSelect(){
   if(typeof settleVidDrop==='function') settleVidDrop();
+  /* v1.1.21：【试玩符纸】的临时解锁只活一局 —— 回到选角界面即失效（G.trialHero 一清，
+     该角色又回到「上锁」显示）。放在这里而不是局末：从开局抉择「返回上一步」也走本函数。 */
+  if(G) G.trialHero=null;
   /* setBg 会按 PRE_RUN_BG 表**保留** body.at-menu ⇒ `#app` 仍不渲染（此刻 run 还没开始）：
      这条是 v0.68.2 修掉的空骨架 bug，别放它回来。 */
   setBg('hero_select.jpg');
@@ -742,14 +751,14 @@ function hsApplyHero(id, animate){
   const h=hsHero(id);
   const info=document.getElementById('hs-info'); if(info) info.innerHTML=hsInfoInner(h);
   const deck=document.getElementById('hs-deck'); if(deck) deck.innerHTML=hsDeckHTML(h);
-  const tkb=document.querySelector('#hs-ticket b'); if(tkb) tkb.textContent=mileTickets();
+  const tk=document.getElementById('hs-ticket'); if(tk) tk.innerHTML=hsTicketInner();   // v1.1.21：两名存量一起重渲
   root.classList.toggle('hs-locked', hsLocked(id));
 }
 /* 解锁 / 符纸数变化后的轻量刷新（不重播背景降落）。 */
 function hsRefreshTicket(){
   const root=document.getElementById('hs-root'); if(!root) return;
   root.classList.toggle('hs-locked', hsLocked(HS_SEL));
-  const tkb=document.querySelector('#hs-ticket b'); if(tkb) tkb.textContent=mileTickets();
+  const tk=document.getElementById('hs-ticket'); if(tk) tk.innerHTML=hsTicketInner();   // v1.1.21：两名存量一起重渲
   const deck=document.getElementById('hs-deck'); if(deck) deck.innerHTML=hsDeckHTML(hsHero(HS_SEL));
 }
 /* —— 右上牌组图标：长按 250ms 展开预览；短按=切换（仅阴差 t4 可切）。 —— */
@@ -798,7 +807,9 @@ function hsDeckPreviewClose(){
   const p=document.getElementById('hs-prev'); if(p && p.parentNode) p.parentNode.removeChild(p);
   sfx('key_press');
 }
-/* 右下「开始游戏」：已解锁直接进；未解锁弹「消耗 1 张入门符纸解锁」，无符纸则不可进。 */
+/* 右下「开始游戏」：已解锁直接进；未解锁 —— v1.1.21 起【试玩符纸】优先后手
+   （弹毛笔确认窗「是否要用试玩符纸获得试玩一次的权力」，窗内若还有入门符纸再给「永久解锁」出口），
+   没试玩符纸才回落到原来的「消耗 1 张入门符纸解锁」。 */
 function heroSelectStart(){
   const h=hsHero(HS_SEL); if(!h) return;
   sfx('key_press');
@@ -807,7 +818,27 @@ function heroSelectStart(){
     if(hasRunSave()){ askOverwriteSave(HS_SEL); return; }
     pickHero(HS_SEL); return;
   }
-  if(mileTickets()<1){ sfx('error'); floatMsg('没有【入门符纸】'); return; }
+  /* v1.1.21（用户 2026-10-16 口径「有试玩符纸时，选未解锁角色进游戏要弹『是否要用试玩符纸获得
+     试玩一次的权力』，毛笔字体风格、参考选角界面」）：有试玩符纸 ⇒ 先走试玩窗。 */
+  if(trialTickets()>=1){
+    const canPerm=(mileTickets()>=1);
+    askConfirm(`是否要用【试玩符纸】获得【${hsEscape(h.name)}】试玩一次的权力？`
+      + `<br>试玩一次 = 本局可用该角色，进度 / 图鉴 / 排行榜照常计入；`
+      + `试玩中若再用【入门符纸】即可续成永久解锁。`
+      + `<br>试玩符纸 ${trialTickets()} 张${canPerm?` · 入门符纸 ${mileTickets()} 张`:''}。`,
+      ()=>startTrialRun(HS_SEL),
+      { brush:true, yesLabel:'试玩一次', noLabel:'取消',
+        label: canPerm?'永久解锁':null,
+        cb: canPerm ? ()=>{
+          if(unlockHeroWithTicket(HS_SEL)){
+            log(`使用入门符纸解锁角色【${h.name}】`);
+            floatMsg(`已解锁【${h.name}】 · 剩 ${mileTickets()} 张`);
+            hsRefreshTicket();
+          } else { sfx('error'); floatMsg('解锁失败'); }
+        } : null });
+    return;
+  }
+  if(mileTickets()<1){ sfx('error'); floatMsg('没有【入门符纸】也没有【试玩符纸】'); return; }
   askConfirm(`消耗 1 张【入门符纸】解锁【${hsEscape(h.name)}】？<br>当前持有 ${mileTickets()} 张。`, ()=>{
     if(unlockHeroWithTicket(HS_SEL)){
       log(`使用入门符纸解锁角色【${h.name}】`);
@@ -815,6 +846,17 @@ function heroSelectStart(){
       hsRefreshTicket();
     } else { sfx('error'); floatMsg('解锁失败'); }
   });
+}
+/* v1.1.21：用 1 张【试玩符纸】直接开一局该角色（试玩只活一局，不写永久解锁位）。
+   扣 1 张 → 弹「试玩 · 剩 N 张」→ 有旧档仍走覆盖提示（与永久解锁路径同一口径）→ pickHero。 */
+function startTrialRun(id){
+  const h=hsHero(id); if(!h) return;
+  if(!unlockHeroWithTrialTicket(id)){ sfx('error'); floatMsg('【试玩符纸】不足'); return; }
+  log(`使用试玩符纸试玩角色【${h.name}】`);
+  floatMsg(`试玩【${h.name}】 · 剩 ${trialTickets()} 张`);
+  hsRefreshTicket();
+  if(hasRunSave()){ askOverwriteSave(id); return; }
+  pickHero(id);
 }
 function pickHero(id){
   G.hero=id;

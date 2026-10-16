@@ -7357,6 +7357,43 @@
     __ok('v1.1.8 入门符纸：解锁 tianshi / 非法 id 一律拒绝且不扣符纸',
       unlockHeroWithTicket('tianshi') === false && unlockHeroWithTicket('__nope') === false && mileTickets() === 1);
 
+    /* 2a-3) v1.1.21（用户 2026-10-16）：【试玩符纸】—— 一张只换「本局试玩一次」：
+       扣 1 张 + 写本局 G.trialHero（mileOn('hero') 据此放行），**不写 SAVE.unlockedHeroes**；
+       回选角（showHeroSelect 清 G.trialHero）后角色重新上锁、票不返还。 */
+    SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0, heroes: {} },
+             mile: [], mileClaimed: [], unlockedHeroes: [], mileTickets: 0, trialTickets: 0 };
+    G = __base('tianshi');
+    __ok('v1.1.21 试玩符纸：0 张时拒绝且不扣（角色仍锁）',
+      trialTickets() === 0 && unlockHeroWithTrialTicket('ganshiren') === false &&
+      !G.trialHero && mileOn('hero', 'ganshiren') === false);
+    SAVE.trialTickets = 2;
+    __ok('v1.1.21 试玩符纸：消耗 1 张 ⇒ G.trialHero 放行本局、不写 SAVE.unlockedHeroes（不占永久解锁位）',
+      unlockHeroWithTrialTicket('ganshiren') === true && trialTickets() === 1 &&
+      G.trialHero === 'ganshiren' && mileOn('hero', 'ganshiren') === true &&
+      heroUnlocked('ganshiren') === false &&
+      (SAVE.unlockedHeroes || []).indexOf('ganshiren') < 0);
+    SAVE.trialTickets = 1;   // 复位，供下面两条「不扣」的断言比对
+    __ok('v1.1.21 试玩符纸：tianshi / 非法 id 一律拒绝且不扣',
+      unlockHeroWithTrialTicket('tianshi') === false &&
+      unlockHeroWithTrialTicket('__nope') === false && trialTickets() === 1);
+    __ok('v1.1.21 试玩符纸：回选角（showHeroSelect）即清 G.trialHero ⇒ 角色重新上锁、票不返还',
+      __code(showHeroSelect).indexOf('G.trialHero=null') >= 0 &&
+      (function () { G.trialHero = null; return mileOn('hero', 'ganshiren') === false && trialTickets() === 1; })());
+    __ok('v1.1.21 首启赠 3 张：TRIAL_GIFT_N=3、loadSave 一次性送（trialGiftV1 落盘后不再发）',
+      TRIAL_GIFT_N === 3 && typeof trialTickets === 'function' && typeof trialHeroOn === 'function' &&
+      __code(loadSave).indexOf('TRIAL_GIFT_N') >= 0 && __code(loadSave).indexOf('trialGiftV1') >= 0);
+    __ok('v1.1.21 试玩弹窗：heroSelectStart 走「试玩符纸」分支（毛笔 brush + 试玩一次 / 永久解锁两个出口）',
+      __code(heroSelectStart).indexOf('trialTickets()>=1') >= 0 &&
+      __code(heroSelectStart).indexOf('是否要用【试玩符纸】获得') >= 0 &&
+      __code(heroSelectStart).indexOf('brush:true') >= 0 &&
+      __code(heroSelectStart).indexOf("yesLabel:'试玩一次'") >= 0 &&
+      __code(heroSelectStart).indexOf('startTrialRun') >= 0 &&
+      typeof resolveConfirmAlt === 'function' &&
+      __code(askConfirm).indexOf('ovc-brush') >= 0 &&
+      __code(askConfirm).indexOf('ovc-alt') >= 0 &&
+      __code(unlockHeroWithTrialTicket).indexOf('trialTickets() - 1') >= 0 &&
+      __code(hsTicketInner).indexOf('ui/shiwanfuzhi.png') >= 0);
+
     /* 2b) v1.1.1 里程碑专属内容硬门禁：未在里程界面领取该档前，即使门禁总开关为开也不放行。 */
     SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [], mileClaimed: [] };
     __ok('v1.1.1 里程碑专属牌/遗物：领取前被硬门禁挡在所有卡池外',

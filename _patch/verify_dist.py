@@ -224,6 +224,14 @@ def main():
     check(_ui_rank == ['ui/huangbang.png'],
           '风云榜入口的皇榜图从 60_boot.js 反推出 1 张（%s）' % ','.join(_ui_rank))
     want += _ui_rank
+    # v1.1.21（试玩符纸）：选角页顶部存量条的第二枚符纸图 素材/ui/shiwanfuzhi.png，
+    # 由 60_boot.js 的 hsTicketInner 以 artImg('ui/shiwanfuzhi.png','','') 取用。
+    # 与皇榜同一个处境：不在任何 ids 清单里 ⇒ 不显式加进 want 会被上面那句
+    # 「从未被游戏请求 / 可考虑删掉」**错报**成孤儿（照删存量条就少一枚图标）。
+    _ui_trial = sorted(set(re.findall(r"artImg\(\s*'(ui/[^']*shiwanfuzhi\.png)'", _boot)))
+    check(_ui_trial == ['ui/shiwanfuzhi.png'],
+          '试玩符纸图从 60_boot.js 反推出 1 张（%s）' % ','.join(_ui_trial))
+    want += _ui_trial
     # 石碑碎片的 5 片必须复用**同一张**石碑图（clip-path 切 5 块、同一个 src ⇒ 浏览器复用解码
     # 结果，零额外体积）。碎片要是指向别的/不存在的文件，演出时就是 5 块空白。
     _shard_src = sorted(set(re.findall(r"menuShardsHTML\(\s*'([^']+)'", _boot)))

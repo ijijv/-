@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v1.1.20</title>
+<title>志怪塔 · 原型 v1.1.21</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -851,6 +851,14 @@
   #ovConfirm .ovc-btn:active{transform:scale(.9);}
   #ovConfirm .ovc-yes{background:var(--green); border-color:#2c6b3a;}
   #ovConfirm .ovc-no{background:var(--red); border-color:#5a1d16;}
+  /* v1.1.21（用户口径「试玩符纸」）：试玩弹窗 —— 毛笔风 + 文字圆钮 + 第三个出口「永久解锁」。
+     仅在 askConfirm 传了 opt 时由 .ovc-brush / #ovc-alt 触发；旧流程（不传 opt）一条都不受影响。 */
+  #ovConfirm .ovc-box.ovc-brush .ovc-msg{font-family:'MaShanZheng', var(--font-brush), serif;
+    font-size:clamp(14px,2.6vh,19px); letter-spacing:1px; line-height:1.7;}
+  #ovConfirm .ovc-box.ovc-brush .ovc-btn{width:auto; min-width:58px; height:58px; border-radius:29px;
+    padding:0 20px; font-size:17px; font-family:'MaShanZheng', var(--font-brush), serif; white-space:nowrap;}
+  #ovConfirm .ovc-alt{background:var(--gold); border-color:#8a6a1e; color:#2a1c08;}
+  #ovConfirm .ovc-btn.hidden{display:none;}
   #overlayWrap{position:relative; max-width:620px; width:94%;}
   /* v0.71.0：选英雄屏**放不下**（无头实测 #overlay .panel 内部溢出：640×360 → 62px、
      844×390 → 33px、**1280×720 → 20px**）—— 用户报的「选英雄的时候它显示不完全所以导致
@@ -2816,6 +2824,8 @@
   .hs-ticket img{width:clamp(26px,4.2vh,44px); height:auto; display:block; object-fit:contain;}
   .hs-ticket b{font-family:'MaShanZheng', var(--font-brush), serif; font-size:clamp(16px,3vh,28px);
     color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.9);}
+  /* v1.1.21：入门符纸 / 试玩符纸两名之间的竖分隔（半透明金） */
+  .hs-ticket-sep{width:1px; height:clamp(16px,2.8vh,26px); background:rgba(255,231,184,.42); margin:0;}
   /* 右上：初始牌组图标区 */
   .hs-deck{position:absolute; right:2.6%; top:3.4%; z-index:6;
     display:flex; flex-direction:column; align-items:center; gap:6px;}
@@ -3940,6 +3950,7 @@
     <div class="ovc-msg"></div>
     <div class="ovc-btns">
       <button class="ovc-btn ovc-yes" onclick="resolveConfirm(true)" aria-label="确定">✓</button>
+      <button class="ovc-btn ovc-alt hidden" id="ovc-alt" onclick="resolveConfirmAlt()" aria-label="永久解锁">永久解锁</button>
       <button class="ovc-btn ovc-no" onclick="resolveConfirm(false)" aria-label="取消">✗</button>
     </div>
   </div>

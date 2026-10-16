@@ -1711,8 +1711,17 @@ function loadSave(){
        unlockedHeroes = 已用符纸解锁的角色 id 列表；mileTickets = 手上剩余的符纸张数。 */
     if(!Array.isArray(SAVE.unlockedHeroes)) SAVE.unlockedHeroes=[];
     SAVE.mileTickets = Math.max(0, SAVE.mileTickets|0);
+    /* v1.1.21（用户 2026-10-16）：【试玩符纸】—— trialTickets = 手上张数（一张换「某角色试玩一次」）。 */
+    SAVE.trialTickets = Math.max(0, SAVE.trialTickets|0);
   }
-  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], unlockedHeroes:[], mileTickets:0, mileResetV2:true}; }
+  catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], unlockedHeroes:[], mileTickets:0, trialTickets:0, trialGiftV1:false, mileResetV2:true}; }
+  /* v1.1.21（用户口径「首启自动发 3 张试玩符纸」）：一次性赠送 —— 新档 / 老档 / 坏档一律在
+     首次 loadSave 时补 TRIAL_GIFT_N 张，trialGiftV1 落盘后永不再发（老玩家也只有这一次）。 */
+  if(SAVE && !SAVE.trialGiftV1){
+    SAVE.trialTickets = trialTickets() + TRIAL_GIFT_N;
+    SAVE.trialGiftV1 = true;
+    persistSave();
+  }
 }
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
@@ -1770,6 +1779,13 @@ function mileDone(id){ return !!(SAVE && SAVE.mile && SAVE.mile.indexOf(id) >= 0
 function mileClaimed(id){ return !!(SAVE && SAVE.mileClaimed && SAVE.mileClaimed.indexOf(id) >= 0); }
 /* v1.1.8：【入门符纸】—— 领取第 6 档奖励后手上剩余的符纸张数（可花掉，故不是布尔）。 */
 function mileTickets(){ return Math.max(0, (SAVE && SAVE.mileTickets)|0); }
+/* v1.1.21（用户 2026-10-16）：【试玩符纸】—— 首启赠 TRIAL_GIFT_N 张（见 loadSave 的一次性赠送）。
+   一张 = 「某个未解锁角色试玩一次」：只把该角色**本局**临时放行（G.trialHero），
+   **不写 SAVE.unlockedHeroes**，故局末即失效、角色在选角页照旧显示上锁。 */
+const TRIAL_GIFT_N = 3;
+function trialTickets(){ return Math.max(0, (SAVE && SAVE.trialTickets)|0); }
+/* 本局是否正在试玩该角色（G.trialHero 只在试玩局里落定，回选角 / 开新局即清）。 */
+function trialHeroOn(id){ return !!(G && G.trialHero && id && G.trialHero===id); }
 /* 是否为「已用符纸解锁」的角色（tianshi 由 mileOn 单独恒开）。 */
 function heroUnlocked(id){ return !!(SAVE && SAVE.unlockedHeroes && SAVE.unlockedHeroes.indexOf(id)>=0); }
 /* 用 1 张【入门符纸】解锁一名角色。返回 true=成功。无符纸 / 已解锁 / 非角色 ⇒ false（不落盘）。 */
@@ -1780,6 +1796,19 @@ function unlockHeroWithTicket(id){
   SAVE.mileTickets = mileTickets() - 1;
   if(!Array.isArray(SAVE.unlockedHeroes)) SAVE.unlockedHeroes=[];
   SAVE.unlockedHeroes.push(id);
+  persistSave();
+  return true;
+}
+/* v1.1.21（用户口径「只能使用角色一次 = 每局一次」）：用 1 张【试玩符纸】给该角色开一局试玩 ——
+   扣 1 张、把角色记进**本局**的 G.trialHero（mileOn('hero') 据此放行），**不写 SAVE.unlockedHeroes**。
+   返回 true=成功。无试玩符纸 / 已永久解锁 / 非角色 ⇒ false（不扣不落盘）。 */
+function unlockHeroWithTrialTicket(id){
+  if(!id || id==='tianshi' || heroUnlocked(id)) return false;
+  if(typeof HEROES!=='undefined' && !HEROES.some(h=>h && h.id===id)) return false;
+  if(trialTickets() < 1) return false;
+  SAVE.trialTickets = trialTickets() - 1;
+  if(!G) return false;
+  G.trialHero = id;                 // 本局临时解锁；showHeroSelect() / 开新局（newState）即清
   persistSave();
   return true;
 }
@@ -1815,6 +1844,8 @@ function mileOn(kind,key){
   if(!MILE_GATE_ON) return true;                            // v1.0.16：总开关关掉 ⇒ 一律放行（测试期，见 20_data.js）
   if(kind==='hero'){
     if(key==='tianshi') return true;                        // 初始角色恒开
+    /* v1.1.21：试玩局里该角色本局临时放行（G.trialHero 不落盘，回选角即失效）。 */
+    if(trialHeroOn(key)) return true;
     /* v1.1.8（用户 2026-10-13）：角色**不再按里程自动放行**，改由【入门符纸】解锁
        （选角页消耗 1 张，落 SAVE.unlockedHeroes）。未登记的 id 仍一律放行，不静默蒸发内容。 */
     if(typeof HEROES!=='undefined' && !HEROES.some(h=>h && h.id===key)) return true;
@@ -2571,19 +2602,39 @@ function menuBack(){
       （buyCard / forgeCard / doRemove / doUnknownRemove / pickOpening）的语义一个字都不动 ——
       冒烟测试直接调它们（smoke_runner.js:153/157/1178/4029），改了当场变红。
    ⚠️ 落地条 #ovConfirm 挂 document.body（见 原型.html），与 #overlay 并列、z-index 更高。 */
-let CONFIRM_CB=null;
-function askConfirm(msg, cb){
+let CONFIRM_CB=null, CONFIRM_ALT=null;
+/* v1.1.21（用户口径「试玩符纸」）：askConfirm 增加**可选第三选项** —— 传 opt 时弹窗切毛笔风
+   （`.ovc-brush`）、确认 / 取消圆钮换成文字（yesLabel / noLabel），并显露 #ovc-alt 作为第二个出口
+   （opt.label + opt.cb，没给就隐藏）。**不传 opt 时行为与旧版完全一致**（✓/✗ 圆钮、方块字体）。 */
+function askConfirm(msg, cb, opt){
   CONFIRM_CB=(typeof cb==='function')?cb:null;
+  CONFIRM_ALT=(opt && typeof opt.cb==='function')?opt.cb:null;
   const el=document.getElementById('ovConfirm');
-  if(!el){ if(CONFIRM_CB){ const f=CONFIRM_CB; CONFIRM_CB=null; f(); } return; }   // 无头/异常兜底：直接生效
-  const m=el.querySelector ? el.querySelector('.ovc-msg') : null; if(m) m.innerHTML=msg;
+  if(!el){ const f=CONFIRM_CB; CONFIRM_CB=null; CONFIRM_ALT=null; if(f) f(); return; }   // 无头/异常兜底：直接生效
+  const q=(sel)=>el.querySelector ? el.querySelector(sel) : null;
+  const m=q('.ovc-msg'); if(m) m.innerHTML=msg;
+  const box=q('.ovc-box'); if(box && box.classList) box.classList.toggle('ovc-brush', !!(opt && opt.brush));
+  const yb=q('.ovc-yes'); if(yb) yb.textContent=(opt && opt.yesLabel) ? opt.yesLabel : '✓';
+  const nb=q('.ovc-no');  if(nb) nb.textContent=(opt && opt.noLabel)  ? opt.noLabel  : '✗';
+  const ab=document.getElementById('ovc-alt');
+  if(ab){
+    if(opt && opt.label){ ab.textContent=opt.label; ab.classList.remove('hidden'); }
+    else ab.classList.add('hidden');
+  }
   el.classList.remove('hidden');
   sfx('ui_flip');
 }
 function resolveConfirm(ok){
   const el=document.getElementById('ovConfirm'); if(el) el.classList.add('hidden');
-  const cb=CONFIRM_CB; CONFIRM_CB=null;
+  const cb=CONFIRM_CB; CONFIRM_CB=null; CONFIRM_ALT=null;
   if(ok && cb){ sfx('ui_unlock'); try{ cb(); }catch(e){} }
+  else sfx('ui_flip');
+}
+/* 第三个出口（仅 v1.1.21 试玩符纸弹窗里显露：窗内明示「永久解锁」，故不再二次确认）。 */
+function resolveConfirmAlt(){
+  const el=document.getElementById('ovConfirm'); if(el) el.classList.add('hidden');
+  const cb=CONFIRM_ALT; CONFIRM_ALT=null; CONFIRM_CB=null;
+  if(cb){ sfx('ui_unlock'); try{ cb(); }catch(e){} }
   else sfx('ui_flip');
 }
 /* —— 六处 onclick 包装：前置校验不通过就直接飘字，通过才问「是/否」 —— */
