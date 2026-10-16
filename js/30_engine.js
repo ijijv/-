@@ -38,8 +38,8 @@ function newState(){
     /* v1.1.8：结算面板的里程分项**快照** —— 发放当刻记下，复活后再败时结算画面仍显示「真正发出去的那一份」，
        不再用当时的 G 重算（否则会出现「结算 +700、却只到账 500」的错位，用户报障）。 */
     _mileParts:null,
-    /* v1.1.x（用户 2026-10-12 分数规则）—— 分档击杀计数（结算时各自乘系数）：
-       普通 ×10 / 精英 ×20 / Boss ×30 / 敌方召唤物 ×5。totalKills 仍是里程碑用的总数。 */
+    /* v1.1.x（用户 2026-10-12 分数规则 / 2026-10-16 修订）—— 分档击杀计数（结算时各自乘系数）：
+       普通 ×6 / 精英 ×8 / Boss ×10 / 敌方召唤物 ×7。totalKills 仍是里程碑用的总数。 */
     killNormal:0, killElite:0, killBoss:0, killSummon:0,
     /* v1.1.x：本局用时计时。accMs = 已冻结的累计毫秒（每次存档时结算一次）；
        t0 = 当前计时段起点（续档 / 新局 / 存档后各自落定）。用时 = accMs + (now - t0)。
@@ -266,7 +266,8 @@ function applyCurse(e, n){
     log(`朱砂砚：${e.name} 诅咒满 6 层，抽 1 张牌`);
   }
 
-  if(e.curse>=6) unlockAchievement('zuzhou');
+  /* v1.1.23（用户口径）：原「诅咒满盈(zuzhou)」整条不再上报 —— 后台 6 条成就里没有对应项，
+     故此处触发点删除（诅咒 >= 6 仍照上给朱砂砚抽牌，见上）。 */
   // 追踪本回合实际施加的诅咒层数（符箓天师，用于血祭/金刚符/金光罩等）
   const applied = e.curse - currentCurse;
   /* v1.0.18：**计「打出的诅咒总量」而不是「挂上去的层数」** —— 用户口径：
@@ -380,6 +381,10 @@ const CARD_DMG = {
    此前这张牌没有 CARD_DMG 行 ⇒ 拖拽时不显示任何预伤数字（用户口径「缺少预伤害」）。
    共用引用（而不是抄一份）：以后调雷符预览，这里自动跟着走。 */
 CARD_DMG.duanren_leifu = CARD_DMG.leifu;
+/* v1.1.23（用户口径「新增的里程碑奖励卡牌有的没有预伤害显示」）：罗汉伏虎[蓝·武僧里程碑 t1]
+   此前没有 CARD_DMG 行 ⇒ previewDamage 第一句就 return null，拖拽时**不显示任何预伤数字**。
+   裸伤 = 基础 5/7 + 当前格挡一半（向下取整、上限 10/15），与 20_data.js 的 eff 逐字对齐。 */
+CARD_DMG.luohanfuhu = (u,e)=>{ if(!(e||curEnemy())) return 0; return (u?7:5)+Math.min(Math.floor((G.block||0)/2), u?15:10); };
 const PER_TURN_SUMMONS = ['zhiren','xiaogui','yinbingguo','shi_wang'];
 /* v1.1.15：多段攻击牌的段数（预览用）—— 与 20_data.js 的 eff 同式。
    朱砂笔/开天眼对多段牌每段减半 ⇒ 预览把「每段减半后的值 × 段数」加进总伤，与实战逐段结算对齐。 */
@@ -605,8 +610,12 @@ function splitBoss(e){
 function onEnemyDeathCheck(e){
   if(e.phase && !e.phase2){ enterPhase2(e); }
   else {
-    G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; if(G.totalKills>=100) unlockAchievement('baizhan'); unlockBestiary(e.key);
-    /* v1.1.x（用户 2026-10-12 分数规则）：击杀按档位分开计数 —— 普通 ×10 / 精英 ×20 / Boss ×30 / 召唤物 ×5。
+    /* v1.1.23r（用户 2026-10-16 纠正口径）：成就「All-unlocked」= **志怪图鉴全面收录**，与击杀总数无关。
+       先 unlockBestiary(e.key) 把这只妖怪收进 SAVE.unlocked，再按「图鉴已收录条数 / BESTIARY_ORDER 全长 34」
+       上报（累计型，达标才发）。⚠️ 判据与 viewBestiary 的 `got` 严格同源。 */
+    G.turnStats.kills.push(e.name); G.totalKills=(G.totalKills||0)+1; unlockBestiary(e.key);
+    tapAchieveProgress('All-unlocked', BESTIARY_ORDER.filter(k=>SAVE.unlocked.includes(k)).length);
+    /* v1.1.x（用户 2026-10-12 分数规则 / 2026-10-16 修订）：击杀按档位分开计数 —— 普通 ×6 / 精英 ×8 / Boss ×10 / 召唤物 ×7。
        召唤物判据走**定义上的 summon 标记**（ENEMIES[key].summon 只被召唤意图用到，
        这两个 id 从不进地图敌人池 ⇒ 不会把正常小怪误记成召唤物）。 */
     const _def=ENEMIES[e.key]||{};

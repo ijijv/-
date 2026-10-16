@@ -637,7 +637,9 @@ function rankManager(){
    （TapTap 小游戏排行榜 API 见 developer.taptap.cn/minigameapidoc 的 LeaderboardManager：
      openLeaderboard / submitScores / loadLeaderboardScores / loadCurrentPlayerLeaderboardScore，
      全部走 `callback` 对象；基础库需 ≥ 1.8.0）。 */
-function rankCall(ctx, name, payload){
+function rankCall(ctx, name, payload, what, timeoutMs){
+  what = what || '排行榜';
+  const T = timeoutMs || 15000;
   return new Promise((ok, no) => {
     let done = false, timer = null;
     const good = v => { if(!done){ done = true; if(timer) clearTimeout(timer); ok(v); } };
@@ -645,7 +647,7 @@ function rankCall(ctx, name, payload){
     try{
       const fn = ctx[name];
       if(typeof fn !== 'function') return bad(new Error('管理器没有 ' + name + ' 方法'));
-      const onFail = (code, message) => bad(new Error((message || '排行榜调用失败') + (code != null ? ('（code ' + code + '）') : '')));
+      const onFail = (code, message) => bad(new Error((message || what + '调用失败') + (code != null ? ('（code ' + code + '）') : '')));
       fn.call(ctx, Object.assign({
         callback: { onSuccess: good, onFailure: onFail },
         /* v1.1.8：**两套回调形状一起下发**。「6 个榜一直没变」的可疑点之一就是回调形状对不上：
@@ -653,10 +655,12 @@ function rankCall(ctx, name, payload){
            `callback:{onSuccess, onFailure}`（早先 v1.0.19 正是从 `{success,fail}` 改过来的）。
            两套键同时给：SDK 认哪套用哪套，多出来的键会被忽略；任一先回调，good/bad 的 done 闸保证只结算一次。 */
         success: good,
-        fail: e => bad(new Error((e && (e.errMsg || e.message)) || '排行榜调用失败'))
+        fail: e => bad(new Error((e && (e.errMsg || e.message)) || what + '调用失败'))
       }, payload));
-      /* 兜底：SDK 静默不回调时别把界面永远钉在「读取中…」 */
-      if(typeof setTimeout === 'function') timer = setTimeout(() => bad(new Error('排行榜接口无响应（15 秒）')), 15000);
+      /* 兜底：SDK 静默不回调时别把界面永远钉在「读取中…」。
+         v1.1.22：`what` / `timeoutMs` 参数化 —— 成就层要试多个候选方法名，超时必须短（4 秒），
+         否则一个不认的方法挂住 15 秒会把「挨个试」拖成几十秒。 */
+      if(typeof setTimeout === 'function') timer = setTimeout(() => bad(new Error(what + '接口无响应（' + Math.round(T/1000) + ' 秒）')), T);
     }catch(e){ bad(e); }
   });
 }
@@ -673,7 +677,10 @@ function rankSubmit(value, boardId){
   const bid = rankBoardId(boardId);
   const v = Math.max(0, Math.round(value || 0));
   return rankCall(ctx, 'submitScores', { scores: [{ leaderboardId: bid, score: v }] }).then(
-    () => ({ ok:true, value:v, board:bid, via:'submitScores' }),
+    /* v1.1.23r（用户 2026-10-16 纠正口径）：成就「Nice-encounter」= **6 个榜单（RANK_BOARDS）任意一榜入围**。
+       放在**提交成功**这一处（任何榜、任何入口：通关计时总/分榜、整局总分榜都走本函数）⇒ 首次成功上榜即报一次；
+       tapAchieve 内部 _tapAchSent 去重 ⇒ 不必担心重复打平台。 */
+    () => { tapAchieve('Nice-encounter'); return { ok:true, value:v, board:bid, via:'submitScores' }; },
     e => { throw new Error('排行榜提交失败（' + ((e && e.message) || e) + '）。' + rankDiag()); }
   );
 }
@@ -746,4 +753,129 @@ function rankSelfScore(boardId){
   if(!ctx || typeof ctx.loadCurrentPlayerLeaderboardScore !== 'function')
     return Promise.reject(new Error('未发现 loadCurrentPlayerLeaderboardScore 接口'));
   return rankCall(ctx, 'loadCurrentPlayerLeaderboardScore', { leaderboardId: rankBoardId(boardId) });
+}
+
+/* ============================================================================
+ * 成就 · TapTap 平台成就适配层（v1.1.22）
+ * ----------------------------------------------------------------------------
+ * 用户口径（2026-10-16）：「『成就/卡背头像框』删了，然后连接 taptap 成就」。
+ *   ⇒ 游戏内**不再自持成就系统**（无解锁 toast / 无卡背 / 无头像框 / 无收藏页；
+ *     50_ui.js 的 COSMETICS / ACHIEVEMENTS / hasAchievement / showAchievementToast /
+ *     unlockAchievement / applyCosmetics / equipCosmetic / viewAchievements 已整块删除），
+ *     局内那 5 个触发点只做一件事：把成就**上报给 TapTap 平台侧**（玩家在 TapTap 游戏页看到点亮）。
+ *
+ * 接口依据：与小游戏排行榜**同源同一份文档域**
+ *   （developer.taptap.cn/minigameapidoc/dev/api/open-api/）—— 小游戏「生态能力 → 成就」是公开能力
+ *   （教程页 dev/tutorial/open-capabilities/achievement/）。
+ *   ⚠️ 但该文档页**要登录**，接口名 / 载荷键原文核不到 —— 与 v1.0.19 那次排行榜同一处境。
+ *   故本层沿用排行榜那套 best-effort 多点探测（rankMethodNames / rankCall）：
+ *     ① 优先 `tap.getAchievementManager()`（与 getCloudSaveManager / getLeaderboardManager 同构），
+ *        管理器方法挂在**原型**上 ⇒ 沿原型链收方法名；
+ *     ② 拿不到管理器就退回 tap 自身（有的基础库把方法直接挂 tap 上）；
+ *     ③ 调用形状：`callback:{onSuccess,onFailure}` 与 `{success,fail}` **两套一起下发**；
+ *     ④ 载荷键**多套一起给** —— 官方 *服务端* API 用的键是 `achievement_open_id`
+ *        （= 开发者在后台建成就时自定义的 open id），小游戏 SDK 的键名可能不同，故
+ *        achievementOpenId / openId / achievement_open_id / achievementId / id 全给；
+ *        累计型成就（百战不殆）再加 steps / progress / completed_step 等键。
+ *
+ * ⚠️ 后台前置（CLI 做不了）：必须在 TapTap 开发者中心 →「游戏服务 / 成就」里**创建成就**，
+ *   每条成就的**成就 ID（即上报用的成就 open id）用下表 TAP_ACHIEVEMENTS 的 openId**。
+ *   v1.1.23（用户 2026-10-16 口径）：用户已在后台建好 6 条成就 ⇒ 本表按后台那 6 条**逐一对应**：
+ *   Beginning / Hard-three / All-unlocked / No-matter-Who / Get-all / Nice-encounter。
+ *   原游戏内自拟的 5 条（wushang / lingfu / zuzhou / tushen / baizhan）**作废、不再上报**。
+ *   成就服务若未开通，需按官方「成就系统功能介绍 → 接入准备」先提工单申请开通。
+ *   taptap-cli 目前**没有**成就相关命令（已核 2026.10.14 版命令表），这部分只能在网页后台做。
+ *
+ * ⚠️ 局内触发点映射（v1.1.23，名字语义由助手按后台名推断，**供用户核对 / 纠正**）：
+ *   登塔！！！(Beginning)         ← 新局开始（confirmNewGame）
+ *   初入第三幕(Hard-three)        ← advanceAct 推进到第 3 幕（act>=3）
+ *   全部图鉴解锁(All-unlocked, 34) ← **志怪图鉴全面收录**：unlockBestiary 后按「已收录条数 / BESTIARY_ORDER 全长 34」上报
+ *   全能降魔者(No-matter-Who, 4)  ← 局末按「已通关过的角色数」上报
+ *   解锁并拥有所有(Get-all, 4)    ← 解锁角色（unlockHeroWithTicket）时按「已解锁角色数」上报
+ *   风云榜相聚(Nice-encounter)    ← **6 个榜单（RANK_BOARDS）任意一榜入围**：rankSubmit 提交成功后即上报
+ *
+ *   v1.1.23r（用户 2026-10-16 纠正两处口径）：All-unlocked 由「累计击杀 34」改为「图鉴全面解锁」；
+ *     Nice-encounter 由「仅总分榜」放宽为「6 榜任一入围」。⚠️ 后台中文名以用户后台为准，上表 name 仅语义化替身。
+ *
+ * 兜底口径（同排行榜层）：非 TapTap 环境 / 拿不到成就对象 / 候选方法全失败 ⇒ 整层 no-op，
+ *   浏览器 / PWA / 本地双击 / node 冒烟**逐字节不受影响**；失败原因（含方法名诊断串）只写进返回值，
+ *   **不弹窗、不打断战斗** —— 成就上报绝不该影响局内节奏。 */
+const TAP_ACHIEVEMENTS = [
+  {id:'Beginning',      openId:'Beginning',      name:'登塔！！！',        desc:'开始一局爬塔（进入第一幕）',            steps:1},
+  {id:'Hard-three',     openId:'Hard-three',     name:'初入第三幕',        desc:'爬塔推进到第三幕',                      steps:1},
+  {id:'All-unlocked',   openId:'All-unlocked',   name:'百鬼全录',          desc:'集齐全 34 条志怪图鉴（累计型）',        steps:34},
+  {id:'No-matter-Who',  openId:'No-matter-Who',  name:'全能降魔者',        desc:'用 4 名角色各通关一次（累计型）',        steps:4},
+  {id:'Get-all',        openId:'Get-all',        name:'解锁并拥有所有角色', desc:'解锁全部 4 名角色（累计型）',            steps:4},
+  {id:'Nice-encounter', openId:'Nice-encounter', name:'风云榜相聚',        desc:'6 个榜单中任意一榜入围',                steps:1}
+];
+/* 候选方法名（按「最可能命中」排序）。只试**确实存在**的前 TAP_ACH_TRY 个，
+   每个 4 秒没回调就换下一个 ⇒ 最坏 16 秒，正常情况下第一个即中。 */
+const TAP_ACH_METHODS = ['unlockAchievement','unlock','completeAchievement','submitAchievement',
+                         'achieve','addAchievement','growSteps','addSteps','updateAchievement','setAchievement'];
+const TAP_ACH_TRY = 4;
+let _tapAchSent = null;         // 本次会话已上报过的 openId（免每场战斗重复打平台）
+function tapAchById(id){ return TAP_ACHIEVEMENTS.find(a => a.id === id || a.openId === id) || null; }
+function tapAchieveEnv(){
+  try{
+    if(typeof tap === 'undefined' || !tap) return { ok:false, why:'非 TapTap 小游戏环境' };
+    return { ok:true, why:'' };
+  }catch(e){ return { ok:false, why:'成就环境探测失败：' + ((e && e.message) || e) }; }
+}
+/* 成就对象：优先 tap.getAchievementManager()，退回 tap 自身；都没有 ⇒ null。 */
+function tapAchievementManager(){
+  try{
+    if(typeof tap.getAchievementManager === 'function'){
+      const m = tap.getAchievementManager();
+      if(m) return { ctx:m, all:rankMethodNames(m), via:'manager' };
+    }
+  }catch(e){}
+  return tapAchieveEnv().ok ? { ctx:tap, all:rankMethodNames(tap), via:'tap' } : null;
+}
+/* 诊断串（同 rankDiag 的口径：把真机上真实可用的方法名亮出来，一次真机回报即可定位）。 */
+function tapAchieveDiag(){
+  const env = tapAchieveEnv();
+  if(!env.ok) return env.why;
+  const p = tapAchievementManager();
+  if(!p) return 'TapTap 可用，但拿不到成就对象';
+  return '成就对象（' + p.via + '）可用方法：' + (p.all.join(' / ') || '一个都收不到')
+       + '；候选：' + TAP_ACH_METHODS.join(' / ');
+}
+/* 上报一条成就（best-effort）。steps 非空表示累计型成就（如「百战不殆」传累计击杀数）。
+   返回 Promise<{ok, openId?, via?, res?, cached?, why?, diag?}>；**永不 reject** ⇒ 调用点不必 try/catch。 */
+function tapAchieve(id, steps){
+  const env = tapAchieveEnv();
+  if(!env.ok) return Promise.resolve({ ok:false, why:env.why });
+  const a = tapAchById(id);
+  const openId = a ? a.openId : id;
+  const p = tapAchievementManager();
+  if(!p) return Promise.resolve({ ok:false, why:'拿不到成就对象', diag:tapAchieveDiag() });
+  if(!_tapAchSent) _tapAchSent = Object.create(null);
+  if(_tapAchSent[openId]) return Promise.resolve({ ok:true, cached:true, openId:openId });
+  const payload = {
+    achievementOpenId:openId, openId:openId, achievement_open_id:openId,
+    achievementId:openId, achievement_id:openId, id:openId
+  };
+  if(steps != null){
+    const n = Math.max(0, Math.round(steps || 0));
+    payload.steps = n; payload.step = n; payload.progress = n;
+    payload.completedStep = n; payload.completed_step = n;
+  }
+  const cands = TAP_ACH_METHODS.filter(n => typeof p.ctx[n] === 'function').slice(0, TAP_ACH_TRY);
+  if(!cands.length) return Promise.resolve({ ok:false, why:'成就对象上没有候选方法', diag:tapAchieveDiag() });
+  /* 挨个试：方法名对了但键名/回调形状不对会失败 ⇒ 换下一个候选再试。 */
+  let chain = Promise.reject(new Error('（未尝试）'));
+  cands.forEach(n => { chain = chain.catch(() => rankCall(p.ctx, n, payload, '成就', 4000)); });
+  return chain.then(
+    res => { _tapAchSent[openId] = 1; return { ok:true, openId:openId, via:cands[0], res:res }; },
+    e => ({ ok:false, openId:openId, why:(e && e.message) || String(e), diag:tapAchieveDiag() })
+  );
+}
+/* 累计型成就的**达标才上报**封装（v1.1.23）：cur = 当前累计值，目标步数取 TAP_ACHIEVEMENTS.steps。
+   未达标 ⇒ 直接 no-op（不发请求）；达标 ⇒ 上报一次（steps 传目标值，避免每次击杀都打平台）。
+   返回 Promise，与 tapAchieve 一样**永不 reject** ⇒ 调用点无需 try/catch。 */
+function tapAchieveProgress(id, cur){
+  const a = tapAchById(id);
+  const need = (a && a.steps) || 1;
+  if((cur|0) < need) return Promise.resolve({ ok:false, why:'未达标（' + (cur|0) + '/' + need + '）' });
+  return tapAchieve(id, need);
 }

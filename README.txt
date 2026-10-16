@@ -21,7 +21,7 @@
 📦 发给别人试玩（**只要一个文件，对方什么都不用装**）
   发这个：dist/志怪塔.html（也可以先复制成 dist/志怪塔·试玩版 vX.YZ.html 再发，内容一样）
   · 对方**双击就能玩**。不需要 Python、不需要 素材/ 文件夹、不需要 js/ —— 图片/BGM/音效
-    全部 base64 内联在这一个文件里，总共 490 个素材（图 360 / 音 130）、约 33 MB。
+    全部 base64 内联在这一个文件里，总共 489 个素材（图 360 / 音 129）、约 33 MB。
     · 手机端性能：30 张特效精灵图（3840×2880 整图）在这里被**按排切成 170 张小图**
       （键 fx/<名>_r<行>.png，逐像素不变）—— 整图一次要解 11 Mpx ≈ 42 MB，手机图片缓存留不住，
       每次出牌都重解一遍（真机 100~200ms，就是「打出手牌那一瞬间卡」）。按排只解 1.8 Mpx。 
@@ -34,7 +34,7 @@
     打包把同一批文件内联进了 ASSET_MAP，取的是 `data:` URI，而 data: URI 在 file:// 下
     fetch 是通的（已实测：真取到字节并解出 AudioBuffer）。所以产物双击就有音效，
     那道「file:// 就跳过外置音效」的闸对产物不成立（它只在**没有** ASSET_MAP 的开发树上生效）。
-  · 测出来没问题的是这些：dist 里 ASSET_MAP 490 键（含 sfx/ 124 个、music/ 6 个，值全是
+  · 测出来没问题的是这些：dist 里 ASSET_MAP 489 键（含 sfx/ 123 个、music/ 6 个，值全是
     data:audio/…）、地图卷轴三张纹理被 assetURL 覆盖成内联、存档读写不抛异常 ——
     都有常驻闸（`python _patch/probe_dist.py`）。
 
@@ -156,6 +156,77 @@
                 闸与回归：verify_web 的 [2] 加「恰有一个 js 注入 FX_ROW_KEYS」、[3] 改成承认按排键
                 （源 fx 整图 ↔ 产物 _r0.._r(n-1)）并加 [3b] 几何互核（行数 == FX_SHEETS.rows、宽 == 源宽、
                 行高 == 源高/排数）；冒烟基线 1534→1536（新增 2 条按排判据回归断言）。
+  v1.1.23  修障 + 规则批（用户 2026-10-16 口径，7 条）：
+             ① 战局外子面板返回跳战斗（v1.1.16 的锦囊快照只覆盖锦囊一处，「✕」出口也不认快照）——
+                抽成共用对 outPanelSnap / outPanelRestore（50_ui.js）：showJinnang / viewDeck（我的牌库）/
+                showPile（牌堆）打开前各快照一次；jinnangBack 与 closeOverlay（含 ✕ 与 ESC 两个出口）先试还原、
+                还原不了才回落 hideOverlay；SCENES 名单补 'deck-scene'。⇒ 篝火 / 商店 / 事件房等处进锦囊·
+                牌库·牌堆再返回，落回原场景，不再掉进战斗骨架
+             ② 结算画面停留一会儿后黑屏：settleTransition 的 heavy 档是「结局视频缺席 / 解码失败」的唯一回落
+                出口，而 v1.1.x 为让视频末帧当背景撤掉了整屏图 ⇒ 视频一旦没播成就落在 #overlay 的 88% 黑幕上。
+                修：heavy 分支先 setBg(defeat.jpg / victory.jpg) 铺回整屏背景（两张都在 SCENE_BG 表内 ⇒
+                黑幕放松到 55%），观感与视频末帧同档；视频成功播放时这条不走，原口径不变
+             ③ BGM 多轨重叠（boss 关 / 复活等）：startBGM 的 active 原是局部闭包，stopBGM 只能暂停当前 Audio
+                元素，已派出的候选与 1500ms 看门狗不知情 ⇒ 切轨 / 掐曲后旧链仍会 play() 或兜底合成。
+                修：全局代计数 BGM_GEN —— stopBGM++，startBGM 取 gen=++BGM_GEN，tryNext/resolve 先判
+                gen!==BGM_GEN 即静默退出，失败候选显式掐掉自己；clearSynthBGM 统一收口合成兜底定时器
+             ④ 删里程轨滑动音：ui_drag 键位与素材（素材/sfx/ui_drag.wav）**一并移除**（SFX_TABLE 124→123，
+                冒烟对应断言同步改数）—— 手感（惯性 / 缓出）原样不动，滑动全程无音
+             ⑤ 总分口径（用户定稿）：击杀四档 10/20/30/5 → 普通 ×6 / 精英 ×8 / 首领 ×10 / 召唤物 ×7；
+                剩余生命 ×10 → ×1（层数 ×40 / 金币 ×8 / 灵汁 ×40 / 通关 +1000 不变）。
+                里程口径（mileParts 同步改数）：层数 ×15→×22 · 击杀 ×5→×7 · 通关 +600→+300（幕数 ×200 不变），
+                加权后平均每把仍 ≈570 点 ⇒ 6 档阈值无需重标；被钉着数值的 7 条冒烟断言已同步改数
+             ⑥ 里程碑奖励卡补预伤害：罗汉伏虎（luohanfuhu，武僧 mile 奖励）此前 CARD_DMG 无登记 ⇒ 拖拽不显预伤，
+                补一行（5 + 格挡/2，升级 7 + 上限 15）
+             ⑦ 尸王牌面同步：阴司牒（yinsidie）到手后，尸王卡牌信息追加「阴司牒 · 每次尸王攻击后获得 5 点格挡」
+                并在名字旁给 ↑ 标记（shiWangBoostTag / shiWangBoosted，卡牌信息与手牌渲染都走）
+             ⑧ TapTap 成就改用后台已建 6 条：原自拟 5 条（wushang / lingfu / zuzhou / tushen / baizhan）作废、
+                上报点整条移除；TAP_ACHIEVEMENTS 换成 Beginning / Hard-three / All-unlocked / No-matter-Who /
+                Get-all / Nice-encounter。触发点（v1.1.23r 用户 2026-10-16 澄清两处）：
+                新局 → 登塔、推进第三幕 → 初入第三幕、**图鉴收录满 34 条 → All-unlocked**（改自「累计击杀」）、
+                局末按已通关角色数 → No-matter-Who(4)、解锁角色 → Get-all(4)、
+                **6 榜任一提交成功 → Nice-encounter**（上移到 rankSubmit 成功回调内，不再只认总分榜）；
+                累计型走 tapAchieveProgress（达标才上报）
+             ⑨ 终局慢镜（用户口径）：「终结游戏的最后一个行为要加入行为 + 音效 + 特效的**慢动作**，再衔接结算
+                动画」—— 用户口中的「纯动画增量」就是既有 heroAnim / enemyActAnim 那套行为效果（非帧序列）。
+                新增 finaleBlow(mode, then)：挂一个 body 级 class body.finale-slow（原型.html），把 hero-hit /
+                hero-attack / e-atk / dying 四条 keyframes 的 animation-duration 拉长 + #app 压灰度与暗角 ⇒
+                **纯动画增量，不动判定**。落点两处（loseGame 被击败 / showVictory 通关）各包一层，约 1.6s 后
+                由 clean() 统一摘类再推结算；无头 / 关特效 ⇒ 同刻 then()（冒烟在 loseGame 后立刻读 DOM 不受影响）
+             ⑩ 闸：node --check 八段全绿；冒烟基线 1547→1551（新增 BGM 代计数 / 终局慢镜 / 结算背景 3 条断言）；
+                verify_dist 与 verify_web 的版本号一致性靠重打包复位
+  v1.1.22  成就重定位批（用户 2026-10-16 口径「『成就/卡背头像框』删了，然后连接 taptap 成就」）：
+             ① 游戏内成就系统**整块删除**：COSMETICS / ACHIEVEMENTS / hasAchievement / showAchievementToast /
+                unlockAchievement / applyCosmetics / equipCosmetic / viewAchievements 八个函数与数据一处不留；
+                主菜单「成就 · 收藏」入口摘掉（v0.66.0 那批注释里「函数本体一律保留」至此只对
+                viewStats / showTutorial 成立）；卡背 / 头像框外观 CSS（body[data-cardback] / [data-frame]）
+                与 #achieve-toast 全族（主规则 / .show / .at-icon / .at-title / .at-sub / 矮屏档 /
+                字体栈里的一处引用 / DOM 那个空 div）一并清掉；SAVE 的 achievements / cardBack / avatarFrame
+                三个键自此**零读写**（不迁不删 —— 老档里的残留数据留着无害）
+             ② **接入 TapTap 平台成就**（55_cloud.js 新增成就适配层）：局内那 5 个触发点（无伤之战 /
+                零符斩杀 / 诅咒满盈 / 屠神证道 / 百战不殆）不再自持，改为 tapAchieve() **上报 TapTap**，
+                玩家在 TapTap 游戏页看到点亮。与小游戏排行榜同源同一份文档域
+                （minigameapidoc/dev/api/open-api/），但文档页**要登录**、接口名原文核不到 ⇒ 沿用排行榜那套
+                best-effort 多点探测：① 优先 tap.getAchievementManager()（与 getCloudSaveManager /
+                getLeaderboardManager 同构，方法沿原型链收）；② 拿不到管理器就退回 tap 自身；
+                ③ `callback:{onSuccess,onFailure}` 与 `{success,fail}` 两套回调形状一起下发；
+                ④ 载荷键多套一起给 —— 官方 *服务端* API 用的键是 achievement_open_id，故
+                achievementOpenId / openId / achievement_open_id / achievementId / id 全给，累计型成就
+                （百战不殆，传累计击杀数）再加 steps / progress / completed_step；
+                候选方法名按序试（unlockAchievement / unlock / completeAchievement / submitAchievement …，
+                **只试确实存在的 4 个**、每个 4 秒超时 ⇒ 最坏 16 秒，正常第一个即中）；每会话按 openId 去重。
+                非 TapTap 环境 / 拿不到对象 / 候选全失败 ⇒ **整层 no-op**（浏览器 / PWA / 本地双击 /
+                node 冒烟逐字节不受影响），失败只写返回值、**不弹窗**（成就上报绝不该打断局内节奏）；
+                设置面板补一行「成就上报（TapTap 平台）：已接入 / 未接入」+ 真机诊断串 tapAchieveDiag
+                （把真机上真实可用的方法名亮出来，一次真机回报即可定位）
+                ⚠️ **后台前置（CLI 做不了）**：需在 TapTap 开发者中心「游戏服务 / 成就」里建成这 5 条成就，
+                open id 用 wushang / lingfu / zuzhou / tushen / baizhan（与表内 openId 同名，否则上报的 id
+                平台上不存在）；成就服务未开通时按官方「成就系统功能介绍 → 接入准备」先提工单申请。
+                taptap-cli（已核 2026.10.14 版命令表）**没有**成就相关命令 —— 这部分只能走网页后台
+             ③ 闸：node --check 五段全绿；冒烟基线 1542→1547（新增 5 条：八字全消失（const 声明不走
+                globalThis，故用裸 typeof）/ 三个 SAVE 键零读写 / 适配层就位（5 条成就、openId 与 id 同名）/
+                非 TapTap 环境 no-op 且返回 Promise / 5 个触发点接线）；verify_dist 里 #achieve-toast 的
+                两条旧断言改成**反向钉子**（产物里不得再出现 #achieve-toast / 金沙卡背 / 紫金头像框）
   v1.1.21  试玩符纸批（用户 2026-10-16 口径「首启自动发 3 张试玩符纸」）：**新增【试玩符纸】游戏道具** ——
              一张 = 「某个未解锁角色试玩一次」：只在**本局**临时放行（G.trialHero，局末 / 回选角即失效），
              **不写 SAVE.unlockedHeroes**，故该角色在选角页照旧显示上锁；试玩局的进度 / 成就 / 图鉴 /

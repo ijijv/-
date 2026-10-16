@@ -2694,6 +2694,8 @@ const MILESTONES = [
 /* 一局结束时的里程碑点数 —— **独立函数**，便于冒烟直接断言。
    v1.0.25（用户定稿口径）：公式改为 —— 每推进一幕 200 点（act 从 1 起，故 act-1）·
      每爬一层 15 点 · 每击杀 1 个 5 点 · 通关（打穿最后一幕幕主）额外 600 点；结果不小于 0。
+   v1.1.23（用户定稿）：层数 15→22 · 击杀 5→7 · 通关 600→300（幕数 ×200 不变）。
+     加权后平均每把仍 ≈ 570 点 ⇒ 下面 6 档阈值无需重标。
    取这套权重的依据：按真实地图结构做 20 万局蒙特卡洛，平均每把 ≈ 572 点，
    正好落在下面 6 档阈值「550 / 1400 / 2900 / 4500 / 7500 / 11000」（≈ 1.0 / 2.4 / 5.1 / 7.9 / 13.1 / 19.2 把）上。
    传入 s 可指定状态（不传则读全局 G），对老档/空值一律安全回落。 */
@@ -2703,17 +2705,19 @@ function milePointsFor(s){
   return Math.max(0, mileParts(g).reduce(function(a,p){ return a + p.val; }, 0));
 }
 /* v1.1.x（用户 2026-10-12）：结算画面右上「里程分数」要**逐条弹出**地展示里程怎么来的 ⇒
-   把 milePointsFor 的加数拆成可读分项（标签 + 分值）。milePointsFor 反过来调它，杜绝两处漂。 */
+   把 milePointsFor 的加数拆成可读分项（标签 + 分值）。milePointsFor 反过来调它，杜绝两处漂。
+   v1.1.23（用户定稿口径）：层数 ×15→×22 · 击杀 ×5→×7 · 通关 +600→+300（幕数 ×200 不变），
+   分项标签不动；本规则原先被 7 条回归断言钉着具体数值，已同步改数（见 smoke_runner.js）。 */
 function mileParts(s){
   const g = s || (typeof G!=='undefined' ? G : null);
   if(!g) return [];
   const act = Math.max(0,(g.act|0)) - 1;                 // act=1 ⇒ 0
   const parts = [
     { lab:'幕数推进', val: act*200 },
-    { lab:'爬塔层数', val: Math.max(0,(g.mapRow|0))*15 },
-    { lab:'击败敌人', val: Math.max(0,(g.totalKills|0))*5 },
+    { lab:'爬塔层数', val: Math.max(0,(g.mapRow|0))*22 },
+    { lab:'击败敌人', val: Math.max(0,(g.totalKills|0))*7 },
   ];
-  if(g.finalBoss) parts.push({ lab:'通关加成', val: 600 });
+  if(g.finalBoss) parts.push({ lab:'通关加成', val: 300 });
   return parts;
 }
 /* —— 里程碑「里程轨」（v1.0.21，用户草图）：左侧 4 个角色开关（横屏立绘 + 名字），

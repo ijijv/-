@@ -1,6 +1,6 @@
 /* ===== 志怪塔 Task#13 冒烟 runner（追加于 <script> 末尾，与引擎同作用域） ===== */
 (function () {
-  /* ---------- 外围降级：保留结算逻辑，屏蔽渲染/音效/存档/成就/召唤 UI 的副作用 ---------- */
+  /* ---------- 外围降级：保留结算逻辑，屏蔽渲染/音效/存档/召唤 UI 的副作用 ---------- */
   try { SETTINGS.lowSpec = true; SETTINGS.sound = false; SETTINGS.musicVol = 0; SETTINGS.sfxVol = 0; } catch (e) {}
   var __sil = function () {};
   var __realSfx = sfx; // v0.61.25 金快照探针要用真 sfx（第 631 行会把全局 sfx 顶成 __sil）
@@ -12,7 +12,6 @@
   var __gcInit = goldCompensation; // v0.61 B6：捕获金卡补偿初值（后续用例会改动这个全局）
   try { render = __sil; } catch (e) {}
   try { saveRun = __sil; } catch (e) {}
-  try { unlockAchievement = __sil; } catch (e) {}
   try { unlockBestiary = __sil; } catch (e) {}
   try { showOverlay = __sil; } catch (e) {}
   try { hideOverlay = __sil; } catch (e) {}
@@ -3527,8 +3526,8 @@
     (function () {
       var i, j, k, s, ok, got, missing, bad, steps;
 
-      /* ① 分发表完整性：124 键，每步参数都齐 */
-      __ok('v0.61.25 音效表 124 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 4 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键；v1.1.13：+选角 4 键 talisman_click/talisman_slide/key_press/poster_bounce_land；v1.1.20 特效批：+wanjian/gouhun 2 键；v1.1.20 音效批：−遗留键 hit，+tianlei/lei/zhenyaoling 3 键；v1.1.20 补登记：+relic_proc 1 键；v1.1.20r：+jinzhong/wangyou 2 键）', SFX_KEYS.length === 124, 'n=' + SFX_KEYS.length);
+      /* ① 分发表完整性：123 键，每步参数都齐 */
+      __ok('v0.61.25 音效表 123 键（v1.0.17：+ui_flip/+glass_break；v1.0.23：+主菜单与里程碑 3 键；v1.1.x：+number/stone_broken/rank/boom/energy 5 键，+spark/slash/lightning 3 键；v1.1.10：+boss_vfx 前 6 幕 19 键；v1.1.9 焚牌：+fx_forge/fx_burn 2 键；v1.1.12：+boss_vfx 7~9 幕 9 键；v1.1.13：+选角 4 键 talisman_click/talisman_slide/key_press/poster_bounce_land；v1.1.20 特效批：+wanjian/gouhun 2 键；v1.1.20 音效批：−遗留键 hit，+tianlei/lei/zhenyaoling 3 键；v1.1.20 补登记：+relic_proc 1 键；v1.1.20r：+jinzhong/wangyou 2 键；v1.1.23：−ui_drag 1 键）', SFX_KEYS.length === 123, 'n=' + SFX_KEYS.length);
       bad = [];
       for (i = 0; i < SFX_KEYS.length; i++) {
         k = SFX_KEYS[i]; steps = SFX_TABLE[k];
@@ -4115,12 +4114,12 @@
     __ok('v0.61.32 UI·锻造升级 → ui_levelup（原先蹭 relic 音）',
       got.indexOf('ui_levelup') >= 0 && got.indexOf('relic') < 0, got.join(','));
     /* ui_unlock / ui_panel 这两个键的**调用点**在冒烟里不可达：runner 开头就把
-       unlockBestiary / unlockAchievement / showOverlay / hideOverlay 整体换成了空函数
+       unlockBestiary / showOverlay / hideOverlay 整体换成了空函数
        （与 v0.61.31 的 startBGM 同一处境）。所以这里改成验**被抽出来的转发函数**：
-       音对不对、抛不抛错都验得到；那四行 `unlockSfx()` / `overlaySfx()` 转发本身不可达，
+       音对不对、抛不抛错都验得到；那两行 `unlockSfx()` / `overlaySfx()` 转发本身不可达，
        如实记在更新日志里，不假装验过。 */
     got = __rec(function () { unlockSfx(); });
-    __ok('v0.61.32 UI·解锁音（图鉴条目与成就共用）→ ui_unlock', got.indexOf('ui_unlock') >= 0, got.join(','));
+    __ok('v0.61.32 UI·解锁音（图鉴新条目 / 里程碑解锁共用）→ ui_unlock', got.indexOf('ui_unlock') >= 0, got.join(','));
     got = __rec(function () { overlaySfx(); });
     __ok('v0.61.32 UI·面板开合音（showOverlay/hideOverlay 共用）→ ui_panel', got.indexOf('ui_panel') >= 0, got.join(','));
   })();
@@ -6845,7 +6844,8 @@
         return miss.length === 0;
       })(), '缺=' + JSON.stringify(globalThis.__missMenuEntry || []));
     __ok('v0.66.0 主菜单 9 → 4：被移除的入口不再出现在模板里'
-      + '（⚠️ 只是摘入口；viewAchievements / viewStats / showTutorial 的**函数本体仍保留**，'
+      + '（⚠️ 只是摘入口；viewStats / showTutorial 的**函数本体仍保留**，'
+      + 'viewAchievements 的函数本体已在 v1.1.22 随成就系统整块删除；'
       + 'startEndless 随无尽模式在 v1.0.14 一并删除）',
       (function () {
         var s = __code(showStartScreen);
@@ -6854,6 +6854,56 @@
       })());
     __ok('v0.66.0 签到整块取消：模板里没有 signInPanelHTML（用户：『没有实际意义』）',
       __code(showStartScreen).indexOf('signInPanelHTML') < 0);
+    /* v1.1.22（用户口径「成就/卡背头像框 删了，然后连接 taptap 成就」）：
+       游戏内成就系统**整块删除** —— 8 个标识全部消失（含 const 声明的 COSMETICS / ACHIEVEMENTS，
+       故与 v1.1.15 的 globalThis 判据不同，这里用裸 `typeof`：未声明时同样安全返回 'undefined'）。
+       SAVE 的 achievements / cardBack / avatarFrame 三个键自此没有任何读写点。 */
+    __ok('v1.1.22 游戏内成就/卡背/头像框整块删除（COSMETICS/ACHIEVEMENTS/hasAchievement/showAchievementToast/'
+      + 'unlockAchievement/applyCosmetics/equipCosmetic/viewAchievements 八者全部不存在）',
+      typeof COSMETICS === 'undefined' && typeof ACHIEVEMENTS === 'undefined'
+      && typeof hasAchievement === 'undefined' && typeof showAchievementToast === 'undefined'
+      && typeof unlockAchievement === 'undefined' && typeof applyCosmetics === 'undefined'
+      && typeof equipCosmetic === 'undefined' && typeof viewAchievements === 'undefined');
+    __ok('v1.1.22 成就遗留 SAVE 键不再被读写（loadSave / persistSave / saveRun 源码里都不出现）',
+      (function () {
+        var s = __code(loadSave) + __code(persistSave) + __code(saveRun);
+        return s.indexOf('achievements') < 0 && s.indexOf('cardBack') < 0 && s.indexOf('avatarFrame') < 0;
+      })());
+    /* v1.1.23（用户口径）：游戏内不再自持成就；TapTap 后台 6 条成就（open id 由用户建好）逐一对应上报。 */
+    __ok('v1.1.23 TapTap 成就适配层就位（tapAchieve / tapAchieveProgress / tapAchieveEnv / tapAchieveDiag / '
+      + 'TAP_ACHIEVEMENTS 6 条，openId 与 id 同名且与后台 6 条一致、每条都带 steps）',
+      typeof tapAchieve === 'function' && typeof tapAchieveProgress === 'function'
+      && typeof tapAchieveEnv === 'function' && typeof tapAchieveDiag === 'function'
+      && typeof tapAchievementManager === 'function'
+      && Array.isArray(TAP_ACHIEVEMENTS) && TAP_ACHIEVEMENTS.length === 6
+      && TAP_ACHIEVEMENTS.every(function (a) { return a.id && a.id === a.openId && a.name && a.desc; })
+      && ['Beginning', 'Hard-three', 'All-unlocked', 'No-matter-Who', 'Get-all', 'Nice-encounter']
+           .every(function (id) { return TAP_ACHIEVEMENTS.some(function (a) { return a.openId === id; }); })
+      && TAP_ACHIEVEMENTS.every(function (a) { return typeof a.steps === 'number' && a.steps > 0; }));
+    __ok('v1.1.23 非 TapTap 环境（冒烟宿主）：tapAchieveEnv 判非环境、tapAchieve 返回 Promise 且不抛错',
+      (function () {
+        try { return tapAchieveEnv().ok === false && typeof tapAchieve('Beginning').then === 'function'; }
+        catch (e) { return false; }
+      })());
+    __ok('v1.1.23 累计型成就达标才上报（tapAchieveProgress：未达标 no-op、达标传目标步数）',
+      (function () {
+        try {
+          var r = tapAchieveProgress('All-unlocked', 3);   // 3 < 34 ⇒ 未达标
+          return typeof r.then === 'function' && r.__probe !== true;
+        } catch (e) { return false; }
+      })());
+    __ok('v1.1.23 6 条成就触发点全部就位（登塔 Beginning / 第三幕 Hard-three / 图鉴全录 All-unlocked / '
+      + '全能降魔者 No-matter-Who / Get-all 解锁角色 / 风云榜相聚 Nice-encounter）',
+      __code(confirmNewGame).indexOf("tapAchieve('Beginning')") >= 0
+      && __code(advanceAct).indexOf("tapAchieve('Hard-three')") >= 0
+      && __code(onEnemyDeathCheck).indexOf("tapAchieveProgress('All-unlocked'") >= 0
+      && __code(onEnemyDeathCheck).indexOf("BESTIARY_ORDER.filter(k=>SAVE.unlocked.includes(k))") >= 0
+      && __code(grantRunMilestones).indexOf("tapAchieveProgress('No-matter-Who'") >= 0
+      && __code(unlockHeroWithTicket).indexOf("tapAchieveProgress('Get-all'") >= 0
+      && __code(rankSubmit).indexOf("tapAchieve('Nice-encounter')") >= 0
+      && __code(recordScoreRun).indexOf("tapAchieve('Nice-encounter')") < 0
+      && __code(winFight).indexOf("tapAchieve('wushang')") < 0
+      && __code(applyCurse).indexOf("tapAchieve('zuzhou')") < 0);
     __ok('v0.66.0 「续」总是渲染、无存档时 disabled（不再按 hasRunSave 条件渲染 —— 石碑忽隐忽现会破构图）',
       (function () {
         var s = __code(showStartScreen);
@@ -7306,15 +7356,15 @@
     /* 1) 点数公式（独立函数 milePointsFor，便于断言） */
     __ok('v1.0.15 milePointsFor：起始态 0 点',
       milePointsFor({ act: 1, mapRow: 0, totalKills: 0, finalBoss: false }) === 0);
-    __ok('v1.0.25 milePointsFor：幕 200 / 层 15 / 击杀 5 分别计权',
-      milePointsFor({ act: 2, mapRow: 4, totalKills: 10 }) === 200 + 60 + 50,
+    __ok('v1.0.25 milePointsFor：幕 200 / 层 22 / 击杀 7 分别计权（v1.1.23 改数）',
+      milePointsFor({ act: 2, mapRow: 4, totalKills: 10 }) === 200 + 88 + 70,
       String(milePointsFor({ act: 2, mapRow: 4, totalKills: 10 })));
-    __ok('v1.0.25 milePointsFor：通关（打穿第三幕幕主）额外 +600',
-      milePointsFor({ act: 3, mapRow: 13, totalKills: 0, finalBoss: true }) === 400 + 195 + 600);
+    __ok('v1.0.25 milePointsFor：通关（打穿第三幕幕主）额外 +300（v1.1.23 由 600 改）',
+      milePointsFor({ act: 3, mapRow: 13, totalKills: 0, finalBoss: true }) === 400 + 286 + 300);
     __ok('v1.0.15 milePointsFor：空值 / 越界字段不抛且不小于 0',
       milePointsFor({}) === 0 && milePointsFor({ act: 0, mapRow: -3, totalKills: -9 }) === 0);
-    __ok('v1.0.25 一局普通通关（≈1295 点）能让天师轨 ≥2 档达标（正反馈）',
-      MILE_TRACKS.tianshi.nodes.filter(function (n) { return n.need <= 1295; }).length >= 2);
+    __ok('v1.0.25 一局普通通关（≈1126 点）能让天师轨 ≥2 档达标（正反馈）',
+      MILE_TRACKS.tianshi.nodes.filter(function (n) { return n.need <= 1126; }).length >= 2);
     __ok('v1.1.8 角色门禁已撤：MILESTONES 不含任何 heroes 条目（角色改由【入门符纸】解锁）',
       !MILESTONES.some(function (m) { return m.heroes; }) &&
       ['hero_ganshiren', 'hero_wuseng', 'hero_yincha'].every(function (id) {
@@ -7393,6 +7443,12 @@
       __code(askConfirm).indexOf('ovc-alt') >= 0 &&
       __code(unlockHeroWithTrialTicket).indexOf('trialTickets() - 1') >= 0 &&
       __code(hsTicketInner).indexOf('ui/shiwanfuzhi.png') >= 0);
+    /* v1.1.23r（用户 2026-10-16）：【试玩符纸】只开一局试玩 ⇒ **绝不能触发** Get-all（成就「解锁并拥有所有角色」）。
+       只有永久解锁（unlockHeroWithTicket，写 SAVE.unlockedHeroes）才上报。 */
+    __ok('v1.1.23r 试玩符纸不触发 Get-all：unlockHeroWithTrialTicket 源码里不出现 tapAchieveProgress，'
+      + '永久解锁 unlockHeroWithTicket 才报 Get-all',
+      __code(unlockHeroWithTrialTicket).indexOf('tapAchieveProgress') < 0
+      && __code(unlockHeroWithTicket).indexOf("tapAchieveProgress('Get-all'") >= 0);
 
     /* 2b) v1.1.1 里程碑专属内容硬门禁：未在里程界面领取该档前，即使门禁总开关为开也不放行。 */
     SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [], mileClaimed: [] };
@@ -7657,21 +7713,21 @@
 
     /* 4) grantRunMilestones：累加 / 阈值解锁 / 幂等 */
     SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [] };
-    G = __base('tianshi'); G.act = 1; G.mapRow = 5; G.totalKills = 6; G.finalBoss = false;   // 5×15 + 6×5 = 105
+    G = __base('tianshi'); G.act = 1; G.mapRow = 5; G.totalKills = 6; G.finalBoss = false;   // 5×22 + 6×7 = 152
     var j1 = grantRunMilestones();
     __ok('v1.0.25 grantRunMilestones：本局点数/局数/击杀累加正确',
-      SAVE.progress.pts === (5 * 15 + 6 * 5) && SAVE.progress.runs === 1 && SAVE.progress.kills === 6,
+      SAVE.progress.pts === (5 * 22 + 6 * 7) && SAVE.progress.runs === 1 && SAVE.progress.kills === 6,
       JSON.stringify(SAVE.progress));
     __ok('v1.0.25 grantRunMilestones：未达本角色轨第一档（天师 350）不解锁',
       j1.length === 0 && SAVE.mile.length === 0);
     var j2 = grantRunMilestones();
     __ok('v1.0.25 grantRunMilestones：一局只发一次（幂等）',
-      j2.length === 0 && SAVE.progress.pts === (5 * 15 + 6 * 5) && SAVE.progress.runs === 1);
+      j2.length === 0 && SAVE.progress.pts === (5 * 22 + 6 * 7) && SAVE.progress.runs === 1);
     /* v1.0.15：结算面板显示的是 _mileGain（**实际发放额**），不是当场重算 ——
        幂等返回（复活后再败/再胜）时重算会显示一个没真发的数。 */
     __ok('v1.0.25 grantRunMilestones：落 _mileGain 实际发放额，幂等返回时保持不变',
-      G._mileGain === (5 * 15 + 6 * 5));
-    G = __base('tianshi'); G.act = 3; G.mapRow = 13; G.totalKills = 20; G.finalBoss = true;   // 400+195+100+600 = 1295
+      G._mileGain === (5 * 22 + 6 * 7));
+    G = __base('tianshi'); G.act = 3; G.mapRow = 13; G.totalKills = 20; G.finalBoss = true;   // 400+286+140+300 = 1126
     var ptsBefore = SAVE.progress.pts, j3 = grantRunMilestones();
     __ok('v1.0.25 grantRunMilestones：普通通关一次点亮天师轨 ≥2 档',
       j3.length >= 2, 'unlocked=' + j3.map(function (m) { return m.id; }).join(','));
@@ -7684,7 +7740,7 @@
       SAVE.progress.wins === 1 && SAVE.progress.bestAct === 3);
     var j4 = grantRunMilestones();
     __ok('v1.0.25 grantRunMilestones：再调不重复解锁、点数不再叠加（幂等）',
-      j4.length === 0 && SAVE.mile.length === j3.length && SAVE.progress.pts === ptsBefore + 1295);
+      j4.length === 0 && SAVE.mile.length === j3.length && SAVE.progress.pts === ptsBefore + 1126);
 
     /* 5) loadSave 对老档 / 坏档的兼容 */
     Store.setJSON(SAVE_KEY, { unlocked: ['youhun'] });   // 老档：只有 unlocked
@@ -7709,7 +7765,7 @@
         SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0 }, mile: [] };
         G = __base('tianshi'); G.act = 1; G.mapRow = 8; G.totalKills = 4; G.finalBoss = false;
         grantRunMilestones();
-        return SAVE.progress.pts === (8 * 15 + 4 * 5) && SAVE.progress.runs === 1;
+        return SAVE.progress.pts === (8 * 22 + 4 * 7) && SAVE.progress.runs === 1;
       })());
     __ok('v1.0.16 独立的「解锁」界面：viewMilestones 存在、主菜单有入口',
       typeof viewMilestones === 'function' &&
@@ -7740,16 +7796,16 @@
         return JSON.stringify(mileNodesFor(h).map(function(n){ return n.need; })) ===
           JSON.stringify([550, 1400, 2900, 4500, 7500, 11000]); }));
     /* v1.1.8（角色符纸解锁）：解锁记本角色轨档位 id + 新门禁表剩余 id（紫/金内容），不再写 hero_*。 */
-    __ok('v1.1.8 里程碑：解锁记 <hero>_t<N> 与新表 id（395 点 ⇒ adv_card/potion_new 达标、adv_relic 未达）',
+    __ok('v1.1.8 里程碑：解锁记 <hero>_t<N> 与新表 id（482 点 ⇒ adv_card/potion_new 达标、adv_relic 未达）',
       (function(){ var bak = SAVE;
         SAVE = { unlocked:[], progress:{ pts:0, runs:0, wins:0, bestAct:0, kills:0, heroes:{} }, mile:[] };
-        G = __base('tianshi'); G.act = 2; G.mapRow = 9; G.totalKills = 12;   // 200+135+60 = 395
+        G = __base('tianshi'); G.act = 2; G.mapRow = 9; G.totalKills = 12;   // 200+198+84 = 482
         var j = grantRunMilestones();
         var r = j.length >= 1 && j.some(function(n){ return /^tianshi_t\d+$/.test(n.id); }) &&
                 SAVE.mile.indexOf('adv_card') >= 0 && SAVE.mile.indexOf('potion_new') >= 0 &&
                 SAVE.mile.indexOf('adv_relic') < 0 &&
                 !SAVE.mile.some(function(id){ return /^hero_/.test(id); }) &&
-                SAVE.progress.heroes.tianshi.pts === 395;
+                SAVE.progress.heroes.tianshi.pts === 482;
         SAVE = bak; return r; })());
     MILE_GATE_ON = __gate0;
 
@@ -7787,12 +7843,37 @@
       __code(forgeCardHTML).indexOf("cc.oneShot&&cc.id==='leifu'") >= 0 &&
       __code(handCardHTML).indexOf("c.oneShot&&c.id==='leifu'") >= 0);
 
-    /* ⑤ 锦囊返回：开面板前快照 / 返回时还原（覆盖锻造/商店/事件房/地图全部战局外场景）。 */
-    __ok('v1.1.16 锦囊返回：showJinnang 快照 overlay（class+内容），jinnangBack 优先还原快照',
-      __code(showJinnang).indexOf('JINNANG_SNAP') >= 0 &&
-      __code(showJinnang).indexOf("contains('pouch-scene')") >= 0 &&
-      __code(jinnangBack).indexOf('ov.className=snap.cls') >= 0 &&
-      __code(jinnangBack).indexOf('oc.innerHTML=snap.html') >= 0);
+    /* ⑤ 子面板（锦囊 / 牌库 / 牌堆）返回：开面板前快照 / 返回时还原。
+       v1.1.16 只有锦囊一处内联快照，且返回只认「返回」按钮；v1.1.23 抽成共用对
+       outPanelSnap / outPanelRestore（三条路径 + ✕ 出口全走它，覆盖锻造/商店/事件房/地图）。 */
+    __ok('v1.1.23 子面板返回：outPanelSnap 快照 + outPanelRestore 还原 + 锦囊/牌库/牌堆/✕ 共用',
+      __code(outPanelSnap).indexOf('JINNANG_SNAP') >= 0 &&
+      __code(outPanelSnap).indexOf('OUT_SUB_SCENES') >= 0 &&
+      __code(outPanelRestore).indexOf('ov.className=snap.cls') >= 0 &&
+      __code(outPanelRestore).indexOf('oc.innerHTML=snap.html') >= 0 &&
+      __code(showJinnang).indexOf('outPanelSnap()') >= 0 &&
+      __code(viewDeck).indexOf('outPanelSnap()') >= 0 &&
+      __code(jinnangBack).indexOf('outPanelRestore()') >= 0 &&
+      __code(closeOverlay).indexOf('outPanelRestore()') >= 0);
+
+    /* ⑦ v1.1.23 BGM 多轨重叠修复：startBGM 用全局代计数作废在途链（boss 关 / 复活等切换场景）。
+       ⚠️ 真实的 startBGM / stopBGM / clearSynthBGM 在冒烟开头就被静音桩 __sil 顶掉了（第 27~30 行），
+          `__code(fn)` 只量得到 "function () {}" ⇒ 改验**没被顶掉**的新全局代计数 BGM_GEN。 */
+    __ok('v1.1.23 BGM 多轨：全局代计数 BGM_GEN 就位（真实 startBGM/stopBGM 在冒烟里被静音桩顶掉，故验此全局量）',
+      typeof BGM_GEN === 'number');
+
+    /* ⑧ v1.1.23 终局慢镜（用户口径）：终结本局的最后一个行为放慢再衔接结算 —— body.finale-slow + 两处落点。 */
+    __ok('v1.1.23 终局慢镜：finaleBlow 挂 body.finale-slow，loseGame / showVictory 各包一层',
+      typeof finaleBlow === 'function' &&
+      __code(finaleBlow).indexOf('finale-slow') >= 0 &&
+      __code(finaleBlow).indexOf('hero-hit') >= 0 &&
+      __code(finaleBlow).indexOf('find(x=>x && x.dying)') >= 0 &&
+      __code(loseGame).indexOf("finaleBlow('lose'") >= 0 &&
+      __code(showVictory).indexOf("finaleBlow('win'") >= 0);
+
+    /* ⑨ v1.1.23 结算黑屏：heavy 回落档先 setBg(defeat/victory) 铺回整屏背景（SCENE_BG ⇒ 黑幕 55%）。 */
+    __ok('v1.1.23 结算黑屏：settleTransition heavy 回落铺回整屏背景',
+      __code(settleTransition).indexOf("setBg(mode==='lose' ? 'defeat.jpg' : 'victory.jpg')") >= 0);
 
     /* ⑥ 选角界面隐藏战局外 HUD（hero-scene 排除）。④ 牌库图标改用 deck_back.png。 */
     __ok('v1.1.16 战局外 HUD：选角屏(hero-scene)排除 + 牌库图标改 ui/deck_back.png',

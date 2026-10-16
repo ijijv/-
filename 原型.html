@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v1.1.21</title>
+<title>志怪塔 · 原型 v1.1.23</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -1754,6 +1754,22 @@
   .low-spec .card.is-ash{animation:none;}
   .enemy.dying{animation:enemyDie .45s ease-out forwards; pointer-events:none;}
   @keyframes enemyDie{0%{opacity:1; transform:translate(var(--ex,0px),var(--ey,0px)) scale(1)}100%{opacity:0; transform:translate(var(--ex,0px),var(--ey,0px)) scale(.55)}}
+  /* —— v1.1.23 终局慢镜（finaleBlow / body.finale-slow）——
+     用户口径：「不论角色还是敌人，在终结游戏的最后一个行为要加入行为 + 音效 + 特效的**慢动作**，再衔接结算动画。」
+     做法：只挂一个 body 级 class，把 hero / enemy 那几条既有 keyframes 的 animation-duration 拉长，
+     并给战场 #app 压一点灰度 + 暗角 ⇒ **纯动画增量**，不动任何判定数值。
+     只在对局终点两处短暂挂上（loseGame 被击败 / showVictory 通关），约 1.6s 后由 finalBlow 摘掉。
+     ⚠️ 只列 hero-hit / hero-attack / e-atk / dying 四条 —— 别用 `*{animation-duration}` 全量拖慢，
+        否则连墨过场 / 结算弹字都会一起变慢。 */
+  body.finale-slow .hero-art-box.hero-hit .hero-art,
+  body.finale-slow .hero-art-box.hero-attack .hero-art{animation-duration:1.15s !important;}
+  body.finale-slow .enemy.e-atk{animation-duration:.95s !important;}
+  body.finale-slow .enemy.dying{animation-duration:1.45s !important;}
+  body.finale-slow #app{filter:grayscale(.32) contrast(1.06) brightness(.9); transition:filter .3s ease;}
+  body.finale-slow #app::after{content:''; position:absolute; inset:0; pointer-events:none; z-index:4000;
+    background:radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,.55) 100%);
+    animation:finaleVig .5s ease-out both;}
+  @keyframes finaleVig{0%{opacity:0;}100%{opacity:1;}}
   /* —— v0.72.0：卡牌动画层（抽 / 弃 / 洗 + 易物） ——
      为什么不复用 #fx-layer(5)：#overlay 是 z-index:10，而「易物打出时牌体在战场中央亮相」
      必须在小窗开着时看得见 ⇒ 必须高于 10。取 12 仍低于 #float-msg(20) 与 #tooltip(9999)，
@@ -2162,21 +2178,8 @@
   #enemy-say.tier-low{border-color:rgba(200,96,60,.6); color:#f0cdb4;}
   #enemy-say.tier-out{border-color:rgba(140,120,96,.45); color:#c9bda6;}
   #enemy-say.tier-mid{border-color:rgba(226,196,120,.72); color:#f5e6bd;}
-  /* —— 成就 · 卡背 / 头像框外观（局外收集奖励） —— */
-  body[data-cardback="cb_jinsha"]{--cb:linear-gradient(90deg,#d4af37,#8c6d1f,#d4af37);}
-  body[data-cardback="cb_moqi"]{--cb:linear-gradient(90deg,#1a1a1a,#000,#1a1a1a);}
-  body[data-cardback="cb_yanmo"]{--cb:linear-gradient(90deg,#8c1f1f,#3a0f0f,#8c1f1f);}
-  body[data-frame="af_zijin"] .hero-art-box{box-shadow:0 0 0 3px #9b59b6, 0 0 0 6px #f1c40f;}
-  body[data-frame="af_chijin"] .hero-art-box{box-shadow:0 0 0 3px #e74c3c, 0 0 0 6px #f39c12;}
-  /* ⚠️ 收起态必须用 calc(-100% - 24px)，**不能写 -140%**：toast 是空元素时高度只有 26px
-     （padding 12×2 + 边框），-140% 只有 -36.4px，配 top:14px 后底边停在 y≈+4 ——
-     在顶边露出**一条 4px 宽的金色圆角边**。主菜单改全屏后被实测抓出来（驱动 S 条）。
-     -100% - 24px 与自身高度无关，恒停在视口上方 10px。 */
-  #achieve-toast{position:fixed; top:14px; left:50%; transform:translate(-50%,calc(-100% - 24px)); z-index:120; min-width:240px; max-width:86vw; text-align:center; background:rgba(24,18,12,.97); border:1px solid var(--gold); border-radius:12px; padding:12px 20px; box-shadow:0 8px 26px rgba(0,0,0,.65); transition:transform .4s cubic-bezier(.2,.8,.2,1); pointer-events:none;}
-  #achieve-toast.show{transform:translate(-50%,0);}
-  #achieve-toast .at-icon{font-size:26px; line-height:1;}
-  #achieve-toast .at-title{font-family:var(--font-brush); font-size:17px; color:var(--gold); letter-spacing:2px; margin-top:6px;}
-  #achieve-toast .at-sub{font-size:12px; color:var(--dim); margin-top:4px; letter-spacing:1px;}
+  /* v1.1.22（用户口径）：成就 · 卡背 / 头像框外观 与 成就吐司（achieve toast）整块 CSS **已删除**
+     （随游戏内成就系统一并移除）。.card::before 的 --cb 仍有基样式兜底（红渐变），不再需要 data-cardback。 */
   /* —— 手机端适配（地图/手牌/面板缩放） —— */
   @media (max-width:520px){
     h1.title{font-size:22px; letter-spacing:3px;}
@@ -2416,12 +2419,7 @@
     .prelic-chip{padding:1px 5px 1px 1px;}
     /* v1.0.17：本档图标同样 2×（遗物芯片 18px → 36px）。 */
     .prelic-chip .ricon{width:36px; height:36px;}
-    /* v0.71.0：成就吐司从视口上方掉下来，`top:14px` + `min-width:240px` 正好**盖住
-       顶部那三枚按钮**（战报/牌库/菜单）。矮屏压小一圈并往边上去，减少遮挡。 */
-    #achieve-toast{top:6px; min-width:180px; padding:7px 12px;}
-    #achieve-toast .at-icon{font-size:18px;}
-    #achieve-toast .at-title{font-size:14px; letter-spacing:1px; margin-top:3px;}
-    #achieve-toast .at-sub{font-size:11px; margin-top:2px;}
+    /* v1.1.22：原成就吐司（achieve toast）的矮屏档（v0.71.0 压小一圈）随成就系统一并删除。 */
     /* v0.71.0：Boss 出场在矮屏档一字未改 ⇒ `.bs-name` 44px + 印章块 22px/34px 的 padding
        ≈150px 高，在 390 高的屏上四个角贴边。压到与屏高相称。 */
     #boss-intro .boss-seal{padding:12px 20px; border-width:2px;}
@@ -3648,7 +3646,7 @@
   .title-actions .btn, button.btn.ghost, .tb-toggle,
   #tooltip, #tooltip .tt-story, #tut-hint .tut-tag, #tip-bubble .tip-tag,
   .settle-cap, .settle-acc, #perf,
-  #achieve-toast .at-sub, .bcard .bmeta, .bcard .bstory,
+  .bcard .bmeta, .bcard .bstory,
   .pouch-name, .pouch-desc, .pouch-empty, .run-status, .kwlist,
   .menu-title small, .menu-col .menu-tier.is-list .btn, .menu-tip,
   .map-plaque small, #rotate-tip .rt-sub,
@@ -3893,7 +3891,6 @@
 <div id="boss-intro"></div>
 <div id="scene-veil"><div class="veil-ink"></div></div>
 <div id="rotate-tip"><div class="rt-ico">▯</div><div class="rt-main">请 横 屏</div><div class="rt-sub">《志怪塔》是横屏游戏，把手机转过来即可继续</div></div>
-<div id="achieve-toast"></div>
 <img id="bg" alt="" style="display:none">
 <div id="app">
   <h1 class="title">志 怪 塔<span class="title-actions"><button class="btn ghost" id="logToggle">战报</button><button class="btn ghost" id="viewDeck">牌库</button><button class="btn ghost" id="menuBtn">菜单</button><button class="btn ghost" id="jinnangBtn" aria-label="锦囊" onclick="showJinnang()">锦囊</button></span></h1>

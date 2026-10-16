@@ -915,6 +915,7 @@ function confirmNewGame(opts){
     const __sd=rngSeedNow(); seedRng(__sd);      // v0.61.06：本局种子（可用 ?seed=N 复现）
     G.mapSeed=__sd; buildActs(__sd); G.mapRow=0; // v0.61.40：按种子生成本局三幕随机地图
     track('runStart');
+    tapAchieve('Beginning');   // v1.1.23：新局开工 → 上报「登塔！！！」
     if(SAVE.signInBonus>0){ G.gold=SAVE.signInBonus; SAVE.signInBonus=0; persistSave(); log('开局携带签到奖励 '+G.gold+' 金币'); }
     showHeroSelect();
   } catch(e){ console.error('confirmNewGame error:', e); showStartScreen(); }
@@ -1029,6 +1030,8 @@ function skipOpening(){
    布局权威 = 志怪塔UI重设计\主菜单demo.html：顶标题 / 左石碑列 / 右符纸行 / 全屏背景。
    入口 9 → 5：删 startEndless(无尽) / viewAchievements(成就) / viewStats(统计) / showTutorial(引导)
    —— 用户原话『真实的9个按键只要是那5个入口没提的，就默认删去』。**函数本体一律保留**，只摘入口。
+   v1.1.22（用户口径）：成就 · 收藏（卡背 / 头像框）**整块系统删除** ⇒ viewAchievements 本体随之一并删除
+   （至此本条注释里「函数本体仍保留」只对 viewStats / showTutorial 成立）。
    v1.0.14：排行榜入口（is-leaderboard）连同 js/56_rank.js 一并删除 ⇒ 符纸行只剩「图鉴」「设置」。
    签到整块取消（用户：『没有实际意义』）。
    ⚠️ 版本号字符串必须留在 <h2> 里（提交.py 的 read_version() 读 原型.html，但三处保持一致是项目惯例）。
@@ -1095,7 +1098,6 @@ function openMenu(){
     <button class="btn ghost" onclick="viewKeywords()">关键词说明</button>
     <button class="btn ghost" onclick="viewRelics()">遗物图鉴</button>
     <button class="btn ghost" onclick="viewBestiary()">志怪图鉴</button>
-    <button class="btn ghost" onclick="viewAchievements()">成就 · 收藏</button>
     <button class="btn ghost" onclick="viewMilestones()">里程碑 · 解锁</button>`);
 }
 function manualSave(){
@@ -1187,6 +1189,7 @@ function showSettings(){
     <button class="btn ghost" onclick="showClearTimes()">榜 单</button>
     <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
     <button class="btn ghost" onclick="showCloudPanel()">云存档</button>
+    <p style="margin-top:16px">成就上报（TapTap 平台）：<b style="color:${tapAchieveEnv().ok?'var(--green)':'var(--red)'}">${tapAchieveEnv().ok?'已接入':'未接入'}</b><br><small style="color:var(--dim);font-size:12px">v1.1.23：游戏内成就 / 卡背 / 头像框已删除；6 条成就（登塔！！！/ 初入第三幕 / 身经百战 / 全能降魔者 / 解锁并拥有所有角色 / 风云榜相聚）只上报到 TapTap 平台（玩家在 TapTap 游戏页看到点亮）。<br>${tapAchieveDiag()}</small></p>
     <button class="btn ghost" onclick="menuBack()">返回菜单</button>`, undefined, 'scroll-scene');
 }
 /* 榜 单（v1.0.19 · v1.1.x 换皮为「风云榜」）—— 6 个榜：通关计时总榜 + 4 个角色分榜 + 整局总分榜。
@@ -1625,7 +1628,6 @@ applyLowSpec();
 applyPerfReadout();   // v1.0.5：恢复上次的性能读数开关（默认关，桌面零变化）
 numPrewarm();   // v0.61.41：四档字形开局就预加载 —— 否则本局第一次飘字必然回落文字
 hudIconPrewarm();   // v1.1.20r3：锦囊 / 牌堆两枚 HUD 图标也开局预热（探图异步，免得进地图时先闪回落文字）
-applyCosmetics();
 pileInit();     // v0.69.0：把 back.png / side.png 的地址写进 CSS 变量（抽牌堆·弃牌堆）
 trackLaunch();
 normalizeSingleRunSave();   // v1.1.15：单档化收敛 —— 旧多档只留最新那份，搬进 0 号槽

@@ -59,6 +59,14 @@ function settleTransition(tier, mode, openFn){
     return;
   }
   /* 重档：收尾拍 .45 → 墨自四边洇入 .55 → 留白 .3 → 揭幕（开面板 + 墨从中裂开 .5） */
+  /* v1.1.23（用户报障「结算画面停留一会儿，怎么会黑屏」）：heavy 档是**结局视频缺席 / 解码失败**
+     时唯一的回落出口（settleVideo 的三条回落路径都汇到这里）。v1.1.x 为让视频末帧充当背景，
+     把整屏背景图撤了 —— 视频一旦没播成，结算面板就落在 #overlay 的 88% 黑幕上，看着就是「黑屏」。
+     这里把整屏背景铺回去（失败 bg_defeat.jpg / 战胜 bg_victory.jpg），观感与「视频末帧」同一档：
+     两张都在 SCENE_BG 表内 ⇒ #overlay 黑幕放松到 55%，图才透得出来。视频成功播放时这条不会走，
+     所以 v1.1.x 的「视频末帧当背景」口径原样保留；铺下的背景随后由复活 setBg('act'+N) 或
+     回主菜单 setBg('menu') 自然接管，不需要专门摘。 */
+  if(typeof setBg==='function'){ try{ setBg(mode==='lose' ? 'defeat.jpg' : 'victory.jpg'); }catch(e){} }
   later(450, ()=>{ if(veil){ veil.style.display='block'; veil.className='show '+(mode==='lose'?'lose':'win'); } });
   later(1300, ()=>{ open(); if(veil) veil.classList.add('parting'); });
   later(1850, finish);
@@ -129,6 +137,55 @@ function settleVidDrop(){
   try{ v.pause&&v.pause(); }catch(e){}
   try{ v.parentNode&&v.parentNode.removeChild(v); }catch(e){}
 }
+/* ===================== v1.1.23 终局慢镜（用户口径） =====================
+   用户 2026-10-16：「不论角色还是敌人，在终结游戏的最后一个行为要加入行为 + 音效 + 特效的**慢动作**，
+   再衔接结算动画。」—— 用户在别处说的「纯动画增量」就是**既有 heroAnim / enemyActAnim 那套行为效果**，
+   不是 `_动作产线/` 的帧序列。
+   ⇒ 本局终点两处（loseGame 被击败 / showVictory 通关）在推结算视频前，先把「最后一下」放慢播一遍：
+     · lose：玩家立绘中刀（hero-hit）+ 出手敌人 e-atk + 承伤暗角 + 音效；
+     · win ：收尾敌人（Boss）的 dying 消散重排一次 —— 在 body.finale-slow 下拉长的时长里播完。
+   实现只靠一个 body 级 class（body.finale-slow，见 原型.html）⇒ **不动任何判定数值**。
+   ⚠️ 无头 / 关特效 ⇒ **同刻** then()：冒烟在 loseGame 之后立刻读 DOM，不能异步化。
+   ⚠️ loseGame 的 `if(G.dead) return` 重入守卫在其函数首行 ⇒ 本函数必须在守卫**之后**、settleVideo **之前**调。
+   ⚠️ 不走 heroAnim / enemyAttackAnim：它们自带 360 / 560ms 的摘类定时器，会把慢镜**截断**；
+      这里直接挂类、留到终局由 clean() 统一摘。 */
+let _finaleSkipBound=false;
+function finaleBlow(mode, then){
+  if(!animLive() || menuFxOff()){ then(); return; }
+  let done=false;
+  const clean=()=>{
+    try{ document.body.classList.remove('finale-slow'); }catch(e){}
+    try{ document.querySelectorAll('.hero-art-box').forEach(b=>b.classList.remove('hero-hit','hero-attack')); }catch(e){}
+    try{ document.querySelectorAll('.enemy.e-atk').forEach(el=>el.classList.remove('e-atk')); }catch(e){}
+  };
+  const finish=()=>{ if(done) return; done=true;
+    if(_finaleSkipBound){ _finaleSkipBound=false; try{ window.removeEventListener('pointerdown', skip, true); }catch(e){} }
+    clean(); then();
+  };
+  function skip(){ finish(); }
+  if(!_finaleSkipBound){ _finaleSkipBound=true; try{ window.addEventListener('pointerdown', skip, true); }catch(e){} }
+  try{ document.body.classList.add('finale-slow'); }catch(e){}
+  if(mode==='lose'){
+    try{ sfx('hurt'); }catch(e){}
+    try{ if(typeof hurtVignette==='function') hurtVignette(); }catch(e){}
+    /* 玩家中刀：直接挂 hero-hit 并留到终局（heroAnim 会 360ms 摘类，截断慢镜） */
+    try{ const b=document.querySelector('.hero-art-box');
+      if(b){ b.classList.remove('hero-attack','hero-hit','hero-cast'); void b.offsetWidth; b.classList.add('hero-hit'); } }catch(e){}
+    /* 出手的敌人：同刻重排一次 e-atk（同样留到终局） */
+    try{ (G.enemies||[]).forEach(e=>{ if(!alive(e)) return;
+      const el=(typeof enemyEl==='function')?enemyEl(e):null; if(!el) return;
+      el.style.setProperty('--atk-delay','0ms'); el.style.setProperty('--atk-times','1');
+      el.classList.remove('e-atk'); void el.offsetWidth; el.classList.add('e-atk'); }); }catch(e){}
+  } else {
+    try{ sfx('death'); }catch(e){}
+    /* 收尾敌人的消散重排一次：此刻 DOM 还停在死亡前的渲染（dying 类要下一次 render 才写），
+       所以优先按 e.dying 找到元素再手动挂类。 */
+    try{ const de=(G.enemies||[]).find(x=>x && x.dying);
+      const el=de ? ((typeof enemyEl==='function')?enemyEl(de):null) : document.querySelector('.enemy.dying');
+      if(el){ el.classList.remove('dying'); void el.offsetWidth; el.classList.add('dying'); } }catch(e){}
+  }
+  setTimeout(finish, 1600);
+}
 function winFight(){
   if(G.battleOver) return; // v0.61 B4：重入守卫 —— 一场战斗只结算一次胜利
   G.battleOver=true;
@@ -147,9 +204,10 @@ function winFight(){
   if(hasRelic('jubaopen')) g=Math.floor(g*1.5);
   G.gold+=g; log(`获得 ${g} 金币`);
   const hpLost = Math.max(0, G.battleStartHp - G.hp);
-  if(hpLost===0) unlockAchievement('wushang');
-  if(G.energy===0) unlockAchievement('lingfu');
-  if(isBoss) unlockAchievement('tushen');
+  /* v1.1.23（用户口径）：游戏内成就已删、用户已在 TapTap 后台重建 6 条 ⇒ winFight 里原
+     「无伤(wushang) / 零符(lingfu) / 屠神(tushen)」三条上报点整条移除（新 6 条无对应项）。
+     新上报点：新局开始→登塔 Beginning、推进第三幕→Hard-three、累计击杀→身经百战 All-unlocked、
+     局末按已通关角色数→全能降魔者 No-matter-Who、解锁角色→Get-all、首次上榜→Nice-encounter。 */
   let h=0, extra=0;   // h = 基础战后恢复；extra = 「战后额外恢复」（招魂幡/返魂香，结算面板单独标识）
   if(!G.finalBoss){
     if(isBoss){ h=Math.floor(G.maxHp*0.5); log(`击败 Boss，汲取妖气恢复 ${h} 点生命（50%）`); }
@@ -248,6 +306,7 @@ function goNext(){
 function advanceAct(){
   if(G.act>=ACTS.length){ showVictory(); return; }
   G.act++;
+  if(G.act>=3) tapAchieve('Hard-three');   // v1.1.23：推进到第三幕 → 上报「初入第三幕」
   MAP=ACTS[G.act-1];
   G.mapRow=0; G.mapCol=-1; G.mapPath=[]; G.shopWares=null;
   showOverlay(`<h2>第 ${G.act} 幕 · ${ACT_NAMES[G.act-1]}</h2><p>更凶的妖魔盘踞在更高层。<br>敌人的生命与攻击都变强了。</p><button class="btn" onclick="hideOverlay(); showMap({entry:true});">开始攀登</button>`);
@@ -274,21 +333,23 @@ function clearTimeBonus(sec){
   if(m<50) return 800;
   return 400;
 }
-/* 总分分项（用户 2026-10-12 定稿口径）：
-     层数推进 = 全局层号×40 · 普通击杀×10 · 精英击杀×20 · Boss 击杀×30 · 召唤物击杀×5 ·
-     剩余金币×8 · 剩余生命×10 · 灵汁剩余×40；用时加分与 +1000 通关加成**仅通关时**计入。
-   「层号」按**全局楼层**算：(幕-1)×14 + 当前层（1 基）—— 单调递增，契合「推进」语义。 */
+/* 总分分项（用户 2026-10-12 定稿口径 / 2026-10-16 修订）：
+     层数推进 = 全局层号×40 · 普通击杀×6 · 精英击杀×8 · Boss 击杀×10 · 召唤物击杀×7 ·
+     剩余金币×8 · 剩余生命×1 · 灵汁剩余×40；用时加分与 +1000 通关加成**仅通关时**计入。
+   「层号」按**全局楼层**算：(幕-1)×14 + 当前层（1 基）—— 单调递增，契合「推进」语义。
+   2026-10-16 修订：击杀四档由 10/20/30/5 改为 **6/8/10/7**（普通/精英/首领/召唤物），
+   剩余生命由 ×10 改为 **×1**（用户口径「剩余生命给分数的加成改为1」）。 */
 function scoreParts(s){
   const g=s||G; if(!g) return [];
   const floor=(Math.max(1,g.act|0)-1)*MAP_ROWS + Math.max(0,g.mapRow|0) + 1;
   const parts=[
     { lab:'层数推进', val:floor*40 },
-    { lab:'普通击杀', val:Math.max(0,g.killNormal|0)*10 },
-    { lab:'精英击杀', val:Math.max(0,g.killElite|0)*20 },
-    { lab:'首领击杀', val:Math.max(0,g.killBoss|0)*30 },
-    { lab:'召唤物击杀', val:Math.max(0,g.killSummon|0)*5 },
+    { lab:'普通击杀', val:Math.max(0,g.killNormal|0)*6 },
+    { lab:'精英击杀', val:Math.max(0,g.killElite|0)*8 },
+    { lab:'首领击杀', val:Math.max(0,g.killBoss|0)*10 },
+    { lab:'召唤物击杀', val:Math.max(0,g.killSummon|0)*7 },
     { lab:'剩余金币', val:(g.gold|0)*8 },
-    { lab:'剩余生命', val:Math.max(0,g.hp|0)*10 },
+    { lab:'剩余生命', val:Math.max(0,g.hp|0)*1 },
     { lab:'灵汁剩余', val:(g.potions?g.potions.length:0)*40 },
   ];
   if(g.finalBoss){
@@ -435,8 +496,9 @@ function loseGame(){
      不再有 <h2> 标题、得分行、里程碑框等赘述；大号 num 浮字从右到左弹出组成总分。 */
   grantRunMilestones();
   const R=settleResultHTML('lose');
-  /* v1.1.x：结局接**角色败局视频**（settleVideo 内部无头/缺素材回落墨过场）。 */
-  settleVideo('lose', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); });
+  /* v1.1.x：结局接**角色败局视频**（settleVideo 内部无头/缺素材回落墨过场）。
+     v1.1.23：先播一段「承受到致命伤害」的终局慢镜（玩家中刀 + 出手敌人 + 音效 + 暗角），再衔接结算。 */
+  finaleBlow('lose', ()=>{ settleVideo('lose', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); }); });
 }
 function giveUp(){
   if(typeof settleVidDrop==='function') settleVidDrop();   // v1.1.x：败局面板点「放弃」也要摘掉结局视频
@@ -503,8 +565,9 @@ function showVictory(){
   const R=settleResultHTML('win');
   /* 通关是**最重**的一档（金墨自下升）。`giveUp()` 刻意**不接** —— 它不是结算，
      是结算面板上的一个次级出口，给它铺一场墨幕会显得「又赢了一次」。
-     v1.1.x：结局接**角色通关视频**（settleVideo 内部无头/缺素材回落墨过场）。 */
-  settleVideo('win', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); });
+     v1.1.x：结局接**角色通关视频**（settleVideo 内部无头/缺素材回落墨过场）。
+     v1.1.23：先播一段终局慢镜（收尾敌人的消散放慢），再衔接结算。 */
+  finaleBlow('win', ()=>{ settleVideo('win', ()=>{ showOverlay(R.html, undefined, 'result-scene'); settleAnim(R); }); });
 }
 
 /* ===================== 通关计时榜（v1.0.17） =====================
@@ -578,6 +641,8 @@ function recordScoreRun(win){
   /* v1.0.21：失败不再静默 —— 用户报障「分数榜上传不了」时看不到任何原因，
      这里把真实错误（含 boardId 诊断串）浮字出来，一次真机回报即可定位是后台建榜配置还是权限。 */
   if(typeof rankSubmit === 'function'){
+    /* v1.1.23r（用户 2026-10-16 纠正口径）：成就「Nice-encounter」的上报已**上移到 rankSubmit 成功回调内**
+       （任何榜提交成功都触发，不再只认总分榜），此处不再重复上报。 */
     try{ rankSubmit(sc, 'total_score').catch(function(e){
       if(typeof floatMsg==='function') floatMsg('总分榜上传失败：'+((e&&e.message)||e));
     }); }catch(e){}

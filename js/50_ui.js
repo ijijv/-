@@ -1797,6 +1797,8 @@ function unlockHeroWithTicket(id){
   if(!Array.isArray(SAVE.unlockedHeroes)) SAVE.unlockedHeroes=[];
   SAVE.unlockedHeroes.push(id);
   persistSave();
+  /* v1.1.23：解锁角色 → 上报「解锁并拥有所有角色」(Get-all)。tianshi 恒开 ⇒ 计数 +1；4 名齐聚即达标。 */
+  tapAchieveProgress('Get-all', 1 + ((SAVE.unlockedHeroes||[]).length));
   return true;
 }
 /* v1.1.21（用户口径「只能使用角色一次 = 每局一次」）：用 1 张【试玩符纸】给该角色开一局试玩 ——
@@ -1889,6 +1891,8 @@ function grantRunMilestones(){
   if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
   const hp=p.heroes[heroId] || (p.heroes[heroId]={pts:0,runs:0,wins:0});
   hp.pts=(hp.pts|0)+pts; hp.runs=(hp.runs|0)+1; if(won) hp.wins=(hp.wins|0)+1;
+  /* v1.1.23：跨局成就「全能降魔者」(4 步) —— 按「已通关过的角色数」上报（4 名各通关一次即达标）。 */
+  tapAchieveProgress('No-matter-Who', Object.keys(p.heroes).filter(k => p.heroes[k] && (p.heroes[k].wins|0) > 0).length);
   const fresh=[];
   if(!SAVE.mile) SAVE.mile=[];
   mileNodesFor(heroId).forEach(n=>{                         // 只判**这个角色**的轨
@@ -1918,8 +1922,8 @@ function grantRunMilestones(){
    **左边 2/3**（右缘压一道暗渐变暗示还剩 1/3），点中展开全幅 + 厚边立体框；每张海报**下面挂一行
    该角色自己的里程**（`.ml-hinfo`）—— 用户口径「里程可以显示在海报下面」，顶栏那块整块撤掉。
    右侧 = **该角色自己的**横向里程轨：**6 档 + 1 个「敬请期待」尾节点**，节点**等距分布**，
-   里程数只作节点下方标注。轨可横向拖动（鼠标拖 / 触屏滑，拖动中响布料摩擦音）。
-   音效：点海报 ui_poster / 领奖励 ui_reward / 拖轨 ui_drag（进界面那一层由 talisOpen 的 ui_curtain 负责）。
+   里程数只作节点下方标注。轨可横向拖动（鼠标拖 / 触屏滑，v1.1.23 起滑动不再出声）。
+   音效：点海报 ui_poster / 领奖励 ui_reward（进界面那一层由 talisOpen 的 ui_curtain 负责）。
    ⚠️ 6 档里**前 5 档的真实奖励内容与里程数、以及里程增长规则**都**待与用户定稿**（用户口径：
       「先设计里程获得的全新规则和数值后计算平均每把的里程数后才能制定」）⇒ 现在渲染成**虚线待定框**，
      「领取」是**占位交互、不落盘**。定稿后填 20_data.js 的 MILE_TRACKS 即可，这里一行都不用动。 */
@@ -2065,11 +2069,11 @@ function mileDetail(nodeId){
 }
 /* 里程轨横向拖动（鼠标：按住拖 + **松手惯性 + 停稳缓出**；触屏走原生 overflow 滚动 ——
    原生滚动自带惯性/缓出，别用自定义方案去抢它的手势）。
-   拖动中节流响「布面摩擦」；**松手后的惯性阶段照样在滚** ⇒ `onscroll` 继续触发 ⇒ 「唰唰唰」连贯。
-   v1.1.18（用户口径「里程碑的滑动要有轻微惯性来配合音效」）：鼠标松手后用 rAF 衰减，
+   v1.1.18（用户口径「里程碑的滑动要有轻微惯性」）：鼠标松手后用 rAF 衰减，
    衰减参数对齐 样式预览.html 的轨道 demo（速度 <30px/s 后衰减陡增 = 缓出，<1.2px/s 归零）。
-   ⚠️ 音效素材用户之后给：这里只复用现成的 `ui_drag`（mileDragSfx，110ms 节流），不新增声音。 */
-const _mlDrag={on:false,x:0,sl:0,el:null,last:0,v:0,raf:0,pt:0,px:0};
+   v1.1.23（用户口径「把里程碑的滑动音效删了」）：拖动/惯性阶段原本节流播 `ui_drag`（布面摩擦），
+   现已整条移除 —— 手感（惯性 / 缓出）原样不动，滑动**全程无音**。 */
+const _mlDrag={on:false,x:0,sl:0,el:null,v:0,raf:0,pt:0,px:0};
 function _mlNow(){ return (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now(); }
 function _mlStopInertia(){
   if(_mlDrag.raf){ try{ cancelAnimationFrame(_mlDrag.raf); }catch(err){} _mlDrag.raf=0; }
@@ -2103,10 +2107,6 @@ function mileDragStart(e){
   if(sc.classList) sc.classList.add('grabbing');
   try{ if(sc.setPointerCapture) sc.setPointerCapture(e.pointerId); }catch(err){}
 }
-function mileDragSfx(){
-  const now=_mlNow();
-  if(now-_mlDrag.last<110) return; _mlDrag.last=now; sfx('ui_drag');
-}
 function mileDragMove(e){
   if(!_mlDrag.on||!_mlDrag.el) return;
   const dx=e.clientX-_mlDrag.x;
@@ -2114,7 +2114,6 @@ function mileDragMove(e){
   /* 顺带估个「松手速度」（scrollLeft 每秒变化量）：dt≥12ms 才更新，避免除零/高频抖动。 */
   const now=_mlNow(), dt=now-_mlDrag.pt;
   if(dt>=12){ _mlDrag.v=(_mlDrag.el.scrollLeft-_mlDrag.px)/dt*1000; _mlDrag.pt=now; _mlDrag.px=_mlDrag.el.scrollLeft; }
-  if(Math.abs(dx)>4) mileDragSfx();
   if(e.preventDefault) e.preventDefault();
 }
 function mileDragEnd(){
@@ -2206,7 +2205,7 @@ function viewMilestones(heroId){
       <div class="ml-heroes">${rail}</div>
       <div class="ml-stage">
         <div class="ml-scroll" onpointerdown="mileDragStart(event)" onpointermove="mileDragMove(event)"
-             onpointerup="mileDragEnd()" onpointercancel="mileDragEnd()" onscroll="mileDragSfx()">
+             onpointerup="mileDragEnd()" onpointercancel="mileDragEnd()">
           <div class="ml-track" style="min-width:${trackW}px">
             <div class="ml-line"><i style="width:${fillPct}%"></i></div>
             ${marks}${tailMark}
@@ -2219,8 +2218,9 @@ function viewMilestones(heroId){
     </div>
   </div>`, true, 'mile-scene');
 }
-/* v0.61.32：解锁音单独成函数 —— 冒烟里 unlockBestiary/unlockAchievement 都被换成空函数，
-   写在它们体内验不到（同 overlaySfx 的理由）。两个调用点各一行转发。 */
+/* v0.61.32：解锁音单独成函数 —— 冒烟里 unlockBestiary 被换成空函数，
+   写在它体内验不到（同 overlaySfx 的理由）。调用点：图鉴新条目 / 里程碑解锁。
+   v1.1.22：成就系统删除后，原 unlockAchievement 那个调用点一并消失。 */
 function unlockSfx(){ sfx('ui_unlock'); }
 function unlockBestiary(key){
   if(!key || !ENEMIES[key]) return;
@@ -2247,71 +2247,10 @@ function viewBestiary(){
   }).join('');
   showOverlay(`<h2>志 怪 图 鉴</h2><p style="font-size:13px;color:var(--dim)">已收录 <b style="color:var(--gold)">${got}</b> / ${total} · 击败妖怪，把它们的志怪故事收进你的百鬼谱。</p><div id="bestiary-grid">${cards}</div>`, true, 'scroll-scene');
 }
-/* ===================== 成就 & 收集（卡背 / 头像框） ===================== */
-const COSMETICS = {
-  cb_jinsha:{name:'金沙卡背', type:'cardback'},
-  cb_moqi:{name:'墨气卡背', type:'cardback'},
-  cb_yanmo:{name:'阎魔卡背', type:'cardback'},
-  af_zijin:{name:'紫金头像框', type:'frame'},
-  af_chijin:{name:'赤金头像框', type:'frame'}
-};
-const ACHIEVEMENTS = [
-  {id:'wushang', name:'无伤之战', icon:'🕊', desc:'一场战斗 0 伤害获胜', reward:'cb_jinsha'},
-  {id:'lingfu',  name:'零符斩杀', icon:'🈳', desc:'以 0 点符文结束一场战斗', reward:'cb_moqi'},
-  {id:'zuzhou',  name:'诅咒满盈', icon:'🔮', desc:'让一名敌人叠满 6 层【诅咒】', reward:'af_zijin'},
-  {id:'tushen',  name:'屠神证道', icon:'👹', desc:'击败一名幕主 Boss', reward:'af_chijin'},
-  {id:'baizhan', name:'百战不殆', icon:'🗡', desc:'累计击败 100 个敌人', reward:'cb_yanmo'}
-];
-function hasAchievement(id){ return SAVE.achievements && SAVE.achievements.includes(id); }
-function showAchievementToast(title, sub){
-  let t=document.getElementById('achieve-toast');
-  if(!t) return;
-  t.innerHTML=`<div class="at-icon">🏆</div><div class="at-title">${title}</div>${sub?`<div class="at-sub">${sub}</div>`:''}`;
-  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
-  clearTimeout(showAchievementToast._t);
-  showAchievementToast._t=setTimeout(()=>t.classList.remove('show'), 2600);
-}
-function unlockAchievement(id){
-  if(!id || hasAchievement(id)) return;
-  if(!SAVE.achievements) SAVE.achievements=[];
-  SAVE.achievements.push(id); persistSave();
-  const a=ACHIEVEMENTS.find(x=>x.id===id);
-  if(a){
-    unlockSfx();   // v0.61.32：成就从蹭金币音改成专属解锁音
-    const cos=COSMETICS[a.reward];
-    showAchievementToast(`成就解锁 · ${a.name}`, cos?`奖励：${cos.name}（收藏页可装备）`:'');
-    log(`【成就】${a.name} 已解锁${cos?`，获得${cos.name}`:''}`);
-  }
-}
-function applyCosmetics(){
-  document.body.dataset.cardback = (SAVE && SAVE.cardBack) || '';
-  document.body.dataset.frame = (SAVE && SAVE.avatarFrame) || '';
-}
-function equipCosmetic(id){
-  const cos=COSMETICS[id]; if(!cos) return;
-  if(cos.type==='cardback') SAVE.cardBack = (SAVE.cardBack===id?'':id);
-  else SAVE.avatarFrame = (SAVE.avatarFrame===id?'':id);
-  persistSave(); applyCosmetics(); sfx('relic');
-  viewAchievements();
-}
-function viewAchievements(){
-  const got=(SAVE.achievements||[]).length;
-  const rows=ACHIEVEMENTS.map(a=>{
-    const have=hasAchievement(a.id);
-    const cos=COSMETICS[a.reward];
-    const equipped=(cos.type==='cardback' && SAVE.cardBack===cos.id) || (cos.type==='frame' && SAVE.avatarFrame===cos.id);
-    const right=have
-      ? `<button class="btn ghost" style="padding:4px 12px;font-size:12px;margin:0" onclick="equipCosmetic('${cos.id}')">${equipped?'✓ 已装备':'装备 · '+cos.name}</button>`
-      : `<span style="color:var(--dim);font-size:11px">奖励：${cos.name}</span>`;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--ink3);${have?'':'opacity:.45'}">
-      <div style="flex:1"><span style="font-size:20px">${have?a.icon:'🔒'}</span> <b>${a.name}</b> <span style="color:var(--dim);font-size:12px">· ${a.desc}</span></div>
-      ${right}
-    </div>`;
-  }).join('');
-  showOverlay(`<h2>成 就 · 收 藏</h2>
-    <p style="font-size:13px;color:var(--dim)">解锁成就获得卡背 / 头像框，点击奖励即可装备（局外生效，切换后立即在卡面/头像上看效果）。已达成 <b style="color:var(--gold)">${got}</b> / ${ACHIEVEMENTS.length}。</p>
-    <div class="kwlist">${rows}</div>`, true);
-}
+/* v1.1.22（用户口径）：成就 · 收藏（卡背 / 头像框）整块系统**已删除** ——
+   原 COSMETICS / ACHIEVEMENTS / hasAchievement / showAchievementToast / unlockAchievement /
+   applyCosmetics / equipCosmetic / viewAchievements 全部移除，卡背与头像框的 CSS / SAVE 键同批清掉。
+   成就改由 TapTap 平台侧承载（见 55_cloud.js 的 tapAchieve 上报）。 */
 
 /* ===================== 每日签到 + 广告占位（局外留存） ===================== */
 function todayStr(){
@@ -2386,11 +2325,41 @@ function viewRelics(){
    ⚠️ 锦囊自身在面板里「用一瓶灵汁」后会重开本面板（showJinnang）⇒ 那一次不能再快照，
       否则快照被自己的 pouch 面板顶掉，返回就回到锦囊页而不是底下的场景。 */
 let JINNANG_SNAP=null;
+/* v1.1.23（用户报障「篝火等场景进锦囊**或牌库/牌堆**，返回后跳进战斗场面」）：
+   锦囊自 v1.1.16 起有快照还原，但它的返回有**两个出口** —— 面板内「返回」走 jinnangBack、
+   右上 ✕ 走 closeOverlay，只有前者认快照，点 ✕ 照样掉进 #app；而 viewDeck（#outPile「牌堆」）
+   与 showPile 两条路径**连快照都没有** ⇒ 返回必然露出背后的战斗骨架。
+   把「快照 / 还原」抽成一对共用函数：
+     · 战局外场景（地图 / 营地 / 商店 / 事件房 / 锻造…）都渲染在 #overlay 里，showOverlay 是
+       **整块覆写** #overlayContent ⇒ 开子面板后原场景无从还原，只能靠快照整体贴回（含 ✕ 的显隐态）；
+     · 子面板自己（pouch / pile / deck）不快照，避免把自己顶成快照、返回时停在子面板而不是原场景；
+     · 只在「当前确实压着一块面板」时快照（overlay 非 hidden）—— 战斗里锦囊挂在 #app 顶上，
+       overlay 是 hidden 的，快照了反而会把上一块战斗面板重新贴出来。 */
+const OUT_SUB_SCENES=['pouch-scene','pile-scene','deck-scene'];
+function outPanelSnap(){
+  const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
+  if(!(ov && oc && ov.classList && !ov.classList.contains('hidden'))) return;
+  for(let i=0;i<OUT_SUB_SCENES.length;i++) if(ov.classList.contains(OUT_SUB_SCENES[i])) return;
+  const x=document.getElementById('overlayCloseX');
+  JINNANG_SNAP={ cls:ov.className, html:oc.innerHTML, xd:(x?x.style.display:'') };
+}
+function outPanelRestore(){
+  const snap=JINNANG_SNAP; JINNANG_SNAP=null;
+  if(!snap) return false;
+  const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
+  if(!(ov && oc)) return false;
+  try{
+    ov.className=snap.cls; oc.innerHTML=snap.html;
+    ov.classList.remove('hidden');
+    const x=document.getElementById('overlayCloseX'); if(x) x.style.display=(snap.xd==null?'':snap.xd);
+    if(typeof ovMarkCornerBtns==='function') ovMarkCornerBtns();
+    if(typeof outHudSync==='function') outHudSync();
+    return true;
+  }catch(e){ return false; }
+}
 function showJinnang(){
   if(!G) return;
-  { const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
-    if(ov && oc && ov.classList && !ov.classList.contains('hidden') && !ov.classList.contains('pouch-scene'))
-      JINNANG_SNAP={ cls:ov.className, html:oc.innerHTML }; }
+  outPanelSnap();
   const pm={}; const porder=[];
   (G.potions||[]).forEach(p=>{ if(!pm[p.name]){ pm[p.name]=1; porder.push(p.name); } else pm[p.name]++; });
   const potionHTML = porder.length
@@ -2421,20 +2390,7 @@ function showJinnang(){
    v1.1.16：改为**优先还原开锦囊前的快照**（见 showJinnang 顶部注释），一处覆盖全部战局外场景；
    快照不在（战斗里开的锦囊 / 快照失败）时，才回落到既有的「地图重画 / 否则收面板」两条老路。 */
 function jinnangBack(){
-  const snap=JINNANG_SNAP; JINNANG_SNAP=null;
-  if(snap){
-    const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
-    if(ov && oc){
-      try{
-        ov.className=snap.cls; oc.innerHTML=snap.html;
-        ov.classList.remove('hidden');
-        const x=document.getElementById('overlayCloseX'); if(x) x.style.display='';
-        if(typeof ovMarkCornerBtns==='function') ovMarkCornerBtns();
-        if(typeof outHudSync==='function') outHudSync();
-        return;
-      }catch(e){}
-    }
-  }
+  if(outPanelRestore()) return;
   if(SCENE==='map'){ showMap(); return; }
   hideOverlay();
 }
@@ -2445,6 +2401,7 @@ function viewDeck(){
      每张牌直接渲染 cardBody（唯一牌面渲染器），不再按 id 合并成文字清单。
      容器 .deck-grid（CSS 里 6 列网格）+ deck-scene（与 forge/pile 同一条加宽口径）。 */
   const cards=G.deck.map(c=>`<div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div>`).join('');
+  outPanelSnap();   // v1.1.23：战局外（营地/商店/事件房…）打开「牌库」前先快照，返回才回得去原场景
   showOverlay(`<h2>我的牌库（共 ${G.deck.length} 张）</h2><div class="deck-grid">${cards}</div>`, true, 'deck-scene');
 }
 
@@ -2469,6 +2426,7 @@ function showPile(kind){
   const head=isDraw
     ? `<h2>抽牌堆 · ${src.length} 张</h2><p>顺序已打乱（不泄露下一张）。</p>`
     : `<h2>弃牌堆 · ${src.length} 张</h2><p>堆顶在前 —— 最近打出的牌在第一格。</p>`;
+  outPanelSnap();   // v1.1.23：若当前压着战局外面板（理论上牌堆入口多在战斗内），返回才回得去
   showOverlay(`${head}<div class="reward-cards">${cards}</div>`, true, 'pile-scene');
 }
 
@@ -2510,7 +2468,7 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   //   漏传不会报错，只会让面板退回通用的 overlayIn（10px 下滑），而这一条没有任何闸看得见。
   // v1.0.23：+ mile-scene（里程碑「里程轨」整屏界面：4 张角色海报 + 蓝色里程轨）。
   // v1.1.x：+ rank-scene（风云榜「皇榜卷轴」整屏界面：左六类导航 + 前三甲 + 十名榜单 + 我的战绩）。
-  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','result-scene','mile-scene','pouch-scene','rank-scene'];
+  const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','deck-scene','result-scene','mile-scene','pouch-scene','rank-scene'];
   const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
   // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
   // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
@@ -2520,7 +2478,7 @@ function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面�
   if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
     ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene');
     ov.classList.remove('forge-scene'); ov.classList.remove('pile-scene'); ov.classList.remove('result-scene');
-    ov.classList.remove('mile-scene'); ov.classList.remove('pouch-scene'); ov.classList.remove('rank-scene'); }
+    ov.classList.remove('mile-scene'); ov.classList.remove('pouch-scene'); ov.classList.remove('rank-scene'); ov.classList.remove('deck-scene'); }
   ov.classList.remove('hidden');
   // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
   // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。
@@ -2586,6 +2544,10 @@ function closeOverlay(){
         若先判 SCENE，点里程碑的 ✕ 就会拿一局已废的存档 showMap() 直接进地图
         （用户 2026-10-12 报的「里程碑 ✕ 返回 → 直接进地图、没角色、没手牌」正是这条顺序错误）。 */
   if(SCENE==='map'){ showMap(); return; }
+  /* v1.1.23（用户报障「篝火等场景进锦囊/牌库返回后跳进战斗场面」）：
+     战局外场景面板是被 showOverlay **整块覆写**掉的，直接 hideOverlay() 只会露出背后的
+     #app 战斗骨架。右上 ✕ 与 ESC 都走这里 ⇒ 必须先认快照把原场景贴回，快照不在时才收面板。 */
+  if(outPanelRestore()) return;
   hideOverlay();
 }
 /* v1.0.20：设置/榜单等卷轴页的「返回菜单」不能写死 openMenu()（那是**局内**菜单）——

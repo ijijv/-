@@ -141,14 +141,15 @@ const SFX_TABLE = {
   /* v1.0.17（P3-6 补）：道心破碎（用户交付 素材/sfx/glass_break.mp3 的合成兜底）。
      玻璃碎裂：一记宽频噪声爆 + 三片越掉越低的碎音，短促、干脆。 */
   glass_break:    [['b',.16,.34,3200,900],['t',2600,.09,'triangle',.15,0,1400],['t',1900,.11,'triangle',.12,.05,1000],['t',1200,.14,'triangle',.10,.11,600]],
-  /* J 组 · 主菜单与里程碑（4）—— v1.0.23（用户口径「音效你自己配好」）。
-     入塔/续的石碑崩碎、三张符纸拉开、里程碑海报点选、里程轨横向拖动。
-     全是合成兜底：素材/sfx/ 里没有同名文件时照旧出声，日后补真采样即可自动接管。 */
+  /* J 组 · 主菜单与里程碑（3）—— v1.0.23（用户口径「音效你自己配好」）。
+     入塔/续的石碑崩碎、三张符纸拉开、里程碑海报点选。
+     全是合成兜底：素材/sfx/ 里没有同名文件时照旧出声，日后补真采样即可自动接管。
+     v1.1.23（用户口径「把里程碑的滑动音效删了」）：里程轨横向拖动那条 ui_drag **整键移除** ——
+     触发点（mileDragStart/Move 的节流播声）已删，键位与素材一并清掉，不留休眠键。 */
   ui_stele:       [['b',.26,.55,1500,240],['t',150,.16,'square',.20,0,80],
                    ['t',430,.10,'triangle',.13,.07,320],['t',880,.08,'triangle',.10,.14,560]],
   ui_curtain:     [['b',.34,.30,2400,900],['t',620,.22,'sine',.10,0,1500],['t',1250,.14,'triangle',.08,.06,900]],
   ui_poster:      [['b',.13,.42,900,170],['t',250,.12,'triangle',.16,0,430],['t',430,.10,'sine',.10,.05,560]],
-  ui_drag:        [['b',.09,.20,3000,1400],['t',760,.05,'triangle',.07,0,1300]],
   /* K 组 · v1.1.x（用户交付真采样：素材/sfx/<键名>.wav —— 在就用素材，不在就走下面的合成兜底）
      number        结算滚字滴答（总分 / 里程逐条 + 大号浮字逐位）
      stone_broken  主界面「入塔 / 续」石碑崩碎（与 ui_stele 同族，换成真采样）
@@ -660,8 +661,16 @@ function setBg(name){
 }
 /* —— 背景音乐：优先 素材/music，缺失回退合成氛围音 —— */
 let BGM=null, BGM_TRACK=null, MUSIC_OK=null, CUR_BGM='menu';
+/* v1.1.23（用户报障「Boss 关 / 复活等场景会听到几首背景音乐叠在一起」）：
+   BGM_GEN = 「第几条 startBGM 探测链」的代号。startBGM 是**异步多候选探测**——
+   每个候选 new Audio + 1500ms 看门狗，若这条链的 `active` 只写成 startBGM 内部的
+   局部变量，那么 stopBGM（切轨 / 掐曲 / 复活终止）**只能暂停当前那个 Audio 元素**，
+   已经派出去的候选与待判超时并不知情 ⇒ 它们稍后照样 resolve(true) 并 a.play()，
+   于是新旧两条轨同时出声。修法是把「谁还有效」从局部闭包提到全局代计数：
+   任何一次 stopBGM 都 BGM_GEN++ ⇒ 所有旧链在下一个检查点静默退出，不再 play / 不再兜底合成。 */
+let BGM_GEN=0;
 function clearSynthBGM(){ if(SYNTH_BGM_TIMER){ clearInterval(SYNTH_BGM_TIMER); SYNTH_BGM_TIMER=null; } }
-function stopBGM(){ if(BGM){ try{ BGM.pause(); }catch(e){} BGM=null; } BGM_TRACK=null; clearSynthBGM(); }
+function stopBGM(){ BGM_GEN++; if(BGM){ try{ BGM.pause(); }catch(e){} BGM=null; } BGM_TRACK=null; clearSynthBGM(); }
 let SYNTH_BGM_TIMER=null;
 function startSynthBGM(track){
   if(SYNTH_BGM_TIMER) return;
@@ -714,13 +723,14 @@ function battleBgmFor(enemies){
 function startBGM(track){
   if(!SETTINGS.sound){ stopBGM(); return; }
   if(BGM_TRACK===track) return;
-  stopBGM();
+  stopBGM();                 // 停旧轨；同时 BGM_GEN++ ⇒ 在途的旧探测链全部作废
+  const gen=++BGM_GEN;       // 本链代号：BGM_GEN 一变（切轨 / 掐曲 / 再进 startBGM）本链即静默退出
   BGM_TRACK=track; MUSIC_OK=null;
   let exts=BGM_EXTS.slice();
   if(ASSET_MAP){ const _av=exts.filter(e=>ASSET_MAP['music/bgm_'+track+e]); if(_av.length) exts=_av; }
-  let idx=0, active=true;
+  let idx=0;
   function tryNext(){
-    if(!active) return;
+    if(gen!==BGM_GEN) return;
     if(idx>=exts.length){
       /* v0.61.31：升级轨探测全 miss → 退回基础轨（否则 Boss 房比普通战还安静）。
          兜底放在 startBGM 内部而不是加第二参数：这样所有直接调用点
@@ -734,10 +744,12 @@ function startBGM(track){
     a.loop=true; a.volume=(SETTINGS.musicVol==null?0.32:SETTINGS.musicVol);
     let resolved=false;
     const resolve=(ok)=>{
+      if(gen!==BGM_GEN) return;              // 本候选所属的链已被更晚的 stopBGM/startBGM 作废
       if(resolved) return; resolved=true;
-      if(!active) return;
-      if(ok){ active=false; MUSIC_OK=true; clearSynthBGM(); a.play().catch(()=>{}); }
-      else { tryNext(); }
+      if(ok){ MUSIC_OK=true; clearSynthBGM(); a.play().catch(()=>{}); }
+      /* 候选判失败时必须**显式掐掉它自己** —— 否则这个「判慢了」的元素仍可能在下一顺位
+         出声时跟着一起播（原先只换 BGM 引用，元素并不停）。 */
+      else { try{ a.pause(); a.src=''; }catch(e){} tryNext(); }
     };
     a.onerror=()=>resolve(false);
     a.oncanplaythrough=()=>resolve(true);
