@@ -489,24 +489,25 @@ function clearTimeBonus(sec){
   if(m<50) return 800;
   return 400;
 }
-/* 总分分项（用户 2026-10-12 定稿口径 / 2026-10-16 修订）：
-     层数推进 = 全局层号×40 · 普通击杀×6 · 精英击杀×8 · Boss 击杀×10 · 召唤物击杀×7 ·
-     剩余金币×8 · 剩余生命×1 · 灵汁剩余×40；用时加分与 +1000 通关加成**仅通关时**计入。
+/* 总分分项（用户 2026-10-12 定稿口径 / 2026-10-17 修订）：
+     层数推进 = 全局层号×50 · 普通击杀×40 · 精英击杀×140 · Boss 击杀×300 ·
+     剩余金币×8 · 灵汁剩余×240；用时加分与 +1000 通关加成**仅通关时**计入。
+     （2026-10-17 删去「召唤物击杀」「剩余生命」两条。）
    「层号」按**全局楼层**算：(幕-1)×14 + 当前层（1 基）—— 单调递增，契合「推进」语义。
-   2026-10-16 修订：击杀四档由 10/20/30/5 改为 **6/8/10/7**（普通/精英/首领/召唤物），
-   剩余生命由 ×10 改为 **×1**（用户口径「剩余生命给分数的加成改为1」）。 */
+   2026-10-16 修订：击杀四档 10/20/30/5 → **6/8/10/7**；剩余生命 ×10 → **×1**。
+   2026-10-17 定稿（用户口径）：层数推进 ×40 → **×50**；击杀**三档**（普通/精英/首领）
+   ×6 / ×8 / ×10 → **×40 / ×140 / ×300**；**删去「召唤物击杀」与「剩余生命」两条**；
+   灵汁剩余 ×40 → **×240**；剩余金币 ×8 **不变**。 */
 function scoreParts(s){
   const g=s||G; if(!g) return [];
   const floor=(Math.max(1,g.act|0)-1)*MAP_ROWS + Math.max(0,g.mapRow|0) + 1;
   const parts=[
-    { lab:'层数推进', val:floor*40 },
-    { lab:'普通击杀', val:Math.max(0,g.killNormal|0)*6 },
-    { lab:'精英击杀', val:Math.max(0,g.killElite|0)*8 },
-    { lab:'首领击杀', val:Math.max(0,g.killBoss|0)*10 },
-    { lab:'召唤物击杀', val:Math.max(0,g.killSummon|0)*7 },
+    { lab:'层数推进', val:floor*50 },
+    { lab:'普通击杀', val:Math.max(0,g.killNormal|0)*40 },
+    { lab:'精英击杀', val:Math.max(0,g.killElite|0)*140 },
+    { lab:'首领击杀', val:Math.max(0,g.killBoss|0)*300 },
     { lab:'剩余金币', val:(g.gold|0)*8 },
-    { lab:'剩余生命', val:Math.max(0,g.hp|0)*1 },
-    { lab:'灵汁剩余', val:(g.potions?g.potions.length:0)*40 },
+    { lab:'灵汁剩余', val:(g.potions?g.potions.length:0)*240 },
   ];
   if(g.finalBoss){
     parts.push({ lab:'用时', val:clearTimeBonus(Math.floor(runElapsedMs(g)/1000)) });

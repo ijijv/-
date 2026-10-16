@@ -2172,6 +2172,14 @@
      startBattle / revive / startTutorial 摘类）。挂父盒 ⇒ 与子立绘的中刀/待机动画互不抢通道。 */
   @keyframes heroDie{0%{opacity:1; transform:translateX(0) rotate(0deg);}22%{opacity:1; transform:translateX(-9px) rotate(0deg);}100%{opacity:.12; transform:translate(-34px,14px) rotate(-19deg);}}
   .hero-art-box.hero-dead{animation:heroDie 1.0s cubic-bezier(.4,0,.7,1) forwards; transform-origin:bottom center;}
+  /* v1.1.25r（用户 2026-10-17 报障「（角色）的待机呼吸你一点没做」）：**玩家立绘**补上待机呼吸。
+     挂**父盒** .hero-art-box（子立绘 .hero-art 已被 heroAttack / heroHit 占用 animation 通道，
+     父盒只有 hero-dead 用它 ⇒ `:not(.hero-dead)` 让阵亡动画独占、不与呼吸互抢）。
+     ⚠️ 必须写在 hero-dead 那条**之后**：两者特异度同为 (0,2,0)，靠书写顺序决定胜负。
+     节奏取 4.0s，与敌人（精英 3.4s / boss 4.6s）错开，避免同屏同频。幅度沿用 idleBreath。 */
+  @media (prefers-reduced-motion: no-preference){
+    .hero-art-box:not(.hero-dead){ transform-origin:bottom center; animation:idleBreath 4.0s ease-in-out infinite; }
+  }
   /* 常驻「跳过教程」：教程期间一直挂右上，单击即跳免确认（tutSkipShow 挂/收） */
   #tut-skip{position:fixed; top:10px; right:12px; z-index:66; background:rgba(24,18,12,.9); border:1px solid var(--dim);
     color:var(--dim); border-radius:8px; padding:6px 14px; font-size:13px; letter-spacing:2px; cursor:pointer; font-family:inherit;}

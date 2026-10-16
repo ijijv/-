@@ -34,12 +34,15 @@ function newState(){
     retainHeal:0, pendingBlockStart:0, xisuiTurns:0, bleedSummonsBonus:1,
     shiWangCard:null, ranhunType:null, ranhunSelf:null, endBlockKind:null, xiejiaUp:false,
     zhouhunSteal:0, stealWatch:false, stealAccum:0,   // 咒印(#42B)：咒魂吸血监视
-    _mileGiven:false,   // v1.0.15：里程碑「一局只发一次」的幂等守卫（新局由 newState 重置）
-    /* v1.1.8：结算面板的里程分项**快照** —— 发放当刻记下，复活后再败时结算画面仍显示「真正发出去的那一份」，
-       不再用当时的 G 重算（否则会出现「结算 +700、却只到账 500」的错位，用户报障）。 */
+    _mileCounted:false, // v1.1.25r：本局「局数 / 胜场 / 击杀 / 最高幕 / 成就上报」只记一次的守卫（替换旧的 _mileGiven）
+    _mileGranted:0,     // v1.1.25r：本局**已发放**的里程累计 —— 结算只补增量，复活后接着爬的里程一次结清（用户口径「复活后要继承，之后一起算」）
+    /* v1.1.25r（口径改「像分数一样」）：结算面板的里程分项改为**实时重算**（grantRunMilestones 落）；
+       v1.1.8 的「发放当刻快照」已废 —— 那时是为了防「结算 +700 却只到账 500」，现改增量发放后不再有错位。
+       _mileGain 仍记本局**累计实际发放额**，供回归断言核对。 */
     _mileParts:null,
-    /* v1.1.x（用户 2026-10-12 分数规则 / 2026-10-16 修订）—— 分档击杀计数（结算时各自乘系数）：
-       普通 ×6 / 精英 ×8 / Boss ×10 / 敌方召唤物 ×7。totalKills 仍是里程碑用的总数。 */
+    /* v1.1.x（用户 2026-10-12 分数规则 / 2026-10-17 修订）—— 分档击杀计数（结算时各自乘系数）：
+       普通 ×40 / 精英 ×140 / Boss ×300；敌方召唤物**不再计分**（killSummon 仅留作其它统计）。
+       totalKills 仍是里程碑用的总数。 */
     killNormal:0, killElite:0, killBoss:0, killSummon:0,
     /* v1.1.x：本局用时计时。accMs = 已冻结的累计毫秒（每次存档时结算一次）；
        t0 = 当前计时段起点（续档 / 新局 / 存档后各自落定）。用时 = accMs + (now - t0)。

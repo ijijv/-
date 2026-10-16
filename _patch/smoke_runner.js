@@ -6993,6 +6993,14 @@
       && __code(narrateShow).indexOf('narrateWho') >= 0
       && __code(narrateShow).indexOf('"who"') >= 0
       && __code(bindNarrTap).indexOf('NARR_CUR.force') >= 0);
+    /* v1.1.25r（用户修正口径）：旁白**只点「旁白框」才推进** —— 旧版挂 window 捕获相，
+       任意 pointerdown 都收非强制泡 ⇒ 一触屏幕就把整段教程会话点掉（用户报）。
+       判据：bindNarrTap 里**不得**再出现 window.addEventListener，且点按绑到 box.onpointerdown；
+       narrateShow 把 box 交给 bindNarrTap。 */
+    __ok('v1.1.25r 教程旁白只在点旁白框时推进（去全局 window 监听，绑 #tut-narr）',
+      __code(bindNarrTap).indexOf('window.addEventListener') < 0
+      && __code(bindNarrTap).indexOf('box.onpointerdown') >= 0
+      && __code(narrateShow).indexOf('bindNarrTap(box)') >= 0);
     __ok('v1.1.25 旁白未读完时不许出牌（防把待强制的那张符先打掉 ⇒ 强制泡凑不出牌，卡死）',
       typeof narrBusy === 'function' && __code(narrBusy).indexOf('NARR_CUR') >= 0
       && __code(playCard).indexOf('narrBusy()') >= 0 && __code(endTurn).indexOf('narrBusy()') >= 0);
@@ -7040,6 +7048,17 @@
       && __code(audioHiddenStop).indexOf('stopVoice()') >= 0
       && __code(audioHookHidden).indexOf('visibilitychange') >= 0
       && __code(audioHookHidden).indexOf('pagehide') >= 0);
+    /* v1.1.25r（用户口径「退了要断，进了要续」）：回前台按**切走那一刻真在演的**那条轨续 BGM。
+       三条判据各自都要在源码里看得见：只在 BGM_TRACK 有值时记轨（过场 stopBGM / 关声音后不凭空起曲）、
+       续前认 SETTINGS.sound、真起曲走 startBGM；钩子既要 visible 分支也要 pageshow。 */
+    __ok('v1.1.25r 回前台自动续轨：audioHiddenResume 认「切走时真在播」+ 声音开关，钩子含 visible / pageshow',
+      typeof audioHiddenResume === 'function'
+      && __code(audioHiddenStop).indexOf('BGM_TRACK') >= 0
+      && __code(audioHiddenResume).indexOf('BGM_TRACK') >= 0
+      && __code(audioHiddenResume).indexOf('SETTINGS.sound') >= 0
+      && __code(audioHiddenResume).indexOf('startBGM(') >= 0
+      && __code(audioHookHidden).indexOf('audioHiddenResume') >= 0
+      && __code(audioHookHidden).indexOf('pageshow') >= 0);
     __ok('v0.66.0 「续」总是渲染、无存档时 disabled（不再按 hasRunSave 条件渲染 —— 石碑忽隐忽现会破构图）',
       (function () {
         var s = __code(showStartScreen);
@@ -7878,6 +7897,40 @@
     __ok('v1.0.25 grantRunMilestones：再调不重复解锁、点数不再叠加（幂等）',
       j4.length === 0 && SAVE.mile.length === j3.length && SAVE.progress.pts === ptsBefore + 1126);
 
+    /* v1.1.25r（用户 2026-10-17 口径）：总分分项改数 —— 层数推进 ×50、击杀三档 40/140/300、
+       删去「召唤物击杀」与「剩余生命」、灵汁 ×240、金币 ×8 不变。 */
+    __ok('v1.1.25r scoreParts：层数 ×50 · 击杀 40/140/300 · 金币 ×8 · 灵汁 ×240（召唤物击杀 / 剩余生命两条已删）',
+      (function () {
+        var g = __base('tianshi');
+        g.act = 2; g.mapRow = 3; g.totalKills = 9;
+        g.killNormal = 3; g.killElite = 2; g.killBoss = 1; g.killSummon = 4;
+        g.gold = 7; g.hp = 11; g.potions = [{ id: 'huanyanglu' }, { id: 'huangquanjiu' }]; g.finalBoss = false;
+        var sp = scoreParts(g);
+        var labs = sp.map(function (x) { return x.lab; });
+        var floor = (2 - 1) * 14 + 3 + 1;                              // 全局层号 = (幕-1)×14 + 层 + 1
+        var want = floor * 50 + 3 * 40 + 2 * 140 + 1 * 300 + 7 * 8 + 2 * 240;
+        var got = 0; sp.forEach(function (x) { got += x.val; });
+        return labs.indexOf('召唤物击杀') < 0 && labs.indexOf('剩余生命') < 0 && got === want;
+      })());
+    /* v1.1.25r（用户口径「里程也要像分数一样，复活后要继承，之后一起算」）：
+       同一条 G 先败（结算一次）→ 复活后爬得更远 → 再败：第二次只补**增量**，两次合计恰等于全量，
+       且「局数只记一次」不被复活后的第二次结算重复累加。 */
+    __ok('v1.1.25r grantRunMilestones：复活后再结算只补增量、两次合计等于全量（里程继承），局数不重复计',
+      (function () {
+        var bak = SAVE;
+        SAVE = { unlocked: [], progress: { pts: 0, runs: 0, wins: 0, bestAct: 0, kills: 0, heroes: {} }, mile: [] };
+        G = __base('tianshi'); G.act = 1; G.mapRow = 5; G.totalKills = 6;      // 110 + 42 = 152
+        grantRunMilestones();
+        var afterFirst = SAVE.progress.pts, runsFirst = SAVE.progress.runs;
+        G.act = 2; G.mapRow = 9; G.totalKills = 11; G.dead = false;            // 复活后接着爬：200 + 198 + 77 = 475
+        grantRunMilestones();
+        var full = milePointsFor(G);
+        var r = afterFirst === 152 && full === 475 && SAVE.progress.pts === full &&
+                runsFirst === 1 && SAVE.progress.runs === 1 &&
+                G._mileGain === full && G._mileParts.length === mileParts(G).length;
+        SAVE = bak; return r;
+      })());
+
     /* 5) loadSave 对老档 / 坏档的兼容 */
     Store.setJSON(SAVE_KEY, { unlocked: ['youhun'] });   // 老档：只有 unlocked
     loadSave();
@@ -7991,6 +8044,16 @@
       __code(viewDeck).indexOf('outPanelSnap()') >= 0 &&
       __code(jinnangBack).indexOf('outPanelRestore()') >= 0 &&
       __code(closeOverlay).indexOf('outPanelRestore()') >= 0);
+    /* v1.1.25r（用户报障「战斗里点锦囊返回，有时候会跳到地图界面」）：来处由快照记，不再猜 SCENE。
+       判据：outPanelSnap 在 overlay 隐藏时记 {hidden:true}（来处=#app 战斗层）；
+       outPanelRestore 认 snap.hidden 走 hideOverlay（且**绝不** showMap）、认 map-scene 走 showMap 重画；
+       jinnangBack / closeOverlay 里都不得再出现 showMap() 的旧兜底（jinnangBack 完全不用 showMap）。 */
+    __ok('v1.1.25r 子面板返回来处由快照记（战斗层→收面板 / 地图→重画），不再用 SCENE 猜',
+      __code(outPanelSnap).indexOf('hidden:true') >= 0 &&
+      __code(outPanelRestore).indexOf('snap.hidden') >= 0 &&
+      __code(outPanelRestore).indexOf('map-scene') >= 0 &&
+      __code(outPanelRestore).indexOf('showMap()') >= 0 &&
+      __code(jinnangBack).indexOf('showMap') < 0);
 
     /* ⑦ v1.1.23 BGM 多轨重叠修复：startBGM 用全局代计数作废在途链（boss 关 / 复活等切换场景）。
        ⚠️ 真实的 startBGM / stopBGM / clearSynthBGM 在冒烟开头就被静音桩 __sil 顶掉了（第 27~30 行），

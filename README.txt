@@ -194,17 +194,47 @@
                 另：磁盘上曾有的 `素材/voice/tut_3h.mp3`（「腐毒」那条）**本批按用户口径删除**
                 （用户原文「tut_3h.mp3 删了，不要这个」）：verify_dist 原先为它保留的「已知孤儿」登记随之一并拆除，
                 `voice/` 下现在每一条都必须对应 `TUT_NARR` 的一个 id（多一条散件即报红）。
-             ⑥ **切后台 / 页面隐藏即静音**（用户口径「页面切到后台或隐藏时自动 stopBGM（两条链一起停）…
-                在 Trae 内置浏览器里切走就静音；对移动端 / 小游戏也更规范」）：10_audio.js 新增
-                `audioHiddenStop()`（＝ `stopVoice()` + `stopBGM()` —— 采样 BGM 对象、合成氛围音两条链
-                连同正在念的旁白配音一起停）+ `audioHookHidden()` 挂 `visibilitychange`（仅 hidden 时触发）
-                与 `pagehide` 两个钩子。**只做「停」**，不做回前台自动续播（何时再起曲由进场景 / 设置触发，
-                免得来回掐断又重起）。55_cloud.js 原本就挂在同一个 `visibilitychange` 上（那条只管存云），互不影响。
+             ⑥ **切后台停 / 回前台自动续轨**（用户口径「页面切到后台或隐藏时自动 stopBGM（两条链一起停）…
+                在 Trae 内置浏览器里切走就静音；对移动端 / 小游戏也更规范」，随后补「bgm 肯定是退了要断、
+                进了要续哇」）：10_audio.js 新增 `audioHiddenStop()`（＝ 先记下切走那一刻 `BGM_TRACK`
+                再 `stopVoice()` + `stopBGM()` —— 采样 BGM 对象、合成氛围音两条链连同正在念的旁白配音一起停）
+                与 `audioHiddenResume()`（消费 `BGM_RESUME`；认 `SETTINGS.sound`、`visibilityState` 与
+                `BGM_TRACK` 已在播则不起曲，否则 `ensureAudio()` + `startBGM(bgmTrackFor(t))` 续回切走时那条轨），
+                `audioHookHidden()` 挂三钩子：`visibilitychange`（hidden→停 / 否则→续）、`pagehide`→停、
+                `pageshow`→续。**只在切走那刻真在演（`BGM_TRACK` 有值）时记轨** —— 过场 stopBGM / 声音关着
+                的静默段回前台不凭空起曲。55_cloud.js 原本就挂在同一个 `visibilitychange` 上（那条只管存云），互不影响。
              闸与回归：verify_dist 的 `G._settlePlayed=false` 计数断言 2→3（`tutRetry` 重开本关合法第三处）；
                 verify_dist 新增 [2] 尾部教程配音三条（清单非空 / 一条不缺 / 无散件）；
                 冒烟新增 5 条（结束回合锁 / 旁白收泡族 / 13 条对话 + TUT_WHO / enemySay 让位 / heroDeath 接线）
                 + 配音 3 条（通道就位 / id 纯 ASCII 且不接腐毒 / 四处挂点）
-                + 切后台静音 1 条（audioHiddenStop 调 stopBGM+stopVoice、audioHookHidden 含两钩子）；冒烟基线 1555→1559。
+                + 切后台静音 1 条（audioHiddenStop 调 stopBGM+stopVoice、audioHookHidden 含两钩子）
+                + 回前台续轨 1 条（audioHiddenResume 认 BGM_TRACK / SETTINGS.sound / startBGM、钩子含 pageshow）；冒烟基线 1555→1560。
+             ⑦ **v1.1.25r 收尾批**（用户 2026-10-17 报障 3 类：反复回归 + 锦囊返回跳地图 + 旁白误跳 + 呼吸没做）：
+                ① **教程旁白只在「点旁白框」时推进**（用户「不是点哪里都可以，不然一触屏幕就会跳过教程会话」）：
+                   旧 `bindNarrTap` 把收泡监听挂在 **window 捕获相** ⇒ 屏幕任意一处 pointerdown 都收掉**非强制**泡。
+                   改为只绑 `#tut-narr` 框的 `onpointerdown`（容器 `pointer-events:none`、只有 `.bubble` 可点
+                   ⇒ 事件自 .bubble 冒泡到框），`narrateShow` 取到 box 后调 `bindNarrTap(box)`。
+                ② **「战斗里点锦囊返回跳地图」根治**：旧 `outPanelSnap()` 只在 overlay **非 hidden** 时才快照，
+                   而战斗中 overlay 本就是 hidden ⇒ 一个字不记，返回时只能靠 `jinnangBack` / `closeOverlay` 的
+                   `SCENE==='map'` 去**猜**来处（读档过渡 / 结算前后 / 云同步任一刻就会误判 ⇒ `showMap()`）。
+                   现改为**无论 overlay 显不显都记来处**（hidden 记 `{hidden:true}`＝来处是 #app 战斗层），
+                   `outPanelRestore()` 按来处分流：战斗层 → 只收面板（绝不 showMap）、地图 → 重画（保 bindMapDrag）、
+                   其它面板 → 贴回 HTML；`jinnangBack` 删掉 `SCENE==='map'` 兜底猜，`closeOverlay` 把
+                   `outPanelRestore()` 提到 SCENE 判定**之前**。
+                ③ **玩家立绘补待机呼吸**（用户「（角色）的待机呼吸你一点没做」）：原设计只给精英/boss 挂 `idleBreath`，
+                   normal / 召唤物 / **玩家立绘一律不挂**。新增 `.hero-art-box:not(.hero-dead)` 挂 `idleBreath`
+                   （4.0s，与敌人 3.4s / 4.6s 错频，避免同屏同频）；挂**父盒**，子立绘 `.hero-art` 的
+                   heroAttack / heroHit 通道不受影响，`:not(.hero-dead)` 保证阵亡动画独占。
+                ④ **总分规则改数**（用户 2026-10-17 定稿）：层数推进 ×40→**×50**；击杀**三档** 6/8/10 →
+                   **40 / 140 / 300**（普通/精英/首领）；**删去「召唤物击杀」×7 与「剩余生命」×1 两条**；
+                   灵汁剩余 ×40→**×240**；剩余金币 ×8 **不变**；用时 / 通关加成仍**仅通关**计入。
+                ⑤ **里程改为「像分数一样」**（用户口径「复活后要继承，之后一起算」）：旧版靠 `_mileGiven` 一局只发一次 ⇒
+                   先败拿一份小的、复活后爬到更远再败，多出来的里程**永远发不出去**（结算画面还只显示第一次那份快照）。
+                   现拆两段：**点数**按 milePointsFor(G) 算全量、减去 `_mileGranted` 只补**增量**（一局走完合计恰等于全量）；
+                   **计数**（局数/胜场/击杀/最高幕/成就上报）改用 `_mileCounted` 一局只记一次，免得复活后重复累加。
+                   结算面板里程分项同步改**实时重算**（不再用 v1.1.8 的发放快照 —— 改增量后不会再有「+700 只到账 500」错位）。
+                闸：node --check 八段全绿；冒烟新增 4 条（旁白只绑旁白框 / 锦囊来处由快照记不再猜 SCENE /
+                   分数新档位 / 里程复活继承），冒烟基线 1560→1564。
   v1.1.24  新手教程批（用户 2026-10-16 口径「开新局吧，先进入选角界面。需要的常驻跳过。斩妖剑也行。
              按照你的 md 开始吧，之前的旧的教程可以删了」）：**6 关固定路线教学局**（普通-商店-精英-篝火-
              未知-boss）整体替换旧交互引导；教程结束直接 confirmNewGame 开新局、先落选角界面

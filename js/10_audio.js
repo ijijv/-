@@ -835,23 +835,41 @@ function setBGM(track){
 function unlockAudio(){ ensureAudio(); loadSfxSamples(); if(BGM && SETTINGS.sound){ try{ BGM.play().catch(()=>{}); }catch(e){} } }
 document.addEventListener('pointerdown', unlockAudio, {once:true});
 document.addEventListener('keydown', unlockAudio, {once:true});
-/* ===================== v1.1.25r 切后台 / 页面隐藏即静音 =====================
-   页面切走（Trae 内置浏览器换标签、移动端/小游戏切后台、系统锁屏）时把声音全停：
+/* ===================== v1.1.25r 切后台即静音，回前台自动续轨 =====================
+   切走（Trae 内置浏览器换标签、移动端 / 小游戏切后台、系统锁屏、离开页面）把声音全停：
    两条 BGM 链（采样 BGM 对象 + 合成氛围音）由 stopBGM 一次停掉，正在念的旁白配音一并掐掉。
-   只做「停」不做「回前台自动续播」—— 何时再起曲由进场景 / 设置自然触发，免得来回掐断又重起。
+   回前台（visible / pageshow）再把**刚才真在演的那条轨**续上 —— 判据是切走那一刻 BGM_TRACK 有值：
+   有值 = 演出确实在放（继续放）；为 null = 这段本来就没曲（过场 stopBGM、声音开关关着）⇒ 不续，
+   免得凭空起曲。续的轨就是切走那一刻实际在放的那条（BGM_TRACK，已经过 bgmTrackFor 解析），
+   再经 bgmTrackFor 复核一次：缺素材照旧走回退 / 合成兜底，与 setBGM 同一套口径。
+   两次「停」会先后到达（visibilitychange hidden 与 pagehide）⇒ 只有第一次记轨，
+   第二次 BGM_TRACK 已是 null，不覆盖，保证回前台还有得续。
    （55_cloud.js 也挂在同一个 visibilitychange 上，那条只管存云，与此互不影响。） */
+let BGM_RESUME=null;
 function audioHiddenStop(){
+  if(BGM_TRACK) BGM_RESUME=BGM_TRACK;   // 只在「真有曲在放」时记轨，供 audioHiddenResume 续
   try{ stopVoice(); }catch(e){}
   try{ stopBGM(); }catch(e){}
 }
-/* 挂两个钩子：visibilitychange（换标签 / 切后台 / 锁屏）+ pagehide（离开页面），两处都只做「停」。 */
+function audioHiddenResume(){
+  const t=BGM_RESUME; BGM_RESUME=null;   // 无论续不续得上都先消费掉，别留下陈轨
+  if(!t) return;
+  if(typeof document!=='undefined' && document.visibilityState==='hidden') return;
+  if(!SETTINGS.sound || BGM_TRACK) return;   // 声音关着 / 已在播（别的路径先起了）就不重复起曲
+  try{ ensureAudio(); startBGM(bgmTrackFor(t)); }catch(e){}
+}
+/* 挂三处钩子：visibilitychange（换标签 / 切后台 / 锁屏 → 停；回前台 → 续）
+   + pagehide（离开页面 → 停）+ pageshow（bfcache 回退 → 续）。 */
 function audioHookHidden(){
   if(typeof document!=='undefined' && document.addEventListener){
     document.addEventListener('visibilitychange', function(){
-      if(document.visibilityState==='hidden') audioHiddenStop();
+      if(document.visibilityState==='hidden') audioHiddenStop(); else audioHiddenResume();
     });
   }
-  if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('pagehide', audioHiddenStop);
+  if(typeof window!=='undefined' && window.addEventListener){
+    window.addEventListener('pagehide', audioHiddenStop);
+    window.addEventListener('pageshow', audioHiddenResume);
+  }
 }
 audioHookHidden();
 

@@ -844,9 +844,9 @@ function narrateShow(id, force){
   if(txt==null){ narrateNext(); return; }
   NARR_CUR={ id:id, force:!!force };
   if(typeof document==='undefined'||!document.body) return;
-  bindNarrTap();                             // 幂等：用到才挂，无头不挂（不给启动期/冒烟添副作用）
   let box=document.getElementById('tut-narr');
   if(!box){ box=document.createElement('div'); box.id='tut-narr'; document.body.appendChild(box); }
+  bindNarrTap(box);                          // 幂等：把「点按收泡」只绑在旁白框上（不改全局监听，见函数注释）
   const who=narrateWho(id);
   const anim=['a-slide','a-fade','a-brush'][((G&&G.tutorial&&G.tutorial.node)||0)%3];
   box.className='narr '+anim+(force?' force':'')+(who?' foe':'');
@@ -886,16 +886,25 @@ function narrateClear(){
   const box=document.getElementById('tut-narr');
   if(box){ box.classList.remove('show'); box.innerHTML=''; }
 }
-/* 任意点击即收非强制泡。**捕获相** + 常驻一个监听（与 bindSaySkip 同一条理由：配对在交叠时会互相摘掉对方）。
-   ⚠️ 强泡期间不推进 —— 否则玩家点「结束回合」等操作会顺手把强制旁白点掉，锁就废了。 */
+/* v1.1.25r（用户修正口径）：旁白**只在点「旁白框」本身时**才推进 ——
+   旧版把监听挂在 window 捕获相，任意一次 pointerdown 都会收掉非强制泡 ⇒ 玩家一碰屏幕就把整段
+   教程会话点掉（用户报「一触屏幕就会跳过教程会话」）。现在只认 #tut-narr .bubble 上的点按，
+   点到别处该干嘛干嘛（出牌 / 结束回合不受影响）。
+   #tut-narr 本身 pointer-events:none、只有 .bubble 是 auto ⇒ 事件由 .bubble 冒泡到框，绑框即可。
+   框元素长期复用 ⇒ 用 onpointerdown 幂等覆盖，绝不 addEventListener（否则每次展示叠一层监听）。
+   强泡（force）依旧点不掉 —— 照师父说的做才收。 */
 let _narrTapBound=false;
-function bindNarrTap(){
-  if(_narrTapBound) return;
-  if(typeof window==='undefined' || !window.addEventListener) return;
-  _narrTapBound=true;
-  window.addEventListener('pointerdown', function(){
-    if(NARR_CUR && !NARR_CUR.force) narrateAdvance();
-  }, true);
+function bindNarrTap(box){
+  if(box && box.addEventListener){
+    _narrTapBound=true;
+    box.onpointerdown=function(ev){ if(ev && ev.stopPropagation) ev.stopPropagation();
+      if(NARR_CUR && !NARR_CUR.force) narrateAdvance(); };
+    return;
+  }
+  /* 兜底：无 box 参数时取现有 #tut-narr（正常路径 narrateShow 一定传 box） */
+  if(typeof document==='undefined') return;
+  const el=document.getElementById('tut-narr');
+  if(el) bindNarrTap(el);
 }
 /* 常驻「跳过教程」：教程期间一直挂右上，单击即跳（免确认 —— 用户口径）。 */
 function tutSkipShow(on){
@@ -2031,30 +2040,40 @@ function mileOn(kind,key){
 }
 const MILE_BASE_POTIONS=['huanyanglu','huangquanjiu','zhenhunshui','mengpotang'];
 /* 一局结束结算：把 milePointsFor(G) 累加进 SAVE.progress，并按阈值解锁新里程碑。
-   返回**本次新解锁的里程碑数组**。幂等：一局只发一次（G._mileGiven；newState 里重置）。 */
+   返回**本次新解锁的里程碑数组**。
+   v1.1.25r（用户 2026-10-17 口径「里程也要像分数一样，复活后要继承，之后一起算」）：
+   旧版靠 G._mileGiven 一局只发一次 ⇒ 先败拿了一份小的，复活后接着爬到更远、再败时**多出来的里程永远发不出去**
+   （结算画面还只显示第一次那份快照）。现拆成两段：
+     · **点数**：按 milePointsFor(G) 算**全量**，减去本局已发放额（G._mileGranted）⇒ 每次结算只补**增量**，
+       一局走完（败 / 胜 / 放弃）时合计恰等于全量，等价于「复活后继承 + 之后一起算」；
+     · **计数**（局数 / 胜场 / 击杀 / 最高幕 / 成就上报）：一局只记一次（G._mileCounted），与增量发放分开，免得复活后重复累加。 */
 function grantRunMilestones(){
   if(!G) return [];
-  if(G._mileGiven) return [];                               // 一局只给一次（loseGame/showVictory 都会调）
-  G._mileGiven=true;
   if(!SAVE.progress || typeof SAVE.progress!=='object') SAVE.progress={};
   const p=SAVE.progress;
-  const pts=milePointsFor(G);
-  G._mileGain=pts;                                          // 记录**实际发放额**：结算面板读它，别重算（幂等返回时重算会显示一个没真发的数）
-  G._mileParts=mileParts(G);                                // v1.1.8：分项也一起快照 —— 复活后再败，结算画面仍显示「真正发出去的那一份」
+  const full=milePointsFor(G);                              // 本局**累计应发**（随进度单调增）
+  const prev=(G._mileGranted|0);
+  const pts=Math.max(0, full-prev);                         // 本次只补**增量** ⇒ 复活后接着爬的里程在下次结算一次结清
+  G._mileGranted=full;
+  G._mileGain=(G._mileGain|0)+pts;                          // 本局累计**实际发放额**（=最终结算的里程）
+  G._mileParts=mileParts(G);                                // v1.1.25r：分项改**实时**（像分数）—— 复活后随进度涨，末次结算即全量
   p.pts=(p.pts|0)+pts;
-  p.runs=(p.runs|0)+1;
-  const won=!!G.finalBoss;                                  // finalBoss 只在打穿最后一幕幕主时置真 ⇒ 通关
-  if(won) p.wins=(p.wins|0)+1;
-  p.bestAct=Math.max(p.bestAct|0, G.act|0);
-  p.kills=(p.kills|0)+(G.totalKills|0);
   /* v1.0.24：里程**按角色分账** —— 同一局同时累加全局 p.pts（结算面板 / 老口径）与该角色自己的 p.heroes[id]。
      v1.0.25：达标判定改由**该角色自己的 6 档轨**（MILE_TRACKS）驱动 —— 新体系取代旧的全局 MILESTONES 进度。 */
   const heroId=(G.hero && typeof HEROES!=='undefined' && HEROES.some(h=>h.id===G.hero)) ? G.hero : 'tianshi';
   if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
   const hp=p.heroes[heroId] || (p.heroes[heroId]={pts:0,runs:0,wins:0});
-  hp.pts=(hp.pts|0)+pts; hp.runs=(hp.runs|0)+1; if(won) hp.wins=(hp.wins|0)+1;
-  /* v1.1.23：跨局成就「全能降魔者」(4 步) —— 按「已通关过的角色数」上报（4 名各通关一次即达标）。 */
-  tapAchieveProgress('No-matter-Who', Object.keys(p.heroes).filter(k => p.heroes[k] && (p.heroes[k].wins|0) > 0).length);
+  hp.pts=(hp.pts|0)+pts;
+  if(!G._mileCounted){                                       // 一次性计数：一局只记一次
+    G._mileCounted=true;
+    const won=!!G.finalBoss;                                // finalBoss 只在打穿最后一幕幕主时置真 ⇒ 通关
+    p.runs=(p.runs|0)+1; if(won) p.wins=(p.wins|0)+1;
+    p.bestAct=Math.max(p.bestAct|0, G.act|0);
+    p.kills=(p.kills|0)+(G.totalKills|0);
+    hp.runs=(hp.runs|0)+1; if(won) hp.wins=(hp.wins|0)+1;
+    /* v1.1.23：跨局成就「全能降魔者」(4 步) —— 按「已通关过的角色数」上报（4 名各通关一次即达标）。 */
+    tapAchieveProgress('No-matter-Who', Object.keys(p.heroes).filter(k => p.heroes[k] && (p.heroes[k].wins|0) > 0).length);
+  }
   const fresh=[];
   if(!SAVE.mile) SAVE.mile=[];
   mileNodesFor(heroId).forEach(n=>{                         // 只判**这个角色**的轨
@@ -2495,19 +2514,33 @@ let JINNANG_SNAP=null;
      · 战局外场景（地图 / 营地 / 商店 / 事件房 / 锻造…）都渲染在 #overlay 里，showOverlay 是
        **整块覆写** #overlayContent ⇒ 开子面板后原场景无从还原，只能靠快照整体贴回（含 ✕ 的显隐态）；
      · 子面板自己（pouch / pile / deck）不快照，避免把自己顶成快照、返回时停在子面板而不是原场景；
-     · 只在「当前确实压着一块面板」时快照（overlay 非 hidden）—— 战斗里锦囊挂在 #app 顶上，
-       overlay 是 hidden 的，快照了反而会把上一块战斗面板重新贴出来。 */
+     · **v1.1.25r**：不再「只在压着面板时」才快照 —— overlay 隐藏（#app 战斗层）也记 `{hidden:true}`，
+       返回时按来处还原（见下面两函数注释），根治「战斗里点锦囊返回跳地图」。 */
 const OUT_SUB_SCENES=['pouch-scene','pile-scene','deck-scene'];
 function outPanelSnap(){
   const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
-  if(!(ov && oc && ov.classList && !ov.classList.contains('hidden'))) return;
+  if(!(ov && oc && ov.classList)) return;
+  /* v1.1.25r（用户报障「战斗里点锦囊返回，有时候会跳到地图界面」）——
+     旧版只在「当前压着一块面板」时快照：战斗里 #overlay 是 hidden 的 ⇒ 一个字都不记，
+     返回时只能靠 jinnangBack / closeOverlay 里的 `SCENE==='map'` 去**猜**来处；一旦那一刻
+     SCENE 不是理想值（读档过渡、结算前后、云同步…），就被误判成地图 ⇒ showMap() 掉进地图。
+     现在**无论 overlay 显不显示都记一笔来处**：hidden 记 `{hidden:true}`（来处是 #app 战斗层），
+     非 hidden 照旧记整块面板 ⇒ 返回时按来处还原，不再猜 SCENE。
+     · 子面板自身（pouch / pile / deck）不快照，免得把自己顶成来处（返回会停在子面板而非原场景）。 */
+  if(ov.classList.contains('hidden')){ JINNANG_SNAP={ hidden:true }; return; }
   for(let i=0;i<OUT_SUB_SCENES.length;i++) if(ov.classList.contains(OUT_SUB_SCENES[i])) return;
   const x=document.getElementById('overlayCloseX');
-  JINNANG_SNAP={ cls:ov.className, html:oc.innerHTML, xd:(x?x.style.display:'') };
+  JINNANG_SNAP={ hidden:false, cls:ov.className, html:oc.innerHTML, xd:(x?x.style.display:'') };
 }
 function outPanelRestore(){
   const snap=JINNANG_SNAP; JINNANG_SNAP=null;
   if(!snap) return false;
+  /* v1.1.25r：来处是 #app 战斗层（开子面板时 overlay 是 hidden）⇒ 只把面板收回，**不碰 SCENE、
+     更不 showMap** —— 这就是「战斗里点锦囊返回却跳到地图」的根治点。 */
+  if(snap.hidden){ hideOverlay(); return true; }
+  /* v1.1.25r：来处是地图 ⇒ 必须**重画**（bindMapDrag 的拖拽监听绑在元素上，贴回 innerHTML
+     只会得到一张点不动的死图）—— 所以地图走 showMap 而不是还原 HTML。 */
+  if(/map-scene/.test(snap.cls||'')){ showMap(); return true; }
   const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
   if(!(ov && oc)) return false;
   try{
@@ -2548,12 +2581,14 @@ function showJinnang(){
 }
 /* v1.1.x（用户报障「地图进锦囊后返回，卡进战斗界面」）——
    地图本身就渲染在 #overlay 里（showMap→showOverlay+map-scene），而锦囊返回原先写死
-   hideOverlay() ⇒ 摘掉 overlay 露出背后的 #app 战斗版面。按 SCENE 分流：在地图上就重画地图。
-   v1.1.16：改为**优先还原开锦囊前的快照**（见 showJinnang 顶部注释），一处覆盖全部战局外场景；
-   快照不在（战斗里开的锦囊 / 快照失败）时，才回落到既有的「地图重画 / 否则收面板」两条老路。 */
+   hideOverlay() ⇒ 摘掉 overlay 露出背后的 #app 战斗版面。
+   v1.1.16：改为**优先还原开锦囊前的快照**（见 showJinnang 顶部注释），一处覆盖全部战局外场景。
+   v1.1.25r：来处完全交给快照（含战斗层 {hidden:true}），不再按 SCENE 分流兜底。 */
 function jinnangBack(){
+  /* v1.1.25r：来处由快照记（outPanelRestore 按它还原：战斗→收面板、地图→重画、其它面板→贴回），
+     不再用 SCENE 猜。快照缺失（理论上不该有）也只是兜底收面板，**绝不 showMap()** ——
+     免得在战斗里被误判跳进地图。 */
   if(outPanelRestore()) return;
-  if(SCENE==='map'){ showMap(); return; }
   hideOverlay();
 }
 function viewDeck(){
@@ -2701,15 +2736,16 @@ function closeOverlay(){
      所以回主菜单这一支**直接交给 showStartScreen 收口**：异常时最坏也只是留着上一块面板，
      不会掉进全空状态。 */
   if(atMenu || !G){ showStartScreen(); return; }
-  /* 地图本身渲染在 #overlay 里 ⇒ SCENE==='map' 时摘掉 #overlay 会露出背后的 #app 战斗版面，必须重画地图。
-     ⚠️ 这一支**必须**排在 atMenu 判定**之后**：showStartScreen 不复位 SCENE，打完一局回主菜单后 SCENE 仍是 'map'，
-        若先判 SCENE，点里程碑的 ✕ 就会拿一局已废的存档 showMap() 直接进地图
-        （用户 2026-10-12 报的「里程碑 ✕ 返回 → 直接进地图、没角色、没手牌」正是这条顺序错误）。 */
-  if(SCENE==='map'){ showMap(); return; }
   /* v1.1.23（用户报障「篝火等场景进锦囊/牌库返回后跳进战斗场面」）：
      战局外场景面板是被 showOverlay **整块覆写**掉的，直接 hideOverlay() 只会露出背后的
-     #app 战斗骨架。右上 ✕ 与 ESC 都走这里 ⇒ 必须先认快照把原场景贴回，快照不在时才收面板。 */
+     #app 战斗骨架。右上 ✕ 与 ESC 都走这里 ⇒ 必须先认快照把原场景贴回，快照不在时才收面板。
+     ⚠️ 这一支**必须**排在 atMenu 判定**之后**：showStartScreen 不复位 SCENE，打完一局回主菜单后
+        SCENE 仍是 'map'，若先判 SCENE，点里程碑的 ✕ 就会拿一局已废的存档 showMap() 直接进地图
+        （用户 2026-10-12 报的「里程碑 ✕ 返回 → 直接进地图、没角色、没手牌」正是这条顺序错误）。
+     v1.1.25r：来处改由快照记（战斗层 {hidden:true} / 地图 map-scene / 其它面板），
+       快照缺失且**确实**在地图时才重画兜底 —— 根治「战斗里点锦囊返回跳地图」。 */
   if(outPanelRestore()) return;
+  if(SCENE==='map'){ showMap(); return; }
   hideOverlay();
 }
 /* v1.0.20：设置/榜单等卷轴页的「返回菜单」不能写死 openMenu()（那是**局内**菜单）——
