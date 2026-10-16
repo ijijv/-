@@ -186,9 +186,164 @@ function finaleBlow(mode, then){
   }
   setTimeout(finish, 1600);
 }
+/* ===================== v1.1.24 新手教程 · 流程控制（教程成品脚本落定） =====================
+   线性 6 关：goNext 单点拦截推进；死亡转 tutOnDeath 重开本关；recordScoreRun 不入榜；
+   saveRun 全程不写（教程局不产存档 ⇒ 重玩教程也不冲掉玩家的旧档）。 */
+function startTutorial(){
+  if(typeof hideOverlay==='function') hideOverlay();
+  if(typeof ensureAudio==='function') ensureAudio();
+  setRunSlot(0); RUN_FINISHED=false;
+  G=newState(); G.mapRow=0;
+  G.startTs=Date.now(); G.accMs=0; G.t0=Date.now();
+  const __sd=rngSeedNow(); seedRng(__sd);
+  G.mapSeed=__sd; buildActs(__sd); G.mapRow=0;
+  track('runStart'); tapAchieve('Beginning');
+  G.hero='tianshi';
+  G.deck=heroDeck('tianshi');
+  G.hp=G.maxHp=60;
+  G.tutorial={ on:true, node:0, force:null, flags:{}, draw:null, foeOv:null };
+  log('—— 新手教程 · 入塔 ——');
+  tutEnterNode(0);
+}
+function tutEnterNode(i){
+  const N=TUT_NODES[i]; if(!N){ tutGraduate(); return; }
+  const T=G.tutorial; T.node=i; T.force=null; T.draw=null; T.foeOv=null; T.flags={};   // v1.1.25：一次性标记随关重置（重开本关也重播）
+  if(typeof narrateClear==='function') narrateClear();
+  if(typeof tutSkipShow==='function') tutSkipShow(true);
+  if(N.key==='fight'||N.key==='elite'||N.key==='boss'){
+    if(i===2||i===5) G.hp=G.maxHp;   // 精英关、Boss 关进关前回满
+    T.draw=N.draw.slice(); T.foeOv=N.foeOv;
+    startBattle(N.foes.slice());
+  } else if(N.key==='shop'){
+    G.gold=(N.gold!=null?N.gold:120);
+    G.shopWares=N.wares.map(id=>cardById(id)); G.shopPotions=[];   // 教程固定货位（showShop 见非 null 不重抽）
+    if(typeof showShop==='function') showShop();
+    if(typeof narrate==='function') narrate('tut_2a','tut_2b');
+  } else if(N.key==='camp'){
+    if(typeof showCampfire==='function') showCampfire();
+    if(typeof narrate==='function') narrate('tut_4a','tut_4b');
+  } else if(N.key==='unknown'){
+    if(typeof showUnknown==='function') showUnknown();
+    if(typeof narrate==='function') narrate('tut_5a');
+  }
+}
+/* 事件机：30_engine / 50_ui 各钩子汇到这里。flags 记一次性，重开本关时随 node 重置。 */
+function tutOn(evt, arg){
+  if(!G||!G.tutorial||!G.tutorial.on) return;
+  const T=G.tutorial, i=T.node, F=T.flags||(T.flags={});
+  const N=function(){ if(typeof narrate==='function') narrate.apply(null, arguments); };
+  if(evt==='battleStart'){
+    if(i===0) N('tut_0_1','tut_0_2','tut_1a','tut_1b','tut_1c','tut_1d', function(){ tutForce('leifu','tut_1e'); });
+    else if(i===2) N('tut_2_1','tut_2_2','tut_3a','tut_3b','tut_3c', function(){ tutForce('zhouyin','tut_3d'); });
+    else if(i===5) N('tut_5_1','tut_5_2','tut_6a');
+  }
+  else if(evt==='playedForce'){
+    const c=arg||{};
+    if(i===0){
+      if(c.id==='leifu' && !F.leifu1){ F.leifu1=1; N('tut_1f','tut_0_3','tut_1g'); }
+      else if(c.id==='leifu'){ F.leifu2=1; if(!F.gang) tutForce('jingang','tut_1h'); }
+      else if(c.id==='jingang'){ F.gang=1; N('tut_1i'); }
+    }
+    else if(i===2 && c.id==='zhouyin'){ N('tut_3e','tut_3f','tut_2_4'); }
+  }
+  else if(evt==='endTurn'){
+    /* 带着强制锁收回合 = 玩家没照做（如没出金刚符）—— 放锁收旁白，挨打时由 playerHit 讲变体 */
+    if(T.force){ T.force=null; if(typeof narrateHide==='function') narrateHide(); }
+  }
+  else if(evt==='playerHit'){
+    if(i===0 && !F.hit){ F.hit=1;
+      if(arg && arg.absorbed>0) N('tut_1j'); else N('tut_1j2');
+    }
+    else if(i===2 && !F.hit){ F.hit=1; N('tut_2_3'); }
+  }
+  else if(evt==='battleWin'){
+    if(i===0) N('tut_1k','tut_0_4');
+    else if(i===5) N('tut_5_5');
+  }
+  else if(evt==='turnStart'){
+    if(i===2 && G.turn===2 && !F.daoti){ F.daoti=1; N('tut_3g'); }
+    if(i===5){
+      const boss=(G.enemies||[]).find(e=>e.boss);
+      if(boss && boss.intent){
+        if(!F.ba && (boss.intent.type==='charge'||boss.intent.type==='aoe')){ F.ba=1; N('tut_6b'); }
+        if(!F.sum && boss.intent.type==='summon'){ F.sum=1; N('tut_5_3','tut_5_4','tut_6c'); }
+      }
+      if(boss && !F.half && boss.hp*2<=boss.maxHp){ F.half=1;
+        boss.hp=Math.min(boss.maxHp, boss.hp+12); boss.strength=(boss.strength||0)+2;
+        log('僵王血过半，尸变：恢复 12 点生命，力量 +2');
+        N('tut_6d');
+      }
+    }
+  }
+  else if(evt==='forged'){ N('tut_4c','tut_4d'); }
+  else if(evt==='unknownPotion'){ N('tut_5b','tut_5c'); }
+}
+/* 强制出牌：锁的是卡牌 id（playCard 拦别的牌，doPlayCard 命中即清锁）。 */
+function tutForce(cardId, narrId){
+  if(!G||!G.tutorial||!G.tutorial.on) return;
+  G.tutorial.force=cardId;
+  if(narrId && typeof narrateShow==='function') narrateShow(narrId, true);
+}
+function tutAdvance(){
+  if(!G||!G.tutorial||!G.tutorial.on) return;
+  const next=G.tutorial.node+1;
+  if(next>=TUT_NODES.length){ tutGraduate(); return; }
+  const N=TUT_NODES[next];
+  if(typeof narrateClear==='function') narrateClear();
+  showOverlay('<h2>第 '+(next+1)+' 关 · '+N.name+'</h2><button class="btn" onclick="hideOverlay(); tutEnterNode('+next+');">继 续</button>');
+}
+function tutGraduate(){
+  if(typeof narrateClear==='function') narrateClear();
+  if(typeof tutSkipShow==='function') tutSkipShow(false);
+  showOverlay('<h2>出 师</h2><p style="font-family:var(--font-brush);font-size:17px;line-height:1.9;text-align:left;max-width:560px">'+TUT_NARR.tut_6e+'</p><button class="btn" onclick="tutFinish()">正式入塔</button>');
+  if(typeof playVoice==='function') playVoice('tut_6e');   // v1.1.25r：出师那段整屏旁白也配音
+}
+function tutFinish(){
+  if(typeof stopVoice==='function') stopVoice();
+  if(G&&G.tutorial) G.tutorial.on=false;
+  markTutorialSeen();
+  try{ grantRunMilestones(); }catch(e){}   // 里程照算（用户口径：教程局仅不入榜）
+  hideOverlay();
+  confirmNewGame();   // 开新局 → 选角界面（用户拍板）
+}
+/* 常驻跳过：单击即跳，免确认（用户口径）。旧档不动 —— 教程全程 saveRun 空转。 */
+function tutSkip(){
+  if(!G||!G.tutorial||!G.tutorial.on) return;
+  G.tutorial.on=false;
+  if(typeof narrateClear==='function') narrateClear();
+  if(typeof tutSkipShow==='function') tutSkipShow(false);
+  markTutorialSeen();
+  hideOverlay();
+  confirmNewGame();
+}
+function tutOnDeath(){
+  if(G.dead) return;
+  G.dead=true; G.battleOver=true;
+  sfx('lose');
+  if(typeof narrateClear==='function') narrateClear();
+  const _panel='<h2>倒 下 了</h2><p style="font-family:var(--font-brush);font-size:18px;line-height:1.9">'+TUT_NARR.tut_die+'</p><button class="btn" onclick="tutRetry()">重 来</button>';
+  if(typeof playVoice==='function') playVoice('tut_die');   // v1.1.25r：倒下那段旁白也配音
+  /* v1.1.25：先播玩家阵亡倾倒（用户口径「死亡动画也没有」），再上「倒下了」面板；
+     无头 / 关特效 ⇒ 同刻上屏（不给冒烟添定时器）。 */
+  if(typeof heroDeath==='function' && typeof animLive==='function' && animLive() && !(typeof menuFxOff==='function' && menuFxOff())){
+    heroDeath(true);
+    setTimeout(function(){ showOverlay(_panel); }, 1000);
+  } else {
+    showOverlay(_panel);
+  }
+}
+function tutRetry(){
+  hideOverlay();
+  if(typeof stopVoice==='function') stopVoice();
+  G.dead=false; G.battleOver=false; G._settlePlayed=false;
+  G.hp=G.maxHp; G.weak=0; G.gouhun=0; G.thorns=0; G.block=0; G.burn=0;
+  G.tutorial.force=null;
+  tutEnterNode(G.tutorial.node);   // 重开本关（用户口径：死亡先旁白再重开本关）
+}
 function winFight(){
   if(G.battleOver) return; // v0.61 B4：重入守卫 —— 一场战斗只结算一次胜利
   G.battleOver=true;
+  if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('battleWin'); }catch(e){} }   // v1.1.24 教程：击杀讲解
   sfx('win');
   HITFX.enemies.clear();
   log('击败了所有敌人！');
@@ -285,6 +440,7 @@ function showBossReward(){
     <button class="btn ghost" onclick="hideOverlay(); goNext();">继续前进</button>`);
 }
 function goNext(){
+  if(G&&G.tutorial&&G.tutorial.on){ tutAdvance(); return; }   // v1.1.24 教程：线性 6 关推进的唯一收口
   /* v0.61.42：记下**刚打通的这条边**，交给随后的 showMap → drawMapLinks 做一次
      「淡黄色浅浅的光边沿着路径延长过去」的动画。必须在本行之前取 —— G.mapPath 的最后两项
      正是「上一层那格 → 刚清掉的这格」。唯一的推进出口就是这里（全仓只有这一处 G.mapRow++），
@@ -480,8 +636,10 @@ function settleOverwrittenRun(d){
   G=savedG;
 }
 function loseGame(){
+  if(G&&G.tutorial&&G.tutorial.on){ tutOnDeath(); return; }   // v1.1.24 教程：死亡转「重来本关」，不走败局结算
   if(G.dead) return; // 防止重复结算（多张怨气/连续判定）
   G.dead=true; G.battleOver=true; // v0.61 B4：胜负旗标统一收口
+  if(typeof heroDeath==='function') heroDeath(true);   // v1.1.25：玩家阵亡倾倒（配合 finaleBlow 的 1.6s 慢镜）
   sfx('lose');
   track('death');
   G.score=calcScore();
@@ -521,6 +679,7 @@ function revive(){
   G._settlePlayed=false;
   G.hp=G.maxHp; G.weak=0; G.gouhun=0; G.thorns=0; G.block=0; G.burn=0;
   G.discard=G.discard.concat(G.hand); G.hand=[];
+  if(typeof heroDeath==='function') heroDeath(false);   // v1.1.25：复活回到同一场战斗 ⇒ 摘掉阵亡倾倒类
   /* v0.74.0：复活回的是**同一场战斗** ⇒ 必须把战斗背景铺回去（失败屏刚把它换成了 bg_defeat）。
      漏掉这一句的表现是「血回满了、顶栏回来了，可背后还是那张败局图」，而且没有任何闸会响。
      表达式与 startBattle 里那一行逐字相同 —— 别写成两个不同的判法。
@@ -632,6 +791,7 @@ const SCORE_MAX=10;
 function readScores(){ try{ const a=JSON.parse(Store.get(SCORE_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
 function writeScores(a){ try{ Store.set(SCORE_KEY, JSON.stringify((a||[]).slice(0, SCORE_MAX))); }catch(e){} }
 function recordScoreRun(win){
+  if(G&&G.tutorial&&G.tutorial.on) return;   // v1.1.24 教程：不入风云榜（用户口径）
   const sc=G.score||0;
   const sign=G.startTs||0;
   const list=readScores().filter(x=>!(sign && x && x.startTs===sign));
@@ -708,6 +868,7 @@ function restoreEnemy(d){
 }
 function saveRun(scene){
   if(!G) return;
+  if(G.tutorial && G.tutorial.on) return;   // v1.1.24 教程：全程不产存档（重玩教程不冲旧档）
   if(RUN_FINISHED) return;   // v1.0.17b：本局已终结（通关）⇒ 一个字都不许再落盘
   /* v1.1.x（用户口径「存档可以暂时暂停时间计算」）：落档前把到此刻的累计用时**冻结**进 accMs，
      并把计时锚点 t0 挪到此刻 ⇒ 存档 / 关掉游戏那段时间不计入；续档后从 accMs 继续累加。 */

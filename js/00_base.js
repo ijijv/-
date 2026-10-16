@@ -97,47 +97,9 @@ function floatMsg(msg){
   setTimeout(()=>{ if(item.parentNode && item.parentNode.removeChild) item.parentNode.removeChild(item); }, 1700);
 }
 
-/* ===================== 条件引导气泡（v0.61.20 P8） =====================
- * 首次遇到「诅咒 / 格挡 / 召唤物 / 尸气」各弹一次，讲清它是什么。
- * 和 floatMsg（战斗飘字，1.6s 就散）不同：气泡是**可读的**——停到你看完，点一下收起，7 秒自动收。
- * 看过就记在 Store 里（zhiguaitower_tips_v1），换局不重弹；清掉存档即重置。
- * 只在真正的战斗场景里触发（SCENE==='battle'），免得在菜单/商店/仿真里乱冒。
- * 注意：tipOnce 的返回值与「是否真的画了 DOM」解耦 —— 冒烟环境没有 DOM，仍要能断言触发过。 */
-const TIPS_KEY = 'zhiguaitower_tips_v1';
-let TIPS_SEEN = null;
-function tipsSeen(){ if(!TIPS_SEEN){ TIPS_SEEN = Store.getJSON(TIPS_KEY) || {}; } return TIPS_SEEN; }
-function inBattleScene(){
-  try{ return typeof SCENE==='string' && SCENE==='battle' && typeof G!=='undefined' && !!G && !G.dead; }catch(e){ return false; }
-}
-function hideTipBubble(){
-  try{
-    const el=document.getElementById('tip-bubble');
-    if(el){ el.classList.remove('show'); setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 300); }
-  }catch(e){}
-}
-function showTipBubble(html){
-  if(!document || !document.body || !document.createElement) return;
-  try{
-    hideTipBubble();
-    const el=document.createElement('div');
-    el.id='tip-bubble';
-    el.innerHTML='<span class="tip-tag">提示</span>'+html;
-    el.onclick=hideTipBubble;
-    document.body.appendChild(el);
-    try{ requestAnimationFrame(()=>{ el.classList.add('show'); }); }catch(e){ el.classList.add('show'); }
-    setTimeout(()=>{ const x=document.getElementById('tip-bubble'); if(x===el) hideTipBubble(); }, 7000);
-  }catch(e){}
-}
-/* 返回 true 表示「这次真的弹了」（冒烟用它断言，别依赖 DOM） */
-function tipOnce(key, html){
-  try{
-    const s=tipsSeen();
-    if(s[key]) return false;
-    s[key]=1; Store.setJSON(TIPS_KEY, s);
-    if(inBattleScene()) showTipBubble(html);
-    return true;
-  }catch(e){ return false; }
-}
+/* v1.1.24：条件引导气泡（tipOnce 族，原 v0.61.20 P8）**整块删除** ——
+   用户口径「之前的旧的教程可以删了」；教学改由教程成品脚本接管
+   （js/40_flow.js 教程族 + js/50_ui.js narrate 旁白播放器）。 */
 
 /* ===================== 战斗特效（juice：伤害飘字 / 受击震屏 / 敌人抖动） ===================== */
 let HITFX = { enemies: new Set() };
@@ -809,6 +771,16 @@ function heroAnim(state){
     if(state==='attack') setTimeout(function(){ box.classList.remove('hero-attack'); },400);
   }
 }
+/* v1.1.25：玩家阵亡「向前倾倒」动画的加/摘类 —— 类挂在**父盒** `.hero-art-box`（见 原型.html @keyframes heroDie），
+   与子立绘的待机/中刀动画走不同元素，互不抢 animation 通道。
+   on=true 由 loseGame / tutOnDeath 调；on=false 由 startBattle / revive 调（否则复活或下一局还躺着）。 */
+function heroDeath(on){
+  if(typeof document==='undefined') return;
+  const box=document.querySelector('.hero-art-box');
+  if(!box) return;
+  if(on){ box.classList.remove('hero-attack','hero-hit','hero-cast'); void box.offsetWidth; box.classList.add('hero-dead'); }
+  else box.classList.remove('hero-dead');
+}
 /* v1.0.11：敌人「出手」动作 —— 向玩家方向（左下）冲一下。
    为什么不用 HITFX 那套「登记集合 + render 时写进 HTML」：那是给**受击**用的，
    因为受击发生在 render 之前、类要能活过一次重建；而敌人出手发生在 enemyAct 里，
@@ -1137,6 +1109,9 @@ function sayMidPick(key){
   return (m && m.text) ? m.text : null;
 }
 function enemySay(e, tier){
+  /* v1.1.25 教程：妖物自带四档气泡**整体让位**给教程旁白系统（教程对话走 TUT_NARR / TUT_WHO），
+     否则同屏双泡（教学泡 + 妖物泡）且各自计时，读的人被两套话挤住。 */
+  if(G && G.tutorial && G.tutorial.on) return;
   const line=sayPick(e, tier);
   if(!line) return;
   SAY_QUEUE.push({e:e, line:line, tier:tier});

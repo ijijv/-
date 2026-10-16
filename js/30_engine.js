@@ -233,7 +233,6 @@ function burstShow(el, segs, step, key){
 function isLinghua(e){ return !!(e && e.affixes && e.affixes.some(a=>a.id==='linghua')); }
 function applyCurse(e, n){
   if(n>0) sfx('card_curse');   // v0.61.25：施用诅咒的听感（天师整套牌的核心动作）
-  if(n>0) tipOnce('curse', '<b>【诅咒】</b>是你在敌人身上累积的印记，本身不掉血 —— 要靠【噬魂术】【钟馗镇魂】【百鬼夜行】这类牌去「引爆」它，才变成伤害。符箓天师整套牌都围着它转。');
   let v=n;
   if(e.key==='xiuluowang' && (G.karmaFire||0)>0) v=v*2;
   // v0.61.35：守一改「减免该牌自身费用」后，旧的「本次施咒 +1 层」不再有生产者，整段退役
@@ -534,6 +533,7 @@ function dealDamageToPlayer(n, attacker, floatDelay, opt){
   G.hpLostTurn=(G.hpLostTurn||0)+loss;
   G.turnStats.dmgTaken+=loss; G.turnStats.blocked+=absorbed;
   log(`${attacker.name} 对你造成 ${loss} 点伤害${absorbed>0?`（格挡吸收 ${absorbed}）`:''}`);
+  if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('playerHit',{loss:loss, absorbed:absorbed}); }catch(e){} }   // v1.1.24 教程：受击反馈（护体见效 / 受伤变体）
   // —— 本回合“受到攻击时”触发（荆棘符/铜皮铁骨/反震/卸甲等），非闪避命中即结算 ——
   if(full>0){
     /* 罗汉拳套[蓝·武僧]（v1.1.4：反伤 1→2）+ 铁壁[t2·武僧·纯机制]：永久自带反伤，与临时【荆棘】叠加。 */
@@ -657,7 +657,6 @@ function directDamage(n, msg){
 }
 function tickSeals(){ [G.hand, G.drawPile, G.discard].forEach(pile=>pile.forEach(c=>{ if(c.sealed>0) c.sealed--; })); }
 function gainBlock(n){
-  if(n>0) tipOnce('block', '<b>格挡</b>先替你挨打 —— 敌人打过来时先扣格挡、再扣血。但它在<b>回合结束时清零</b>（苦行武僧除外），所以能挡就这回合挡完。');
   G.block+=n;
   /* v0.61.32：出牌窗口内 = 「防御牌起盾」走 card_defense；窗口外（遗物/武僧被动/反震/五通神）仍是通用 block。
      两键并存，block 没有退役。 */
@@ -1088,7 +1087,18 @@ function skipRetainSelect(){
   finishEndTurn();
 }
 
-function resetDeck(){ G.drawPile=shuffle([...G.deck]); G.hand=[]; G.discard=[]; }
+function resetDeck(){
+  /* v1.1.24 教程：固定牌序 —— draw 数组就是期望的**上手顺序**；drawCards 从 drawPile 末位 pop，
+     所以反转后入堆（pop 出来的第 1 张 == draw[0]）。没在 draw 里的牌（奖励牌等）洗乱垫在堆底。 */
+  if(G.tutorial && G.tutorial.on && G.tutorial.draw){
+    const used=new Set(); const seq=[];
+    G.tutorial.draw.forEach(id=>{ const c=G.deck.find(x=>x.id===id && !used.has(x)); if(c){ used.add(c); seq.push(c); } });
+    const rest=G.deck.filter(x=>!used.has(x));
+    G.drawPile = shuffle(rest).concat(seq.reverse());
+    G.hand=[]; G.discard=[]; return;
+  }
+  G.drawPile=shuffle([...G.deck]); G.hand=[]; G.discard=[];
+}
 function drawCards(n){
   const drawn=[]; const objs=[];
   for(let i=0;i<n;i++){
@@ -1124,12 +1134,23 @@ function applyBattleStartRelics(){
 function startBattle(keys){
   SCENE='battle';
   fxStopAll();
+  if(typeof heroDeath==='function') heroDeath(false);   // v1.1.25：新一场战斗摘掉玩家阵亡倾倒类
   setBg('act'+G.act);
   G.enemies = keys.map(k=>makeEnemy(ENEMIES[k], k));
   /* v0.61.31：Boss/精英轨必须**在这一行之后**判定 —— G.enemies 到上一行才存在，
      原来 setBGM('battle') 写在建敌人之前，那一刻 e.boss / e.elite 都还没生成，判不出来。 */
   setBGM(battleBgmFor(G.enemies));
   G.enemies.forEach((e,i)=>{ if(e.intents.length>1) e.intentIndex = i % e.intents.length; });
+  /* v1.1.24 教程：敌人覆写 —— 必须在上一行意图偏移**之后**（覆写要把 intentIndex 归零）；
+     先清词缀再上固定词缀（makeEnemy 随机 roll 的词缀不能带进教程关）。 */
+  if(G.tutorial && G.tutorial.on && G.tutorial.foeOv){
+    G.enemies.forEach(e=>{ const ov=G.tutorial.foeOv[e.key]; if(!ov) return;
+      if(ov.hp!=null){ e.hp=ov.hp; e.maxHp=ov.hp; }
+      if(ov.intents) e.intents=ov.intents.map(it=>Object.assign({},it));
+      e.affixes=(ov.affixes||[]).map(a=>Object.assign({},a));
+      e.intentIndex=0;
+    });
+  }
   G.target=0;
   G.battleOver=false; // v0.61 B4：每场开打重置终局旗标
   G._settlePlayed=false; // v0.76.0：结算墨色过场的一次性标记，随战斗一起重置（见 settleTransition）
@@ -1174,7 +1195,8 @@ function startBattle(keys){
     G.enemies.forEach(e=>enemySay(e,'in'));
     G.enemies.forEach(e=>{ if(bossVfxKey(e,'affix')) bossSelfFx(e,'affix'); });   // v1.1.12：阎罗天子开局词缀专图（render 之后才量得到锚点）
     bindSaySkip();
-    if(!tutorialSeen()) startGuidedTutorial(); startTurn();
+    if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('battleStart'); }catch(e){} }   // v1.1.24 教程：开战旁白/强制出牌
+    startTurn();
   };
   if(G.enemies.some(e=>e.boss)) bossIntro(beginBattle);
   else beginBattle();
@@ -1282,6 +1304,7 @@ function startTurn(){
     if(G.turn===1 && !e.boss && !e.aggressive){ e.intent={type:'dormant'}; }
     else { e.intent=e.intents[e.intentIndex % e.intents.length]; e.intentIndex++; }
   });
+  if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('turnStart'); }catch(e){} }   // v1.1.24 教程：意图讲解（在 roll 完之后，读的是本回合实际意图）
   let n=5; if(G.gouhun>0){ n-=1; log('勾魂：本回合少抽 1 张牌'); } n=Math.max(1,n); if(G.dodgeDraw>0){ n+=G.dodgeDraw; log(`额外摸 ${G.dodgeDraw} 张（上回合效果）`); G.dodgeDraw=0; }
   if(hasRelic('yinyangjing')){ n+=1; log('阴阳镜：多抽 1 张'); }
   if(hasRelic('tongling') && G.turn===1){ n+=2; log('铜铃：战斗开始额外抽 2 张'); }   // 铜铃[白]：只在第 1 回合（= 战斗开始）多抽
@@ -1398,7 +1421,10 @@ function triggerSummons(decay){
 }
 function endTurn(){
   if(G.enemyPhase) return;   // v1.0.14：敌人/召唤物行动演出期间，结束回合按钮无效
-  if(TUT && TUT.step===3) advanceTut();
+  /* v1.1.25：强制出牌未完成、或旁白还在放时不许过回合 —— 否则「执一道雷符」这类强制教学会被
+     「结束回合」绕过（下一回合手上没有那张符 ⇒ 打不出也过不去，卡死）。锁与 playCard 同源。 */
+  if(G.tutorial && G.tutorial.on && ((typeof narrBusy==='function' && narrBusy()) || G.tutorial.force)){ sfx('error'); floatMsg('先听师父的话'); return; }
+  if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('endTurn'); }catch(e){} }   // v1.1.24 教程：结束回合讲解
   // 废牌：未主动打出的自动打出
   const junks=G.hand.filter(c=>c.type==='junk');
   if(junks.length){
@@ -1794,6 +1820,11 @@ function logTurnSummary(){
 function playCard(i){
   if(G.enemyPhase) return;   // v1.0.14：敌人/召唤物行动演出期间不可出牌
   const c=G.hand[i]; if(!c) return;
+  /* v1.1.24 教程：强制出牌锁 —— 有锁定牌时，打别的牌一律拦下（锁的是 id，不锁具体哪一张） */
+  if(G.tutorial && G.tutorial.on && G.tutorial.force && c.id!==G.tutorial.force){ sfx('error'); floatMsg('先听师父的话'); shakeCard(i); return; }
+  /* v1.1.25 教程：旁白还在放（且未轮到强制牌）时也不许出牌 —— 防玩家在讲解未完就把「待会儿
+     要强制出的那张符」先打掉，那样强制泡凑不出牌 ⇒ 卡死。 */
+  if(G.tutorial && G.tutorial.on && typeof narrBusy==='function' && narrBusy() && c.id!==G.tutorial.force){ sfx('error'); floatMsg('先听师父的话'); shakeCard(i); return; }
   if(c.sealed>0){ floatMsg('【'+c.name+'】被忘忧封印'); log('这张牌被忘忧封印，无法打出'); return; }
   const cost=effectiveCost(c);
   if(G.energy<cost){ sfx('error'); floatMsg('符文不足'); shakeCard(i); return; }
@@ -1813,6 +1844,12 @@ function playCard(i){
 function confirmPlayCard(i){ hideOverlay(); doPlayCard(i); }
 function doPlayCard(i){
   const c=G.hand[i]; if(!c) return;
+  /* v1.1.24 教程：强制牌命中 —— 清锁、收旁白、推进讲解（能量扣减前，doPlayCard 一定打得出去） */
+  if(G.tutorial && G.tutorial.on && G.tutorial.force && c.id===G.tutorial.force){
+    G.tutorial.force=null;
+    if(typeof narrateHide==='function') narrateHide();
+    if(typeof tutOn==='function'){ try{ tutOn('playedForce', c); }catch(e){} }
+  }
   const cost=effectiveCost(c);
   // 记录可回退信息（以防 eff 返回 false 需要回滚）
   const exNow = isOneUse(c);
@@ -1887,7 +1924,6 @@ function doPlayCard(i){
   }
   // 尸王(#48)：成功打出后记录卡牌引用，等召唤物消散再回弃牌堆
   if(c.id==='shi_wang' && G.hero==='ganshiren'){ G.shiWangCard=c; }
-  if(TUT && TUT.step===1) advanceTut();
   /* 摄魂铃[金] 本次改造：2 → 3，并改走 heal() ⇒ 每次触发都带回血特效（用户口径：回血一律要特效）。 */
   if(c.type==='attack' && hasRelic('shehunling')){ heal(3); log('摄魂铃：回复 3 点生命'); }
   G.attackBuff=prevBuff;

@@ -101,6 +101,11 @@ def dump_ids():
           # v1.0.16：iconTag 里**拼串**取用的素材（ui/intent_* / ui/kind_* / 词缀 buff/<id>.png）。
           # 唯一真相源在 js/50_ui.js 的 TAG_ICON_PATHS，python 侧不镜像这三族的名字。
           "tagIcons:TAG_ICON_PATHS,"
+          # v1.1.25r：教程旁白配音。id 即 TUT_NARR 的键；路径由**游戏作用域**的
+          # VOICE_DIR / VOICE_EXT 现拼（python 侧不镜像 —— 与 bgRel / evtBg 同一范式），
+          # 用来把配音钉进 want 并断言「TUT_NARR 一条不缺、磁盘上也没有 id 之外的散件」。
+          "tutNarr:Object.keys(TUT_NARR),"
+          "tutVoice:Object.keys(TUT_NARR).map(function(i){return VOICE_DIR+i+VOICE_EXT;}),"
           "kw:KEYWORDS.map(function(k){return k[0];})})")
     env = dict(os.environ, SMOKE_DUMP=js)
     r = subprocess.run(['node', HOST], capture_output=True, text=True, cwd=ROOT, env=env)
@@ -1130,9 +1135,11 @@ def main():
               for b in _media_blocks(r'@media\s*\(prefers-reduced-motion:\s*reduce\)')),
           '减弱动态块里有同形的专用规则（@media 不加特异度，靠**书写顺序**压过基档那条）')
     # ---- 一次性标记：四条出口各要清一次，漏一处就是「第二次结算静默不铺墨」----
+    # v1.1.25：startBattle + revive + **教程重开本关(tutRetry)** 三处合法；
+    #   教程的第三处是教程局专用（G.tutorial 下才走），不影响普通局的「复活必清」语义。
     _sp = js_src.count('G._settlePlayed=false;')
-    check(_sp == 2,
-          '`G._settlePlayed=false` 出现在 **startBattle 与 revive 两处**（实测 %d 处）—— '
+    check(_sp == 3,
+          '`G._settlePlayed=false` 出现在 **startBattle / revive / tutRetry 三处**（实测 %d 处）—— '
           'revive 那次漏了，表现是「看了败局墨幕、复活、再打赢 Boss，胜利结算静默地不铺墨」，'
           '而没有任何闸会响（用户看不出少了什么）' % _sp)
     # v1.1.x（结局结算视频）：三条出口的接线在改造后分成两路 ——
@@ -1357,15 +1364,14 @@ def main():
         check('#overlay.menu-hit.menu-art' in _rmb,
               '减弱动态效果下关 .menu-art 动画的选择器带 #overlay 前缀（不带就压不过基样式 (0,3,0)）'
               ': %s' % _rmb[:80])
-    # v0.66.0：成就 toast 收起态原写 -140%，而空元素高度只有 26px ⇒ 只上移 36.4px，配 top:14px
-    # 后底边停在 y≈+4，在主菜单顶边漏出**一条 4px 宽的金色圆角边**（全屏主菜单后被实拍抓出来）。
-    # 换成 calc(-100% - 24px)：与自身高度无关，恒停在视口上方 10px。
-    _at = _re.search(r'#achieve-toast\s*\{[^}]*\}', _css)
-    check(_at is not None, '产物里 #achieve-toast 规则还在')
-    if _at:
-        check('calc(-100%' in _at.group(0).replace(' ', ''),
-              '#achieve-toast 收起态用 calc(-100%% ...) 而非百分比（空元素只有 26px 高，-140%% 会漏 4px 金边）: %s'
-              % _at.group(0)[:90])
+    # v1.1.22（用户口径）：游戏内成就系统删除 ⇒ 原 #achieve-toast 两条断言（规则还在 / 收起态用 calc(-100%)
+    # 而非百分比）一并移除，改成**反向钉子**：产物里不应再有成就系统的 CSS 规则与文案。
+    #   ⚠️ 判据只钉**规则**（`#achieve-toast{`）而不钉裸名字 —— 源码里留了说明性注释（「原成就吐司整块
+    #   CSS 已删除」），CSS 注释会原样进产物，钉裸名字会被自己的注释误伤（本轮实测踩到过）。
+    check(_re.search(r'#achieve-toast\s*\{', html) is None,
+          '产物里不再有 #achieve-toast 的 CSS 规则（成就系统已删除）')
+    for _ach in ('金沙卡背', '紫金头像框'):
+        check(_ach not in html, '产物里不再有成就遗留文案「%s」（成就系统已删除）' % _ach)
     # 提示项，不作断言：stringArrayThreshold=0.75 意味着约 1/4 的字符串保留明文，
     # 哪些字符串被编码随输入变化（同样输入 + 固定 seed 才稳定），命中与否都不影响功能与隐私。
     print('  注: 产物中 %s "%s" 明文' % ('存在' if '素材/' in html else '不存在', '素材/'))
@@ -1426,6 +1432,22 @@ def main():
     for _p in ('ui/card/side.png', 'ui/card/back.png'):
         check(_p in want and os.path.exists(os.path.join(ASSD, _p)),
               '卡牌侧视图/背视图已接线且仍在磁盘: %s' % _p)
+    # v1.1.25r：教程配音（素材/voice/<id>.mp3，id = TUT_NARR 的键）。playVoice 按
+    # VOICE_DIR+id+VOICE_EXT **拼串**取用，dump_ids 捞不到 ⇒ 不进 want。这些是用户逐条录的
+    # 真素材，落进下面「从未被请求」会是错的建议（照着删掉教程就没声了）⇒ 逐条钉进 _reserved；
+    # 并正面断言「TUT_NARR 的每一条都有一条配音打进产物」。
+    _tv = ids.get('tutVoice') or []
+    check(len(_tv) > 0, '教程配音路径清单非空（%d 条）' % len(_tv))
+    _vmiss = [p for p in _tv if p not in keys]
+    check(not _vmiss, 'TUT_NARR 每条旁白都有一条配音打进产物（缺 %d：%s）'
+          % (len(_vmiss), ','.join(_vmiss[:5])))
+    _reserved += _tv
+    _disk_voice = sorted(d for d in disk if d.startswith('voice/'))
+    _vids = set(ids.get('tutNarr') or [])
+    _vstray = [d for d in _disk_voice
+               if os.path.splitext(os.path.basename(d))[0] not in _vids]
+    check(not _vstray, '素材/voice/ 下都是 TUT_NARR 的 id（多出 %d：%s）'
+          % (len(_vstray), ','.join(_vstray[:5])))
     unused = sorted(k for k in (keys - set(want) - set(num_want))
                     if not k.startswith('sfx/') and k not in optional_music
                     and k not in _reserved)

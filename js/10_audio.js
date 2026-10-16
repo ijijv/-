@@ -417,6 +417,65 @@ function pickHitSfx(dmg, blockedAll, killed){
   return 'hit_light';
 }
 
+/* ===================== v1.1.25r 教程旁白配音（素材/voice/<id>.mp3） =====================
+   用户按 TUT_NARR 的 id 逐条交付了配音（52 条 = 39 条旁白 + 13 条互动对话），文件名 = id
+   （纯 ASCII、一律 .mp3、无变体）。挂点：50_ui.js 的 narrateShow（气泡一出即发声）与
+   narrateDrop / narrateClear（收泡即掐声），以及 40_flow.js 的 tut_00 / tut_6e / tut_die 三处整屏面板。
+   为什么**不塞进 SFX_TABLE**：音效表要变调、要随机变体，且 SFX_KEYS 有预解码上限（SFX_SAMPLE_MAX）；
+   人声是**逐条唯一**的固定念白，既不随机也不该变调 —— 单开一条通路最省事，也最不容易和音效互漂。
+   取址一律走 assetURL('voice/<id>.mp3')：单文件产物查 ASSET_MAP（data URI，file:// 下 fetch 也通）、
+   拆包 / 开发树走 素材/voice/ 相对路径。file:// 双击开发树时 fetch 被拦 ⇒ 静默无配音
+   （与音效同一限制：用 试玩.py 起 http，或直接跑打包产物，即可听到）。
+   没就绪的缓冲**先取回再补播**（voiceLoad 的回调），且只在「此刻仍是这条」时才出声
+   —— 玩家点得快、旁白已翻页时，过期的那条不再补播，免得两句话叠在一起。 */
+const VOICE_DIR='voice/';
+const VOICE_EXT='.mp3';
+var VOICE_BUF={};                       // id -> AudioBuffer（解码结果，一条只解一次）
+var VOICE_LOADING={};                   // id -> [待回补播的回调]
+var VOICE_SRC=null;                     // 当前发声的 BufferSource
+var VOICE_WANT=null;                    // 此刻该响的那条 id（异步入栈后据此判要不要补播）
+function _voiceKill(){ if(VOICE_SRC){ try{ VOICE_SRC.stop(); }catch(e){} VOICE_SRC=null; } }
+function stopVoice(){ VOICE_WANT=null; _voiceKill(); }
+function voiceLoad(id, cb){
+  if(VOICE_BUF[id]){ if(cb){ try{ cb(VOICE_BUF[id]); }catch(e){} } return; }
+  if(VOICE_LOADING[id]){ if(cb) VOICE_LOADING[id].push(cb); return; }
+  VOICE_LOADING[id] = cb ? [cb] : [];
+  const done=function(buf){
+    if(buf) VOICE_BUF[id]=buf;
+    const q=VOICE_LOADING[id]||[]; VOICE_LOADING[id]=null;
+    for(let i=0;i<q.length;i++){ try{ q[i](buf); }catch(e){} }
+  };
+  const ac=ensureAudio();
+  const url=(typeof assetURL==='function') ? assetURL(VOICE_DIR+id+VOICE_EXT) : null;
+  if(!url || typeof fetch!=='function' || !ac || typeof ac.decodeAudioData!=='function'){ done(null); return; }
+  try{
+    fetch(url).then(function(r){ return (r && r.ok===false) ? null : r.arrayBuffer(); })
+      .then(function(ab){ if(!ab) return done(null);
+        ac.decodeAudioData(ab, function(b){ done(b||null); }, function(){ done(null); }); })
+      .catch(function(){ done(null); });
+  }catch(e){ done(null); }
+}
+function playVoiceBuffer(buf){
+  const ac=ensureAudio(); if(!ac || !buf || typeof ac.createBufferSource!=='function') return;
+  _voiceKill();
+  try{
+    const src=ac.createBufferSource(); src.buffer=buf;
+    const g=ac.createGain(); g.gain.value=(SETTINGS.sfxVol==null?1:SETTINGS.sfxVol);
+    src.connect(g); g.connect(ac.destination);
+    src.onended=function(){ if(VOICE_SRC===src) VOICE_SRC=null; };
+    src.start(0); VOICE_SRC=src;
+  }catch(e){}
+}
+/* 播一条旁白配音。id 即 素材/voice/<id>.mp3；音效关 / 音量为 0 时不响（与 sfx 同口径）。 */
+function playVoice(id){
+  if(!id){ stopVoice(); return; }
+  const vol=(SETTINGS.sfxVol==null?1:SETTINGS.sfxVol);
+  if(!SETTINGS.sound || !(vol>0)){ stopVoice(); return; }
+  VOICE_WANT=id;
+  if(VOICE_BUF[id]) playVoiceBuffer(VOICE_BUF[id]);
+  else voiceLoad(id, function(b){ if(b && VOICE_WANT===id) playVoiceBuffer(b); });
+}
+
 /* ===================== 外置素材（有则增强，无则优雅回退） ===================== */
 const ASSET_BASE = '素材/';
 /* 音频扩展名的唯一真相源：打包.py 的 AUD_MIME 必须与此集合一致（漂移由 verify_dist 断言拦住）。
@@ -776,4 +835,23 @@ function setBGM(track){
 function unlockAudio(){ ensureAudio(); loadSfxSamples(); if(BGM && SETTINGS.sound){ try{ BGM.play().catch(()=>{}); }catch(e){} } }
 document.addEventListener('pointerdown', unlockAudio, {once:true});
 document.addEventListener('keydown', unlockAudio, {once:true});
+/* ===================== v1.1.25r 切后台 / 页面隐藏即静音 =====================
+   页面切走（Trae 内置浏览器换标签、移动端/小游戏切后台、系统锁屏）时把声音全停：
+   两条 BGM 链（采样 BGM 对象 + 合成氛围音）由 stopBGM 一次停掉，正在念的旁白配音一并掐掉。
+   只做「停」不做「回前台自动续播」—— 何时再起曲由进场景 / 设置自然触发，免得来回掐断又重起。
+   （55_cloud.js 也挂在同一个 visibilitychange 上，那条只管存云，与此互不影响。） */
+function audioHiddenStop(){
+  try{ stopVoice(); }catch(e){}
+  try{ stopBGM(); }catch(e){}
+}
+/* 挂两个钩子：visibilitychange（换标签 / 切后台 / 锁屏）+ pagehide（离开页面），两处都只做「停」。 */
+function audioHookHidden(){
+  if(typeof document!=='undefined' && document.addEventListener){
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState==='hidden') audioHiddenStop();
+    });
+  }
+  if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('pagehide', audioHiddenStop);
+}
+audioHookHidden();
 

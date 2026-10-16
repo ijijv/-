@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>志怪塔 · 教程 UI 方案选稿</title>
+<style>
+  /* ============================================================================
+     教程 UI 方案选稿：供用户挑选「气泡形态 / 字体 / 旁白出场 / UI 放置位置」组合。
+     样式 100% 复用原型.html 的 CSS 变量 + 项目真实素材（天师立绘 / 背景）。
+     本页**不参与打包**，仅设计稿用途。
+     ============================================================================ */
+  :root{
+    --ink:#16110c; --ink2:#241d16; --ink3:#3a2f24; --inkDeep:#120e0b;
+    --text:#e8ddc8; --dim:#9c8f77; --gold:#e0b341; --red:#b23b2e; --green:#3fa060;
+    --font-brush:"MaShanZheng","KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
+    --font-kai:"KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
+    --font-body:"KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--font-body); color:var(--text); min-height:100%;
+    background:
+      radial-gradient(circle at 15% 12%, rgba(178,59,46,.10), transparent 40%),
+      radial-gradient(circle at 85% 8%, rgba(224,179,65,.06), transparent 35%),
+      linear-gradient(180deg, #241d16 0%, var(--ink) 30%, #120e0b 100%);
+    background-attachment:fixed; padding:18px 16px 48px;
+  }
+  h1{font-family:var(--font-brush); font-size:24px; color:var(--gold); text-align:center; font-weight:400; letter-spacing:3px;}
+  .hint{max-width:960px; margin:10px auto 0; font-size:13px; color:var(--dim); line-height:1.9; text-align:center;}
+  .hint b{color:var(--gold);}
+
+  /* —— 控制条（挑选组合） —— */
+  .bar{max-width:1020px; margin:16px auto 0; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center;}
+  .bar label{font-size:13px; color:var(--dim); display:inline-flex; align-items:center; gap:6px;}
+  .bar select{font-family:var(--font-kai); font-size:13px; color:var(--text);
+    background:linear-gradient(180deg,#2a2218,#1a140e); border:1px solid var(--ink3); border-radius:6px;
+    padding:5px 8px; outline:none;}
+  .bar button{font-family:var(--font-brush); font-size:14px; color:var(--text);
+    background:linear-gradient(180deg,#2a2218,#1a140e); border:1px solid var(--ink3); border-radius:6px;
+    padding:7px 14px; letter-spacing:1px; cursor:pointer;}
+  .bar button:hover{border-color:var(--gold); color:var(--gold);}
+
+  /* —— 舞台：16:9 黑色底模拟实机战局 —— */
+  .stage-wrap{max-width:1020px; margin:16px auto 0; border:1px solid var(--ink3); border-radius:12px;
+    overflow:hidden; box-shadow:inset 0 0 60px rgba(0,0,0,.6); background:#0a0806; position:relative;}
+  .stage{
+    position:relative; aspect-ratio:16 / 9; width:100%;
+    background:linear-gradient(180deg, #2f261c 0%, #1a140e 55%, #120e0b 100%);
+    background-image:linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.15)), url('素材/bg/bg_act1.png');
+    background-size:cover; background-position:center;
+  }
+  .stage::before{content:''; position:absolute; inset:0; background:rgba(0,0,0,.18);}
+
+  /* —— 天师立绘 —— */
+  .hero{position:absolute; left:4%; bottom:6%; width:16%; z-index:3;}
+  .hero img{width:100%; height:auto; filter:drop-shadow(0 8px 16px rgba(0,0,0,.7));}
+
+  /* —— 敌人占位（用于画面构图） —— */
+  .enemy{position:absolute; right:14%; bottom:6%; width:14%; z-index:3; text-align:center;}
+  .enemy img{width:100%; height:auto; filter:drop-shadow(0 8px 16px rgba(0,0,0,.7));}
+  .enemy .label{font-family:var(--font-brush); font-size:14px; color:rgba(255,240,210,.55); margin-top:4px; letter-spacing:1px;}
+
+  /* —— 手牌占位 —— */
+  .hand{position:absolute; left:50%; bottom:0; transform:translateX(-50%); display:flex; gap:-8px; z-index:2;}
+  .hand .card{width:72px; height:100px; background:linear-gradient(180deg,#3a2f24,#1a140e); border:1px solid var(--ink3); border-radius:6px;
+    box-shadow:0 4px 12px rgba(0,0,0,.6); margin:0 -10px; display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-brush); font-size:22px; color:var(--gold);}
+
+  /* ============================================================================
+     旁白层（.narr）—— 四套 placement × 三套 bubble × 两套 font × 两套 出场动画
+     ============================================================================ */
+  .narr{position:absolute; z-index:20; pointer-events:auto;}
+
+  /* —— 放置位置（placement）—— */
+  .narr.p-bottom{left:50%; bottom:10px; transform:translateX(-50%); width:min(82%, 720px);}
+  .narr.p-side{left:22%; top:50%; transform:translateY(-50%); width:38%;}
+  .narr.p-float{left:50%; top:38%; transform:translate(-50%,-50%); width:min(70%, 620px);}
+  .narr.p-avatar{left:22%; bottom:18%; width:min(42%, 380px);}
+  /* p-avatar 天师头像在前，气泡从头像右上方伸出 */
+  .narr.p-avatar .avatar{position:absolute; left:-54px; bottom:0; width:48px; height:48px; border-radius:50%;
+    border:2px solid var(--gold); overflow:hidden; box-shadow:0 0 14px rgba(224,179,65,.3); background:#1a140e;}
+  .narr.p-avatar .avatar img{width:100%; height:100%; object-fit:cover;}
+  .narr.p-avatar.b-tip{padding-left:58px;} .narr.p-avatar.b-box{padding-left:58px;} .narr.p-avatar.b-brush{padding-left:58px;}
+
+  /* —— 气泡形态（bubble）—— */
+  .narr .bubble{position:relative; padding:14px 20px 16px; border-radius:10px; line-height:1.75;}
+  /* ① 圆角卡片（现代 UI 风） */
+  .narr.b-round .bubble{background:rgba(20,16,12,.92); border:1px solid var(--ink3); color:var(--text);
+    box-shadow:0 8px 28px rgba(0,0,0,.6);}
+  /* ② 尖角气泡（传统提示风） */
+  .narr.b-tip .bubble{background:rgba(20,16,12,.92); border:1px solid var(--ink3); color:var(--text);
+    box-shadow:0 8px 28px rgba(0,0,0,.6); border-radius:14px 14px 4px 14px;}
+  .narr.b-tip .bubble::before{content:''; position:absolute; left:18px; top:-8px; width:14px; height:14px; transform:rotate(45deg);
+    background:rgba(20,16,12,.92); border-left:1px solid var(--ink3); border-top:1px solid var(--ink3);}
+  /* ③ 水墨框（中式志怪风） */
+  .narr.b-brush .bubble{background:linear-gradient(180deg, rgba(28,22,16,.94), rgba(16,12,9,.94));
+    color:var(--text);
+    border:none; border-radius:4px;
+    box-shadow:
+      0 0 0 1px rgba(224,179,65,.28) inset,
+      0 0 0 3px rgba(16,12,9,.8) inset,
+      0 0 0 4px rgba(224,179,65,.12) inset,
+      0 10px 34px rgba(0,0,0,.6);
+    position:relative;}
+  .narr.b-brush .bubble::before{content:''; position:absolute; inset:8px; pointer-events:none;
+    border:1px solid rgba(224,179,65,.10); border-radius:2px;}
+  /* 水墨框左下角「天师」落款 */
+  .narr.b-brush .bubble .sign{position:absolute; right:14px; bottom:8px; font-family:var(--font-brush);
+    font-size:11px; color:rgba(224,179,65,.55); letter-spacing:2px;}
+
+  /* —— 字体 —— */
+  .narr.f-brush .bubble{font-family:var(--font-brush); font-size:18px;}
+  .narr.f-kai   .bubble{font-family:var(--font-kai);   font-size:16px;}
+
+  /* —— 标题条（天师旁白 / 第 N 步 之类）—— */
+  .narr .head{display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:13px; color:var(--gold); letter-spacing:1px;}
+  .narr .head .who{opacity:.75;}
+  .narr .head .dot{width:6px; height:6px; border-radius:50%; background:var(--gold); box-shadow:0 0 8px var(--gold);}
+  .narr.b-brush .head{color:rgba(224,179,65,.78);}
+  .narr.b-brush .head .dot{box-shadow:0 0 10px rgba(224,179,65,.6);}
+
+  /* —— 出场动画（给 .narr 一个初始类，JS 触发 enter）—— */
+  .narr.hidden{display:none;}
+  .narr.a-slide .bubble{opacity:0; transform:translateY(18px); transition:opacity .42s ease, transform .42s cubic-bezier(.22,.8,.25,1);}
+  .narr.a-slide.show .bubble{opacity:1; transform:translateY(0);}
+  .narr.a-fade .bubble{opacity:0; transition:opacity .5s ease;}
+  .narr.a-fade.show .bubble{opacity:1;}
+  .narr.a-brush .bubble{opacity:0; transform:scale(.96); filter:blur(4px);
+    transition:opacity .5s ease, transform .5s cubic-bezier(.2,.9,.3,1.1), filter .5s ease;}
+  .narr.a-brush.show .bubble{opacity:1; transform:scale(1); filter:blur(0);}
+
+  /* —— 步骤 / 进度指示条（浮层右上角）—— */
+  .step-ind{position:absolute; right:14px; top:10px; z-index:22; display:flex; gap:6px;
+    padding:6px 12px; border-radius:14px; background:rgba(20,16,12,.78); border:1px solid rgba(224,179,65,.2);
+    font-family:var(--font-brush); font-size:13px; color:var(--gold); letter-spacing:1px;}
+  .step-ind .dot{width:6px; height:6px; border-radius:50%; background:rgba(224,179,65,.28);}
+  .step-ind .dot.on{background:var(--gold); box-shadow:0 0 8px var(--gold);}
+
+  /* —— 手动出牌提示圈（可选叠层，用于教学强制点这张牌）—— */
+  .tap-hint{position:absolute; z-index:21; width:72px; height:100px; border-radius:6px;
+    animation:tapHint 1.4s ease-in-out infinite;
+    box-shadow:0 0 0 2px rgba(224,179,65,.8), 0 0 20px 4px rgba(224,179,65,.35);
+    pointer-events:none;}
+  @keyframes tapHint{0%,100%{box-shadow:0 0 0 2px rgba(224,179,65,.8), 0 0 20px 4px rgba(224,179,65,.35);}
+    50%{box-shadow:0 0 0 4px rgba(224,179,65,.3), 0 0 40px 10px rgba(224,179,65,.22);}}
+
+  /* —— 「将删除的旧提示清单」表 —— */
+  .section{max-width:1020px; margin:20px auto 0;}
+  .section h2{font-family:var(--font-brush); font-size:17px; color:var(--gold); letter-spacing:2px; margin-bottom:8px;}
+  table.del{width:100%; border-collapse:collapse; font-size:13px;}
+  table.del th, table.del td{padding:8px 10px; text-align:left; border-bottom:1px dashed var(--ink3); color:var(--dim); vertical-align:top;}
+  table.del th{font-family:var(--font-brush); color:var(--gold); font-weight:normal; letter-spacing:1px;}
+  table.del td code{color:#d9b96a; background:rgba(224,179,65,.08); padding:0 5px; border-radius:4px; font-family:Consolas,monospace; font-size:12px;}
+  .del-row:hover td{color:var(--text);}
+  .cap{max-width:1020px; margin:10px auto 0; text-align:center; font-size:13px; color:var(--dim);}
+  .cap b{color:var(--gold);}
+  @media (max-width:640px){
+    h1{font-size:18px;} .narr.f-brush .bubble{font-size:15px;} .narr.f-kai .bubble{font-size:14px;}
+    .narr.p-bottom{width:94%; bottom:6px;} .narr.p-side{width:70%; left:24%;} .narr.p-avatar{left:22%; width:56%;}
+    .hand .card{width:52px; height:74px; font-size:16px; margin:0 -6px;}
+  }
+</style>
+</head>
+<body>
+  <h1>志怪塔 · 教程 UI 方案选稿</h1>
+  <p class="hint">
+    请先看舞台里<strong>天师旁白气泡</strong>长什么样：<b>气泡形态</b>、<b>字体</b>、<b>旁白放置位置</b>、<b>出场动画</b>四个维度各挑 1 款，组合就是最终教程 UI。
+    下面还有一张表列了<strong>将要全局删除的旧文字提示</strong>（<code>tipOnce</code> 族共 5 处），请你确认范围是否对。
+  </p>
+
+  <div class="bar">
+    <label>气泡
+      <select id="selB">
+        <option value="round">① 圆角卡片（现代）</option>
+        <option value="tip">② 尖角气泡（传统提示）</option>
+        <option value="brush" selected>③ 水墨框（中式志怪）</option>
+      </select>
+    </label>
+    <label>字体
+      <select id="selF">
+        <option value="brush" selected>① 毛笔体（MaShanZheng）</option>
+        <option value="kai">② 楷体（KaiTi）</option>
+      </select>
+    </label>
+    <label>放置位置
+      <select id="selP">
+        <option value="bottom">① 舞台底部居中</option>
+        <option value="side">② 舞台左侧中部</option>
+        <option value="float">③ 舞台中央悬浮</option>
+        <option value="avatar" selected>④ 天师头像旁伸出</option>
+      </select>
+    </label>
+    <label>出场动画
+      <select id="selA">
+        <option value="slide" selected>① 下滑淡入（自然）</option>
+        <option value="fade">② 纯淡入</option>
+        <option value="brush">③ 毛笔点晕（放大+去模糊）</option>
+      </select>
+    </label>
+    <button id="btnPlay">▶ 重播旁白</button>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <!-- 右上角 步骤指示（例：6 关，当前第 2 关） -->
+      <div class="step-ind" title="教程 6 关进度">
+        <span class="step-label">第 2 关 · 普通战斗</span>
+        <span class="dot"></span><span class="dot on"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+      <!-- 天师立绘 -->
+      <div class="hero"><img src="素材/hero/tianshi.png" alt="天师"></div>
+      <!-- 敌人占位 -->
+      <div class="enemy">
+        <img src="素材/enemy/youhun.png" alt="游魂">
+        <div class="label">游魂 · 第 2 关</div>
+      </div>
+      <!-- 手牌占位（其中一张被金圈提示「必须打这张」） -->
+      <div class="hand" id="hand">
+        <div class="card">符</div>
+        <div class="card">令</div>
+        <div class="card">咒</div>
+        <div class="card">镇</div>
+        <div class="card">符</div>
+      </div>
+      <!-- 强制出牌提示圈（叠层，可选开关） -->
+      <div class="tap-hint" id="tapHint" style="left:calc(50% - 160px);"></div>
+
+      <!-- 旁白：JS 动态挂 class，用户选的四元组 -->
+      <div class="narr hidden" id="narr">
+        <div class="bubble">
+          <div class="head"><span class="who"><span class="dot"></span> 符箓天师 · 旁白</span></div>
+          <div class="text" id="narrText">小妖已近身。听我号令——先出一张<b style="color:var(--gold)">「镇」</b>字符，压住它的游魂！<br>（点下方「镇」那张牌，我才会继续。）</div>
+          <div class="sign">天 师</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cap">想把这段换成别的旁白文案？把文字给我，我直接贴进同一版式。</div>
+
+  <!-- 将删除的旧提示清单 -->
+  <div class="section">
+    <h2>将全局删除的旧文字提示（tipOnce 族，共 5 处）</h2>
+    <table class="del">
+      <thead><tr><th style="width:180px">文件 / 位置</th><th style="width:220px">触发条件</th><th>文案摘要</th><th style="width:80px">处理</th></tr></thead>
+      <tbody>
+        <tr class="del-row"><td><code>20_data.js</code> · 尸气机制首次引用</td><td>遇到【尸气】机制</td><td>茅山赶尸人专属资源：上限 15 点，战斗内跨回合累积，每场清零……</td><td>删除</td></tr>
+        <tr class="del-row"><td><code>20_data.js</code> · 召唤物机制首次引用</td><td>场上出现召唤物</td><td>召唤物不算敌人，站你这边，每回合结束自动结算效果……</td><td>删除</td></tr>
+        <tr class="del-row"><td><code>30_engine.js</code> · 诅咒首次叠加</td><td>诅咒层数 > 0</td><td>【诅咒】是敌人身上的印记，要靠【噬魂术】这类牌引爆……</td><td>删除</td></tr>
+        <tr class="del-row"><td><code>30_engine.js</code> · 格挡首次生效</td><td>格挡 > 0</td><td>格挡先替你挨打，回合结束清零（武僧除外）……</td><td>删除</td></tr>
+        <tr class="del-row"><td><code>00_base.js</code> · <code>tipOnce</code> 函数本体</td><td>全局删除（删完上面 4 处引用后）</td><td>带 <code>localStorage</code> 持久化的「只弹一次」提示框实现</td><td>删除</td></tr>
+      </tbody>
+    </table>
+    <p class="cap">删除范围确认后，我会把 <b>5 个调用点 + 函数本体</b> 一并摘除，换成教程旁白（每个教学点一段）来代替。</p>
+  </div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var narr=$('narr');
+  var selB=$('selB'), selF=$('selF'), selP=$('selP'), selA=$('selA'), btnPlay=$('btnPlay');
+
+  function apply(){
+    narr.className='narr b-'+selB.value+' f-'+selF.value+' p-'+selP.value+' a-'+selA.value+' hidden';
+    setTimeout(function(){ narr.classList.remove('hidden'); narr.classList.add('show'); }, 20);
+  }
+  [selB,selF,selP,selA].forEach(function(el){ el.addEventListener('change', apply); });
+  btnPlay.addEventListener('click', apply);
+  apply();
+})();
+</script>
+</body>
+</html>

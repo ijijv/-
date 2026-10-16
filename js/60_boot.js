@@ -87,7 +87,7 @@ function onDragUp(ev){
     }
     else if(d.targetable){
       const idx=enemyAtPoint(ev.clientX, ev.clientY);
-      if(idx>=0){ G.target=idx; play=true; if(TUT && TUT.step===2) advanceTut(); } // v0.61.33：引导第2步改由「拖到敌人身上」推进（原由 selectTarget 推进）
+      if(idx>=0){ G.target=idx; play=true; }
     } else if(d.sy-ev.clientY>=40){ play=true; }
   }
   d.el.classList.remove('dragging','lift','pressed');
@@ -1030,8 +1030,8 @@ function skipOpening(){
    布局权威 = 志怪塔UI重设计\主菜单demo.html：顶标题 / 左石碑列 / 右符纸行 / 全屏背景。
    入口 9 → 5：删 startEndless(无尽) / viewAchievements(成就) / viewStats(统计) / showTutorial(引导)
    —— 用户原话『真实的9个按键只要是那5个入口没提的，就默认删去』。**函数本体一律保留**，只摘入口。
-   v1.1.22（用户口径）：成就 · 收藏（卡背 / 头像框）**整块系统删除** ⇒ viewAchievements 本体随之一并删除
-   （至此本条注释里「函数本体仍保留」只对 viewStats / showTutorial 成立）。
+   v1.1.22（用户口径）：成就 · 收藏（卡背 / 头像框）**整块系统删除** ⇒ viewAchievements 本体随之一并删除。
+   v1.1.24：showTutorial 本体随旧教程族一并删除（教程改由 40_flow 教程族接管）。
    v1.0.14：排行榜入口（is-leaderboard）连同 js/56_rank.js 一并删除 ⇒ 符纸行只剩「图鉴」「设置」。
    签到整块取消（用户：『没有实际意义』）。
    ⚠️ 版本号字符串必须留在 <h2> 里（提交.py 的 read_version() 读 原型.html，但三处保持一致是项目惯例）。
@@ -1187,7 +1187,7 @@ function showSettings(){
     <p style="margin-top:16px">结束回合软提示：<b style="color:${SETTINGS.endTurnHint!==false?'var(--green)':'var(--red)'}">${SETTINGS.endTurnHint!==false?'开':'关'}</b></p>
     <button class="btn ghost" onclick="toggleEndTurnHint()">${SETTINGS.endTurnHint!==false?'关闭软提示':'开启软提示'}</button>
     <button class="btn ghost" onclick="showClearTimes()">榜 单</button>
-    <button class="btn ghost" onclick="showTutorial(1)">查看新手引导</button>
+    <button class="btn ghost" onclick="tutReplayAsk()">重玩新手教程</button>
     <button class="btn ghost" onclick="showCloudPanel()">云存档</button>
     <p style="margin-top:16px">成就上报（TapTap 平台）：<b style="color:${tapAchieveEnv().ok?'var(--green)':'var(--red)'}">${tapAchieveEnv().ok?'已接入':'未接入'}</b><br><small style="color:var(--dim);font-size:12px">v1.1.23：游戏内成就 / 卡背 / 头像框已删除；6 条成就（登塔！！！/ 初入第三幕 / 身经百战 / 全能降魔者 / 解锁并拥有所有角色 / 风云榜相聚）只上报到 TapTap 平台（玩家在 TapTap 游戏页看到点亮）。<br>${tapAchieveDiag()}</small></p>
     <button class="btn ghost" onclick="menuBack()">返回菜单</button>`, undefined, 'scroll-scene');
@@ -1490,43 +1490,11 @@ function toggleEndTurnHint(){ // v0.61.20(P1)
   SETTINGS.endTurnHint = (SETTINGS.endTurnHint===false); persistSettings(); renderEndTurnHint(); showSettings();
 }
 /* ===================== 新手引导 ===================== */
+/* v1.1.24：门禁键保留（首启判进不进教程插图）；旧的交互引导（TUT/TUTORIAL_STEPS/showTutorial）
+   与 tipOnce 族已全删 —— 由 js/40_flow.js 的教程族（startTutorial/tutOn/…）+ js/50_ui.js 的
+   narrate 旁白播放器接管（教程成品脚本落定稿）。 */
 function tutorialSeen(){ try{ return Store.get('zhiguaitower_tutorial_v1')==='1'; }catch(e){ return false; } }
 function markTutorialSeen(){ try{ Store.set('zhiguaitower_tutorial_v1','1'); }catch(e){} }
-/* —— 交互式新手引导（强制分步：出牌→拖拽指向敌人→结束回合） —— */
-let TUT=null;
-function startGuidedTutorial(){ TUT={step:1}; renderTutHint(); }
-function renderTutHint(){
-  let el=document.getElementById('tut-hint');
-  if(!TUT){ if(el) el.remove(); return; }
-  if(!el){ el=document.createElement('div'); el.id='tut-hint'; document.body.appendChild(el); }
-  const msgs={1:'第一步 · 把<b>攻击牌拖到敌人身上</b>打出（左上角是符文费用）',2:'第二步 · 箭头指向谁，谁的头顶就会浮出<b>预计伤害</b>（非指向牌点一下即可打出）',3:'第三步 · 点手牌右侧<b>「结束回合」</b>结束本回合'};
-  el.innerHTML='<span class="tut-tag">引导</span>'+msgs[TUT.step];
-  el.classList.add('show');
-}
-function advanceTut(){
-  if(!TUT) return;
-  if(TUT.step>=3){ TUT=null; markTutorialSeen(); renderTutHint(); return; }
-  TUT.step++; renderTutHint();
-}
-const TUTORIAL_STEPS = [
-  {t:'出牌', html:'点<b>手牌</b>打出，左上角数字是<b>符文费用</b>（出不起会提示「符文不足」）。<br>每回合 3 点符文，用完就点「结束回合」。'},
-  {t:'目标与意图', html:'把 <b>攻击牌拖到敌人身上</b>打出 —— 箭头指到谁就打谁，落点会高亮，同时浮出<b>预计伤害</b>（已算上遗物/诅咒/格挡/虚弱）。<br>敌人头顶 <b>⚠ 意图</b> 预告它下回合要做什么，先看清再决定。'},
-  {t:'关键词与状态', html:'文字里的<b>金色关键词</b>（如【诅咒】【虚弱】）悬停可看解释。<br>敌人身上的状态徽章（诅咒/力量等）也可悬停查看。'},
-  {t:'遗物与灵汁', html:'顶栏 <b>🧪灵汁</b> 点击直接使用；<b>遗物</b> 本局永久生效。<br>战斗外可点「菜单」存档、改设置。祝你好运，打上塔顶。'}
-];
-function showTutorial(i){
-  if(i>TUTORIAL_STEPS.length){ markTutorialSeen(); hideOverlay(); render(); return; }
-  const s=TUTORIAL_STEPS[i-1];
-  const last = i===TUTORIAL_STEPS.length;
-  const btn = last
-    ? `<button class="btn" onclick="markTutorialSeen(); closeOverlay();">完成</button>`
-    : `<button class="btn" onclick="showTutorial(${i+1})">下一步</button>`;
-  const back = i>1 ? `<button class="btn ghost" onclick="showTutorial(${i-1})">上一步</button>` : '';
-  /* v1.0.20：**必须走 closeOverlay() 而不是 hideOverlay()** —— 引导可以从「主菜单 → 设置」里打开，
-     那一刻 body.at-menu 还在，只 hideOverlay 会把 #app 留在隐藏态 ⇒ 全黑卡死（用户 2026-10-08 报）。 */
-  const skip = `<button class="btn ghost" onclick="markTutorialSeen(); closeOverlay();">跳过引导</button>`;
-  showOverlay(`<h2>入门引导 · ${i}/${TUTORIAL_STEPS.length} · ${s.t}</h2><p style="text-align:left;line-height:2">${s.html}</p>${btn}${back}${skip}`);
-}
 function resumeGame(){
   if(aliveEnemies().length>0) hideOverlay();
   // v0.62.0：从菜单/结算回到地图页也算「重新进入」，走进场动画（缓停在本局当前那一层）
@@ -1631,7 +1599,9 @@ hudIconPrewarm();   // v1.1.20r3：锦囊 / 牌堆两枚 HUD 图标也开局预�
 pileInit();     // v0.69.0：把 back.png / side.png 的地址写进 CSS 变量（抽牌堆·弃牌堆）
 trackLaunch();
 normalizeSingleRunSave();   // v1.1.15：单档化收敛 —— 旧多档只留最新那份，搬进 0 号槽
-document.addEventListener('DOMContentLoaded', showStartScreen);
+/* v1.1.24 首启门禁：没见过教程 → 插图过场 → 教程 6 关；见过的老玩家照旧进主菜单。
+   设置页另有「重玩新手教程」入口（tutReplayAsk）。 */
+document.addEventListener('DOMContentLoaded', function(){ if(!tutorialSeen()) showTutIntro(); else showStartScreen(); });
 /* v0.76.2 云存档：非 TapTap 环境直接 return；TapTap 端延迟 2s 拉一次云端列表，
    若云端比本机新（换设备 / 清缓存），弹一次「恢复云端存档」。 */
 if(typeof cloudBootCheck === 'function'){ try{ cloudBootCheck(); }catch(e){} }

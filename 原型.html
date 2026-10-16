@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-<title>志怪塔 · 原型 v1.1.23</title>
+<title>志怪塔 · 原型 v1.1.25</title>
 <style>
   :root{
     --ink:#171310; --ink2:#221c17; --ink3:#2c251e;
@@ -1753,7 +1753,7 @@
   .low-spec .card.is-forging::after,.low-spec .card.is-burning::after{animation:none; opacity:0;}
   .low-spec .card.is-ash{animation:none;}
   .enemy.dying{animation:enemyDie .45s ease-out forwards; pointer-events:none;}
-  @keyframes enemyDie{0%{opacity:1; transform:translate(var(--ex,0px),var(--ey,0px)) scale(1)}100%{opacity:0; transform:translate(var(--ex,0px),var(--ey,0px)) scale(.55)}}
+  @keyframes enemyDie{0%{opacity:1; transform:translate(var(--ex,0px),var(--ey,0px)) rotate(0deg) scale(1)}100%{opacity:0; transform:translate(var(--ex,0px),var(--ey,0px)) rotate(-9deg) scale(.5)}}
   /* —— v1.1.23 终局慢镜（finaleBlow / body.finale-slow）——
      用户口径：「不论角色还是敌人，在终结游戏的最后一个行为要加入行为 + 音效 + 特效的**慢动作**，再衔接结算动画。」
      做法：只挂一个 body 级 class，把 hero / enemy 那几条既有 keyframes 的 animation-duration 拉长，
@@ -2118,20 +2118,79 @@
   #app.closing #hand{opacity:0; transition:opacity .3s ease .12s;}
   #app.closing .pile{opacity:0; transition:opacity .3s ease .24s;}
   #app.closing #actions{opacity:0; transition:opacity .26s ease .3s;}
-  /* —— 交互式新手引导 —— */
-  #tut-hint{position:fixed; left:50%; bottom:92px; transform:translateX(-50%); z-index:30; background:rgba(24,18,12,.96); border:1px solid var(--gold); border-radius:10px; padding:10px 18px; color:var(--gold); font-size:14px; letter-spacing:1px; box-shadow:0 6px 20px rgba(0,0,0,.6); pointer-events:none; white-space:nowrap;}
-  #tut-hint .tut-tag{display:inline-block; background:var(--red); color:#fff; border-radius:4px; padding:1px 8px; margin-right:6px; font-size:12px; letter-spacing:0;}
-  #tut-hint b{color:#f0e0b8;}
-  /* v0.61.20(P8)：条件引导气泡 —— 首次遇到 诅咒/格挡/召唤物/尸气 各弹一次，可点掉、7 秒自动收 */
-  #tip-bubble{position:fixed; left:50%; bottom:150px; transform:translateX(-50%); z-index:32; max-width:min(560px,92vw);
-    background:rgba(24,18,12,.96); border:1px solid var(--gold); border-left:4px solid var(--gold); border-radius:10px; padding:10px 18px;
-    color:var(--text); font-size:14px; line-height:1.75; letter-spacing:1px; box-shadow:0 6px 22px rgba(0,0,0,.66); cursor:pointer;
-    pointer-events:none; opacity:0; transition:opacity .25s ease;}
-  /* ⚠️ 只在 .show 时可点。原先一直可点 —— 而它是 `opacity:0` **隐藏但仍在**，
-     所以没显示时也是一枚看不见的挡板，正好吃掉手牌下方那一带的拖拽落点。 */
-  #tip-bubble.show{opacity:1; pointer-events:auto;}
-  #tip-bubble .tip-tag{display:inline-block; background:var(--gold); color:#241a10; border-radius:4px; padding:1px 8px; margin-right:8px; font-size:12px; letter-spacing:0; font-weight:bold;}
-  #tip-bubble b{color:#f0e0b8;}
+  /* —— v1.1.24 新手教程：天师旁白（尖角气泡 + 毛笔体），三种出场动画按关轮换 ——
+     v1.1.25（用户实测口径修正）：改到**玩家与敌人之间**（left:50% 居中，不再压左下「符」图标与手牌区）；
+     去掉「符」字头像，改以名字行标识说话人（妖物 .foe 鬼气边框）；
+     容器 pointer-events:none、只 .bubble 可点 ⇒ 透明区绝不挡手牌拖拽落点。
+     DOM 见 js/50_ui.js narrateShow。 */
+  #tut-narr{display:none; position:fixed; left:50%; top:23%; transform:translateX(-50%); width:min(560px,50vw); z-index:36; pointer-events:none;}
+  #tut-narr.show{display:block;}
+  #tut-narr .bubble{position:relative; padding:13px 20px 15px; border-radius:12px; pointer-events:auto;
+    background:rgba(20,16,12,.94); border:1px solid var(--ink3); box-shadow:0 10px 30px rgba(0,0,0,.6); cursor:pointer;}
+  #tut-narr .bubble::before{content:''; position:absolute; left:50%; bottom:-8px; width:14px; height:14px;
+    transform:translateX(-50%) rotate(45deg); background:rgba(20,16,12,.94);
+    border-right:1px solid var(--ink3); border-bottom:1px solid var(--ink3);}
+  #tut-narr .who{font-family:var(--font-brush); font-size:14px; letter-spacing:3px; color:var(--gold); margin-bottom:3px;}
+  #tut-narr .text{font-family:var(--font-brush); font-size:17px; line-height:1.75; color:var(--text); letter-spacing:1px;}
+  #tut-narr .text b{color:var(--gold);}
+  #tut-narr .more{margin-top:6px; text-align:right; font-size:11px; color:rgba(224,179,65,.6); letter-spacing:2px; animation:tutMoreBlink 1.2s ease-in-out infinite;}
+  @keyframes tutMoreBlink{0%,100%{opacity:.45;} 50%{opacity:1;}}
+  /* 妖物泡（TUT_WHO 登记）：鬼气青绿边框 + 名字行同色 */
+  #tut-narr.foe .bubble{border-color:rgba(96,200,170,.55); box-shadow:0 10px 30px rgba(0,0,0,.6), 0 0 16px rgba(96,200,170,.18);}
+  #tut-narr.foe .bubble::before{border-right-color:rgba(96,200,170,.55); border-bottom-color:rgba(96,200,170,.55);}
+  #tut-narr.foe .who{color:#7fe3c4;}
+  /* 强制牌锁定泡：金框加重、无 .more（点不掉，由 doPlayCard 命中后 narrateHide 收） */
+  #tut-narr.force .bubble{border-color:var(--gold); box-shadow:0 0 18px rgba(224,179,65,.25), 0 10px 30px rgba(0,0,0,.6); cursor:default;}
+  #tut-narr.force .bubble::before{border-right-color:var(--gold); border-bottom-color:var(--gold);}
+  /* 出场动画三种，刻意拉大差异（tutorial.node % 3 轮换） */
+  #tut-narr .bubble{opacity:0;}
+  #tut-narr.a-slide .bubble{transform:translateY(56px); transition:opacity .45s ease, transform .45s cubic-bezier(.18,.9,.24,1.06);}
+  #tut-narr.a-slide.show .bubble{opacity:1; transform:translateY(0);}
+  #tut-narr.a-fade .bubble{transform:scale(.99); transition:opacity 1.0s ease-out, transform 1.0s ease-out;}
+  #tut-narr.a-fade.show .bubble{opacity:1; transform:scale(1);}
+  #tut-narr.a-brush .bubble{transform:translateY(14px) scale(.78); filter:blur(12px); transition:opacity .7s ease, transform .7s cubic-bezier(.16,1.2,.3,1.12), filter .7s ease;}
+  #tut-narr.a-brush.show .bubble{opacity:1; transform:translateY(0) scale(1); filter:blur(0);}
+  /* —— v1.1.25 待机呼吸 + 阵亡动画 ——
+     v1.1.25r（用户真机复核）：上一版把玩家与**所有**敌人统一 3.8s 同频同相左右摆，幅度也偏大，
+     看着「像一起跳舞」。据此改为三条口径：
+       ① 只有**精英与 boss** 有动静（normal / 召唤物 / 玩家立绘**不挂**）；
+       ② 动作由「左右摆」改成**呼吸式** —— origin 底、纵向极轻起伏（胸腔向上提），横向几乎不动；
+       ③ 幅度压到最轻（纵向 2.2%、横向 0.4%），boss 比精英慢一档且错相 1.1s，同屏也不会一起起伏。
+     挂在**子立绘**上（.enemy 自身用 --ex/--ey 定位，绝不动它）；`:not(.dying)` 保证消散类
+     （.enemy.dying，挂在 .enemy 上）时不再叠加呼吸。 */
+  @media (prefers-reduced-motion: no-preference){
+    .enemy.e-elite:not(.dying) .eportrait,
+    .enemy.e-boss:not(.dying) .eportrait{
+      transform-origin:bottom center;
+      animation:idleBreath 3.4s ease-in-out infinite;
+    }
+    .enemy.e-boss:not(.dying) .eportrait{animation-duration:4.6s; animation-delay:-1.1s;}
+  }
+  /* 0→45% 吸气（略慢）、45→100% 呼气；峰值错到 45% 而非 50%，免得机械地对称。 */
+  @keyframes idleBreath{0%,100%{transform:scale(1,1);}45%{transform:scale(1.004,1.022);}}
+  /* 玩家阵亡：立绘向前倾倒 + 淡出（挂 .hero-art-box.hero-dead；loseGame / tutOnDeath 加类，
+     startBattle / revive / startTutorial 摘类）。挂父盒 ⇒ 与子立绘的中刀/待机动画互不抢通道。 */
+  @keyframes heroDie{0%{opacity:1; transform:translateX(0) rotate(0deg);}22%{opacity:1; transform:translateX(-9px) rotate(0deg);}100%{opacity:.12; transform:translate(-34px,14px) rotate(-19deg);}}
+  .hero-art-box.hero-dead{animation:heroDie 1.0s cubic-bezier(.4,0,.7,1) forwards; transform-origin:bottom center;}
+  /* 常驻「跳过教程」：教程期间一直挂右上，单击即跳免确认（tutSkipShow 挂/收） */
+  #tut-skip{position:fixed; top:10px; right:12px; z-index:66; background:rgba(24,18,12,.9); border:1px solid var(--dim);
+    color:var(--dim); border-radius:8px; padding:6px 14px; font-size:13px; letter-spacing:2px; cursor:pointer; font-family:inherit;}
+  #tut-skip:hover{border-color:var(--gold); color:var(--gold);}
+  /* 首启插图过场（showTutIntro）：缺图 onerror 回落墨底 */
+  #tut-intro{position:fixed; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:#080605; padding:20px;}
+  #tut-intro .ti-img{width:min(92vw,860px); aspect-ratio:16/9; object-fit:cover; border:1px solid var(--ink3); border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.7);}
+  #tut-intro .ti-text{font-family:var(--font-brush); font-size:clamp(16px,2.6vw,22px); line-height:1.9; color:var(--text); text-align:center; letter-spacing:2px; max-width:min(92vw,760px);}
+  #tut-intro .ti-text b{color:var(--gold);}
+  #tut-intro .ti-go{font-size:18px; letter-spacing:6px; padding:12px 42px;}
+  @media (max-height:560px){
+    /* 矮屏横档：旁白居中收小 */
+    #tut-narr{top:20%; width:min(460px,52vw);}
+    #tut-narr .text{font-size:14px; line-height:1.6;}
+    #tut-narr .bubble{padding:9px 14px 11px;}
+    #tut-skip{font-size:12px; padding:4px 10px;}
+    #tut-intro .ti-img{width:min(70vw,640px);}
+    #tut-intro .ti-text{font-size:14px; line-height:1.6;}
+  }
   /* v0.61.20(P3)：拖拽指向敌人时，目标头顶的受击预览。
      v0.61.33：卡面徽章已删，这里成为预伤的**唯一**显示处，且按「拖拽所见目标」实时算（previewDamage(c, e)）。 */
   #drag-dmg{position:fixed; z-index:34; pointer-events:none; font-family:var(--font-brush); font-size:30px; font-weight:bold; letter-spacing:1px;
@@ -2519,11 +2578,8 @@
     .hand-area #endTurn{writing-mode:horizontal-tb; min-height:0; align-self:flex-end;
          font-size:13px; padding:6px 10px; letter-spacing:2px;}
 
-    /* 两条桌面专属浮层：矮屏正好压在手牌卡上，而气泡是可点的 ⇒ 会吃掉出牌落点
-       （出牌靠 elementFromPoint，气泡盖住谁就选不中谁）。 */
+    /* 桌面专属浮层：矮屏正好压在手牌卡上。 */
     .hint{display:none;}
-    #tut-hint{bottom:4px; font-size:12px; padding:6px 12px;}
-    #tip-bubble{bottom:4px; font-size:12px; padding:6px 12px; line-height:1.5;}
     #end-turn-hint{font-size:11px; padding:4px 8px;}
 
     /* 面板：横扁的窗口里别退成一条竖列 */
@@ -3152,12 +3208,6 @@
   /* 触屏落点：24px 太小，给到 30×26。 */
   #log .log-close{min-width:30px; min-height:26px; font-size:13px;}
 
-  /* —— ④ 引导条提到屏幕中间 ——
-     引导是新手的一次性提示，原来贴在屏幕最下沿、正压着刚松开的手牌
-     （用户：「引导…却占据了下面的位置」）。挪到屏幕正中；它自带 pointer-events:none（基档），
-     所以压在敌人身上也不会挡「把牌拖到敌人身上打出」。 */
-  #tut-hint{top:50%; bottom:auto; transform:translate(-50%,-50%);}
-
   @media (max-height:560px){
     /* ⑤ 手牌往下一点：引导条搬走后底部更空。数值是**实测出来的**——
        ⑥ 把 .battle 抬了约 21px（243 vs 222），已吃掉原来 27px 死区的大半，
@@ -3644,7 +3694,7 @@
   h1.title small, .hint, .pmech, .prow, .prelics, .badge, .summon,
   .map-node, .pile-n, #turn-summary, .pstats, .hp-label,
   .title-actions .btn, button.btn.ghost, .tb-toggle,
-  #tooltip, #tooltip .tt-story, #tut-hint .tut-tag, #tip-bubble .tip-tag,
+  #tooltip, #tooltip .tt-story,
   .settle-cap, .settle-acc, #perf,
   .bcard .bmeta, .bcard .bstory,
   .pouch-name, .pouch-desc, .pouch-empty, .run-status, .kwlist,

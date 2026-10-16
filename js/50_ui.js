@@ -18,7 +18,7 @@ const MAP_ICON_DIR = 'map/';
 /* v1.1.14（用户 2026-10-14）：关卡图标改用 素材/map/guanqia-logo/ 下的新图，按文件名映射类型；
    商店图（shop.png）仍是 素材/map/shop.png —— guanqia-logo 里没有商店图。
    ⚠️ 换图只改这张表，渲染逻辑一个字都不用动。 */
-const NODE_ICON  = { fight:'guanqia-logo/combat.png', elite:'guanqia-logo/ellite.png', unknown:'guanqia-logo/unknown.png', camp:'guanqia-logo/rest.png', shop:'shop.png', boss:'guanqia-logo/boss.png' };
+const NODE_ICON  = { fight:'guanqia-logo/combat.png', elite:'guanqia-logo/elite.png', unknown:'guanqia-logo/unknown.png', camp:'guanqia-logo/rest.png', shop:'shop.png', boss:'guanqia-logo/boss.png' };
 /* v1.1.14（用户口径「关卡不要用锁图标，把精英/Boss/篝火等类型都显示出来，方便玩家综观全局挑路线」）：
    未解锁/未到达的关卡不再挂锁，一律**显示真实类型图标**，仅以灰化（.o-locked 描边档位）区分。
    这条常量只保留「锁图在磁盘上的名字」这一事实（素材不擅自删），**渲染侧已不再引用**。 */
@@ -813,10 +813,122 @@ const EVT_BG = { well:'evt_well.jpg', blackmarket:'evt_blackmarket.jpg',
 /* v0.61.41：**不再让玩家三选一** —— 踩到未知节点直接随机抽一个事件并立刻进入
    （用户要求：「未知关卡不要由玩家选择的环节，玩家直接进入随机环节」）。
    抽到什么用 floatMsg 报一声：原先靠三张卡面预告，现在没有预告了，总得让玩家知道发生了什么。 */
+/* ===================== v1.1.24 新手教程 · 旁白播放器（教程关卡样式.html 落定稿） =====================
+   尖角气泡 + 毛笔体；三种出场动画按关轮换（用户抱怨过「都一样」）。
+   v1.1.25（用户实测口径修正）：
+     · 位置改到**玩家与敌人之间**（不再压左下「符」字图标 / 手牌区 / 抽牌堆）；
+     · **去掉「符」字头像**（用户原话「不要左下角的『符』字图标」）——改以名字行标识说话人，
+       妖物（TUT_WHO 登记）加鬼气边框 .foe；
+     · 任意一次 pointerdown 收非强制泡（用户原话「非提示的旁白点一下就该过」），
+       队列抽干立即收泡（旧版 return 会把气泡永久挂屏）；
+     · **强制泡（tutForce）不可点收**，由强制牌打出后 doPlayCard 调 narrateHide 收。
+   无 DOM（冒烟/无头）一律安全 no-op —— 队列照样走，只是不画。 */
+const NARR_Q=[];
+let NARR_CUR=null;   // { id, force }
+function narrate(){
+  if(!G||!G.tutorial||!G.tutorial.on) return;
+  for(let i=0;i<arguments.length;i++){ const it=arguments[i]; if(it!=null) NARR_Q.push(it); }
+  narrateNext();
+}
+function narrateNext(){
+  if(NARR_CUR) return;                 // 当前气泡还在，等点按 / 清锁
+  const it=NARR_Q.shift();
+  if(it==null){ narrateDrop(); return; }   // v1.1.25：队列抽干即收气泡（旧版 return 会永久挂屏）
+  if(typeof it==='function'){ try{ it(); }catch(e){} narrateNext(); return; }
+  narrateShow(it, false);
+}
+/* 说话人：TUT_WHO 里登记的是**妖物**（鬼气泡 + 名字行）；天师旁白不登记 ⇒ 无名行。 */
+function narrateWho(id){ return (typeof TUT_WHO!=='undefined') ? (TUT_WHO[id]||null) : null; }
+function narrateShow(id, force){
+  const txt=(typeof TUT_NARR!=='undefined')?TUT_NARR[id]:null;
+  if(txt==null){ narrateNext(); return; }
+  NARR_CUR={ id:id, force:!!force };
+  if(typeof document==='undefined'||!document.body) return;
+  bindNarrTap();                             // 幂等：用到才挂，无头不挂（不给启动期/冒烟添副作用）
+  let box=document.getElementById('tut-narr');
+  if(!box){ box=document.createElement('div'); box.id='tut-narr'; document.body.appendChild(box); }
+  const who=narrateWho(id);
+  const anim=['a-slide','a-fade','a-brush'][((G&&G.tutorial&&G.tutorial.node)||0)%3];
+  box.className='narr '+anim+(force?' force':'')+(who?' foe':'');
+  box.innerHTML='<div class="bubble">'
+    +(who?'<div class="who">'+who+'</div>':'')
+    +'<div class="text">'+txt+'</div>'
+    +(force?'':'<div class="more">▼ 点按继续</div>')+'</div>';
+  void box.offsetWidth;                      // 重排后再挂 show，动画才重播
+  box.classList.add('show');
+  /* 配音：id 即 素材/voice/<id>.mp3（v1.1.25r 用户已逐条交付 53 条 = 40 旁白 + 13 对话）。
+     走 playVoice 这条**专用**通路（assetURL 取址，绝不经 sfx 的合成音回落）——
+     没人声时宁可静音，也不要程序化合成的「假念白」。 */
+  if(typeof playVoice==='function') playVoice(id);
+}
+function narrateDrop(){
+  NARR_CUR=null;
+  if(typeof stopVoice==='function') stopVoice();   // 收泡即掐配音（点按跳过时不留半句话）
+  if(typeof document==='undefined') return;
+  const box=document.getElementById('tut-narr');
+  if(box){ box.classList.remove('show'); box.innerHTML=''; }
+}
+/* 点按推进：非强制泡一律可点收（用户口径）。强制泡点不掉 —— 照师父说的做才收。 */
+function narrateAdvance(){
+  if(NARR_CUR && NARR_CUR.force) return;
+  narrateDrop();
+  narrateNext();
+}
+/* 强制牌打出后由 doPlayCard 调：无视 force 标记，强制收泡并接着放队列里的后续旁白。 */
+function narrateHide(){ narrateDrop(); narrateNext(); }
+/* 是否还有旁白在放（含正在展示的强制泡与队列里的）—— 教程期间 playCard / endTurn 据此上锁，
+   避免玩家在旁白未读完时就把「待会儿要强制出的那张符」先打掉（那样强制泡就永远打不出、卡死）。 */
+function narrBusy(){ return !!(NARR_CUR || NARR_Q.length); }
+function narrateClear(){
+  NARR_Q.length=0; NARR_CUR=null;
+  if(typeof stopVoice==='function') stopVoice();
+  if(typeof document==='undefined') return;
+  const box=document.getElementById('tut-narr');
+  if(box){ box.classList.remove('show'); box.innerHTML=''; }
+}
+/* 任意点击即收非强制泡。**捕获相** + 常驻一个监听（与 bindSaySkip 同一条理由：配对在交叠时会互相摘掉对方）。
+   ⚠️ 强泡期间不推进 —— 否则玩家点「结束回合」等操作会顺手把强制旁白点掉，锁就废了。 */
+let _narrTapBound=false;
+function bindNarrTap(){
+  if(_narrTapBound) return;
+  if(typeof window==='undefined' || !window.addEventListener) return;
+  _narrTapBound=true;
+  window.addEventListener('pointerdown', function(){
+    if(NARR_CUR && !NARR_CUR.force) narrateAdvance();
+  }, true);
+}
+/* 常驻「跳过教程」：教程期间一直挂右上，单击即跳（免确认 —— 用户口径）。 */
+function tutSkipShow(on){
+  if(typeof document==='undefined'||!document.body) return;
+  let b=document.getElementById('tut-skip');
+  if(on){
+    if(!b){ b=document.createElement('button'); b.id='tut-skip'; b.textContent='跳过教程'; document.body.appendChild(b); }
+    b.onclick=function(){ tutSkip(); };
+    b.style.display='';
+  } else if(b){ b.style.display='none'; }
+}
+/* 插图过场：首启门禁落点。缺图 onerror 回落墨底，不阻塞流程（素材由用户提供）。 */
+function showTutIntro(){
+  if(typeof document==='undefined'||!document.body){ startTutorial(); return; }
+  let el=document.getElementById('tut-intro');
+  if(el) el.remove();
+  el=document.createElement('div'); el.id='tut-intro';
+  el.innerHTML='<img class="ti-img" alt=""><div class="ti-text">'+(TUT_NARR.tut_00||'')+'</div><button class="btn ti-go">入 塔</button>';
+  document.body.appendChild(el);
+  const img=el.querySelector('.ti-img');
+  img.src=assetURL('intro/tutorial.png', true);
+  img.onerror=function(){ img.style.display='none'; };
+  el.querySelector('.ti-go').onclick=function(){ if(typeof stopVoice==='function') stopVoice(); el.remove(); startTutorial(); };
+  /* 入塔前那段整屏旁白（tut_00）也配音 —— 这一段不在气泡播放器里，单独挂。 */
+  if(typeof playVoice==='function') playVoice('tut_00');
+}
+/* 设置页「重玩新手教程」—— 旧档不受教程影响（教程全程 saveRun 空转）。 */
+function tutReplayAsk(){ hideOverlay(); showTutIntro(); }
 function showUnknown(){
   const pool=UNKNOWN_EVENTS;
   const labels={well:'古井许愿', blackmarket:'鬼市黑商', temple:'无头古庙', ambush:'拦路恶鬼', forge:'废弃道观', empty:'荒坟', potion:'灵泉', remove:'净坛'};
-  const ev=pool[Math.floor(rng()*pool.length)];
+  /* v1.1.24 教程：未知关固定「灵泉」（脚本 tut_5b 灵液讲解跟着它走） */
+  const ev=(G.tutorial&&G.tutorial.on)?'potion':pool[Math.floor(rng()*pool.length)];
   SCENE='unknown'; saveRun();
   /* v0.73.0：换事件房专用背景。**恢复不用单独写** —— 事件的每一个出口都会经过
      goNext()（→ showMap → setBg(mapBgName())）或 startBattle()（→ setBg('act'+N)），
@@ -870,6 +982,7 @@ function doUnknownRemove(i){
 }
 function unknownPotion(){
   const p=randomPotion(); gainPotion(p);
+  if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('unknownPotion'); }catch(e){} }   // v1.1.24 教程：灵液讲解
   showOverlay(`<h2>灵 泉</h2><p>一泓清泉自石缝渗出，隐隐有灵光。<br>你取一瓢饮下，得了一瓶【${p.name}】。</p><div class="reward-cards"><div class="relic r-blue">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
 /* v0.68.1：古井许愿**先问后扣**（用户报「他要你八点生命换一个遗物，你又不想要换，
@@ -1460,6 +1573,8 @@ function renderCampfire(){
 }
 function restAtCamp(){ heal(20); log('在篝火旁休息，恢复 20 生命'); G.campActed=true; saveRun(); renderCampfire(); }
 function showRestConfirm(){
+  /* v1.1.24 教程：篝火关先锻造（脚本 tut_4b），歇息讲解（tut_4c）在锻完之后 */
+  if(G.tutorial && G.tutorial.on && !G.campActed){ floatMsg('先听师父的话，锻造一道符'); return; }
   showOverlay(`<h2>休息 · 恢复 20 生命</h2><p>当前生命 ${G.hp}/${G.maxHp}。确定休息恢复 20 点生命吗？（与锻造二选一）</p>
     <button class="btn" onclick="restAtCamp()">确定 · 休息</button>
     <button class="btn ghost" onclick="renderCampfire()">返回</button>`);
@@ -1505,6 +1620,8 @@ function canUpgrade(c){
 function forgeCard(i){
   if(CARD_ACT_BUSY) return;                        // v1.1.19：演出期一次只允许锻一张（见 CARD_ACT_BUSY 注释）
   const c=G.deck[i];
+  /* v1.1.24 教程：篝火关锁定只能锻【雷符】（脚本 tut_4b 指定） */
+  if(G.tutorial && G.tutorial.on && G.tutorial.node===3 && !G.campActed && c.id!=='leifu'){ floatMsg('先听师父的话，拣那道【雷符】'); return; }
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   if(!canUpgrade(c)){ floatMsg('不可升级'); log(`【${c.name}】没有可升级的变化，无法锻造`); return; }
   sfx('ui_levelup');   // v0.61.32：升级从蹭遗物音改成专属音（⚠️ 必须**同步**出声：冒烟 v0.61.32 钉着这一条）
@@ -1515,7 +1632,10 @@ function forgeCard(i){
   cardFxAnim(el, 'forge', ()=>{
     CARD_ACT_BUSY=false;                           // 演出结束 → 解锁（无 DOM 时同帧就走到这里）
     c.up=true; log(`锻造升级【${c.name}】`);
-    if(G.forgeFrom==='camp'){ G.campActed=true; G.forgeFrom=null; saveRun(); renderCampfire(); }
+    if(G.forgeFrom==='camp'){
+      G.campActed=true; G.forgeFrom=null; saveRun(); renderCampfire();
+      if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('forged'); }catch(e){} }   // v1.1.24 教程：锻完讲歇息/删符
+    }
     else { G.forgeFrom=null; hideOverlay(); goNext(); }
   });
 }
@@ -1560,6 +1680,8 @@ function showShop(){
 function renderShop(){
   /* v0.74.0：整屏鬼市背景。理由同上 —— 续档的 d.scene==='shop' 分支直呼 renderShop()。 */
   setBg('shop.jpg');
+  /* v1.1.24 教程：鬼市专属版 —— 固定三符 + 法宝货位，未买齐【斩妖剑】【招魂幡】不能走 */
+  if(G.tutorial && G.tutorial.on){ renderTutShop(); return; }
   const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" data-ri="${i}" onclick="askBuyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
   /* 聚宝盆（蓝）：灵汁 7 折 —— 界面把**原价划掉**、新价加亮，让折扣「看得见」（用户定稿要求）。 */
   const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const base=potionPriceBase(); const ok=G.gold>=price; const priceTxt=(price!==base)?`<s class="price-old">${base}</s> <b class="price-new">${price}</b>`:`${price}`; return `<div class="relic r-blue ${ok?'':'disabled'}" data-ri="${i}" onclick="askBuyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${priceTxt} 金币</div></div>`; }).join('');
@@ -1571,10 +1693,48 @@ function renderShop(){
     <button class="btn ghost" onclick="hideOverlay(); showMap();">返回地图</button>
     <button class="btn" onclick="hideOverlay(); goNext();">继续前进</button>`);
 }
+/* ===================== v1.1.24 教程 · 鬼市专属版 =====================
+   固定三符（斩妖剑/火符/金刚符）+ 法宝货位（招魂幡 30 冥钱）；
+   未买齐【斩妖剑】+【招魂幡】前：删牌/继续前进都拦下（floatMsg「先听师父的话」）。 */
+function renderTutShop(){
+  const N=TUT_NODES[G.tutorial.node];
+  const F=G.tutorial.flags;
+  const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" data-ri="${i}" onclick="askBuyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 冥钱${ok?'':' · 不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">符已卖完</p>';
+  let relicSlot;
+  if(F.relicBought){ relicSlot='<p style="color:var(--green)">✓ 法宝已请</p>'; }
+  else {
+    const r=RELICS.find(x=>x.id===N.relic);
+    const ok=G.gold>=N.relicPrice;
+    relicSlot=`<div class="relic ${RCOLOR[r.rarity]} ${ok?'':'disabled'}" onclick="tutBuyRelic()">${relicIcon(r)}<div class="cname">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${N.relicPrice} 冥钱 · 法宝</div></div>`;
+  }
+  const done=F.swordBought && F.relicBought;
+  showOverlay(`<h2>鬼 市</h2>${runStatusHTML()}<p>你带着 <b style="color:var(--gold)">${G.gold}</b> 冥钱。</p>
+    <div class="reward-cards">${cards}</div>
+    <div style="color:var(--gold);margin:8px 0 2px">— 法宝 —</div>
+    <div class="reward-cards">${relicSlot}</div>
+    <button class="btn ghost" onclick="removeCard()">删一张牌（${removeCost()} 冥钱）</button>
+    ${done?'<button class="btn" onclick="hideOverlay(); goNext();">继续前进</button>':'<p style="color:var(--dim)">先听师父的话：买下【斩妖剑】与【招魂幡】。</p>'}`);
+}
+function tutBuyRelic(){
+  if(!G||!G.tutorial||!G.tutorial.on) return;
+  const N=TUT_NODES[G.tutorial.node]; const F=G.tutorial.flags;
+  if(F.relicBought) return;
+  const r=RELICS.find(x=>x.id===N.relic); if(!r) return;
+  if(G.gold<N.relicPrice){ floatMsg('冥钱不足'); return; }
+  G.gold-=N.relicPrice; F.relicBought=true;
+  grantRelic(r); sfx('gold'); log(`请得法宝【${r.name}】`);
+  if(typeof narrate==='function') narrate('tut_2e','tut_2f');
+  renderShop();
+}
 function buyCard(i){
   const c=G.shopWares[i]; const p=priceFor(c);
   if(G.gold<p){ floatMsg(`金币不足（需 ${p}）`); log(`金币不足（需 ${p}）`); return; }
   G.gold-=p; G.deck.push(c); G.shopWares.splice(i,1); G.shopMarkup=(G.shopMarkup||0)+3; sfx('gold'); log(`购买【${c.name}】，商店剩余卡牌价格 +3`);
+  /* v1.1.24 教程：买到【斩妖剑】→ 讲解入袋 + 引向法宝货位 */
+  if(G.tutorial && G.tutorial.on && c.id==='zhanyaojian' && !G.tutorial.flags.swordBought){
+    G.tutorial.flags.swordBought=true;
+    if(typeof narrate==='function') narrate('tut_2c','tut_2d');
+  }
 
   // 购买商店卡牌后更新补偿值（商店属于shop类型）
   updateGoldCompensation(c.rarity === 'gold');
@@ -1603,6 +1763,8 @@ function buyPotion(i){
 }
 function removeCard(){
   if(G.deck.length<=1){ log('牌组只剩一张了'); return; }
+  /* v1.1.24 教程：未买齐斩妖剑+招魂幡前不许删牌（冥钱要花在对的地方） */
+  if(G.tutorial && G.tutorial.on){ const F=G.tutorial.flags; if(!(F.swordBought&&F.relicBought)){ floatMsg('先听师父的话'); return; } }
   renderRemoveList();
 }
 function renderRemoveList(){

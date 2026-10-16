@@ -29,7 +29,8 @@
   try { stopBGM = __sil; } catch (e) {}
   try { clearSynthBGM = __sil; } catch (e) {}
   try { ensureAudio = __sil; } catch (e) {}
-  try { startGuidedTutorial = __sil; } catch (e) {}
+  /* v1.1.24：startGuidedTutorial 已随旧教程整块删除 —— 这里若再 `startGuidedTutorial = __sil`
+     反而会凭空造出一个全局函数（非严格模式赋值未声明变量），故连桩一起摘掉。 */
   try { bossIntro = function (cb) { if (typeof cb === 'function') cb(); }; } catch (e) {}
   var __realEnemyAct = enemyAct; // 保留真实引用（默认 stub 掉，避免 enemyAct->startTurn 连锁）
   try { enemyAct = __sil; } catch (e) {} // 免触发 enemyAct->startTurn 连锁；finishEndTurn 骑乘结算仍原样执行
@@ -3428,44 +3429,7 @@
     __ok('v0.61.20 P5 筛选键提取（只留勾中的）', _keys.length === 1 && _keys[0] === 'dmg', JSON.stringify(_keys));
     __ok('v0.61.20 P5 日志渲染函数在位', typeof renderLogBox === 'function' && typeof toggleLogFilter === 'function');
 
-    /* —— P8 条件引导气泡：每个键只弹一次、落盘、四类触发点都接上 —— */
-    function __tipReset() { TIPS_SEEN = null; try { Store.set(TIPS_KEY, '{}'); } catch (e) {} TIPS_SEEN = null; }
-    SCENE = 'battle';
-    __tipReset();
-    __ok('v0.61.20 P8 首次触发返回 true', tipOnce('block', 'x') === true);
-    __ok('v0.61.20 P8 同键第二次不再弹', tipOnce('block', 'x') === false);
-    __ok('v0.61.20 P8 不同键各自独立', tipOnce('curse', 'x') === true);
-    __ok('v0.61.20 P8 已落盘（换局不重弹）',
-      (Store.getJSON(TIPS_KEY) || {}).block === 1, JSON.stringify(Store.getJSON(TIPS_KEY)));
-
-    __tipReset(); SCENE = 'battle';
-    g = __base('wuseng');
-    gainBlock(3);
-    __ok('v0.61.20 P8 gainBlock 触发「格挡」提示', (Store.getJSON(TIPS_KEY) || {}).block === 1);
-
-    __tipReset(); SCENE = 'battle';
-    g = __base('tianshi'); __fresh();
-    applyCurse(G.enemies[0], 2);
-    __ok('v0.61.20 P8 applyCurse 触发「诅咒」提示', (Store.getJSON(TIPS_KEY) || {}).curse === 1);
-
-    __tipReset(); SCENE = 'battle';
-    g = __base('ganshiren');
-    gainShiqi(1);
-    __ok('v0.61.20 P8 gainShiqi 触发「尸气」提示', (Store.getJSON(TIPS_KEY) || {}).shiqi === 1);
-
-    __tipReset(); SCENE = 'battle';
-    g = __base('ganshiren');
-    addSummon({ type: 'zhiren', v: 3, dur: 2 });
-    __ok('v0.61.20 P8 addSummon 触发「召唤物」提示', (Store.getJSON(TIPS_KEY) || {}).summon === 1);
-
-    // 气泡只在战斗里弹：非战斗场景不写盘、不画 DOM，但仍返回 true（提示「已消费」）
-    __tipReset(); SCENE = 'map';
-    __ok('v0.61.20 P8 非战斗场景仍消费提示位（返回 true）', tipOnce('summon', 'x') === true);
-    __ok('v0.61.20 P8 非战斗场景不画气泡（DOM 无 #tip-bubble）',
-      !document.getElementById('tip-bubble') || !document.getElementById('tip-bubble').classList
-        || !document.getElementById('tip-bubble').classList.contains('show'));
-    SCENE = 'map';
-    __tipReset();
+    /* —— P8 条件引导气泡断言已随 v1.1.24 tipOnce 全族删除一并摘除（00_base.js 无 tipOnce/TIPS_KEY）。 —— */
 
     /* —— P2 连线 / P6 / P7 / P9 —— 无 DOM，只能确认入口在位 —— */
     __ok('v0.61.20 P2 drawMapLinks 已定义且在无 svg 环境下安全返回',
@@ -4774,19 +4738,7 @@
     __ok('v0.61.38 反误伤 阴差被动 仍保留「整局累积」',
       __yp.indexOf('整局累积') >= 0, __yp);
 
-    // ③ tipOnce('shiqi') 的首次提示气泡（照 __realSfx 先例换桩捕获再还原）
-    var __realTipOnce = tipOnce, __tipCap = null;
-    tipOnce = function (key, html) { if (key === 'shiqi') { __tipCap = html; } return true; };
-    try {
-      G = __base('ganshiren');
-      gainShiqi(1);
-      __ok('v0.61.38 tipOnce 尸气提示 被触发',
-        typeof __tipCap === 'string' && __tipCap.length > 0, String(__tipCap));
-      __ok('v0.61.38 tipOnce 尸气提示 不再说「整局累积」',
-        String(__tipCap).indexOf('整局累积') < 0, String(__tipCap));
-      __ok('v0.61.38 tipOnce 尸气提示 说清「战斗内跨回合累积，每场战斗清零」',
-        String(__tipCap).indexOf('战斗内跨回合累积') >= 0 && String(__tipCap).indexOf('每场战斗清零') >= 0, String(__tipCap));
-    } finally { tipOnce = __realTipOnce; __tipCap = null; }
+    // ③ tipOnce 尸气气泡断言已随 v1.1.24 tipOnce 全族删除一并摘除（文案口径改由 KEYWORDS 与引擎对拍兜住）。
 
     // ④ 引擎行为对拍（把文案和事实绑在一起，而不是只比字符串）
     //    startBattle 的重置区在 30_engine.js:640（G.尸气=0），血怒那边一处都没有 → 跨战保留
@@ -5260,8 +5212,8 @@
     /* ============ A. 地图素材表（唯一真相源 = NODE_ICON / NODE_ICON_LOCKED / MAP_ROAD_ICON）============ */
     var iconBad = SIX.filter(function (k) { return !/\.png$/.test(String(NODE_ICON[k] || '')); });
     __ok('v0.61.41 UI NODE_ICON 六键都是 .png 文件名（留空槽时代结束）', iconBad.length === 0, iconBad.join(','));
-    __ok('v1.1.14 UI NODE_ICON 指向 guanqia-logo 新图（商店仍用 map/shop.png）',
-      NODE_ICON.fight === 'guanqia-logo/combat.png' && NODE_ICON.elite === 'guanqia-logo/ellite.png' &&
+    __ok('v1.1.14 UI NODE_ICON 指向 guanqia-logo 新图（商店仍用 map/shop.png；v1.1.24 起 ellite 正名为 elite）',
+      NODE_ICON.fight === 'guanqia-logo/combat.png' && NODE_ICON.elite === 'guanqia-logo/elite.png' &&
       NODE_ICON.unknown === 'guanqia-logo/unknown.png' && NODE_ICON.camp === 'guanqia-logo/rest.png' &&
       NODE_ICON.shop === 'shop.png' && NODE_ICON.boss === 'guanqia-logo/boss.png',
       JSON.stringify(NODE_ICON));
@@ -6844,7 +6796,7 @@
         return miss.length === 0;
       })(), '缺=' + JSON.stringify(globalThis.__missMenuEntry || []));
     __ok('v0.66.0 主菜单 9 → 4：被移除的入口不再出现在模板里'
-      + '（⚠️ 只是摘入口；viewStats / showTutorial 的**函数本体仍保留**，'
+      + '（⚠️ 只是摘入口；viewStats 的**函数本体仍保留**，showTutorial 本体已在 v1.1.24 随旧教程整块删除；'
       + 'viewAchievements 的函数本体已在 v1.1.22 随成就系统整块删除；'
       + 'startEndless 随无尽模式在 v1.0.14 一并删除）',
       (function () {
@@ -6904,6 +6856,190 @@
       && __code(recordScoreRun).indexOf("tapAchieve('Nice-encounter')") < 0
       && __code(winFight).indexOf("tapAchieve('wushang')") < 0
       && __code(applyCurse).indexOf("tapAchieve('zuzhou')") < 0);
+
+    /* ===================== v1.1.24：新手教程批 =====================
+       6 关固定路线教学局（普通-商店-精英-篝火-未知-boss）整体替换旧交互引导。 */
+    __ok('v1.1.24 旧教程全族删除（showTutorial/TUTORIAL_STEPS/startGuidedTutorial/renderTutHint/advanceTut/TUT/'
+      + 'tipOnce/showTipBubble/hideTipBubble/TIPS_KEY 全部不存在）',
+      typeof showTutorial === 'undefined' && typeof TUTORIAL_STEPS === 'undefined'
+      && typeof startGuidedTutorial === 'undefined' && typeof renderTutHint === 'undefined'
+      && typeof advanceTut === 'undefined' && typeof TUT === 'undefined'
+      && typeof tipOnce === 'undefined' && typeof showTipBubble === 'undefined'
+      && typeof hideTipBubble === 'undefined' && typeof TIPS_KEY === 'undefined');
+    __ok('v1.1.24 教程函数族就位（40_flow 10 个 + 50_ui 9 个）',
+      typeof startTutorial === 'function' && typeof tutEnterNode === 'function'
+      && typeof tutOn === 'function' && typeof tutForce === 'function'
+      && typeof tutAdvance === 'function' && typeof tutGraduate === 'function'
+      && typeof tutFinish === 'function' && typeof tutSkip === 'function'
+      && typeof tutOnDeath === 'function' && typeof tutRetry === 'function'
+      && typeof narrate === 'function' && typeof narrateShow === 'function'
+      && typeof narrateHide === 'function' && typeof narrateClear === 'function'
+      && typeof tutSkipShow === 'function' && typeof showTutIntro === 'function'
+      && typeof tutReplayAsk === 'function' && typeof renderTutShop === 'function'
+      && typeof tutBuyRelic === 'function');
+    __ok('v1.1.24 TUT_NODES 恰 6 关且顺序为 fight/shop/elite/camp/unknown/boss',
+      Array.isArray(TUT_NODES) && TUT_NODES.length === 6
+      && TUT_NODES.map(function (n) { return n.key; }).join(',') === 'fight,shop,elite,camp,unknown,boss'
+      && TUT_NODES[1].relic === 'zhaohunfan' && TUT_NODES[1].gold === 120);
+    __ok('v1.1.24 TUT_NARR 关键旁白 id 齐备（含过场 tut_00 与死亡 tut_die）',
+      ['tut_00', 'tut_1a', 'tut_1e', 'tut_1h', 'tut_1k',
+       'tut_2a', 'tut_2b', 'tut_2d', 'tut_3a', 'tut_3b',
+       'tut_3d', 'tut_4a', 'tut_4b', 'tut_5a', 'tut_5b',
+       'tut_6a', 'tut_6e', 'tut_die']
+        .every(function (id) { return typeof TUT_NARR[id] === 'string' && TUT_NARR[id].length > 0; }));
+    __ok('v1.1.24 流程源码里引用的旁白 id 全部在 TUT_NARR 有案（无落空 id）',
+      (function () {
+        var src = __code(tutOn) + __code(tutEnterNode) + __code(startTutorial) + __code(tutGraduate) + __code(tutOnDeath);
+        var ids = (src.match(/'tut_[^']*'/g) || []).map(function (s) { return s.slice(1, -1); });
+        var seen = {};
+        return ids.every(function (id) {
+          if (seen[id]) return true; seen[id] = 1;
+          return typeof TUT_NARR[id] === 'string';
+        });
+      })());
+    __ok('v1.1.24 四处拦截就位（goNext→tutAdvance / loseGame→tutOnDeath / recordScoreRun·saveRun 教程空转 / playCard 强制锁）',
+      (function () {
+        var hits = ['goNext:' + __code(goNext).indexOf('tutAdvance'),
+          'loseGame:' + __code(loseGame).indexOf('tutOnDeath'),
+          'rec:' + __code(recordScoreRun).indexOf('tutorial'),
+          'save:' + __code(__realSaveRun).indexOf('tutorial'),
+          'play:' + __code(playCard).indexOf('先听师父的话'),
+          'do:' + __code(doPlayCard).indexOf('playedForce')];
+        globalThis.__dbg24 = hits.join('|');
+        return __code(goNext).indexOf('tutAdvance') >= 0
+          && __code(loseGame).indexOf('tutOnDeath') >= 0
+          && __code(recordScoreRun).indexOf('tutorial') >= 0
+          && __code(__realSaveRun).indexOf('tutorial') >= 0
+          && __code(playCard).indexOf('先听师父的话') >= 0
+          && __code(doPlayCard).indexOf('playedForce') >= 0;
+      })(), String(globalThis.__dbg24));
+    __ok('v1.1.24 教程固定抽牌：resetDeck 反转写入 ⇒ 首回合必摸 雷符×2·金光咒·聚灵·咒引',
+      (function () {
+        try {
+          G = __base('tianshi');
+          G.deck = heroDeck('tianshi');   // __base 不发牌，教程抽牌序要有完整初始牌库可检索
+          G.tutorial = { on: true, node: 0, force: null, flags: {}, draw: TUT_NODES[0].draw.slice(), foeOv: null };
+          resetDeck();
+          G.hand = [];
+          drawCards(5);
+          var got = G.hand.map(function (c) { return c.id; }).join(',');
+          globalThis.__dbg24b = 'got=' + got
+            + ' | pileTop6=' + G.drawPile.slice(-6).map(function (c) { return c.id; }).join(',')
+            + ' | deck=' + G.deck.map(function (c) { return c.id; }).join(',');
+          return got === 'leifu,leifu,jingang,juling,zhouyin';
+        } catch (e) { globalThis.__dbg24b = 'ERR ' + (e && e.message); return false; }
+        finally { if (G && G.tutorial) G.tutorial.on = false; }
+      })(), String(globalThis.__dbg24b));
+    __ok('v1.1.24 startBattle 敌人覆写：精英关白无常 40 血 + 再生词缀 + 首意图 multi(2×4)',
+      (function () {
+        try {
+          G = __base('tianshi');
+          G.tutorial = { on: true, node: 2, force: null, flags: {}, draw: null, foeOv: TUT_NODES[2].foeOv };
+          startBattle(['baiwuchang', 'youhun']);
+          var bw = (G.enemies || []).filter(function (e) { return e.key === 'baiwuchang'; })[0];
+          var yh = (G.enemies || []).filter(function (e) { return e.key === 'youhun'; })[0];
+          globalThis.__dbg24c = 'bw=' + (bw ? (bw.hp + '/' + bw.maxHp
+              + ' cur=' + JSON.stringify(bw.intent)
+              + ' i0=' + JSON.stringify(bw.intents && bw.intents[0])
+              + ' aff=' + JSON.stringify(bw.affixes)) : 'null')
+            + ' yh=' + (yh ? yh.hp : 'null');
+          /* startTurn 读完意图即 intentIndex++（30_engine.js:1304）⇒ 开战后 idx 已是 1，
+             教程不变量应落在「首回合实际意图 = 连击 2×4」上。 */
+          return !!bw && bw.hp === 40 && bw.maxHp === 40
+            && bw.intent && bw.intent.type === 'multi' && bw.intent.n === 2 && bw.intent.v === 4
+            && bw.intents && bw.intents[0] && bw.intents[0].type === 'multi'
+            && (bw.affixes || []).some(function (a) { return a.id === 'zaisheng'; })
+            && !!yh && yh.hp === 12;
+        } catch (e) { globalThis.__dbg24c = 'ERR ' + (e && e.message); return false; }
+        finally { if (G && G.tutorial) G.tutorial.on = false; }
+      })(), String(globalThis.__dbg24c));
+    __ok('v1.1.24 startBattle 敌人覆写：Boss 关僵王 72 血四意图循环（attack→charge→aoe→summon）',
+      (function () {
+        try {
+          G = __base('tianshi');
+          G.tutorial = { on: true, node: 5, force: null, flags: {}, draw: null, foeOv: TUT_NODES[5].foeOv };
+          startBattle(['jiangwang']);
+          var jw = (G.enemies || [])[0];
+          return !!jw && jw.hp === 72 && jw.maxHp === 72
+            && jw.intents && jw.intents.length === 4
+            && jw.intents.map(function (t) { return t.type; }).join(',') === 'attack,charge,aoe,summon';
+        } catch (e) { return false; } finally { if (G && G.tutorial) G.tutorial.on = false; }
+      })());
+    __ok('v1.1.24 教程局死亡走 tutOnDeath（G.dead 置位、不入榜不记分 —— loseGame 被拦截）',
+      (function () {
+        try {
+          G = __base('tianshi');
+          G.tutorial = { on: true, node: 0, force: null, flags: {}, draw: null, foeOv: null };
+          G.dead = false;
+          loseGame();
+          return G.dead === true;
+        } catch (e) { return false; } finally { if (G && G.tutorial) G.tutorial.on = false; }
+      })());
+    /* ===================== v1.1.25：教程卡死修 + 旁白收泡 + 互动对话 + 待机/阵亡动画 ===================== */
+    __ok('v1.1.25 强制出牌期间「结束回合」被拦（教程卡死回归：没打强制符也能过回合 ⇒ 下一回合无符死锁）',
+      (function () {
+        try {
+          G = __base('tianshi');
+          G.tutorial = { on: true, node: 0, force: 'leifu', flags: {}, draw: null, foeOv: null };
+          endTurn();
+          return G.tutorial.force === 'leifu' && __code(endTurn).indexOf('先听师父的话') >= 0;
+        } catch (e) { return false; } finally { if (G && G.tutorial) G.tutorial.on = false; }
+      })());
+    __ok('v1.1.25 旁白收泡：队列抽干即收（narrateNext→narrateDrop）+ 点按推进族 + 去「符」字头像 + 名字行',
+      typeof narrateDrop === 'function' && typeof narrateAdvance === 'function'
+      && typeof bindNarrTap === 'function' && typeof narrateWho === 'function'
+      && __code(narrateNext).indexOf('narrateDrop') >= 0
+      && __code(narrateShow).indexOf('class="avatar"') < 0
+      && __code(narrateShow).indexOf('narrateWho') >= 0
+      && __code(narrateShow).indexOf('"who"') >= 0
+      && __code(bindNarrTap).indexOf('NARR_CUR.force') >= 0);
+    __ok('v1.1.25 旁白未读完时不许出牌（防把待强制的那张符先打掉 ⇒ 强制泡凑不出牌，卡死）',
+      typeof narrBusy === 'function' && __code(narrBusy).indexOf('NARR_CUR') >= 0
+      && __code(playCard).indexOf('narrBusy()') >= 0 && __code(endTurn).indexOf('narrBusy()') >= 0);
+    __ok('v1.1.25 教程互动对话 13 条 + TUT_WHO 妖物登记齐备（说话人区分天师/妖物）',
+      ['tut_0_1', 'tut_0_2', 'tut_0_3', 'tut_0_4',
+       'tut_2_1', 'tut_2_2', 'tut_2_3', 'tut_2_4',
+       'tut_5_1', 'tut_5_2', 'tut_5_3', 'tut_5_4', 'tut_5_5']
+        .every(function (id) { return typeof TUT_NARR[id] === 'string' && TUT_NARR[id].length > 0; })
+      && typeof TUT_WHO === 'object' && TUT_WHO.tut_0_1 === '游魂' && TUT_WHO.tut_2_1 === '白无常'
+      && TUT_WHO.tut_5_1 === '僵王' && Object.keys(TUT_WHO).length === 7);
+    __ok('v1.1.25 教程中妖物自带四档气泡让位（enemySay 教程早返回，避免同屏双泡）',
+      __code(enemySay).indexOf('G.tutorial') >= 0 && __code(enemySay).indexOf('return') >= 0);
+    __ok('v1.1.25 玩家阵亡倾倒动画就位 + 加/摘类接线（heroDeath ↔ loseGame/tutOnDeath/startBattle/revive）',
+      typeof heroDeath === 'function'
+      && __code(heroDeath).indexOf('hero-dead') >= 0
+      && __code(loseGame).indexOf('heroDeath(true)') >= 0
+      && __code(tutOnDeath).indexOf('heroDeath(true)') >= 0
+      && __code(startBattle).indexOf('heroDeath(false)') >= 0
+      && __code(revive).indexOf('heroDeath(false)') >= 0);
+    /* v1.1.25r：用户交付了教程配音（id = TUT_NARR 的键 → 素材/voice/<id>.mp3）并已接线。 */
+    __ok('v1.1.25r 教程配音通道就位：playVoice/stopVoice 经 assetURL 取址（绝不落 sfx 合成音）',
+      typeof playVoice === 'function' && typeof stopVoice === 'function' && typeof voiceLoad === 'function'
+      && VOICE_DIR === 'voice/' && VOICE_EXT === '.mp3'
+      && __code(playVoice).indexOf('SETTINGS.sound') >= 0
+      && __code(voiceLoad).indexOf('assetURL') >= 0
+      && __code(voiceLoad).indexOf('decodeAudioData') >= 0
+      && __code(stopVoice).indexOf('VOICE_WANT') >= 0);
+    __ok('v1.1.25r 配音 id 纯 ASCII（旧版带中文后缀已去）+ 刻意不接「腐毒」那条（用户口径）',
+      Object.keys(TUT_NARR).length >= 50
+      && Object.keys(TUT_NARR).every(function (id) { return /^[A-Za-z0-9_]+$/.test(id); })
+      && TUT_NARR.tut_3h === undefined);
+    __ok('v1.1.25r 配音挂点：气泡出/收 + 三处整屏面板（tut_00 / tut_6e / tut_die）都接上',
+      __code(narrateShow).indexOf('playVoice(id)') >= 0
+      && __code(narrateDrop).indexOf('stopVoice()') >= 0
+      && __code(narrateClear).indexOf('stopVoice()') >= 0
+      && __code(showTutIntro).indexOf("playVoice('tut_00')") >= 0
+      && __code(tutGraduate).indexOf("playVoice('tut_6e')") >= 0
+      && __code(tutOnDeath).indexOf("playVoice('tut_die')") >= 0
+      && __code(tutFinish).indexOf('stopVoice()') >= 0
+      && __code(tutRetry).indexOf('stopVoice()') >= 0);
+    /* v1.1.25r（用户口径）：页面切后台 / 隐藏即静音 —— visibilitychange + pagehide → stopBGM（含合成链）+ stopVoice。 */
+    __ok('v1.1.25r 切后台 / 页面隐藏即静音：visibilitychange + pagehide → stopBGM（两条链）+ stopVoice',
+      typeof audioHiddenStop === 'function' && typeof audioHookHidden === 'function'
+      && __code(audioHiddenStop).indexOf('stopBGM()') >= 0
+      && __code(audioHiddenStop).indexOf('stopVoice()') >= 0
+      && __code(audioHookHidden).indexOf('visibilitychange') >= 0
+      && __code(audioHookHidden).indexOf('pagehide') >= 0);
     __ok('v0.66.0 「续」总是渲染、无存档时 disabled（不再按 hasRunSave 条件渲染 —— 石碑忽隐忽现会破构图）',
       (function () {
         var s = __code(showStartScreen);

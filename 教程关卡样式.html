@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>志怪塔 · 教程关卡样式</title>
+<style>
+  /* ============================================================================
+     教程「关卡形式」样式稿：一条线性路线 6 关 + 每关场景 + 天师旁白（尖角气泡/毛笔体/头像旁）。
+     100% 复用项目真实素材与 CSS 变量；本页**不参与打包**，仅设计稿。
+     ============================================================================ */
+  :root{
+    --ink:#16110c; --ink2:#241d16; --ink3:#3a2f24; --inkDeep:#120e0b;
+    --text:#e8ddc8; --dim:#9c8f77; --gold:#e0b341; --red:#b23b2e; --green:#3fa060;
+    --font-brush:"MaShanZheng","KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
+    --font-kai:"KaiTi","STKaiti","华文楷体","楷体","Noto Serif SC",serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:var(--font-kai); color:var(--text); min-height:100vh;
+    background:radial-gradient(circle at 15% 12%, rgba(178,59,46,.10), transparent 40%),
+      linear-gradient(180deg,#241d16 0%, var(--ink) 30%, #120e0b 100%);
+    background-attachment:fixed; padding:16px 16px 46px;
+  }
+  h1{font-family:var(--font-brush); font-size:22px; color:var(--gold); text-align:center; font-weight:400; letter-spacing:3px;}
+  .hint{max-width:960px; margin:8px auto 0; font-size:12.5px; color:var(--dim); line-height:1.85; text-align:center;}
+  .hint b{color:var(--gold);}
+
+  /* —— 路线条：6 关线性 —— */
+  .route{max-width:960px; margin:16px auto 4px; display:flex; align-items:center; justify-content:center; gap:2px; flex-wrap:wrap;}
+  .node{display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; opacity:.5; transition:opacity .2s, transform .2s;}
+  .node:hover{opacity:.85;}
+  .node.on{opacity:1; transform:translateY(-2px);}
+  .node .ring{width:56px; height:56px; border-radius:50%; border:1px solid var(--ink3); background:rgba(20,16,12,.7);
+    display:flex; align-items:center; justify-content:center; overflow:hidden;}
+  .node.on .ring{border-color:var(--gold); box-shadow:0 0 16px rgba(224,179,65,.35);}
+  .node .ring img{width:78%; height:78%; object-fit:contain;}
+  .node .nm{font-family:var(--font-brush); font-size:12px; color:var(--dim);}
+  .node.on .nm{color:var(--gold);}
+  .node .idx{font-size:10px; color:var(--dim); opacity:.7;}
+  .arrow{color:var(--ink3); font-size:14px; padding:0 2px;}
+  .node.on + .arrow, .arrow + .node.on{color:var(--gold);}
+
+  /* —— 舞台（16:9） —— */
+  .stage-wrap{max-width:960px; margin:14px auto 0; border:1px solid var(--ink3); border-radius:12px;
+    overflow:hidden; box-shadow:inset 0 0 60px rgba(0,0,0,.6); background:#0a0806; position:relative;}
+  .stage{position:relative; aspect-ratio:16/9; width:100%; background-size:cover; background-position:center; transition:background-image .3s;}
+  .stage::before{content:''; position:absolute; inset:0; background:rgba(0,0,0,.20); z-index:1;}
+
+  .hero{position:absolute; left:3.5%; bottom:5%; width:15%; z-index:3;}
+  .hero img{width:100%; height:auto; filter:drop-shadow(0 8px 16px rgba(0,0,0,.7));}
+  .foe{position:absolute; right:15%; bottom:5%; width:13%; z-index:3; text-align:center;}
+  .foe img{width:100%; height:auto; filter:drop-shadow(0 8px 16px rgba(0,0,0,.7));}
+  .foe .fl{font-family:var(--font-brush); font-size:13px; color:rgba(255,240,210,.6); margin-top:4px;}
+
+  /* 手牌占位 */
+  .hand{position:absolute; left:50%; bottom:0; transform:translateX(-50%); display:flex; z-index:2;}
+  .hand .card{width:66px; height:92px; background:linear-gradient(180deg,#3a2f24,#1a140e); border:1px solid var(--ink3); border-radius:6px;
+    box-shadow:0 4px 12px rgba(0,0,0,.6); margin:0 -9px; display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-brush); font-size:20px; color:var(--gold);}
+  /* 强制出牌提示圈 */
+  .tap-hint{position:absolute; z-index:21; width:66px; height:92px; border-radius:6px; pointer-events:none;
+    animation:tapHint 1.4s ease-in-out infinite;}
+  @keyframes tapHint{0%,100%{box-shadow:0 0 0 2px rgba(224,179,65,.85),0 0 20px 4px rgba(224,179,65,.35);}
+    50%{box-shadow:0 0 0 4px rgba(224,179,65,.28),0 0 42px 12px rgba(224,179,65,.20);}}
+
+  /* 面板占位（商店/篝火/未知 的场景道具） */
+  .panel{position:absolute; z-index:3; left:50%; top:46%; transform:translate(-50%,-50%);
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:center; max-width:70%;}
+  .slot{width:96px; height:132px; border-radius:8px; border:1px solid var(--ink3); background:rgba(16,12,9,.86);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    font-family:var(--font-brush); font-size:13px; color:var(--gold); box-shadow:0 6px 18px rgba(0,0,0,.5);}
+  .slot small{color:var(--dim); font-size:11px; font-family:var(--font-kai);}
+  .opt{width:150px; height:auto; padding:12px; border-radius:8px; border:1px solid var(--ink3); background:rgba(16,12,9,.86);
+    font-family:var(--font-brush); font-size:14px; color:var(--text); text-align:center; box-shadow:0 6px 18px rgba(0,0,0,.5);}
+  .opt.hl{border-color:var(--gold); color:var(--gold);}
+
+  .step-ind{position:absolute; right:12px; top:9px; z-index:22; display:flex; align-items:center; gap:7px;
+    padding:5px 12px; border-radius:14px; background:rgba(20,16,12,.8); border:1px solid rgba(224,179,65,.2);
+    font-family:var(--font-brush); font-size:12.5px; color:var(--gold);}
+  .step-ind .dot{width:6px; height:6px; border-radius:50%; background:rgba(224,179,65,.26);}
+  .step-ind .dot.on{background:var(--gold); box-shadow:0 0 8px var(--gold);}
+
+  /* ============================================================================
+     天师旁白（尖角气泡 + 毛笔体 + 头像旁）——用户选定组合
+     ============================================================================ */
+  .narr{position:absolute; left:19%; bottom:17%; width:min(44%, 380px); z-index:20; padding-left:58px;}
+  .narr .avatar{position:absolute; left:0; bottom:0; width:48px; height:48px; border-radius:50%;
+    border:2px solid var(--gold); overflow:hidden; box-shadow:0 0 14px rgba(224,179,65,.3); background:#1a140e;}
+  .narr .avatar img{width:100%; height:100%; object-fit:cover; object-position:top center;}
+  .narr .bubble{position:relative; padding:13px 18px 15px; border-radius:14px 14px 4px 14px;
+    background:rgba(20,16,12,.93); border:1px solid var(--ink3); box-shadow:0 10px 30px rgba(0,0,0,.6);}
+  .narr .bubble::before{content:''; position:absolute; left:20px; top:-8px; width:14px; height:14px; transform:rotate(45deg);
+    background:rgba(20,16,12,.93); border-left:1px solid var(--ink3); border-top:1px solid var(--ink3);}
+  .narr .head{display:flex; align-items:center; gap:7px; margin-bottom:6px; font-size:12.5px; color:var(--gold); letter-spacing:1px;
+    font-family:var(--font-brush);}
+  .narr .head .dot{width:6px; height:6px; border-radius:50%; background:var(--gold); box-shadow:0 0 8px var(--gold);}
+  .narr .text{font-family:var(--font-brush); font-size:17px; line-height:1.75; color:var(--text);}
+  .narr .text b{color:var(--gold);}
+  .narr .sign{position:absolute; right:12px; bottom:6px; font-family:var(--font-brush); font-size:10.5px;
+    color:rgba(224,179,65,.5); letter-spacing:2px;}
+
+  /* —— 出场动画：三种，**刻意拉大差异** —— */
+  .narr .bubble{opacity:0;}
+  .narr.a-slide .bubble{transform:translateY(56px); transition:opacity .45s ease, transform .45s cubic-bezier(.18,.9,.24,1.06);}
+  .narr.a-slide.show .bubble{opacity:1; transform:translateY(0);}
+  .narr.a-fade .bubble{transform:scale(.99); transition:opacity 1.0s ease-out, transform 1.0s ease-out;}
+  .narr.a-fade.show .bubble{opacity:1; transform:scale(1);}
+  .narr.a-brush .bubble{transform:translateY(14px) scale(.78); filter:blur(12px); transition:opacity .7s ease, transform .7s cubic-bezier(.16,1.2,.3,1.12), filter .7s ease;}
+  .narr.a-brush.show .bubble{opacity:1; transform:translateY(0) scale(1); filter:blur(0);}
+
+  /* —— 开头动漫插图过场 —— */
+  #intro{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:#080605;}
+  #intro.show{display:flex;}
+  #intro .art{width:min(92%,900px); aspect-ratio:16/9; border:1px solid var(--ink3); border-radius:10px; overflow:hidden;
+    background:
+      repeating-linear-gradient(45deg, rgba(224,179,65,.06) 0 12px, rgba(0,0,0,0) 12px 24px),
+      linear-gradient(135deg,#241d16,#0e0a07);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--dim); text-align:center; padding:20px;}
+  #intro .art .big{font-family:var(--font-brush); font-size:26px; color:var(--gold); letter-spacing:4px;}
+  #intro .art .sm{font-size:13px; line-height:1.9;}
+  #intro .art code{color:#d9b96a; font-family:Consolas,monospace;}
+
+  /* —— 控制条 —— */
+  .bar{max-width:960px; margin:14px auto 0; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center;}
+  .bar button{font-family:var(--font-brush); font-size:14px; color:var(--text); cursor:pointer;
+    background:linear-gradient(180deg,#2a2218,#1a140e); border:1px solid var(--ink3); border-radius:7px; padding:7px 15px; letter-spacing:1px;}
+  .bar button:hover{border-color:var(--gold); color:var(--gold);}
+  .bar select{font-family:var(--font-kai); font-size:13px; color:var(--text); background:linear-gradient(180deg,#2a2218,#1a140e);
+    border:1px solid var(--ink3); border-radius:6px; padding:5px 8px; outline:none;}
+  .bar label{font-size:12.5px; color:var(--dim); display:inline-flex; gap:6px; align-items:center;}
+  .cap{max-width:960px; margin:10px auto 0; text-align:center; font-size:12.5px; color:var(--dim);}
+  .cap b{color:var(--gold);}
+  @media (max-width:640px){
+    h1{font-size:18px;}
+    .node .ring{width:44px; height:44px;}
+    .narr{left:16%; width:74%; bottom:15%;} .narr .text{font-size:14px;}
+    .hand .card{width:48px; height:68px; font-size:15px; margin:0 -6px;}
+    .slot{width:74px; height:104px; font-size:12px;}
+  }
+</style>
+</head>
+<body>
+  <h1>志怪塔 · 教程关卡样式</h1>
+  <p class="hint">一条线性路线 <b>普通战斗 → 鬼市 → 精英战 → 篝火 → 未知 → Boss</b>。点上方任一节点看该关的场景与天师旁白。
+    旁白采用你选的组合：<b>尖角气泡 + 毛笔体 + 天师头像旁</b>。下面还能切换<b>三种出场动画</b>（这次刻意拉开差异，应能一眼分辨）。</p>
+
+  <!-- 路线条 -->
+  <div class="route" id="route"></div>
+
+  <!-- 控制条 -->
+  <div class="bar">
+    <label>旁白出场动画
+      <select id="selA">
+        <option value="slide" selected>① 上滑落定（位移 56px）</option>
+        <option value="fade">② 长淡入（1.0s）</option>
+        <option value="brush">③ 墨点晕开（缩小+模糊→清晰）</option>
+      </select>
+    </label>
+    <button id="btnPlay">▶ 重播旁白</button>
+    <button id="btnIntro">▶ 看开头插图过场</button>
+  </div>
+
+  <!-- 舞台 -->
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <div class="step-ind" id="stepInd"></div>
+      <div class="hero"><img src="素材/hero/tianshi.png" alt="天师"></div>
+      <div id="foeWrap"></div>
+      <div id="panelWrap"></div>
+      <div id="handWrap"></div>
+      <div class="tap-hint" id="tapHint" style="display:none"></div>
+      <div class="narr a-slide" id="narr">
+        <div class="avatar"><img src="素材/hero/tianshi.png" alt="天师"></div>
+        <div class="bubble">
+          <div class="head"><span class="dot"></span>符箓天师 · 旁白</div>
+          <div class="text" id="narrText"></div>
+          <div class="sign">天 师</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cap" id="cap"></div>
+
+  <!-- 开头插图过场 -->
+  <div id="intro">
+    <div class="art">
+      <div class="big">衔接动漫插图</div>
+      <div class="sm">这里播放你提供的插图（占位）。<br>建议：<code>素材/intro/tutorial.png</code>，16:9，或换成一段 mp4。<br>播放完自动进入教程地图。</div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  var $=function(s){return document.querySelector(s);};
+  var stage=$('#stage'), route=$('#route'), foeWrap=$('#foeWrap'), panelWrap=$('#panelWrap'),
+      handWrap=$('#handWrap'), tapHint=$('#tapHint'), narr=$('#narr'), narrText=$('#narrText'),
+      stepInd=$('#stepInd'), cap=$('#cap'), selA=$('#selA'), intro=$('#intro');
+
+  /* 6 关数据 */
+  var NODES=[
+    {t:'fight',  nm:'普通战斗', icon:'素材/map/guanqia-logo/combat.png', bg:'素材/bg/bg_map.jpg',
+     foe:{img:'素材/enemy/youhun.png', name:'游魂'},
+     hand:['雷','金','聚','咒','纸'], tap:0,
+     text:'小妖近身。先出一张<b>「雷符」</b>——<br>点下方金圈圈住的那张牌，我看看你的手法。',
+     cap:'关 1 · 普通战斗：教会出牌 / 符文 / 意图 / 格挡 / 回合（仅「出牌」强制）'},
+    {t:'shop',   nm:'鬼市', icon:'素材/map/shop.png', bg:'素材/bg/bg_shop.jpg',
+     panel:[{n:'雷符',s:'80 金'},{n:'金刚符',s:'60 金'},{n:'遗物·朱砂砚',s:'120 金',hl:true}],
+     text:'这里是<b>鬼市</b>。金币能换卡牌与<b>遗物</b>——<br>先买下那件<b>「朱砂砚」</b>，遗物是常驻被动。',
+     cap:'关 2 · 鬼市：金币 / 买牌 / 买遗物 / 删牌（买牌与买遗物强制）'},
+    {t:'elite',  nm:'精英战', icon:'素材/map/guanqia-logo/ellite.png', bg:'素材/bg/bg_map.jpg',
+     foe:{img:'素材/enemy/xiuluo.png', name:'修罗 · 精英'},
+     hand:['咒','雷','符','镇'], tap:0,
+     text:'精英怪身上有<b>词缀</b>（图标在它头顶），比小妖更狠。<br>用你的老本行——打出<b>「咒印」</b>，给它叠诅咒。',
+     cap:'关 3 · 精英战：词缀 / 意图种类 / 天师·诅咒（打出咒印强制）'},
+    {t:'camp',   nm:'篝火', icon:'素材/map/guanqia-logo/rest.png', bg:'素材/bg/bg_campfire.jpg',
+     panel:[{n:'删牌',s:'可选'},{n:'锻造',s:'升级一张',hl:true},{n:'休息',s:'回 20 血'}],
+     text:'篝火能办三件事：<b>删牌</b>、<b>锻造（升级）</b>、<b>休息（回血）</b>。<br>这次先<b>锻造</b>，把一张牌升成金色。',
+     cap:'关 4 · 篝火：删牌 / 锻造升级 / 休息回血（锻造强制）'},
+    {t:'unknown', nm:'未知', icon:'素材/map/guanqia-logo/unknown.png', bg:'素材/bg/bg_evt_well.jpg',
+     panel:[{n:'探井',s:'风险：掉血',hl:false},{n:'绕开',s:'稳妥：无收益',hl:false}],
+     text:'<b>未知</b>就是风险与机遇：下面每个选项我都把后果说给你，<br>但选哪个——由你定。',
+     cap:'关 5 · 未知事件：主动决策 / 赌收益（全自由）'},
+    {t:'boss',   nm:'Boss', icon:'素材/map/guanqia-logo/boss.png', bg:'素材/bg/bg_map.jpg',
+     foe:{img:'素材/enemy/yanluotianzi.png', name:'守关 Boss'},
+     hand:['雷','咒','镇','聚'], tap:-1,
+     text:'守关 <b>Boss</b> 的意图会成套路：<br><b>攻击 → 蓄力 → 大招</b>。看准它蓄力的那回合，攒满格挡。',
+     cap:'关 6 · Boss：意图循环 / 多段攻击 / 收尾出师'}
+  ];
+  var cur=0;
+
+  function buildRoute(){
+    var h='';
+    NODES.forEach(function(n,i){
+      if(i) h+='<span class="arrow">›</span>';
+      h+='<div class="node'+(i===cur?' on':'')+'" data-i="'+i+'">'
+        +'<div class="ring"><img src="'+n.icon+'" alt=""></div>'
+        +'<div class="nm">'+n.nm+'</div><div class="idx">第'+(i+1)+'关</div></div>';
+    });
+    route.innerHTML=h;
+    route.querySelectorAll('.node').forEach(function(el){
+      el.addEventListener('click',function(){ cur=parseInt(el.dataset.i,10); render(); });
+    });
+  }
+
+  function render(){
+    var n=NODES[cur];
+    buildRoute();
+    stage.style.backgroundImage="url('"+n.bg+"')";
+    /* 敌人 */
+    foeWrap.innerHTML = n.foe ? '<div class="foe"><img src="'+n.foe.img+'" alt=""><div class="fl">'+n.foe.name+'</div></div>' : '';
+    /* 场景道具面板 */
+    panelWrap.innerHTML = n.panel ? '<div class="panel">'+n.panel.map(function(p){
+      return '<div class="slot'+(p.hl?' hl':'')+'" style="'+(p.hl?'border-color:var(--gold);color:var(--gold)':'')+'">'+p.n+'<small>'+p.s+'</small></div>';
+    }).join('')+'</div>' : '';
+    /* 手牌 */
+    handWrap.innerHTML = n.hand ? '<div class="hand">'+n.hand.map(function(c){
+      return '<div class="card">'+c+'</div>';}).join('')+'</div>' : '';
+    /* 强制出牌提示圈位置（手牌居中，每张 66-18=48px 步进） */
+    if(n.hand && n.tap>=0){
+      var stepPx=48, total=n.hand.length*stepPx, leftPx=(total/2)-(n.tap*stepPx)-33;
+      tapHint.style.display='block';
+      tapHint.style.left='calc(50% - '+leftPx+'px)';
+      tapHint.style.bottom='0px';
+    } else { tapHint.style.display='none'; }
+    /* 步骤点 */
+    stepInd.innerHTML='<span>第 '+(cur+1)+' 关 · '+n.nm+'</span>'+
+      NODES.map(function(_,i){ return '<span class="dot'+(i<=cur?' on':'')+'"></span>'; }).join('');
+    /* 旁白 */
+    narrText.innerHTML=n.text;
+    cap.innerHTML=n.cap;
+    playNarr();
+  }
+
+  function playNarr(){
+    var cls='narr a-'+selA.value;
+    narr.className=cls;
+    /* 强制重排，确保动画每次都能播 */
+    void narr.offsetWidth;
+    setTimeout(function(){ narr.classList.add('show'); }, 20);
+  }
+
+  selA.addEventListener('change', playNarr);
+  $('#btnPlay').addEventListener('click', playNarr);
+  $('#btnIntro').addEventListener('click', function(){ intro.classList.add('show'); });
+  intro.addEventListener('click', function(){ intro.classList.remove('show'); });
+
+  buildRoute(); render();
+})();
+</script>
+</body>
+</html>

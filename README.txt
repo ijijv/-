@@ -156,6 +156,90 @@
                 闸与回归：verify_web 的 [2] 加「恰有一个 js 注入 FX_ROW_KEYS」、[3] 改成承认按排键
                 （源 fx 整图 ↔ 产物 _r0.._r(n-1)）并加 [3b] 几何互核（行数 == FX_SHEETS.rows、宽 == 源宽、
                 行高 == 源高/排数）；冒烟基线 1534→1536（新增 2 条按排判据回归断言）。
+  v1.1.25  教程试玩反馈批（用户 2026-10-16 真机试玩 v1.1.24 后报障，4 类）：
+             ① **教程卡死根因**：强制出牌（「执一道雷符」）期间「结束回合」没有锁 —— 玩家可直接过回合，
+                下一回合手上没那张符，打不出也过不去 ⇒ 死锁。修法：`endTurn()` 顶上补 force 守卫
+                （与 playCard 同源锁：`sfx('error') + floatMsg('先听师父的话') + return`），键盘空格同路被拦。
+             ② **旁白气泡**：旧版队列抽干时 `narrateNext()` 直接 return ⇒ 气泡永久挂屏、挡手牌区 / 抽牌堆；
+                `box.onclick` 只在泡内可点。修法：队列空即 `narrateDrop()` 收泡；改用**全局捕获相 pointerdown**
+                收**非强制泡**（用户口径「非提示的旁白点一下就该过」，与 bindSaySkip 同一条常驻监听的理由）；
+                位置从**左下**移到**玩家与敌人之间**（居中，不再压左下「符」字图标与手牌区）；
+                **去掉「符」字头像**（用户原话）—— 改以名字行标识说话人，妖物（TUT_WHO 登记）加 `.foe` 鬼气边框；
+                容器 `pointer-events:none`、只 `.bubble` 可点 ⇒ 透明区绝不吃手牌拖拽落点。
+             ③ **待机呼吸 / 阵亡动画**（用户跨轮口径：先要「角色没有左右轻摆，敌人也是」，
+                真机复核后又「角度有点大…一致统一的频率和同步的摇摆十分奇怪，像是一起舞蹈…
+                你能做成呼吸式的吗？幅度依旧不要太多」）：改为**只给精英与 boss** ——
+                新增 `@keyframes idleBreath` 挂**子立绘**（`.enemy.e-elite / .enemy.e-boss` 的 `.eportrait`，
+                带 `:not(.dying)` 免得消散时叠加；`.enemy` 自身用 transform 定位 --ex/--ey 绝不可动），
+                origin 底、纵向 2.2% / 横向 0.4% 极轻起伏，boss 慢一档（4.6s）且错相 1.1s；
+                **normal / 召唤物 / 玩家立绘一律不挂**（上一版全员 3.8s 同频同相左右摆已撤）。
+                新增 `@keyframes heroDie`（倾倒 + 淡出）挂父盒 `.hero-art-box.hero-dead`（`heroDeath(on)` 加/摘类，
+                loseGame / tutOnDeath 加、startBattle / revive 摘）；`enemyDie` 补 rotate 让「死」更像死
+                （450ms 时长不动）。矮屏 / prefers-reduced-motion 尊重。
+             ④ **玩家↔妖物互动对话** 13 条（`教程对话脚本.md` 为设计档，id 纯 ASCII）：3 关共 13 句
+                （游魂 3 / 天师 3 / 白无常 2 / 僵王 3 / 天师 2 …按关编排），说话人由 `TUT_WHO` 区分；
+                教程中妖物自带四档气泡**整体让位**（`enemySay` 教程早返回），避免同屏双泡。
+                **本批先出文本**；mp3 由用户随后交付，见 ⑤。
+             ⑤ **教程配音接线**（用户 2026-10-16「我把对话的mp3都准备好了，你检查一下，然后用起来」）：
+                用户按 `TUT_NARR` 的 id 逐条交付 mp3（`素材/voice/<id>.mp3`，纯 ASCII、一律 .mp3、无变体）。
+                新增**专用配音通路**（10_audio.js 的 `playVoice` / `stopVoice` / `voiceLoad`，取址走
+                `assetURL`，**绝不经 sfx 的合成音回落** —— 没人声宁可静音，也不要程序化合成的假念白；
+                不塞 SFX_TABLE 是因为音效要变调、随机变体，且 SFX_KEYS 有预解码上限，而人声是逐条唯一的固定念白）。
+                挂点：`narrateShow` 出泡即发声、`narrateDrop`/`narrateClear` 收泡即掐声；另三处整屏面板
+                单独挂 —— `showTutIntro`(tut_00) / `tutGraduate`(tut_6e) / `tutOnDeath`(tut_die)，
+                `tutFinish`/`tutRetry` 收尾掐声。未就绪的缓冲先取回再补播，且**只认「此刻仍是这条」**
+                （玩家点得快、旁白已翻页 ⇒ 过期那条不再出声，避免两句叠音）。
+                正面断言「TUT_NARR 每条都有配音打进产物」「voice/ 下都是 TUT_NARR 的 id」
+                （`tutNarr`/`tutVoice` 经 dump_ids，路径由**游戏作用域**的 VOICE_DIR/VOICE_EXT 现拼，python 侧不镜像）。
+                另：磁盘上曾有的 `素材/voice/tut_3h.mp3`（「腐毒」那条）**本批按用户口径删除**
+                （用户原文「tut_3h.mp3 删了，不要这个」）：verify_dist 原先为它保留的「已知孤儿」登记随之一并拆除，
+                `voice/` 下现在每一条都必须对应 `TUT_NARR` 的一个 id（多一条散件即报红）。
+             ⑥ **切后台 / 页面隐藏即静音**（用户口径「页面切到后台或隐藏时自动 stopBGM（两条链一起停）…
+                在 Trae 内置浏览器里切走就静音；对移动端 / 小游戏也更规范」）：10_audio.js 新增
+                `audioHiddenStop()`（＝ `stopVoice()` + `stopBGM()` —— 采样 BGM 对象、合成氛围音两条链
+                连同正在念的旁白配音一起停）+ `audioHookHidden()` 挂 `visibilitychange`（仅 hidden 时触发）
+                与 `pagehide` 两个钩子。**只做「停」**，不做回前台自动续播（何时再起曲由进场景 / 设置触发，
+                免得来回掐断又重起）。55_cloud.js 原本就挂在同一个 `visibilitychange` 上（那条只管存云），互不影响。
+             闸与回归：verify_dist 的 `G._settlePlayed=false` 计数断言 2→3（`tutRetry` 重开本关合法第三处）；
+                verify_dist 新增 [2] 尾部教程配音三条（清单非空 / 一条不缺 / 无散件）；
+                冒烟新增 5 条（结束回合锁 / 旁白收泡族 / 13 条对话 + TUT_WHO / enemySay 让位 / heroDeath 接线）
+                + 配音 3 条（通道就位 / id 纯 ASCII 且不接腐毒 / 四处挂点）
+                + 切后台静音 1 条（audioHiddenStop 调 stopBGM+stopVoice、audioHookHidden 含两钩子）；冒烟基线 1555→1559。
+  v1.1.24  新手教程批（用户 2026-10-16 口径「开新局吧，先进入选角界面。需要的常驻跳过。斩妖剑也行。
+             按照你的 md 开始吧，之前的旧的教程可以删了」）：**6 关固定路线教学局**（普通-商店-精英-篝火-
+             未知-boss）整体替换旧交互引导；教程结束直接 confirmNewGame 开新局、先落选角界面
+             ① 旧教程全族删除：TUTORIAL_STEPS / showTutorial / startGuidedTutorial / renderTutHint /
+                advanceTut / TUT（60_boot.js）、tipOnce 全家（00_base.js 的 TIPS_KEY/tipsSeen/
+                showTipBubble/hideTipBubble 与 20_data/30_engine 共 4 处调用）、#tut-hint 与
+                #tip-bubble 的 CSS（原型.html 基档两族 + 矮屏档两行 + 居中规则 + 字体栈引用）
+             ② 教程数据（20_data.js 末尾）：TUT_NODES 6 关（foes / 敌人覆写 foeOv / 固定抽牌 draw）、
+                TUT_NARR 39 条天师口吻旁白；教学用天师现行初始卡组，抽牌序由 resetDeck 教程分支
+                **反转写入**（drawCards 从末位 pop）⇒ 首回合必摸 雷符×2·金光咒·聚灵·咒引；
+                僵王覆写 72 血四意图循环、白无常覆写 40 血多段+「再生」词缀（演示词缀用）
+             ③ 引擎钩子（30_engine.js）：startBattle 在意图偏移行**之后**做敌人覆写并重置
+                intentIndex=0；tutOn('battleStart'/'turnStart'/'endTurn'/'playerHit'/'battleWin'/
+                'playedForce') 事件机；playCard 强制锁（非指定牌 floatMsg「先听师父的话」），
+                doPlayCard 命中指定牌放锁并收旁白
+             ④ 流程（40_flow.js）：startTutorial 复刻 confirmNewGame 建局序列（固定符箓天师、
+                60 血）→ tutEnterNode 6 关线性推进（goNext 顶部拦截）；死亡 loseGame 拦截走
+                tutOnDeath → tutRetry 重开本关；毕业 tutGraduate → tutFinish → confirmNewGame
+                正式开新局；**saveRun 教程空转**（全程不产存档 ⇒ 重玩教程不冲玩家旧档）、
+                recordScoreRun 拦截（教程局不入榜，其余统计照常）
+             ⑤ UI（50_ui.js）：narrate 旁白队列播放器（尖角气泡 + 毛笔体 + 天师头像，
+                a-slide/a-fade/a-brush 三动画按关轮换，force 泡金框点不掉）、#tut-skip 常驻右上
+                「跳过教程」**单击即跳免确认**、showTutIntro 首启插图过场（intro/tutorial.png
+                缺图 onerror 回落墨底不阻塞）、商店关专属三符+法宝货位（斩妖剑 12 冥钱 /
+                招魂幡 30 冥钱，未买齐不给前进、不给删符）、篝火关锁锻造【雷符】、未知关固定灵液事件
+             ⑥ 门禁（60_boot.js）：DOMContentLoaded 判 tutorialSeen() —— 未见 → showTutIntro，
+                已见 → showStartScreen（新玩家首启自动拉入、老玩家只走设置页重玩）；
+                设置页「查看新手引导」按钮改「重玩新手教程」(tutReplayAsk)
+             ⑦ 闸：node --check 八段全绿；冒烟删 P8 tipOnce 断言块与尸气 tipOnce 子块、新增
+                v1.1.24 教程断言组，基线 1551→1549（另摘掉 runner 顶部 startGuidedTutorial 静音桩 ——
+                函数已删，空桩赋值反而凭空造全局；saveRun 类拦截断言一律改扫 __realSaveRun 真身）；旁白配音预留 id=素材/voice/<id>.mp3
+                （用户暂不配音；接入时走专用探放，勿走 sfx 的合成音回落）
+             ⑧ 地图精英图正名：用户把 素材/map/guanqia-logo/ellite.png 改名为 elite.png（同批 5 张关卡图
+                与 shop.png 也换了新图），NODE_ICON.elite 与冒烟 v1.1.14 断言同步改指新名
+                （旧拼法在 _patch 历史补丁脚本里保留为考古记录，不改）
   v1.1.23  修障 + 规则批（用户 2026-10-16 口径，7 条）：
              ① 战局外子面板返回跳战斗（v1.1.16 的锦囊快照只覆盖锦囊一处，「✕」出口也不认快照）——
                 抽成共用对 outPanelSnap / outPanelRestore（50_ui.js）：showJinnang / viewDeck（我的牌库）/
