@@ -1,41 +1,23 @@
 /* ============================================================================
- * 志怪塔 · js/50_ui.js —— 界面层
- * 爬塔地图 / 奖励与篝火 / 鬼市商店 / 图鉴 / 成就 / 签到·广告占位 / 埋点 / 牌库 / 渲染 render / 拖拽出牌
- * ----------------------------------------------------------------------------
- * 由 原型.html 的整段内联脚本按原顺序切分而来（v0.61.05 三层重构，纯搬移）。
- * 拼接校验：本文件组去掉各自横幅后，应与切分前的内联脚本正文逐字节一致。
- * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
+ * 志怪塔 · js/50_ui.js 界面层
  * ============================================================================ */
-/* ===================== 爬塔地图 ===================== */
-/* ===================== 爬塔地图（v0.61.40：随机树状图 + 逐层迷雾） ===================== */
-/* 节点文案走表，**去掉了敌人数量与敌人名**（遭遇细节藏起来，路线决策只保留节点类型）。
-   v0.61.41：图标由「留空槽」改成**文件名表**（素材/ 下的相对路径，见 NODE_ICON / MAP_ICON_DIR）。
-   换图只改这三张表（NODE_ICON / NODE_ICON_LOCKED / MAP_ROAD_ICON），渲染逻辑一个字都不用动。
-   ⚠ 图标一律走 assetURL（= artImg/assetURL），**不能**在 HTML 里写死 素材/... —— 那样
-     打包.py 的 ASSET_MAP 内联不会生效，单文件产物里会变成丢图。 */
+/* 爬塔地图 */
+
+/* 图标只能走 assetURL，HTML 里写死 素材/ 打包后会丢图 */
 const NODE_LABEL = { fight:'战斗', elite:'精英', unknown:'未知', camp:'篝火', shop:'商店', boss:'Boss' };
 const MAP_ICON_DIR = 'map/';
-/* v1.1.14（用户 2026-10-14）：关卡图标改用 素材/map/guanqia-logo/ 下的新图，按文件名映射类型；
-   商店图（shop.png）仍是 素材/map/shop.png —— guanqia-logo 里没有商店图。
-   ⚠️ 换图只改这张表，渲染逻辑一个字都不用动。 */
+
 const NODE_ICON  = { fight:'guanqia-logo/combat.png', elite:'guanqia-logo/elite.png', unknown:'guanqia-logo/unknown.png', camp:'guanqia-logo/rest.png', shop:'shop.png', boss:'guanqia-logo/boss.png' };
-/* v1.1.14（用户口径「关卡不要用锁图标，把精英/Boss/篝火等类型都显示出来，方便玩家综观全局挑路线」）：
-   未解锁/未到达的关卡不再挂锁，一律**显示真实类型图标**，仅以灰化（.o-locked 描边档位）区分。
-   这条常量只保留「锁图在磁盘上的名字」这一事实（素材不擅自删），**渲染侧已不再引用**。 */
+
 const NODE_ICON_LOCKED = 'locked.png';
-/* 道路贴图（MAP_ROAD_ICON = path-left/right.png）在 v0.61.42 随「路径回到代码自绘」一并**退役**：
-   曲线改由 drawMapLinks 用 SVG 二次贝塞尔现画（还要做沿路径延长的光边动画，贴图做不到）。
-   v0.62.0：用户明确授权后，这两张图已从 素材/map/ 下**真正删除**（不再有「退役但仍占盘」的状态）。 */
-/* v0.61.42：地图落位 —— 5 个槽位（%），每格随机占一个 + 抖动，故而不再整齐排成等距列。
-   槽位间距 21%，抖动上限 ±3% / ±7px ⇒ 不会越槽、也不会与相邻列撞在一起。
-   v0.76.1：±4% → ±3%（理由见 js/20_data.js 的 assignSlots 头注：96% 处节点贴画心边被裁）。 */
+
+
 const MAP_SLOT_PCT = [8, 29, 50, 71, 92];
 function mapSlotPct(node){
   const i = (node && typeof node.sx==='number') ? node.sx : 2;
   return MAP_SLOT_PCT[Math.max(0, Math.min(MAP_SLOT_PCT.length-1, i))];
 }
-/* 每格的内联落位（left 用 %、top 用 px 抖动）。生成器保证 sx/jx/jy 一定有值，
-   这里仍做兜底：老档（v<=3 的存档只存 mapSeed，地图是重算的）与手造 fixture 可能没有这三个字段。 */
+
 function mapNodeStyle(node){
   if(!node) return '';
   const left=mapSlotPct(node)+(node.jx||0);
@@ -43,37 +25,27 @@ function mapNodeStyle(node){
   return 'left:'+left.toFixed(2)+'%;top:'+top+'px;';
 }
 const NODE_TIP   = { fight:'普通战斗', elite:'精英战：更强的敌人，更好的奖励', unknown:'未知事件', camp:'篝火：休整或锻造', shop:'鬼市：买卖与删牌', boss:'守关 Boss' };
-/* v0.61.41：地图背景改用用户给的 素材/bg/bg_map.jpg（setBg 已支持带扩展名的名字），
-   全部幕共用这一张；战斗场景仍走 act1/act2/act3，两者互不影响。 */
+
 const MAP_BG = { 1:'map.jpg', 2:'map.jpg', 3:'map.jpg' };
 function mapBgName(){ return MAP_BG[G.act]||MAP_BG[1]; }
 function nodeLabel(node){ return node ? (NODE_LABEL[node.t] || NODE_LABEL.fight) : ''; }
-/* extra：附加到 .node-ico 上的类（v0.62.0 的锁破裂过渡要挂 .o-reveal 把真实图标先藏起来） */
+
 function nodeIconHTML(file, extra){ return artImg(MAP_ICON_DIR + file, '', 'node-ico' + (extra ? (' ' + extra) : '')); }
 function nodeHTML(node){
   return nodeIconHTML(NODE_ICON[node.t] || NODE_ICON.fight) + '<span class="node-label">' + nodeLabel(node) + '</span>';
 }
-/* —— 地图查询：迷雾渲染与连线的唯一真相 —— */
+/* 地图查询：迷雾渲染与连线的唯一真相 */
 function mapNodeAt(r,c){
   if(r<0 || r>=MAP.length || !MAP[r] || c<0 || c>=MAP[r].length) return null;
   return MAP[r][c] || null;
 }
 function mapVisited(r,c){ return (G.mapPath||[]).some(function(p){ return p.r===r && p.c===c; }); }
-/* 当前层这一格能不能走：
-   · 开局/换幕/旧档降级（mapCol<0）→ 整层可选
-   · 上一层那格找不到（列越界等）→ 放宽为整层可选（防软锁）
-   · 否则必须由上一层的 next 显式连过来 */
+
 function mapReachable(r,c){
   const node=mapNodeAt(r,c);
   if(!node) return false;
   if(r!==G.mapRow) return false;
-  /* v1.1.x（用户 2026-10-11）：「从事件关卡或者商店不行动返回地图，就再也打不开关卡了」。
-     根因：chooseNode 一进节点就把这格 push 进 G.mapPath（它当场变「已走」），
-     而这时 G.mapRow 还没推进（只有 goNext 会 G.mapRow++）。
-     事件/商店面板上的「返回地图」回到地图后，这一格被 fogTier 判成 past（渲染成非按钮 div），
-     当前层剩下的兄弟格又大多不可达 ⇒ **一格都点不动**，只能从底部菜单退局。
-     判据：**当前层 + 正是最后一步选中的那一格** = 「节点还没结算完」⇒ 仍然可达。
-     走过之后（goNext 把 mapRow 推上去）last.r < r，这条不再命中，已完成的关卡不会被重新打开。 */
+  /* 事件/商店返回地图后，刚选中的那格仍要可点 */
   const _p=G.mapPath||[], _last=_p[_p.length-1];
   if(_last && _last.r===r && _last.c===c) return true;
   if(r===0 || G.mapCol<0) return true;
@@ -81,9 +53,7 @@ function mapReachable(r,c){
   if(!up) return true;
   return (up.next||[]).indexOf(c)>=0;
 }
-/* 下一步会解锁哪几格 = 当前所有可走节点 next 的并集。
-   ⚠️ 这是「下一步会亮哪几格」的**现行**语义（冒烟 4410 / 4412 / 4423 钉着它），
-   与下面的 mapRevealedColsAt 是两件事 —— **别合并、别删**。 */
+/* 下一步会亮哪几格 = 可走节点 next 的并集，别和 mapRevealedColsAt 合并 */
 function mapPreviewSet(){
   const out=[];
   const r=G.mapRow, nr=r+1;
@@ -95,28 +65,13 @@ function mapPreviewSet(){
   }
   return out;
 }
-/* —— v0.63.0：地图不再遗忘 ——
-   旧版 fogTier 只按**当前位置**算：你站在第 N 层时那层没走的格子是亮的，走掉一格之后它们就退回
-   hidden（变回锁）⇒ 走过的路只剩「一条链 + 当前一层」，满屏互不相连的锁
-   —— 用户报的「每个关卡的图标都要有路径相连」没做到，根因就在这。
-   现在按**你当时真的看过什么**累积：第 r 层亮过的真图标 = next(你在 r-1 层站的那一格)
-   —— 也就是「你当时能走的那几个」，正是 mapReachable 在第 r 层的历史版本。
-   三条性质（前两条钉在冒烟里，改坏会红）：
-     · 不剧透：未来层一个字都不漏；preview 层照旧挂锁（它的身份从没露过，所以它**不算**看过）；
-     · 不孤立：亮出来的每一格都挂得到一个**也亮着**的父节点 ⇒ 图标永远有线（用户那句话本身）；
-     · 纯函数：只依赖 MAP / G.mapRow / G.mapPath，不新增存档字段，旧档照读。 */
-function mapHistoryCol(row){   // 第 row 层「当时站的那一格」列号；查不到返回 -1
+/* 地图不遗忘：按当时看过什么累积，不是只按当前位置算 */
+function mapHistoryCol(row){   // 第 row 层当时站的那一格的列号；查不到返回 -1
   const p=G.mapPath||[];
   for(let i=p.length-1;i>=0;i--) if(p[i] && p[i].r===row) return p[i].c;
   return -1;
 }
-/* 父链完不完整 / 当前层是不是「没有唯一父节点」。任一成立 ⇒ 0..mapRow-1 **全部**整层亮。
-   两种情况：
-     · 当前层没有唯一的父节点（mapCol 越界或 <0）—— 此时当前层整层可选，它每一格的父节点都得亮着；
-     · mapPath 的父链断了一环（旧档：40_flow.js:238 老存档没 mapPath → 空数组；或有人手改档）。
-   为什么整段一起亮、而不是只亮断的那一层：整层亮的那一层，它自己的格子要挂得上父节点，
-   就得**上一层也整层亮**，一环一环往回推就是这个结论。多亮一层的代价，
-   远小于「图标孤零零没有线」—— 那正是用户报的那个毛病。 */
+/* 父链断了或当前层没有唯一父节点时 0..mapRow-1 整层亮，免得图标没线 */
 function mapDegraded(){
   if(G.mapRow>0 && (G.mapCol<0 || !mapNodeAt(G.mapRow-1, G.mapCol))) return true;
   for(let r=1;r<=G.mapRow-1;r++){
@@ -125,22 +80,20 @@ function mapDegraded(){
   }
   return false;
 }
-/* 第 row 层「亮过真图标」的列。只有 row ≤ G.mapRow 才有意义；未来层一律空（不剧透）。 */
+/* row 层亮过真图标的列；未来层一律空 */
 function mapRevealedColsAt(row){
   const out=[]; const cur=MAP[row]||[];
   if(row>G.mapRow) return out;
-  if(row===G.mapRow){                 // 当前层：直接转调 mapReachable，绝不复制逻辑（免得两处口径分叉）
+  if(row===G.mapRow){                 // 当前层直接转调 mapReachable，别复制逻辑
     for(let c=0;c<cur.length;c++) if(mapReachable(row,c)) out.push(c);
     return out;
   }
-  if(mapDegraded()){                  // 降级：整层亮（理由见 mapDegraded）
+  if(mapDegraded()){                  
     for(let c=0;c<cur.length;c++) out.push(c);
     return out;
   }
   if(row<=0){
-    /* 第 0 层是特例：它**没有上一层**，所以它的非所选格永远挂不到任何可见父节点上（永远没线）。
-       「每个关卡的图标都要有路径相连」⇒ 挂不上线的图标就不该亮，于是第 0 层只亮走过的那些。
-       （其它层不适用这条：那些层的兄弟格会连到你在下一层站的那一格上，线是有的。） */
+    /* 第 0 层没有上一层，非所选格挂不到父节点，只亮走过的 */
     for(let c=0;c<cur.length;c++) if(mapVisited(row,c)) out.push(c);
     return out;
   }
@@ -148,17 +101,15 @@ function mapRevealedColsAt(row){
   (up.next||[]).forEach(function(j){ if(out.indexOf(j)<0 && mapNodeAt(row,j)) out.push(j); });
   return out;
 }
-/* 四档：past（走过的 / 当时看过的真图标）/ choice（现在能走）/ preview（下一步会亮，仍是锁）
-        / hidden（其余，挂锁但不属于任何「看过的范围」）。 */
+/* fogTier 四档：past / choice / preview / hidden */
 function fogTier(r,c){
-  // ⚠️ 第一件事必须是「这格不存在 → hidden」：夹具里 fogTier(1,1)/(1,2) 就落在不存在的列上
+  
   if(!mapNodeAt(r,c)) return 'hidden';
   if(mapVisited(r,c)){
-    /* v1.1.x：刚从事件/商店「返回地图」时，这一步选中的那格必须仍渲染成**可点按钮**
-       （否则 past 是 <div>，玩家一格都点不动 —— 见 mapReachable 里的同一段说明）。 */
+    /* 刚从事件/商店返回：这一步选中的格子仍要渲染成可点按钮 */
     const _p=G.mapPath||[], _last=_p[_p.length-1];
     if(r===G.mapRow && _last && _last.r===r && _last.c===c) return 'choice';
-    return 'past';                               // 走过的格子，**任何层**都是 past（含刚打完的那一层）
+    return 'past';                               
   }
   if(r===G.mapRow) return mapReachable(r,c) ? 'choice' : 'hidden';
   if(r<G.mapRow) return mapRevealedColsAt(r).indexOf(c)>=0 ? 'past' : 'hidden';
@@ -175,23 +126,15 @@ function runStatusHTML(){
     <span>遗物：${relicNames}</span>
   </div>`;
 }
-/* —— v0.62.0 地图顶栏（用户说「上方的玩家信息栏你重新设计」，这块交给我）——
-   只负责**排版**：取值全部复用现成件 —— 头像 artImg('hero/<id>.png')、血条现成的 .hpbar 三件套 +
-   .hp-label 叠数值、金币/幕/层 G.gold/ACT_NAMES/G.mapRow、遗物 relicIcon+relById（同 runStatusHTML 的口径）、
-   尸气与血怒的分支判据照抄 renderTopbar（G.hero==='ganshiren' / 'yincha'）。
-   ⚠️ 战斗页的 #topbar + renderTopbar **一行没动** —— 这里只用新增的 .mt-* 类，
-   绝不改 .stat/.hpbar/.prelic-chip 既有规则，免得波及战斗页。 */
+
 function mapTopbarHTML(){
   const hero=HEROES.find(h=>h.id===G.hero);
   const hpPct=G.maxHp>0 ? Math.max(0, Math.min(100, Math.round(G.hp/G.maxHp*100))) : 0;
   let res='';
   if(G.hero==='ganshiren') res=`<span class="mt-shiqi">尸气 <b>${G.尸气}/${relicMaxShiqi()}</b></span>`;
   else if(G.hero==='yincha') res=`<span class="mt-xuenu">血怒 <b>${G.xuenu||0}/${relicMaxXuenu()}</b></span>`;
-  /* v1.1.x：遗物不再排进地图顶栏 —— 与战斗顶栏同一口径，内容统一收进「锦囊」入口（下方那枚按钮）。
-     血条独占第二行，空出来的横向空间留给生命条。 */
-  /* v1.1.8（用户口径）：顶栏改为「悬浮贴屏顶的横幅」—— 手机横屏下整条顶栏吃 0 布局高度
-     （.map-topbar 绝对定位，画心吃满全屏 ⇒ 一屏多露 1~2 层）。幕名匾并进横幅第二行。
-     锦囊按钮**移出顶栏** —— 屏幕左下的常驻 HUD（#outPouch）已经常驻锦囊，不再重复。 */
+  
+  
   return `<div class="map-topbar">
     <div class="mt-bar">
       <span class="mt-portrait">${artImg('hero/'+G.hero+'.png','','')}</span>
@@ -214,28 +157,15 @@ function mapTopbarHTML(){
   </div>`;
 }
 
-/* —— v0.62.0 地图相机 ——
-   行为（用户要求）：选完英雄进场时镜头**由 Boss 层往下缓入、最后缓停在第 1 层**；之后每打完一关，
-   镜头**只往上走一行**（600ms ease-out），**不回地图顶部、不重播进场动画**。
-   实现：类/内联样式切换驱动 CSS transition（不手写 rAF 插值）—— .map-sheet 默认 600ms，
-   进场时把 transition-duration 临时换成 2000ms。
-   坐标：行 r 的顶边离画心顶 (MAP.length-1-r)*rowH（DOM 顺序是**从 r 大排到 r 小**，
-   所以 Boss 在最上、第 1 层在最下）。要让第 r 层停在窗口底部：
-     camY = (MAP.length-r)*rowH - viewportH，夹在 [0, maxY]，maxY = 画心高 - 窗口高。
-     ⇒ r=0（第 1 层）camY=maxY 贴底；r=13（Boss）camY≤0 被夹到 0 贴顶。
-   ⚠️ rowH 必须**实测**（.map-row 桌面 88px，≤520px 是 68px，≤360px 是 58px），写死 88 会让窄屏错位。
-   ⚠️ drawMapLinks **不用改**：它用 getBoundingClientRect() 相减定位，而 SVG 层与 .map-row 同在
-   .map-sheet 里、共享同一个 transform，位移在相减时正好抵消（overflow:hidden 也不影响布局测量）。
-   —— 这条是本节最省事的地方，别「顺手修坏」。 */
-let _mapStepFrom = -1;    // 上一帧相机停在哪一行；-1 = 不放「只上一行」的动画（重开地图/续档/换幕）
+
+let _mapStepFrom = -1;    // 上一帧相机停在哪一行；-1 = 不放单步动画
 let _mapCamBound = false;
 function measureRowH(){
   const el=document.querySelector('.map-row');
   const h=el && el.offsetHeight;
-  return h ? h : 88;      // 兜底值与 CSS 桌面档一致；窄屏两档靠实测拿到
+  return h ? h : 88;      
 }
-/* 相机几何：行高 / 画心高 / 窗口高 / 最大位移 / 画心上内边距。mapCamInit 与拖拽**共用这一处**，
-   免得两处各算一套（拖拽用的是同一个 maxY，夹取才不会和进场动画对不上）。 */
+
 function mapCamRange(){
   const sheet=document.getElementById('map-sheet');
   const vp=document.getElementById('map-viewport');
@@ -243,9 +173,7 @@ function mapCamRange(){
   const sheetH=(sheet && sheet.offsetHeight) || (MAP.length*rowH);
   const vpH=(vp && (vp.clientHeight || vp.offsetHeight)) || 0;
   let maxY=sheetH-vpH; if(!(maxY>0)) maxY=0;
-  /* v0.63.0 修的一处基准差：.map-sheet 有 padding:30px 0（上下留白，弧线外凸时不被裁），
-     而 camYForRow 用的是「层高 × 层数」这一套基准 —— 少了这段 padding，算出来的位置一律
-     偏小 30px，第 1 层贴底时会**被切掉一截**。这里实测取它（窄屏是 22 / 18px，写死必错）。 */
+  /* .map-sheet 有 padding，camY 少算会切掉第 1 层，这里实测取 */
   let padTop=0;
   try{
     const cs=(typeof window!=='undefined' && window.getComputedStyle && sheet) ? window.getComputedStyle(sheet) : null;
@@ -253,8 +181,7 @@ function mapCamRange(){
   }catch(e){ padTop=0; }
   return { rowH:rowH, sheetH:sheetH, vpH:vpH, maxY:maxY, padTop:padTop };
 }
-/* padTop 是 v0.63.0 新加的**可选**第 5 参（默认 0）—— 不传时行为与 v0.62.0 逐字节一致
-   （冒烟 5355/5356 钉着 camYForRow(3,88,900,0)===900）。 */
+
 function camYForRow(row, rowH, maxY, vpH, padTop){
   if(!(vpH>0)) return maxY;
   let y=(MAP.length-row)*rowH-vpH+(padTop||0);
@@ -267,22 +194,20 @@ function setMapCam(y, animate, ms){
   if(!sheet || !sheet.style) return;
   if(animate) sheet.classList.remove('cam-nofx'); else sheet.classList.add('cam-nofx');
   if(sheet.style.setProperty){
-    // transition-duration 显式两边都写：内联样式压得过 .cam-nofx 的 transition:none，
-    // 只靠类会给上一次残留的时长留后门
+    
+    
     sheet.style.setProperty('transition-duration', (animate ? (ms||600) : 0)+'ms');
     sheet.style.setProperty('--camY', y+'px');
   }
 }
-/* 当前相机位置（读回 --camY）。拖动要的是「按下那一刻在哪」，不能每帧从 G 重算 ——
-   用户可能已经把画面拖到任意位置了。 */
+
 function mapCamNow(){
   const sheet=document.getElementById('map-sheet');
   if(!sheet || !sheet.style || !sheet.style.getPropertyValue) return 0;
   const v=parseFloat(sheet.style.getPropertyValue('--camY'));
   return v>0 ? v : 0;
 }
-/* entry=true：进场动画（Boss 层 → 目标层，2000ms）；stepFrom>=0：从上一行的位置单步移动（600ms）；
-   其它：直接落位不放动画。!fx()（流畅模式）一律直接落位。 */
+/* entry=进场动画；stepFrom>=0=单步上移；其它直接落位 */
 function mapCamInit(entry, stepFrom){
   const sheet=document.getElementById('map-sheet');
   const vp=document.getElementById('map-viewport');
@@ -291,9 +216,9 @@ function mapCamInit(entry, stepFrom){
   const target=camYForRow(G.mapRow, C.rowH, C.maxY, C.vpH, C.padTop);
   if(!fx()){ setMapCam(target, false, 0); return; }
   if(entry){
-    setMapCam(0, false, 0);              // ① 无动画地钉在 Boss 层
-    void sheet.offsetHeight;             // ② 强制一次重排，让 --camY:0 真的生效
-    setMapCam(target, true, 2000);       // ③ 再缓入到目标层并缓停
+    setMapCam(0, false, 0);              
+    void sheet.offsetHeight;             
+    setMapCam(target, true, 2000);       
     return;
   }
   if(stepFrom>=0 && stepFrom!==G.mapRow){
@@ -304,40 +229,30 @@ function mapCamInit(entry, stepFrom){
   }
   setMapCam(target, false, 0);
 }
-/* —— v0.63.0：地图自由滑动（用户选的：「纯自由滑动，不吸附」）——
-   旧版地图页**零个**滚轮/触摸/指针处理，--camY 全项目只有 setMapCam 一个写点 ⇒
-   画心只能靠进场动画与「打完一关自动上一行」移动，手指根本拖不动（用户报的「地图无法滑动」）。
-   手感：跟手（每次 pointermove 直接落位、无过渡、无惯性）、松手**停在哪儿就是哪儿**（不吸附到整行），
-        只把位移夹在 [0, maxY]（**夹取不是吸附** —— 它只防拖出纸外，不会把画面拉回某一行）。
-   手法照抄 js/60_boot.js 的出牌拖拽：pointerdown 挂视口、move/up/cancel 挂 document、
-   不用 setPointerCapture（它在 file:// 与部分国产浏览器上不顶用）。 */
+
 let _mapDragBound=false, _mapDrag=null;
-let _mapUserScrolled=false;   // 用户手动滑过 —— resize 时据此决定「别把镜头拽回当前层」
-let _mapCamRatio=0;           // 上次拖动结束时 camY/maxY，resize 换尺寸后按这个比例保位
-let _mapEatClickUntil=0;      // 拖完地图后的一小段窗口内忽略节点点击（见 chooseNode）
-/* 拖动位移 → 相机位置。**纯函数**（抽出来是为了冒烟能直接对拍 —— 指针手势在 VM 里测不了）。 */
+let _mapUserScrolled=false;   // 用户手动滑过；resize 时据此别把镜头拽回当前层
+let _mapCamRatio=0;           
+let _mapEatClickUntil=0;      // 拖完地图短时间内忽略节点点击
+
 function mapDragCam(startCam, dy, maxY){
-  let y=startCam-dy;          // 手指下滑(dy>0) = 想看更下面的层 ⇒ camY 变小
+  let y=startCam-dy;          // 手指下滑(dy>0)是想看更下层，camY 变小
   if(!(y>0)) y=0;
   if(y>maxY) y=maxY;
   return y;
 }
-/* 按比例换算相机位置（resize 保位用）。同样是纯函数。 */
+
 function mapCamFromRatio(ratio, maxY){
   let y=(ratio>0?ratio:0)*maxY;
   if(!(y>0)) y=0;
   if(y>maxY) y=maxY;
   return y;
 }
-/* v0.64.1：滚轮位移 → 相机位置。**纯函数**（与 mapDragCam 同理，滚轮事件在 VM 里测不了）。
-   方向与拖动一致：往下滚(deltaY>0) = 想看更**下**面的层（第 1 层在画心底端、Boss 在顶端）
-   ⇒ camY 变大（camY 越大画心越往上走）。与普通文档「往下滚 = 看下面」的直觉一致。
-   deltaMode：0=像素、1=行、2=页 —— Firefox 常见**行模式**，不换算的话滚一格几乎不动（值只有 3）。
-   仍是 [0, maxY] 夹取，与拖动共用同一套边界，不吸附、不越界。 */
+
 function mapWheelCam(startCam, deltaY, deltaMode, maxY, vpH){
   let d=(typeof deltaY==='number' && isFinite(deltaY)) ? deltaY : 0;
-  if(deltaMode===1) d=d*16;                      // 行 → 像素（16 与浏览器默认行高同量级）
-  else if(deltaMode===2) d=d*((vpH>0)?vpH:600); // 页 → 像素
+  if(deltaMode===1) d=d*16;                      
+  else if(deltaMode===2) d=d*((vpH>0)?vpH:600); 
   let y=(startCam||0)+d;
   if(!(y>0)) y=0;
   if(y>maxY) y=maxY;
@@ -353,35 +268,30 @@ function bindMapDrag(){
     try{ inside = vp.contains ? vp.contains(ev.target) : (ev.target===vp); }catch(e){ inside=false; }
     if(!inside) return;
     const C=mapCamRange();
-    if(!(C.maxY>0)) return;        // 一屏就装得下：没有可滑的余地，别抢走点击
+    if(!(C.maxY>0)) return;        // 一屏装得下就别抢走点击
     _mapDrag={ id:ev.pointerId, sy:ev.clientY, cam:mapCamNow(), maxY:C.maxY, moved:false };
   });
   document.addEventListener('pointermove', function(ev){
     const d=_mapDrag; if(!d) return;
     if(d.id!=null && ev.pointerId!=null && ev.pointerId!==d.id) return;
     const dy=ev.clientY-d.sy;
-    if(!d.moved && Math.abs(dy)<7) return;   // 7px 阈值：与出牌拖拽同一口径，防手抖/防「点一下」被当成拖动
+    if(!d.moved && Math.abs(dy)<7) return;   // 7px 阈值防手抖，与出牌拖拽同一口径
     d.moved=true; _mapUserScrolled=true;
     const y=mapDragCam(d.cam, dy, d.maxY);
-    setMapCam(y, false, 0);                  // 直接落位：transition-duration 被写成 0ms，跟手不飘
+    setMapCam(y, false, 0);                  
     _mapCamRatio = d.maxY>0 ? y/d.maxY : 0;
     if(ev.cancelable) ev.preventDefault();
   }, {passive:false});
   const up=function(){
     const d=_mapDrag; if(!d) return;
     _mapDrag=null;
-    if(!d.moved) return;                     // 没动 = 就是一次点击，交给节点自己的 onclick
-    /* 拖过就吃掉紧随其后的那一次 click —— 手指从节点图标上起拖也会走到这里，
-       不拦的话「拖地图」会被判成「点了那个节点」（对应出牌拖拽里的 if(!d.moved)）。 */
+    if(!d.moved) return;                     
+    /* 拖过就吃掉紧随的那次 click，否则拖地图会被判成点节点 */
     _mapEatClickUntil=(typeof Date!=='undefined' && Date.now) ? Date.now()+400 : 0;
   };
   document.addEventListener('pointerup', up);
   document.addEventListener('pointercancel', up);
-  /* —— v0.64.1：滚轮 ——
-     地图是**变换驱动**的（画心靠 --camY 位移、窗口 overflow:hidden），里面没有任何可原生滚动的
-     内容 ⇒ 不接管的话滚轮**完全没反应**（用户报的「鼠标滚轮无法滚动地图，必须按住中键」）。
-     passive:false 是必须的：默认 passive 下 preventDefault() 无效，页面会跟着一起滚。
-     每次从 mapCamNow() 读当前值再累加，不用「一格 = 一行」那种量化步进 —— 与拖动同为自由滑动。 */
+  
   document.addEventListener('wheel', function(ev){
     const vp=document.getElementById('map-viewport');
     if(!vp || !ev || !ev.target) return;
@@ -389,15 +299,14 @@ function bindMapDrag(){
     try{ inside = vp.contains ? vp.contains(ev.target) : (ev.target===vp); }catch(e){ inside=false; }
     if(!inside) return;
     const C=mapCamRange();
-    if(!(C.maxY>0)) return;                  // 一屏装得下：没有可滚的余地，让页面自己滚
+    if(!(C.maxY>0)) return;                  
     if(ev.cancelable) ev.preventDefault();
     const y=mapWheelCam(mapCamNow(), ev.deltaY, ev.deltaMode, C.maxY, C.vpH);
-    setMapCam(y, false, 0);                  // 与拖动同一条落位路径：无过渡、跟手
+    setMapCam(y, false, 0);                  
     _mapUserScrolled=true;
     _mapCamRatio = C.maxY>0 ? y/C.maxY : 0;
   }, {passive:false});
-  /* 兜底护栏：画心窗口内一律掐掉原生拖拽。CSS 的 -webkit-user-drag:none 与 artImg 的
-     draggable="false" 已经各拦一道，这里再拦一道 —— 将来谁往地图里加个可拖元素也不会复发。 */
+  
   document.addEventListener('dragstart', function(ev){
     const vp=document.getElementById('map-viewport');
     if(!vp || !ev || !ev.target) return;
@@ -406,143 +315,98 @@ function bindMapDrag(){
     if(inside && ev.cancelable) ev.preventDefault();
   });
 }
-/* 描边分档（用户要求：「达到的关卡的图标要有淡白色的描边，过去的关卡白色描边消失」）：
-   past → 描边消失；choice → 淡白描边（当前层再叠暗金发光）；preview/hidden → 还是锁，无描边。
-   ⚠️ v0.63.0 由「按行给」改成「按档位给」：按行给会让**当前层里那些走不到的锁**也拿到 o-reached
-   （淡白描边），看起来像能走的关卡 —— 而它们底下连一条线都没有，正是用户报的
-   「每个关卡的图标都要有路径相连」看见的那批假图标。 */
+/* 描边按档位给：按行给会让当前层走不到的锁也拿到淡白描边 */
 function nodeOutlineTier(tier){
   if(tier==='past') return 'o-past';
   if(tier==='choice') return 'o-reached';
   return 'o-locked';
 }
-/* v0.62.0：把卷轴三张素材（上/下木轴 + 画心）的地址从 CSS 的**相对路径**换成 assetURL() 的结果。
-   为什么必须有这一步：原型.html 里的 `url(素材/map/scroll_top.png)` 在开发期能解析（两者同级），
-   但 dist/志怪塔.html 是**单文件产物** —— 打包.py 只把 素材/ 收进 ASSET_MAP（base64），
-   **不重写 CSS 里的 url()**（它只特判了 <img src="素材/rune.png">）。所以产物里那三条相对路径会 404，
-   木轴与画心会整片消失；靠这里写内联 background-image 覆盖掉。
-   ⚠️ 只覆盖 background-image —— size / position / repeat 三个长手仍由 CSS 给（画心是两层背景，
-      顺序必须与 CSS 一致：先「画」后「纸」）。querySelector 取不到（老浏览器 / 冒烟桩）就整体跳过，
-      退回 CSS 那条相对路径，等于开发期的行为。 */
+/* 卷轴素材必须走 assetURL：单文件产物不重写 CSS 里的 url() */
 function applyMapTextures(){
   const q=function(sel){ try{ return document.querySelector(sel); }catch(e){ return null; } };
   const set=function(el, v){ if(el && el.style) el.style.backgroundImage=v; };
-  /* v1.0.8（手机端性能）：带 wantBlob=true —— 这三张都是大图（含 bg_map.jpg），
-     单文件产物里是几百 KB 的 base64，而每次进地图场景都要重新塞进 CSS。 */
+  
   const u=function(rel){ return 'url("'+assetURL(rel, true)+'")'; };
   set(q('.map-roller.top'), u('map/scroll_top.png'));
   set(q('.map-roller.bot'), u('map/scroll_bottom.png'));
   set(q('#map-sheet'), u('bg/bg_map.jpg')+', '+u('map/scroll_paper.jpg'));
 }
-/* v0.66.0：主菜单三张背景轮换。**每次进主界面**前进一格 —— 开游戏 / 死亡回菜单 /
-   从设置重开回菜单，三条路径都走 showStartScreen()，所以在那里调用就天然全覆盖。
-   索引存 SAVE（跨启动续上；老存档没有这个字段 ⇒ `undefined|0` = 0，从第一张开始）。
-   ⚠️ 必须走 assetURL() 内联 background-image（同 v0.65.0 的约定）：打包.py 只把 素材/ 收进
-      ASSET_MAP（base64），**不重写 CSS 里的 url()** —— 在 原型.html 写
-      url(素材/bg/menu/menu_1.jpg) 在 dist 里会 404，且 _patch/verify_dist.py 的 [5] 结构门禁会 FAIL
-      （判据：url() 里的相对路径须在产物 <script> 段里找得到**字面量**）。
-   ⚠️ 也不能用 bgRel() —— 它固定拼 'bg/bg_' + name + '.png'，套不进 bg/menu/ 这个子目录。
-   取不到 .menu-bgimg（非主菜单场景 / 冒烟桩）就整体跳过，退回 CSS 的渐变兜底，观感不塌。 */
+
 var MENU_BGS = ['bg/menu/menu_1.jpg','bg/menu/menu_2.jpg','bg/menu/menu_3.png'];
 function menuBgRotate(){
   var n=MENU_BGS.length;
   if(!n) return 0;
-  /* 负值与越界都兜住：`%` 在 JS 里对负数返回负值，只做一次 % 会让下标变负、取到 undefined */
+  /* 负值和越界都兜住：JS 里 % 对负数返回负值 */
   var i=(((SAVE.menuBgIdx|0) % n) + n) % n;
   SAVE.menuBgIdx=(i+1)%n;
   try{ persistSave(); }catch(e){}
   const q=function(sel){ try{ return document.querySelector(sel); }catch(e){ return null; } };
   const set=function(el,v){ if(el && el.style) el.style.backgroundImage=v; };
   set(q('.menu-bgimg.a'), 'url("'+assetURL(MENU_BGS[i])+'")');
-  set(q('.menu-bgimg.b'), '');   // 双缓冲的另一片：本批只做硬切，留空备用（见 CSS 的 .menu-bgimg 注释）
+  set(q('.menu-bgimg.b'), '');   
   return i;
 }
-/* 演出是否该被跳过：低配模式或系统「减弱动态效果」。CSS 会把那几条 keyframes 全置 none，
-   此时再等满 1 秒就是纯粹的干等 ⇒ 缩短到几乎立刻切场景（但**不能**不等，见 steleBreak 的注释）。 */
+
 function menuFxOff(){
   try{ if(SETTINGS.lowSpec) return true; }catch(e){}
   try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
   catch(e){ return false; }
 }
-/* —— 按键演出 ——
-   ⚠️ MENU_BUSY 是**必须的**：没有它，1 秒演出窗口里连点会调两次 startGame()（冒烟有专门断言）。
-      除了这个闸，.menu-stage.is-busy 还会把整块舞台的 pointer-events 关掉。
-   ⚠️ 收尾一律用**定时器**而不是 animationend：碎片是 5 片 × 1 条 keyframes，animationend 会触发
-      5 次；而且 low-spec / prefers-reduced-motion 下动画被 CSS 关掉时 animationend **永远不来**，
-      靠它收尾会当场卡死 —— 定时器在这两种情况下照跑。 */
+/* 收尾用定时器不用 animationend：动画被 CSS 关掉时它永远不来 */
 var MENU_BUSY=false;
 function menuBusy(on){
   MENU_BUSY=!!on;
   const st=(function(){ try{ return document.querySelector('.menu-stage'); }catch(e){ return null; } })();
   if(st && st.classList) st.classList.toggle('is-busy', !!on);
 }
-/* 石碑按下：裂 → 崩碎 → 全屏闪，峰值处切场景。
-   时间轴：0 挂 .is-breaking（碎片 keyframes 自身包含「裂 0~53%」与「崩 53%~100%」两段，
-   5 片各错 0/.04/.08/.12/.16s，最晚一片 1.01s 收尾）→ 800ms 起闪（0.26s，峰值在 +130ms）
-   → 930ms 调 fn()，正好落在全屏最黑那一刻。 */
+
 function steleBreak(btn, fn){
   if(MENU_BUSY || !btn || btn.disabled) return;
   menuBusy(true);
-  sfx('stone_broken');   // v1.1.x：用户交付真采样「击碎石头」，与碎片动画同时起（素材缺则走合成兜底）
+  sfx('stone_broken');   
   if(btn.classList) btn.classList.add('is-breaking');
   const off=menuFxOff();
-  const tFlash=off?0:800, tGo=off?60:930;   // off 时闪被 CSS 关掉 ⇒ 不留 800ms 干等，直接 60ms 切
+  const tFlash=off?0:800, tGo=off?60:930;   
   setTimeout(function(){
     const f=(function(){ try{ return document.querySelector('.menu-flash'); }catch(e){ return null; } })();
     if(f && f.classList) f.classList.add('on');
     setTimeout(function(){ menuBusy(false); if(typeof fn==='function') fn(); }, tGo-tFlash);
   }, tFlash);
 }
-/* 符纸按下：纸下拉 3px 弹回（.tug，150ms）→ 面板以「卷轴从顶落下·带回弹」展开。
-   卷轴那半边由 showOverlay 的第 3 参 scene='scroll-scene' 驱动（见 CSS 的 scrollDrop），
-   三个调用点各补一个参数。 */
+
 function talisOpen(btn, fn){
   if(MENU_BUSY) return;
   menuBusy(true);
-  sfx('ui_curtain');   // v1.0.23：用户口径「其他 3 张符纸要有拖拽窗帘般的音效」
+  sfx('ui_curtain');   
   if(btn && btn.classList) btn.classList.add('tug');
   const off=menuFxOff();
-  /* v0.68.1：150ms → 420ms。符纸按下从「下沉 3px 一闪」改成「向下拉然后回弹」（用户原话），
-     menuTug 的 keyframes 也拉长到 .42s。
-     ⚠️ 这个数必须与 CSS 的 `animation:menuTug .42s` 对齐：短了会在回弹途中切走场景（纸卡半途），
-        长了就是白等一个已经静止的动画。两处一起改。 */
+  
   setTimeout(function(){
     if(btn && btn.classList) btn.classList.remove('tug');
     menuBusy(false);
     if(typeof fn==='function') fn();
   }, off?0:420);
 }
-/* 石碑崩碎的 5 片。**同一个 src** ⇒ 浏览器复用解码结果，零额外体积（素材没多一张）。
-   位置与大小由 CSS 给：.menu-shards{inset:0} 铺满 .menu-artbox（与图等大的紧贴盒），
-   .menu-shard{width/height:100%} 让 5 片都按原尺寸拉伸到画布 —— 5 条 clip-path 精确拼满，
-   所以裂开前重建出的图与原图逐像素一致，不会闪接缝。
-   ⚠️ 必须包在 .menu-artbox 里而不是直接铺在 <button> 上：按钮有 min-width:48px 补热区，
-      会比图宽，clip-path 的百分比就对不上石头本体了。 */
+
 function menuShardsHTML(src){
   let h='<span class="menu-shards" aria-hidden="true">';
   for(let i=1;i<=5;i++) h+=artImg(src,'','menu-shard s'+i);
   return h+'</span>';
 }
-/* opts.entry=true：进场动画（选完英雄 / 换幕 / 续档进地图）。
-   不带则不会播进场动画（goNext 走的是「只上一行」，见 goNext 里写的 _mapStepFrom）。 */
+
 function showMap(opts){
   SCENE='map'; saveRun();
   setBg(mapBgName()); setBGM('map');
   const entry=!!(opts && opts.entry), stepFrom=_mapStepFrom;
-  _mapStepFrom=-1;    // 一次性：用过就清 —— 重开地图 / 续档 / resize 都不会误放动画
-  /* 本次要播「锁破裂」的格：刚从 goNext 上来时，当前层里**现在能走**的那些格
-     （它们在上一帧还是锁 ⇒ 现在解锁，正是用户要的那个过渡）。 */
+  _mapStepFrom=-1;    
+  
   const breakSet={};
   if(stepFrom>=0 && MAP[G.mapRow]){
     for(let c=0;c<MAP[G.mapRow].length;c++) if(mapReachable(G.mapRow,c)) breakSet[G.mapRow+','+c]=true;
   }
-  /* v1.1.8：幕名匾并进 .map-topbar 第二行；底栏（菜单按键）整条去掉 —— 菜单在顶栏右上角，
-     牌堆 / 锦囊由战局外常驻 HUD 落在屏幕右下 / 左下（见 原型.html .out-hud）。 */
+  
   let html=`<div class="map-root">${mapTopbarHTML()}`;
-  /* v0.63.0：卷轴收成一根**居中**的卷轴（用户：「木轴只比画心宽一点点，不要横跨屏幕」）。
-     .map-scroll 是那一列（桌面 792 = 画心上限 760 + 两侧各 16），.map-frame 只给左右 16px 内边距 ⇒
-     木轴恰好比画心宽 32px；窄屏列宽退化成 100%，木轴仍是「屏幕宽 - 32」，**不用负 margin**（那会溢出）。
-     ⚠️ .map-lines 与 .map-row 必须继续留在 .map-sheet 里 —— drawMapLinks 的坐标相消靠这个。 */
+  
   html+=`<div class="map-scroll">`;
   html+=`<div class="map-roller top" aria-hidden="true"></div>`;
   html+=`<div class="map-frame">`;
@@ -552,53 +416,50 @@ function showMap(opts){
     html+=`<div class="map-row ${rowCls}">`;
     for(let c=0;c<MAP[r].length;c++){
       const node=MAP[r][c], tier=fogTier(r,c), dc=`data-r="${r}" data-c="${c}"`;
-      // v1.1.14：未解锁/未到达的格子**不再挂锁**，一律显示真实类型图标（灰化区分），
-      // 让玩家综观全局挑路线。每格都有内容 ⇒ 行高与坐标仍然恒定，解锁进度变化时不抖动。
-      // 描边档位仍跟着 fogTier 走（nodeOutlineTier），hidden/preview 拿 o-locked（灰）。
+      
+      
+      
       const tip=NODE_TIP[node.t]||'', ocls=' '+nodeOutlineTier(tier);
       if(breakSet[r+','+c]){
-        // v0.62.0：刚解锁的格 —— 真实图标先挂上但**藏着**（.o-reveal），锁由 playLockBreak 的
-        // canvas 画在上面；碎片飞散那一帧（t≈0.20）再让图标显形 + 描边淡入
-        // = 用户要的「锁破裂后展示相连的下面关卡的对应图标」。
+        // 刚解锁的格：真图标先藏着，锁碎那帧再显形
+        
+        
         html+=`<button class="map-node breaking${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeIconHTML(NODE_ICON[node.t]||NODE_ICON.fight,'o-reveal')}<span class="node-label">${nodeLabel(node)}</span></button>`;
         continue;
       }
       if(tier==='hidden'){ html+=`<div class="map-node locked${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}（尚未解锁）">${nodeHTML(node)}</div>`; continue; }
       if(tier==='choice'){ html+=`<button class="map-node${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}" onclick="chooseNode(${c})">${nodeHTML(node)}</button>`; continue; }
       if(tier==='preview'){ html+=`<div class="map-node preview${ocls}" ${dc} style="${mapNodeStyle(node)}" title="下一步可以走到这里（尚未解锁）">${nodeHTML(node)}</div>`; continue; }
-      // past：走过的 + **当时看过的兄弟格**（v0.63.0 起不再退回锁）—— 真图标、暗化、描边消失
+      
       html+=`<div class="map-node past${ocls}" ${dc} style="${mapNodeStyle(node)}" title="${tip}">${nodeHTML(node)}</div>`;
     }
     html+=`</div>`;
   }
-  html+=`</div></div>`;   // 收 .map-sheet / .map-viewport
-  html+=`</div>`;         // 收 .map-frame
+  html+=`</div></div>`;   
+  html+=`</div>`;         
   html+=`<div class="map-roller bot" aria-hidden="true"></div>`;
-  html+=`</div>`;         // 收 .map-scroll
-  html+=`</div>`;         // 收 .map-root
+  html+=`</div>`;         
+  html+=`</div>`;         
   showOverlay(html);
-  /* v0.61.42 起的 .map-scene 在 v0.62.0 换了语义：不再是「半透明黑幕 + 半透明面板」，
-     而是「**完全不透明**的整屏场景」（详见 原型.html 里 .map-scene 的注释）。
-     **必须在 showOverlay 之后加**：showOverlay 自己会摘掉 .map-scene，
-     其它所有面板（奖励/商店/图鉴/结算）因此保持原来的深色卡片底。 */
+  /* map-scene 必须加在 showOverlay 之后，否则别的面板也继承整屏底 */
   const __ov=document.getElementById('overlay');
   if(__ov && __ov.classList) __ov.classList.add('map-scene');
-  applyMapTextures();     // 见上：把三张卷轴素材换成 ASSET_MAP 的 data URI（产物里 CSS 相对路径会 404）
-  bindMapDrag();          // v0.63.0：自由滑动（幂等，见 _mapDragBound）
-  // v0.63.0：新的一场地图场景，手动滑动状态归零 —— 否则上一场的 camY 比例会被 resize 带过来
+  applyMapTextures();     
+  bindMapDrag();          // 自由滑动（幂等）
+  
   _mapUserScrolled=false; _mapCamRatio=0;
-  // 行布局完成后才有坐标可量，所以推到下一帧：先画连线，再落相机，最后放锁破裂
+  // 行布局完才有坐标：先画连线，再落相机，最后放锁破裂
   const __step=stepFrom, __break=breakSet;
   const kick=function(){
     drawMapLinks();
-    _mapGlowEdge=null;      // 见下面 drawMapLinks 前的说明：量不到坐标时它会在清标记之前 return
+    _mapGlowEdge=null;      
     mapCamInit(entry, __step);
     const keys=Object.keys(__break);
     for(let i=0;i<keys.length;i++){
       const p=keys[i].split(','), r=p[0], c=p[1];
       const el=document.querySelector('.map-node[data-r="'+r+'"][data-c="'+c+'"]');
       if(!el) continue;
-      // 画布 120px、节点图标 56px ⇒ top=-32px 让锁正好压在图标上
+      
       playLockBreak(el, function(){
         el.classList.remove('breaking');
         el.classList.remove('o-locked'); el.classList.add('o-reached');
@@ -608,9 +469,7 @@ function showMap(opts){
     }
   };
   try{ requestAnimationFrame(kick); } catch(e){ kick(); }
-  /* resize 时重算相机（**不带动画**），否则窄屏换成宽屏后相机停在错的层。
-     v0.63.0：用户手动滑过之后**不能**再这么干 —— mapCamInit 会把镜头拽回当前层，
-     正好是「拖到一半窗口一变就跳回去」的来源。那时改成「按 camY/maxY 比例保位 + 夹取」。 */
+  /* resize 重算相机不动画；但用户手动滑过后改按比例保位 */
   if(!_mapCamBound && typeof window!=='undefined' && window.addEventListener){
     _mapCamBound=true;
     window.addEventListener('resize', function(){
@@ -621,42 +480,25 @@ function showMap(opts){
     });
   }
 }
-/* v0.61.20(P2) / v0.61.40 / v0.61.41 / v0.61.42：地图路径连线。
-   三种线：暗线 = 当前可走节点 → 它连到的**下一层可见**格；
-           金虚线 = 现在这一步能走到的； 淡黄浅光边 = 已经走过的。
-   v0.61.40 起连边来自节点自带的 next（显式拓扑），不再用「列差≤1」猜；
-   且**两端都必须可见** —— 否则一条暗线就出卖了未解锁层的拓扑。
-   v0.61.41 曾换成用户给的道路贴图；v0.61.42 按用户要求**回到代码自绘** —— 因为要做
-   「打通一关后，淡黄色浅浅的光边沿着路径延长过去」的动画，贴图做不到「沿路径生长」。
-   现在每条边是一条 **SVG 二次贝塞尔弧**（控制点沿垂直方向偏移，所以永不画直线），
-   贝塞尔弯曲方向由两端坐标哈希决定 ⇒ 同一张地图每次画都一样，不会闪。
-
-   ⚠️ v0.62.0：地图改成「木轴固定 + 画心滑动」之后，`.map-viewport` 加了 overflow:hidden、
-   `.map-sheet` 带了 `translateY(--camY)` —— **这里一行都不用改**，别顺手「修」。
-   原因：端点坐标是用下面 nodeAt() 的 `b.left-wb.left` / `b.top-wb.top` 算的，
-   而 SVG 层与 .map-row **同在一个 .map-sheet 里** ⇒ 画心的位移在相减时自己抵消，
-   量到的永远是「画心坐标系」里的稳定坐标。overflow:hidden 也不影响布局测量。
-   唯一的前提是**别把 .map-lines 或 .map-row 挪到 .map-sheet 外面** —— 那样两端的位移就不再相等，
-   连线会跟着地图一起上下滑，看起来像「线粘在了视口上」。 */
-/* 一次性标记：刚打通的那条边（由 goNext 写入，drawMapLinks 消费一次后清空）。
-   只在「打完一关往上走」时动画；重开地图 / 续档 / 换幕 / 窗口 resize 都不动画。 */
+/* 连线靠坐标相减定位，.map-lines 与 .map-row 必须留在 .map-sheet 内 */
+/* 刚打通的那条边，消费一次后清空 */
 let _mapGlowEdge = null;
 function mapEdgeKey(r0,c0,r1,c1){ return r0+','+c0+'>'+r1+','+c1; }
-/* 端点坐标 → 弯曲量。返回 [-1,1]，且**远离 0**（保证任何一条边都看得出弧，不是直线）。 */
+
 function mapArcBow(key){
   let h=2166136261;
   for(let i=0;i<key.length;i++){ h^=key.charCodeAt(i); h=Math.imul(h,16777619); }
-  const u=((h>>>0)%2000)/1000-1;                 // -1..1
-  const mag=0.45+0.55*Math.abs(u);               // 0.45..1.00，绝不接近 0
+  const u=((h>>>0)%2000)/1000-1;                 
+  const mag=0.45+0.55*Math.abs(u);               
   return (u<0 ? -mag : mag);
 }
-/* 纯函数：给定两端坐标与边的 key，给出 SVG 的 d。抽出来是为了冒烟能直接对拍（不用真 DOM）。 */
+
 function mapArcD(a, b, key){
   const dx=b.x-a.x, dy=b.y-a.y;
   const dist=Math.hypot(dx,dy);
   if(dist<4) return '';
-  const nx=-dy/dist, ny=dx/dist;                 // 连线方向的垂直单位向量
-  const bow=Math.min(dist*0.14, 42)*mapArcBow(key);   // 夹住外凸量，别让弧线窜出面板
+  const nx=-dy/dist, ny=dx/dist;                 
+  const bow=Math.min(dist*0.14, 42)*mapArcBow(key);   
   const cx=(a.x+b.x)/2+nx*bow, cy=(a.y+b.y)/2+ny*bow;
   const R=function(v){ return Math.round(v*10)/10; };
   return 'M'+R(a.x)+','+R(a.y)+' Q'+R(cx)+','+R(cy)+' '+R(b.x)+','+R(b.y);
@@ -670,13 +512,13 @@ function drawMapLinks(){
   if(!rows.length || !rows[0].getBoundingClientRect) return;
   const wb=wrap.getBoundingClientRect();
   while(layer.firstChild) layer.removeChild(layer.firstChild);
-  // DOM 顺序自上而下 = 层号自高而低，所以第 k 行是 MAP[MAP.length-1-k]
-  // v0.61.40：行宽可变 → 不能再用 cells[c] 按**位置**取，改用 data-r/data-c 属性查询
+  // DOM 顺序自上而下 = 层号从高到低
+  
   function nodeAt(r,c){
     const row=rows[MAP.length-1-r]; if(!row) return null;
     const el=row.querySelector('.map-node[data-r="'+r+'"][data-c="'+c+'"]');
-    // .empty 是 visibility:hidden —— **仍有尺寸**，必须显式排除，否则连线会画到看不见的格子上
-    // （v0.61.41 起没有档会渲染它，这是兜底）
+    // .empty 是 visibility:hidden 仍有尺寸，必须排除
+    
     if(!el || (el.classList && el.classList.contains('empty'))) return null;
     const b=el.getBoundingClientRect();
     if(!b.width && !b.height) return null;
@@ -692,10 +534,7 @@ function drawMapLinks(){
     svg.setAttribute('viewBox','0 0 '+Math.max(1,Math.round(wb.width))+' '+Math.max(1,Math.round(wb.height)));
     layer.appendChild(svg);
   }catch(e){ return; }
-  /* 一条边 = 一条 <path>。newest=true 时额外做「光边沿路径延长」：
-     取路径真实长度喂给 CSS 变量 --len，由 @keyframes mapGlowGrow 把 stroke-dashoffset 从 len 收到 0。
-     取不到长度（老浏览器 / 没有 getTotalLength）就**不加 link-new** —— 只有 .link-past 的淡黄浅光边，
-     降级后依然是对的观感，不会变成一条虚线或干脆看不见。 */
+  
   function seg(a,b,cls,newest,key){
     if(!a||!b) return;
     const d=mapArcD(a,b,key);
@@ -712,16 +551,7 @@ function drawMapLinks(){
       p.setAttribute('class', 'map-path '+cls+' link-new');
     }
   }
-  /* —— v0.63.0：三段 ad-hoc 循环合成**一段** ——
-     根因：v0.62.0 及以前「画线」只认三种特定的边（当前可走→下一层 preview、走过的、上一步→现在能走），
-     而 v0.63.0 起「当时看过的兄弟格」也会亮成真图标 —— 它们不落在那三类里，会**光秃秃地没有线**
-     （用户那句「每个关卡的图标都要有路径相连」说的就是它）。
-     现在改成一条通则：**两个相邻层、两端都可见，就画一条**。线的档位按边的性质给：
-       · 两端都在 mapPath 里连着 → link-past（走过的路，淡黄光边；刚打通的那条再加生长动画）
-       · 子节点在本层（即 G.mapRow）→ link-reach（上一步那格 → 现在能走的每一格）
-       · 其余 → link-dim（当时摆在你面前、你没走的那条；语义与「当前可走 → 下一层」完全一致）
-     三个类名一个不删（verify_dist 的结构闸与冒烟 4751-4754 都钉着它们）；
-     门禁仍然只有 fogVisible 一个（冒烟 4755/4756）—— 两端任一不可见，这条边就不存在。 */
+  
   const __cur=MAP[G.mapRow]||[];
   const __path=G.mapPath||[];
   function walkedKey(r0,c0,r1,c1){
@@ -732,22 +562,14 @@ function drawMapLinks(){
     return false;
   }
   const __dim=[], __past=[], __reach=[];
-  /* v1.1.6（用户口径「地图中往上爬的道路只要亮起玩家所走的那一条，**不是一行全亮**」）：
-     旧写法把**所有进入当前层**的边都算成 link-reach（金虚线 + 外发光，最后画、最抢眼），
-     于是玩家头顶那一整排边全部一起亮；反倒是自己真正走过的那条只有淡黄浅光边 —— 亮暗正好反了。
-     现在 link-reach 只留给**路径的最后一段**（= 刚走过的那一条），其余进入当前层的边一律降为暗线。
-     「道路不隐藏」（v1.1.5）的口径一个字不动：边照样**全画**，只是不给亮。 */
+  
   const __n=(__path||[]).length;
   const __lastA=(__n>=2)?__path[__n-2]:null, __lastB=(__n>=2)?__path[__n-1]:null;
   function isLastSeg(r0,c0,r1,c1){
     return !!__lastA && !!__lastB &&
            __lastA.r===r0 && __lastA.c===c0 && __lastB.r===r1 && __lastB.c===c1;
   }
-  /* v1.1.5（用户口径「地图道路要明确标注、不得隐藏」）：**整张图的路全部画出来**。
-     此前门禁是「两端都 fogVisible」，于是通往未解锁格子（挂锁）的路一条都不画 ——
-     玩家只看到一排排孤立的锁，读不出「这一格能连到哪」，没法判断与抉择。
-     现在改成「两个端点在图上存在就画」，用档位给线的权重（fogVisible 仍参与判档）：
-       两端都没解锁 → link-fog（远景路，压暗，不喧宾夺主）/ 至少一端解锁 → link-dim。 */
+  
   for(let r=0;r<MAP.length-1;r++){
     const cur=MAP[r]||[];
     for(let c=0;c<cur.length;c++){
@@ -764,12 +586,12 @@ function drawMapLinks(){
       }
     }
   }
-  // 输出顺序＝叠放顺序：先远景暗线打底，再暗线，再走过的，最后「刚走过的那一条」压在上面
+  
   let i;
   for(i=0;i<__dim.length;i++)   seg(__dim[i].a,   __dim[i].b,   __dim[i].fog?'link-fog':'link-dim',   false, __dim[i].key);
   for(i=0;i<__past.length;i++)  seg(__past[i].a,  __past[i].b,  'link-past',  false, __past[i].key);
   for(i=0;i<__reach.length;i++) seg(__reach[i].a, __reach[i].b, 'link-reach', (__reach[i].key===_mapGlowEdge), __reach[i].key);
-  // 动画是**一次性**的：这一次画完就消费掉，重开地图 / resize 重画都不会再放一遍
+  
   _mapGlowEdge=null;
   if(!_mapLinkBound && typeof window!=='undefined' && window.addEventListener){
     _mapLinkBound=true;
@@ -777,67 +599,50 @@ function drawMapLinks(){
   }
 }
 function chooseNode(c){
-  /* v0.63.0：刚刚拖过地图，这一下是「滑动」而不是「选点」—— 手指从节点图标上起拖也会走到这里。
-     与出牌拖拽的 if(!d.moved) 同一个意思，只是地图没有统一的 up 收口，用时间戳守（见 bindMapDrag）。 */
+  /* 刚拖过地图，这一下算滑动不算选点 */
   if(Date.now && Date.now() < _mapEatClickUntil) return;
-  // v0.61.40：旧代码靠「只把可达节点渲染成 button」隐式限制，这里补显式二次校验（同时兜住 c 越界）
+  
   if(!mapReachable(G.mapRow,c)){ sfx('error'); floatMsg('这条连线走不通'); return; }
-  sfx('ui_map');   // v0.61.25：地图选点音
+  sfx('ui_map');   
   const node=MAP[G.mapRow][c];
-  (G.mapPath=G.mapPath||[]).push({r:G.mapRow, c:c}); // v0.61.20(P2)：记下这一步，地图连线据此画「已走」
+  (G.mapPath=G.mapPath||[]).push({r:G.mapRow, c:c}); // 记下这一步，地图连线据此画已走
   G.mapCol=c;
   hideOverlay();
-  if(node.t==='fight'||node.t==='elite') startBattle(node.e);   // v0.61.40：精英升为独立节点类型，e 与普通战同构
+  if(node.t==='fight'||node.t==='elite') startBattle(node.e);   
   else if(node.t==='camp') showCampfire();
   else if(node.t==='shop') showShop();
   else if(node.t==='unknown') showUnknown();
   else if(node.t==='boss'){
-    // v0.61.40：Boss 在**生成期**就定死在 node.e（同一存档续档后不再变）；下面一行只是兜底
+    
     if(node.e && node.e.length) startBattle(node.e);
     else { const pool=BOSS_POOL[G.act]||['yewang']; startBattle([pool[Math.floor(rng()*pool.length)]]); }
   }
 }
 
-/* v0.73.0：八个未知/事件房 ↔ 八张专用背景（素材/bg/bg_evt_*.jpg，2026-09-29 交付）。
-   这两张表**提到模块作用域**（原来是 showUnknown 里的局部 const），不是为了别的：
-   产物自检要在**游戏作用域里求值**出这八条路径（verify_dist.py 的 dump_ids → evtBg），
-   而 python 侧一个字都不镜像 —— 镜像必漂（见该文件 v0.61.41 那段旧账：
-   镜像把 bg_map.jpg 算成了 bg/map.jpg）。表在局部就求值不到，只能回去硬拼字符串。 */
+
 const UNKNOWN_EVENTS = ['well','blackmarket','temple','ambush','forge','empty','potion','remove'];
-/* 值带扩展名 ⇒ bgRel 只补 bg_ 前缀、不补 .png（v0.61.41 的两条规则之一）。
-   这八张是 .jpg，写成 'evt_well' 会被拼成 bg_evt_well.png 而全 404。 */
+
 const EVT_BG = { well:'evt_well.jpg', blackmarket:'evt_blackmarket.jpg',
                  temple:'evt_temple.jpg', ambush:'evt_ambush.jpg',
                  forge:'evt_forge.jpg', empty:'evt_empty.jpg',
                  potion:'evt_potion.jpg', remove:'evt_remove.jpg' };
-/* v0.61.41：**不再让玩家三选一** —— 踩到未知节点直接随机抽一个事件并立刻进入
-   （用户要求：「未知关卡不要由玩家选择的环节，玩家直接进入随机环节」）。
-   抽到什么用 floatMsg 报一声：原先靠三张卡面预告，现在没有预告了，总得让玩家知道发生了什么。 */
-/* ===================== v1.1.24 新手教程 · 旁白播放器（教程关卡样式.html 落定稿） =====================
-   尖角气泡 + 毛笔体；三种出场动画按关轮换（用户抱怨过「都一样」）。
-   v1.1.25（用户实测口径修正）：
-     · 位置改到**玩家与敌人之间**（不再压左下「符」字图标 / 手牌区 / 抽牌堆）；
-     · **去掉「符」字头像**（用户原话「不要左下角的『符』字图标」）——改以名字行标识说话人，
-       妖物（TUT_WHO 登记）加鬼气边框 .foe；
-     · 任意一次 pointerdown 收非强制泡（用户原话「非提示的旁白点一下就该过」），
-       队列抽干立即收泡（旧版 return 会把气泡永久挂屏）；
-     · **强制泡（tutForce）不可点收**，由强制牌打出后 doPlayCard 调 narrateHide 收。
-   无 DOM（冒烟/无头）一律安全 no-op —— 队列照样走，只是不画。 */
+/* 踩到未知节点直接随机抽一个事件，不让玩家选 */
+/* 新手教程旁白播放器 */
 const NARR_Q=[];
-let NARR_CUR=null;   // { id, force }
+let NARR_CUR=null;   
 function narrate(){
   if(!G||!G.tutorial||!G.tutorial.on) return;
   for(let i=0;i<arguments.length;i++){ const it=arguments[i]; if(it!=null) NARR_Q.push(it); }
   narrateNext();
 }
 function narrateNext(){
-  if(NARR_CUR) return;                 // 当前气泡还在，等点按 / 清锁
+  if(NARR_CUR) return;                 
   const it=NARR_Q.shift();
-  if(it==null){ narrateDrop(); return; }   // v1.1.25：队列抽干即收气泡（旧版 return 会永久挂屏）
+  if(it==null){ narrateDrop(); return; }   // 队列抽干即收气泡，旧版 return 会永久挂屏
   if(typeof it==='function'){ try{ it(); }catch(e){} narrateNext(); return; }
   narrateShow(it, false);
 }
-/* 说话人：TUT_WHO 里登记的是**妖物**（鬼气泡 + 名字行）；天师旁白不登记 ⇒ 无名行。 */
+
 function narrateWho(id){ return (typeof TUT_WHO!=='undefined') ? (TUT_WHO[id]||null) : null; }
 function narrateShow(id, force){
   const txt=(typeof TUT_NARR!=='undefined')?TUT_NARR[id]:null;
@@ -846,7 +651,7 @@ function narrateShow(id, force){
   if(typeof document==='undefined'||!document.body) return;
   let box=document.getElementById('tut-narr');
   if(!box){ box=document.createElement('div'); box.id='tut-narr'; document.body.appendChild(box); }
-  bindNarrTap(box);                          // 幂等：把「点按收泡」只绑在旁白框上（不改全局监听，见函数注释）
+  bindNarrTap(box);                          // 点按收泡只绑在旁白框上（幂等）
   const who=narrateWho(id);
   const anim=['a-slide','a-fade','a-brush'][((G&&G.tutorial&&G.tutorial.node)||0)%3];
   box.className='narr '+anim+(force?' force':'')+(who?' foe':'');
@@ -854,30 +659,27 @@ function narrateShow(id, force){
     +(who?'<div class="who">'+who+'</div>':'')
     +'<div class="text">'+txt+'</div>'
     +(force?'':'<div class="more">▼ 点按继续</div>')+'</div>';
-  void box.offsetWidth;                      // 重排后再挂 show，动画才重播
+  void box.offsetWidth;                      
   box.classList.add('show');
-  /* 配音：id 即 素材/voice/<id>.mp3（v1.1.25r 用户已逐条交付 53 条 = 40 旁白 + 13 对话）。
-     走 playVoice 这条**专用**通路（assetURL 取址，绝不经 sfx 的合成音回落）——
-     没人声时宁可静音，也不要程序化合成的「假念白」。 */
+  
   if(typeof playVoice==='function') playVoice(id);
 }
 function narrateDrop(){
   NARR_CUR=null;
-  if(typeof stopVoice==='function') stopVoice();   // 收泡即掐配音（点按跳过时不留半句话）
+  if(typeof stopVoice==='function') stopVoice();   
   if(typeof document==='undefined') return;
   const box=document.getElementById('tut-narr');
   if(box){ box.classList.remove('show'); box.innerHTML=''; }
 }
-/* 点按推进：非强制泡一律可点收（用户口径）。强制泡点不掉 —— 照师父说的做才收。 */
+
 function narrateAdvance(){
   if(NARR_CUR && NARR_CUR.force) return;
   narrateDrop();
   narrateNext();
 }
-/* 强制牌打出后由 doPlayCard 调：无视 force 标记，强制收泡并接着放队列里的后续旁白。 */
+
 function narrateHide(){ narrateDrop(); narrateNext(); }
-/* 是否还有旁白在放（含正在展示的强制泡与队列里的）—— 教程期间 playCard / endTurn 据此上锁，
-   避免玩家在旁白未读完时就把「待会儿要强制出的那张符」先打掉（那样强制泡就永远打不出、卡死）。 */
+/* 旁白未放完时 playCard/endTurn 上锁，否则强制符先被打掉会卡死 */
 function narrBusy(){ return !!(NARR_CUR || NARR_Q.length); }
 function narrateClear(){
   NARR_Q.length=0; NARR_CUR=null;
@@ -886,13 +688,7 @@ function narrateClear(){
   const box=document.getElementById('tut-narr');
   if(box){ box.classList.remove('show'); box.innerHTML=''; }
 }
-/* v1.1.25r（用户修正口径）：旁白**只在点「旁白框」本身时**才推进 ——
-   旧版把监听挂在 window 捕获相，任意一次 pointerdown 都会收掉非强制泡 ⇒ 玩家一碰屏幕就把整段
-   教程会话点掉（用户报「一触屏幕就会跳过教程会话」）。现在只认 #tut-narr .bubble 上的点按，
-   点到别处该干嘛干嘛（出牌 / 结束回合不受影响）。
-   #tut-narr 本身 pointer-events:none、只有 .bubble 是 auto ⇒ 事件由 .bubble 冒泡到框，绑框即可。
-   框元素长期复用 ⇒ 用 onpointerdown 幂等覆盖，绝不 addEventListener（否则每次展示叠一层监听）。
-   强泡（force）依旧点不掉 —— 照师父说的做才收。 */
+/* 旁白只认点旁白框本身推进，用 onpointerdown 幂等绑定 */
 let _narrTapBound=false;
 function bindNarrTap(box){
   if(box && box.addEventListener){
@@ -901,12 +697,12 @@ function bindNarrTap(box){
       if(NARR_CUR && !NARR_CUR.force) narrateAdvance(); };
     return;
   }
-  /* 兜底：无 box 参数时取现有 #tut-narr（正常路径 narrateShow 一定传 box） */
+  
   if(typeof document==='undefined') return;
   const el=document.getElementById('tut-narr');
   if(el) bindNarrTap(el);
 }
-/* 常驻「跳过教程」：教程期间一直挂右上，单击即跳（免确认 —— 用户口径）。 */
+
 function tutSkipShow(on){
   if(typeof document==='undefined'||!document.body) return;
   let b=document.getElementById('tut-skip');
@@ -916,7 +712,7 @@ function tutSkipShow(on){
     b.style.display='';
   } else if(b){ b.style.display='none'; }
 }
-/* 插图过场：首启门禁落点。缺图 onerror 回落墨底，不阻塞流程（素材由用户提供）。 */
+
 function showTutIntro(){
   if(typeof document==='undefined'||!document.body){ startTutorial(); return; }
   let el=document.getElementById('tut-intro');
@@ -928,23 +724,20 @@ function showTutIntro(){
   img.src=assetURL('intro/tutorial.png', true);
   img.onerror=function(){ img.style.display='none'; };
   el.querySelector('.ti-go').onclick=function(){ if(typeof stopVoice==='function') stopVoice(); el.remove(); startTutorial(); };
-  /* 入塔前那段整屏旁白（tut_00）也配音 —— 这一段不在气泡播放器里，单独挂。 */
+  
   if(typeof playVoice==='function') playVoice('tut_00');
 }
-/* 设置页「重玩新手教程」—— 旧档不受教程影响（教程全程 saveRun 空转）。 */
+
 function tutReplayAsk(){ hideOverlay(); showTutIntro(); }
 function showUnknown(){
   const pool=UNKNOWN_EVENTS;
   const labels={well:'古井许愿', blackmarket:'鬼市黑商', temple:'无头古庙', ambush:'拦路恶鬼', forge:'废弃道观', empty:'荒坟', potion:'灵泉', remove:'净坛'};
-  /* v1.1.24 教程：未知关固定「灵泉」（脚本 tut_5b 灵液讲解跟着它走） */
+  
   const ev=(G.tutorial&&G.tutorial.on)?'potion':pool[Math.floor(rng()*pool.length)];
   SCENE='unknown'; saveRun();
-  /* v0.73.0：换事件房专用背景。**恢复不用单独写** —— 事件的每一个出口都会经过
-     goNext()（→ showMap → setBg(mapBgName())）或 startBattle()（→ setBg('act'+N)），
-     这两条本来就会把背景换回去；中途退到主菜单则由 showStartScreen 的 setBg('menu') 接管。
-     ⚠️ 兜底给 'map.jpg'：万一表里漏了某个事件的键，宁可铺地图背景，也别让背景卡在上一个场景。 */
+  
   setBg(EVT_BG[ev] || 'map.jpg');
-  setBGM('shop'); // v0.61.31：事件节点是非战斗场景，与商店/营地共用同一条轨
+  setBGM('shop'); 
   floatMsg('未知之地 · ' + (labels[ev]||''));
   doUnknown(ev);
 }
@@ -962,25 +755,16 @@ function doUnknown(ev){
 function unknownRemove(){
   if(G.deck.length<=1){ unknownEmpty(); return; }
   const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" data-fi="${i}" onclick="askUnknownRemove(${i})">${cardBody(c)}</div>`).join('');
-  /* v1.1.x（用户口径「净坛布局：直接复用锻造的卡片尺寸与列数、整行铺满」）——
-     净坛是**单张卡**格（无「当前 ▸ 升级后」对照），所以复用 forge/pile 共用那条
-     满屏宽 grid（`#overlay.pile-scene` 就是「单张卡 = 132px 单元格」的那一半），
-     而不是再传 forge-scene：那条被 verify_dist 钉着「恰好两处调用」（道观 / 篝火）。 */
+  
   showOverlay(`<h2>净 坛</h2><p>一座祭坛，香火缭绕。你可以焚掉一张牌，净化牌组。</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="hideOverlay(); goNext();">离开</button>`, undefined, 'pile-scene');
 }
-/* v1.1.19（用户报障「锻造界面手速快，可以在回到地图前连续锻造多张牌」）：同一时间只允许一张牌
-   处于「演出中」。锻造（forge）与焚符净坛（pile）都是「火焰动画播完才置 up / 移除并推进」，
-   动画窗内（锻造 650+470ms、净坛 800+370ms）其它牌的 onclick 原本仍然有效 ⇒ 手速快就能连锻多张。
-   修法：一枚**同步一次性锁** —— 进入时置位，演出结束（cardFxAnim 的 done）复位；同一张牌自身的
-   前置校验（已升级 / 不可升级 / 尸王不可删）都在置锁**之前**返回，所以不占锁、不改变既有行为。
-   无 DOM / 流畅模式时 cardFxAnim 同步收尾 ⇒ 锁同帧复位，冒烟与无头环境的行为逐字节不变。 */
+/* 同一时间只允许一张牌在演出中（同步一次性锁），防手速连锻多张 */
 let CARD_ACT_BUSY=false;
 function doUnknownRemove(i){
-  if(CARD_ACT_BUSY) return;                       // 演出期不接第二次（见上方 CARD_ACT_BUSY 注释）
+  if(CARD_ACT_BUSY) return;                       
   const c=G.deck[i];
   if(c && c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
-  /* v1.1.x（用户口径）：火焰从左下角烧到右上角、化为灰烬，动画走完才真正从牌组移除并推进。
-     无 DOM / 流畅模式 ⇒ 同步收尾。 */
+  
   let el=null; try{ el=document.querySelector('#overlay.pile-scene .reward-cards [data-fi="'+i+'"]'); }catch(e){}
   CARD_ACT_BUSY=true;
   cardFxAnim(el, 'pile', ()=>{
@@ -991,14 +775,10 @@ function doUnknownRemove(i){
 }
 function unknownPotion(){
   const p=randomPotion(); gainPotion(p);
-  if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('unknownPotion'); }catch(e){} }   // v1.1.24 教程：灵液讲解
+  if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('unknownPotion'); }catch(e){} }   
   showOverlay(`<h2>灵 泉</h2><p>一泓清泉自石缝渗出，隐隐有灵光。<br>你取一瓢饮下，得了一瓶【${p.name}】。</p><div class="reward-cards"><div class="relic r-blue">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div></div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
-/* v0.68.1：古井许愿**先问后扣**（用户报「他要你八点生命换一个遗物，你又不想要换，
-   但没有设置取消或者路过的选项，让玩家无可奈何」）。
-   ⚠️ 这不违反 v0.61.41 的「未知关卡不要三选一」—— 那条说的是**不要让玩家挑事件**，
-   随机抽事件这件事原样保留；改的是抽到之后玩家对**代价**有没有说「不」的权利。
-   同类一并补：鬼市黑商（强塞一张牌，牌组里多一张废牌同样是代价）。 */
+
 function unknownWell(){
   showOverlay(`<h2>古井许愿</h2><p>你俯身探井，井底有微光浮动。<br>井灵低语：留下 <b style="color:var(--red)">8 点生命</b>，便赐你一件遗物。</p>
     <button class="btn" onclick="doWellOffer()">献祭 8 点生命</button>
@@ -1008,7 +788,7 @@ function doWellOffer(){
   G.hp=Math.max(1,G.hp-8); sfx('hurt'); log('古井许愿：以 8 点生命为代价，换取一件遗物');
   const relic=weightedRelic();
   grantRelic(relic);
-  sfx(relicSfxFor(relic)); log(`获得遗物【${relic.name}】`);   // v0.61.32：铃/幡·符/笔/剑·镜/录 三类分化
+  sfx(relicSfxFor(relic)); log(`获得遗物【${relic.name}】`);   
   showOverlay(`<h2>古井许愿</h2><p>井水翻涌，一件旧物浮上水面：</p>
     <div class="reward-cards"><div class="relic ${RCOLOR[relic.rarity]}">${relicIcon(relic)}<div class="cname">${relic.name}</div><div class="cdesc">${relic.desc}</div><div class="ctype">遗物</div></div></div>
     <button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
@@ -1025,11 +805,10 @@ function doBlackMarketTake(id){
   showOverlay(`<h2>鬼市黑商</h2><p>黑商把牌按进你掌心，转身没入人群。</p><div class="reward-cards"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div><button class="btn" onclick="hideOverlay(); goNext();">继续</button>`);
 }
 function unknownTemple(){
-  // 无头古庙：随机赐福（恢复生命 / 最大生命 / 金币 / 卡牌）
+  
   const roll=Math.floor(rng()*4);
   let msg='';
-  /* ⚠️ 回血一律走 heal() —— 它内部已含 playFx('heal','player') + sfx('heal') + 飘字，
-     用户定稿要求「每次触发的回血效果都要触发特效」（含遗物类回血）。此处不再手写 sfx/直接改 G.hp。 */
+  /* 回血一律走 heal()，它自带特效/音效/飘字 */
   if(roll===0){ heal(15); msg='恢复 15 点生命'; }
   else if(roll===1){ G.maxHp+=5; heal(5); msg='最大生命 +5（并恢复 5 点生命）'; }
   else if(roll===2){ G.gold+=20; msg='获得 20 金币'; sfx('gold'); }
@@ -1052,25 +831,23 @@ function unknownEmpty(){
   showOverlay(`<h2>空 坟</h2><p>一座荒坟，墓碑字迹已模糊。<br>什么也没有发生。</p><button class="btn" onclick="hideOverlay(); goNext();">继续前进</button>`);
 }
 
-/* ===================== 奖励与篝火 ===================== */
+/* 奖励与篝火 */
 function weightedCard(){
-  /* duanren_leifu / yinbing 与 shi_wang 同理：**只能由遗物/卡牌自身生成，不进任何奖励池**，
-     否则玩家会在三选一里白嫖到断刃/引魂灯的专属卡。 */
-  /* v1.0.15：门禁过滤（紫/金卡需里程碑；白/蓝恒开）—— 这是三选一/商店/黑商/古庙等
-     所有「卡牌奖励池」的**唯一**出口。兜底：门禁把池子筛空时退回「只过滤专属卡」的旧口径，绝不留空池。 */
+  /* 断刃雷符/引魂灯等专属卡只能由遗物/卡牌自身生成，不进奖励池 */
+  /* 卡牌奖励池的唯一出口：门禁筛空时退回只过滤专属卡，绝不留空池 */
   const _baseOK=c=> (!c.hero || c.hero===G.hero) && (!c.mile || mileClaimed(c.mile)) && c.id!=='shi_wang' && c.id!=='duanren_leifu' && c.id!=='yinbing' && (!c.needs || deckHasMechanic(c.needs));
   let eligible=CARDS.filter(c=> _baseOK(c) && mileOn('card',c));
   if(!eligible.length) eligible=CARDS.filter(_baseOK);
   const poolAll=eligible.length? eligible : CARDS;
   const tier=G.rewardTier||'normal';
 
-  // 获取当前角色专属的卡牌池（根据角色流派增加相应卡牌的出现概率）
+  
   const heroSpecificPool = getHeroSpecificCardPool(poolAll, tier);
 
   for(let attempt=0; attempt<6; attempt++){
     const rarity=rollCardRarity(tier);
 
-    // 优先从角色专属池中筛选对应稀有度的卡牌
+    
     const pool=heroSpecificPool.filter(c=>c.rarity===rarity);
     if(pool.length) {
       const card = cardById(pool[Math.floor(rng()*pool.length)].id);
@@ -1078,41 +855,36 @@ function weightedCard(){
     }
   }
 
-  // 如果角色专属池中没有合适的卡牌，则从全池中选择
+  
   const fallbackPool=poolAll.filter(c=>c.rarity===rollCardRarity(tier));
   if(fallbackPool.length) {
     return cardById(fallbackPool[Math.floor(rng()*fallbackPool.length)].id);
   }
 
-  // 如果6次尝试都没有找到合适稀有度的卡牌，使用备选方案
+  
   return cardById(poolAll[Math.floor(rng()*poolAll.length)].id);
 }
 
-/**
- * 【角色专属系统】获取特定角色的卡牌池（根据角色流派增加相应卡牌的出现概率）
- * @param {Array} originalPool - 原始卡牌池
- * @param {string} tier - 奖励类型 ('normal', 'elite', 'boss', 'shop', 'starter')
- * @returns {Array} 考虑角色特性的卡牌池（某些卡牌会重复以增加出现概率）
- */
+
 function getHeroSpecificCardPool(originalPool, tier = 'normal') {
-  if (!G.hero) return originalPool; // 如果没有角色设定，返回原池
+  if (!G.hero) return originalPool; 
 
   let enhancedPool = [...originalPool];
 
-  // 根据不同角色添加其流派相关的卡牌副本以提高出现概率
+  
   switch(G.hero) {
-    case 'tianshi': // 符箓天师 - 诅咒流
-      // 增加诅咒相关卡牌的权重
-      const tianshiCards = ['zhouyin', 'leifu', 'jingang', 'fodu']; // 诅咒/防御相关
+    case 'tianshi': 
+      
+      const tianshiCards = ['zhouyin', 'leifu', 'jingang', 'fodu']; 
       for(const cardId of tianshiCards) {
         const card = originalPool.find(c => c.id === cardId);
         if(card) {
-          // 根据奖励类型决定增加多少副本
-          let copiesToAdd = 2; // 默认增加2个副本（使出现率×3）
+          
+          let copiesToAdd = 2; 
 
-          // 商店中略微降低角色卡牌权重，保持多样性
+          
           if(tier === 'shop') {
-            copiesToAdd = 1; // 商店中只增加1个副本（使出现率×2）
+            copiesToAdd = 1; 
           }
 
           for(let i = 0; i < copiesToAdd; i++) {
@@ -1122,9 +894,9 @@ function getHeroSpecificCardPool(originalPool, tier = 'normal') {
       }
       break;
 
-    case 'ganshiren': // 茅山赶尸人 - 召唤流
-      // 增加通用基础卡牌，因为他的特色在于玩法而非特定卡牌
-      const ganshirenCards = ['leifu', 'jingang', 'fodu', 'juling']; // 通用强力卡
+    case 'ganshiren': 
+      
+      const ganshirenCards = ['leifu', 'jingang', 'fodu', 'juling']; 
       for(const cardId of ganshirenCards) {
         const card = originalPool.find(c => c.id === cardId);
         if(card) {
@@ -1140,9 +912,9 @@ function getHeroSpecificCardPool(originalPool, tier = 'normal') {
       }
       break;
 
-    case 'wuseng': // 苦行武僧 - 格挡流
-      // 增加格挡和防御相关卡牌的权重
-      const wusengCards = ['tiebushan', 'jingji', 'fodu', 'jingang', 'jinguang']; // 格挡/防御相关
+    case 'wuseng': 
+      
+      const wusengCards = ['tiebushan', 'jingji', 'fodu', 'jingang', 'jinguang']; 
       for(const cardId of wusengCards) {
         const card = originalPool.find(c => c.id === cardId);
         if(card) {
@@ -1158,9 +930,9 @@ function getHeroSpecificCardPool(originalPool, tier = 'normal') {
       }
       break;
 
-    case 'yincha': // 血祭阴差 - 卖血流
-      // 增加卖血和攻击相关卡牌的权重
-      const yinchaCards = ['sheshen', 'xueqi', 'fodu', 'leifu', 'ranxue']; // 卖血/攻击相关
+    case 'yincha': 
+      
+      const yinchaCards = ['sheshen', 'xueqi', 'fodu', 'leifu', 'ranxue']; 
       for(const cardId of yinchaCards) {
         const card = originalPool.find(c => c.id === cardId);
         if(card) {
@@ -1179,10 +951,7 @@ function getHeroSpecificCardPool(originalPool, tier = 'normal') {
 
   return enhancedPool;
 }
-/* ===================== 掉落浮层（v1.1.8） =====================
-   用户口径：战利品掉落要「边浮边放大在屏幕中央」，**不要**再跳一块带纯色底板的翻牌面板 ——
-   背景就是战场本身，只在中间放三张牌、右下角放牌堆、底部放一枚「无视」。
-   #dropUI 与 #overlay 并列挂在 body 下（见 原型.html），背景透明、不吃面板样式。 */
+/* 掉落浮层 */
 function dropUI(html){
   try{
     let el=document.getElementById('dropUI');
@@ -1200,8 +969,7 @@ function dropUIHide(){
   try{ const el=document.getElementById('dropUI'); if(!el) return;
     if(el.classList) el.classList.add('hidden'); el.innerHTML=''; }catch(e){}
 }
-/* 把掉落浮层里的「牌堆」对齐到战斗右下角**真实抽牌堆**上（用户口径「盖住抽牌堆即可」）。
-   量不到就退回 CSS 默认的右下角位。 */
+
 function alignRewardPile(){
   try{
     const pile=document.getElementById('rewardPile'); if(!pile || !pile.style) return;
@@ -1215,27 +983,17 @@ function alignRewardPile(){
     pile.style.transform='translate(-50%,-50%)';
   }catch(e){}
 }
-/* ===================== 战局外常驻 HUD（牌堆 / 锦囊）（v1.1.8） =====================
-   用户口径：战斗之外的每个场景（地图 / 商店 / 营地 / 事件房 / 锻造 …）都要常驻「牌堆」与
-   「锦囊」两个图标；一有卡牌 / 遗物 / 灵汁收获，图标就从来源飞过去。
-   #outHud 是静态 HTML（见 原型.html），z-index 高于 #overlay ⇒ 商店面板上照样看得见。 */
+/* 战局外常驻 HUD */
 function outHudSync(){
   try{
     const hud=document.getElementById('outHud'); if(!hud || !hud.style) return;
-    /* v1.1.16（用户报障「有存档时选角界面左下/右下露出锦囊与牌库图标」）：
-       选角屏也挂在 #overlay 上（scene='hero-scene'），而它**不改 SCENE** ⇒ 有存档时
-       SCENE 还停在旧场景（map/camp…），只按 SCENE 判显隐必然漏 ⇒ 显式排除 hero-scene。 */
+    /* 选角屏不改 SCENE，判显隐必须显式排除 hero-scene */
     const ov=document.getElementById('overlay');
     const heroOn = !!(ov && ov.classList && ov.classList.contains('hero-scene'));
     const show = (typeof G!=='undefined') && !!G && SCENE!=='menu' && SCENE!=='battle' && !heroOn;
     hud.style.display = show ? 'flex' : 'none';
     if(!show) return;
-    /* v1.1.20r3（用户报障「界面的锦囊 UI 和牌堆 UI 还是不用我给你的」）根因：
-       `iconTag()` 的探图是**异步**的 —— 首次调它时 `ICON_PROBE[rel]` 还没落定，必然返回回落串；
-       图 onload 之后只调 iconPokeRender() → render()，**不会**重建 out-HUD。
-       旧版把这两句锁在 `if(!OUT_HUD_BUILT)` 里（false→true 只走一次）⇒ 那次写进去的永远是回落串，
-       用户交付的 素材/ui/menu/jinnang-nobg.png、素材/ui/deck_back.png 一辈子升不上来。
-       改成与 syncJinnangIcons() 同一套口径：**每次同步都比对最新结果，变了才写**（无图时是恒等写入，无开销）。 */
+    /* HUD 图标每帧比对最新结果、变了才写；一次性闩锁会让回落串永远升不上来 */
     const pp=document.getElementById('outPouch'), pl=document.getElementById('outPile');
     const pi=(pp && pp.querySelector) ? pp.querySelector('.out-ico') : null;
     if(pi){ const h=iconTag('ui/menu/jinnang-nobg.png','锦囊'); if(pi.innerHTML!==h) pi.innerHTML=h; }
@@ -1244,21 +1002,18 @@ function outHudSync(){
     const pn=document.getElementById('outPileN'); if(pn) pn.textContent=(G.deck||[]).length;
   }catch(e){}
 }
-/* v1.1.20r3（用户口径「emoji 全删了不就行啦吗」）：这两枚 HUD 图标的回落串由 emoji 🧧/🂠 改成
-   文字「锦囊」「牌堆」—— 与顶栏 syncJinnangIcons 的文字回落同口径，图缺时是「看得懂的文字」
-   而不是一个格子占位/福字方块；同时开局就**预热探测**（iconTag 的探图是异步的，等玩家进地图
-   才第一次调 outHudSync 的话，会先显示回落串再换成图）。与 numPrewarm（）同款做法。 */
+
 function hudIconPrewarm(){
   try{ iconAvail('ui/menu/jinnang-nobg.png'); iconAvail('ui/deck_back.png'); }catch(e){}
 }
-/* 战局外场景的「牌堆」落点（对照 pouchButtonEl）。 */
+
 function pileButtonEl(){
   try{
     if(SCENE!=='battle'){ const o=document.getElementById('outPile'); if(o) return o; }
     return document.getElementById('pile-draw') || document.getElementById('outPile') || null;
   }catch(e){ return null; }
 }
-/* 小图标从来源位置飞向牌堆（战局外买卡 / 得牌时）。无 DOM / 流畅模式 ⇒ 同步收尾。 */
+
 function flyToPile(srcEl, iconHTML, done){
   const finish=()=>{ if(done) done(); };
   try{
@@ -1283,10 +1038,9 @@ function flyToPile(srcEl, iconHTML, done){
   }catch(e){ finish(); }
 }
 function showReward(){
-  /* v0.74.0：战斗胜利三选一的整屏背景。出口 pickReward/skipReward → afterReward()
-     → goNext() → showMap() → setBg(mapBgName())，本来就会换回去，不用单独恢复。 */
+  
   setBg('victory_reward.jpg');
-  // 生成三张奖励卡牌（不在此处更新补偿值）
+  
   const picks=[];
   while(picks.length<3){
     const c=weightedCard();
@@ -1294,34 +1048,23 @@ function showReward(){
   }
   G.rewardPicks=picks;
 
-  // 检查这一轮奖励中是否有金卡
+  
   const hasGoldInReward = picks.some(card => card.rarity === 'gold');
 
-  // 存储补偿值更新信息供后续使用
+  
   G.lastRewardHadGold = hasGoldInReward;
 
   const _TYPE_ORD={attack:0,defense:1,skill:2,spirit:3,junk:4};
-  /* v1.0.14（P3-15）：三选一改「翻牌」——卡背自下升起（加速→急停），点一下翻面看内容，再点一次选走。
-     · 排序与取牌语义不变：pickReward(i) 仍按**原始下标**取牌（i 同时写进 data-ri 与 onclick 闭包）。
-     · `.flip-cards` 让翻面与选牌**永远生效**；只有「升起」动画要 fx() 为真才挂 `.reward-flip`
-       ⇒ 流畅模式只是不播动画，翻开 / 选走的交互一字不少。 */
+  
   const cards=picks.map((c,i)=>({c,i})).sort((a,b)=>(_TYPE_ORD[a.c.type]??9)-(_TYPE_ORD[b.c.type]??9)||a.i-b.i)
     .map(({c,i},k)=>`<div class="rcard" data-ri="${i}" style="--rd:${k}" onclick="flipReward(this,${i})"><div class="rcard-inner"><div class="rcard-face rcard-front"><div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div></div><div class="rcard-face rcard-back"></div></div></div>`).join('');
   const cls='reward-cards flip-cards'+(fx()?' reward-flip':'');
-  /* v1.1.x（用户口径）：
-     · 标题改成「请选择你中意的手牌」；
-     · 「跳过」按键改叫「无视」（语义不变，只是换个说法）；
-     · 右下角加一枚**抽牌堆 UI**，显示玩家**主牌库**（G.deck）当前张数 ——
-       选中一张后 `pickReward` 会**即时**把数字 +1（见下）。 */
+  
   const pileUI=`<div class="reward-pile" id="rewardPile"><div class="rp-stack"><div class="rp-card"></div><div class="rp-card"></div><div class="rp-card"></div></div><div class="rp-meta"><span class="rp-label">牌库</span><span class="rp-n" id="rewardPileN">${(G.deck||[]).length}</span></div></div>`;
-  /* v1.1.8（用户口径）：不再跳「带纯色底板的翻牌面板」，直接把三张牌浮在战场中央原地翻开。
-     出口 pickReward/skipReward 走 dropUIHide()，不动 #overlay。 */
+  
   dropUI(`<div class="drop-head"><h2>请选择你中意的手牌</h2><p>点击卡牌翻开查看，再点一次加入牌组</p></div><div class="${cls}">${cards}</div>${pileUI}<button class="btn ghost drop-skip" onclick="skipReward()">无视</button>`);
 }
-/* v1.1.x：击杀每关最后一个敌人的**掉落动画**（用户口径：三张牌背小图标落在最后击杀的敌人身上，
-   再浮向屏幕正中，化为正常的翻牌界面）—— 动画走完再亮出 showReward()。
-   ⚠️ 无 DOM / 流畅模式 / 战斗界面不在场时**直接同步** showReward()：冒烟宿主没有 #enemy-panel，
-      走同步分支 ⇒ winFight 的断言（gold / exhausted / battleResult）不受影响。 */
+
 function playDropSequence(){
   let host=null; try{ host=document.getElementById('enemy-panel'); }catch(e){}
   const canAnim = (typeof fx==='function' && fx()) && host && document.createElement && document.body && window.requestAnimationFrame;
@@ -1352,7 +1095,7 @@ function playDropSequence(){
     setTimeout(()=>{ try{ layer.remove(); }catch(e){} showReward(); }, 950);
   }catch(e){ try{ const l=document.querySelector('.drop-layer'); if(l) l.remove(); }catch(_){} showReward(); }
 }
-/* 最后击杀的那只敌人（G.enemies 末位）在场上的锚点；量不到就交给上层兜底屏幕中心。 */
+
 function lastKillRect(){
   try{
     const arr=(G&&G.enemies)||[]; let el=null;
@@ -1363,14 +1106,13 @@ function lastKillRect(){
     return { cx:r.left+r.width/2, cy:r.top+r.height*0.62 };
   }catch(e){ return null; }
 }
-/* 选中的那张牌**飞回右下角牌堆 UI**（用户口径：「飞回牌堆的牌肯定是选中的牌」）。
-   量不到元素 / 无线框 / 流畅模式 ⇒ 同步回调，逻辑不受动画影响。 */
+
 function flyCardToPile(el, done){
   const finish=()=>{ if(done) done(); };
   try{
     const pile=document.getElementById('rewardPile');
     if(!el || !el.getBoundingClientRect || !pile || !document.body || !document.createElement || (typeof fx==='function' && !fx())) return finish();
-    /* el 是 .rcard（翻转容器，宽 = 网格列宽 304px）；真正要飞的是里面那张 132×200 的 .card。 */
+    
     const card=(el.querySelector && el.querySelector('.card')) || el;
     const a=card.getBoundingClientRect ? card.getBoundingClientRect() : null;
     if(!a || (!a.width && !a.height)) return finish();
@@ -1389,43 +1131,38 @@ function flyCardToPile(el, done){
     setTimeout(()=>{ try{ fly.remove(); }catch(e){} finish(); }, 560);
   }catch(e){ finish(); }
 }
-/* v1.0.14（P3-15）：翻牌交互 —— 第一次点=翻开看内容（不改动 G.rewardPicks），第二次点=选中带进牌组。
-   v1.0.17：翻开走**专用音** ui_flip（素材/sfx/ui_flip.mp3），与选走的 ui_reward 分开。 */
+
 function flipReward(el, i){
   if(!el || !el.classList) return;
   if(!el.classList.contains('revealed')){ el.classList.add('revealed'); sfx('ui_flip'); return; }
   pickReward(i);
 }
 function pickReward(i){
-  /* v1.1.9：与 pickRelic 同口径 —— 推进必须无条件发生（说明见 pickRelic）。
-     原实现里 `sfx / G.deck.push / updateGoldCompensation / 元素查询` 任一同步抛异常，
-     `flyCardToPile(...)` 就注册不上，`dropUIHide()+afterReward()` 永不执行 ⇒ 停在抽牌面板。
-     这里同样抽成幂等的 go()，异常路径兜底。 */
+  /* 推进必须无条件发生：抽成幂等 go() 兜异常，否则会停在抽牌面板 */
   let advanced=false;
   const go=()=>{ if(advanced) return; advanced=true; dropUIHide(); afterReward(); };
   let el=null;
   try{
-    sfx('ui_reward');   // v0.61.25：三选一翻牌音
+    sfx('ui_reward');   
     const c=G.rewardPicks[i];
     G.deck.push(c);
     log(`获得卡牌【${c.name}】`);
-    /* v1.1.x（用户口径）：右下角牌堆 UI 显示**玩家主牌库剩余张数**，加入所选牌后**即时** +1。 */
+    
     try{ const n=document.getElementById('rewardPileN'); if(n) n.textContent=G.deck.length; }catch(e){}
 
-    // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
+    
     const tier = G.rewardTier || 'normal';
     if(tier !== 'boss' && G.hasOwnProperty('lastRewardHadGold')) {
       updateGoldCompensation(G.lastRewardHadGold);
     }
 
-    /* 选中的那张牌**飞回右下角牌堆 UI**，动画走完再关面板、进下一环（用户口径：飞回去的是选中的牌）。
-       ⚠️ 无元素 / 无线框 / 流畅模式时 flyCardToPile **同步**回调 ⇒ 冒烟打桩不会漏进真实 goNext。 */
+    
     try{ el=document.querySelector('.reward-cards .rcard[data-ri="'+i+'"]'); }catch(e){}
   }catch(e){}
   try{ flyCardToPile(el, go); }catch(e){ go(); }
 }
 function skipReward(){
-  // 根据本轮奖励是否有金卡来更新补偿值（非Boss战才更新）
+  
   const tier = G.rewardTier || 'normal';
   if(tier !== 'boss' && G.hasOwnProperty('lastRewardHadGold')) {
     updateGoldCompensation(G.lastRewardHadGold);
@@ -1435,15 +1172,8 @@ function skipReward(){
   afterReward();
 }
 function afterReward(){
-  /* v1.1.x（用户口径）：撤掉「关卡结算」面板后，抽完牌的去处分三种 ——
-       · 幕主（前 1/2 幕 boss）：**自动进锻造**（配「点击关卡图标」音效 ui_map）；
-         战利品（遗物 + 灵汁）已在 winFight 就地发放、图标已飞进锦囊。
-       · 精英：额外来一件遗物（三选一，选中那件飞进锦囊）。
-       · 普通关：直接进地图。
-     ⚠️ 最后一幕最后一关 boss 早在 winFight 就 advanceAct() 走了，压根不到这儿。 */
-  /* v1.1.25r（用户口径）：**教程**最后一关（山门·僵王）打完 ⇒ 不再进锻造（「都结束了锻造没有实际意义」），
-     改成「本来该在新玩家登录时发」的【试玩符纸】奖励界面（见 showTutTrialReward）。
-     已领过（trialGiftV1）⇒ 直接出师，不再重看奖励页 —— 防止到设置里「重玩新手教程」反复刷符纸。 */
+  
+  
   if(G.battleResult && G.battleResult.isBoss){
     G.pendingRelic=false; sfx('ui_map');
     if(G.tutorial && G.tutorial.on){
@@ -1456,18 +1186,15 @@ function afterReward(){
   goNext();
 }
 
-/* ===================== 掉落 / 飞行 / 锦囊（v1.1.x） =====================
-   用户口径：「以后获得遗物和灵汁都要加入这种动画，回到锦囊」——「获得瞬间从来源位置飞向锦囊」。
-   手机端与电脑端锦囊位置**不同**（战斗内 #jinnangBtn 在题头竖栏 / 战局外 #outPouch 在屏幕左下），
-   一律**运行时量取**。 */
-/* 锦囊按钮：战斗顶栏是 #jinnangBtn，战局外是常驻 HUD 的 #outPouch。 */
+/* 掉落 / 飞行 / 锦囊 */
+/* 锦囊按钮：战斗内 #jinnangBtn，战局外 #outPouch */
 function pouchButtonEl(){
   try{
     if(SCENE!=='battle'){ const o=document.getElementById('outPouch'); if(o) return o; }
     return document.getElementById('jinnangBtn') || document.getElementById('outPouch') || null;
   }catch(e){ return null; }
 }
-/* 掉落来源元素：战斗里取**最后击杀的那只敌人**（G.enemies 末位），没有就 null（回落屏幕中心）。 */
+
 function dropSourceEl(){
   try{
     const arr=(G&&G.enemies)||[];
@@ -1475,7 +1202,7 @@ function dropSourceEl(){
   }catch(e){}
   return null;
 }
-/* 锦囊闪一下金光（获遗物 / 灵汁时）。 */
+
 function pouchFlash(){
   try{
     const b=pouchButtonEl(); if(!b || !b.classList) return;
@@ -1483,8 +1210,7 @@ function pouchFlash(){
     setTimeout(()=>{ try{ b.classList.remove('pouch-flash'); }catch(e){} }, 760);
   }catch(e){}
 }
-/* 小图标从**来源位置**飞向锦囊按钮中心，到位后锦囊闪金光。
-   srcEl 空 ⇒ 回落屏幕中心。无 DOM / 量不到按钮 / 流畅模式 ⇒ **同步**闪金光并收尾。 */
+
 function flyToPouch(srcEl, iconHTML, done){
   const finish=()=>{ if(done) done(); };
   try{
@@ -1508,17 +1234,16 @@ function flyToPouch(srcEl, iconHTML, done){
     setTimeout(()=>{ try{ fly.remove(); }catch(e){} pouchFlash(); finish(); }, 560);
   }catch(e){ pouchFlash(); finish(); }
 }
-/* 灵汁获取的**唯一入口**：入包 + 图标从来源位置飞向锦囊。srcEl 缺省取「最后击杀的敌人」。 */
+
 function gainPotion(p, srcEl){
   if(!p) return;
   G.potions.push(p);
   flyToPouch(srcEl || dropSourceEl(), potionIcon(p));
 }
 function weightedRelic(){
-  /* 专属遗物过滤：带 hero 的只进该英雄池；通用（无 hero）四人共用。
-     本函数是 Boss 战利品（40_flow.js）与古井许愿（doWellOffer）的入口 ⇒ 只改这一处即可覆盖两处。 */
-  /* v1.0.15：门禁过滤（紫/金遗物需里程碑；白/蓝恒开）。兜底：门禁筛空则退回「专属过滤」的旧口径。 */
-  /* v1.0.26：带 mile 的专属遗物未领取前**连兜底池都不进**（避免门禁筛空后从兜底白嫖）。 */
+  
+  
+  
   const _heroOK=r=>(!r.hero || r.hero===G.hero) && (!r.mile || mileClaimed(r.mile));
   let avail=RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id) && mileOn('relic',r));
   if(!avail.length) avail=RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id));
@@ -1531,9 +1256,9 @@ function weightedRelic(){
   return pool[Math.floor(rng()*pool.length)];
 }
 function showRelicReward(){
-  /* 同上：精英三选一也要过专属过滤 */
-  /* v1.0.15：同上过门禁；门禁筛空则退回旧口径，两者都空才跳过。 */
-  /* v1.0.26：带 mile 的专属遗物未领取前**连兜底池都不进**（避免门禁筛空后从兜底白嫖）。 */
+  
+  
+  
   const _heroOK=r=>(!r.hero || r.hero===G.hero) && (!r.mile || mileClaimed(r.mile));
   let unowned = RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id) && mileOn('relic',r));
   if(!unowned.length) unowned = RELICS.filter(r=>_heroOK(r) && !hasRelic(r.id));
@@ -1541,23 +1266,17 @@ function showRelicReward(){
   const picks = shuffle([...unowned]).slice(0,3);
   G.relicPicks=picks;
   const html=picks.map((r,i)=>`<div class="relic ${RCOLOR[r.rarity]}" data-ri="${i}" onclick="pickRelic(${i})">${relicIcon(r)}<div class="cname" data-tip="relic:${r.id}">${r.name}</div><div class="cdesc">${r.desc}</div><div class="ctype">遗物 · ${RNAME[r.rarity]}</div></div>`).join('');
-  /* v1.1.8（用户口径）：精英关的遗物与卡牌同一套演出 —— 浮在战场中央选，选中的飞进锦囊。 */
+  
   dropUI(`<div class="drop-head"><h2>获得遗物 · 三选一</h2><p>遗物本局永久生效，点击获得</p></div><div class="reward-cards">${html}</div><button class="btn ghost drop-skip" onclick="skipRelic()">跳过</button>`);
 }
-/* v0.61.32：遗物音按法器类别分化（同古井许愿那一处）
-   v1.1.x：选中那件先**飞进锦囊**（用户口径「击杀后遗物会飘到锦囊」），动画走完再关面板推进。 */
+
 function pickRelic(i){
   const r=G.relicPicks[i];
-  /* v1.1.9（用户报障「精英关选完遗物后卡在战场、要手动点结束回合才进地图」）：
-     **推进必须无条件发生**。沿用 `sfx/log/元素查询/grantRelic` 任一同步抛异常，grantRelic 就调不到，
-     `dropUIHide()+goNext()` 永不执行 ⇒ 停在遗物面板上（面板透明，背后就是战场）。
-     这里把「关面板 + 进地图」抽成幂等的 go()，用 advanced 自守：
-       · 正常路径：grantRelic 的异步回调 → go()（飞锦囊动画照旧，不受影响）；
-       · 异常路径：catch 里兜底 go() —— 最坏只是少了飞行动画，但玩家一定能进地图。 */
+  /* 推进必须无条件发生，异常时宁可丢动画也要进地图 */
   let advanced=false;
   const go=()=>{ if(advanced) return; advanced=true; dropUIHide(); goNext(); };
   try{ sfx(relicSfxFor(r)); log(`获得遗物【${r.name}】`); }catch(e){}
-  /* 选中那件从三选一面板**飞进锦囊**（grantRelic 内部飞 + 锦囊闪金光），动画走完再关面板推进。 */
+  
   let el=null; try{ el=document.querySelector('.reward-cards .relic[data-ri="'+i+'"] .ricon'); }catch(e){}
   try{ grantRelic(r, el, go); }catch(e){ go(); }
 }
@@ -1566,13 +1285,11 @@ function skipRelic(){ dropUIHide(); goNext(); }
 function showCampfire(){
   G.campRemoved=false; G.campActed=false;
   SCENE='camp'; saveRun();
-  setBGM('shop'); // v0.61.31：营地为非战斗场景，与商店共用同一条轨
+  setBGM('shop'); 
   renderCampfire();
 }
 function renderCampfire(){
-  /* v0.74.0：整屏营地背景。**必须写在 render 里而不是 showCampfire 里** ——
-     续档那条路径（js/40_flow.js 的 d.scene==='camp' 分支）直呼 renderCampfire()，
-     不经过 showCampfire() ⇒ 写在入口函数里的话，从主菜单续档落进营地会铺着上一张背景。 */
+  /* 营地整屏背景写在 render 里：续档直呼 renderCampfire 不走入口 */
   setBg('campfire.jpg');
   if(G.deck.length<=1 && !G.campRemoved){ G.campRemoved=true; }
   const removeBtn = G.campRemoved
@@ -1592,7 +1309,7 @@ function renderCampfire(){
 }
 function restAtCamp(){ heal(20); log('在篝火旁休息，恢复 20 生命'); G.campActed=true; saveRun(); renderCampfire(); }
 function showRestConfirm(){
-  /* v1.1.24 教程：篝火关先锻造（脚本 tut_4b），歇息讲解（tut_4c）在锻完之后 */
+  
   if(G.tutorial && G.tutorial.on && !G.campActed){ floatMsg('先听师父的话，锻造一道符'); return; }
   showOverlay(`<h2>休息 · 恢复 20 生命</h2><p>当前生命 ${G.hp}/${G.maxHp}。确定休息恢复 20 点生命吗？（与锻造二选一）</p>
     <button class="btn" onclick="restAtCamp()">确定 · 休息</button>
@@ -1600,17 +1317,14 @@ function showRestConfirm(){
 }
 function campRemoveCard(){
   if(G.deck.length<=1){ floatMsg('牌组只剩一张了'); return; }
-  /* v1.1.x（用户口径）：篝火删牌复用「净坛」的焚牌特效 —— 卡片必须带 data-fi 才能定位到元素做动画。 */
+  
   const cards=G.deck.map((c,i)=>`<div class="card has-frame ${RCOLOR[c.rarity]}" data-fi="${i}" onclick="doCampRemove(${i})">${cardBody(c)}</div>`).join('');
   showOverlay(`<h2>篝火 · 删牌</h2><p>选择一张牌从牌组移除（仅限一张，免费）</p><div class="reward-cards">${cards}</div><button class="btn ghost" onclick="renderCampfire()">返回</button>`);
 }
 function doCampRemove(i){
   const c=G.deck[i];
   if(c && c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
-  /* v1.1.x（用户口径）：「净坛的删牌特效也要用在篝火的删牌上面」 —— 与 doUnknownRemove 同一条
-     焚牌路径（火焰自左下烧至右上 → 化为灰烬），动画走完才真正从牌组移除并回篝火。
-     ⚠️ 这里不再额外 `sfx('card')`：音效统一由 cardFxAnim 出（与净坛一致，等用户给音效后接入）。
-     无 DOM / 流畅模式 ⇒ cardFxAnim 同步收尾（冒烟与无头环境照样推进）。 */
+  
   let el=null; try{ el=document.querySelector('.reward-cards [data-fi="'+i+'"]'); }catch(e){}
   cardFxAnim(el, 'pile', ()=>{
     const cc=G.deck.splice(i,1)[0]; log(`删除一张【${cc.name}】`);
@@ -1628,7 +1342,7 @@ function showForgePicker(from){
     : `<button class="btn ghost" onclick="G.forgeFrom=null; hideOverlay(); goNext();">继续前进</button>`;
   showOverlay(`<h2>锻造 · 点击一张牌升级</h2><p>左边是当前效果，右边是升级后的效果（整局有效）。${hint}</p><div class="reward-cards">${cards}</div>${back}`, undefined, 'forge-scene');
 }
-/* 该牌是否存在可升级的变化（升级前后文案一致、且无费用减免 => 不可升级） */
+
 function canUpgrade(c){
   try{
     if(String(c.t(false))!==String(c.t(true))) return true;
@@ -1637,38 +1351,33 @@ function canUpgrade(c){
   }catch(e){ return true; }
 }
 function forgeCard(i){
-  if(CARD_ACT_BUSY) return;                        // v1.1.19：演出期一次只允许锻一张（见 CARD_ACT_BUSY 注释）
+  if(CARD_ACT_BUSY) return;                        
   const c=G.deck[i];
-  /* v1.1.24 教程：篝火关锁定只能锻【雷符】（脚本 tut_4b 指定） */
+  
   if(G.tutorial && G.tutorial.on && G.tutorial.node===3 && !G.campActed && c.id!=='leifu'){ floatMsg('先听师父的话，拣那道【雷符】'); return; }
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   if(!canUpgrade(c)){ floatMsg('不可升级'); log(`【${c.name}】没有可升级的变化，无法锻造`); return; }
-  sfx('ui_levelup');   // v0.61.32：升级从蹭遗物音改成专属音（⚠️ 必须**同步**出声：冒烟 v0.61.32 钉着这一条）
-  /* v1.1.x（用户口径）：火焰覆盖 → 一阵风吹散 → 升级卡牌亮相；动画走完才真正置 up 并推进。
-     无 DOM / 流畅模式 ⇒ cardFxAnim 直接同步收尾（冒烟与无头环境照样推进）。 */
+  sfx('ui_levelup');   
+  
   let el=null; try{ el=document.querySelector('.reward-cards [data-fi="'+i+'"]'); }catch(e){}
   CARD_ACT_BUSY=true;
   cardFxAnim(el, 'forge', ()=>{
-    CARD_ACT_BUSY=false;                           // 演出结束 → 解锁（无 DOM 时同帧就走到这里）
+    CARD_ACT_BUSY=false;                           
     c.up=true; log(`锻造升级【${c.name}】`);
     if(G.forgeFrom==='camp'){
       G.campActed=true; G.forgeFrom=null; saveRun(); renderCampfire();
-      if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('forged'); }catch(e){} }   // v1.1.24 教程：锻完讲歇息/删符
+      if(G.tutorial && G.tutorial.on && typeof tutOn==='function'){ try{ tutOn('forged'); }catch(e){} }   
     }
     else { G.forgeFrom=null; hideOverlay(); goNext(); }
   });
 }
-/* —— v1.1.x：锻造 / 净坛 卡牌特效（用户口径） ——
-   锻造：卡牌被火焰覆盖 → 一阵风吹散 → 升级卡牌亮相。
-   净坛：火焰从左下角烧起 → 烧到右上角 → 最后化为灰烬。
-   无 DOM / 流畅模式 / 量不到元素 ⇒ **同步**收尾（推进逻辑不依赖动画）。 */
+
 function cardFxAnim(el, kind, done){
   const finish=()=>{ if(done) done(); };
   try{
     const canAnim = el && el.classList && document.body && (typeof fx==='function' && fx());
     if(!canAnim) return finish();
-    /* v1.1.x（用户交付音效）：锻造 / 焚牌 各一声，落在「特效起手」那一帧（与 CSS 动画对齐）。
-       `sfx` 按名探测 素材/sfx/<key>.mp3，文件缺失时静默回落合成音 ⇒ 不阻塞动画。 */
+    
     if(kind==='forge'){ try{ sfx('fx_forge'); }catch(e){} }
     else { try{ sfx('fx_burn'); }catch(e){} }
     if(kind==='forge'){
@@ -1687,22 +1396,22 @@ function cardFxAnim(el, kind, done){
   }catch(e){ finish(); }
 }
 
-/* ===================== 鬼市商店 ===================== */
+/* 鬼市商店 */
 function priceFor(c){ return {white:4, blue:8, purple:12, gold:12}[c.rarity] + (G.shopMarkup||0); }
 function removeCost(){ return 4 + 4*G.removeCount; }
 function showShop(){
   if(G.shopWares==null){ G.shopWares=[]; while(G.shopWares.length<6){ G.shopWares.push(weightedCard()); } G.shopPotions=[randomPotion(), randomPotion()]; }
   SCENE='shop'; saveRun();
-  setBGM('shop'); // v0.61.31
+  setBGM('shop'); 
   renderShop();
 }
 function renderShop(){
-  /* v0.74.0：整屏鬼市背景。理由同上 —— 续档的 d.scene==='shop' 分支直呼 renderShop()。 */
+  
   setBg('shop.jpg');
-  /* v1.1.24 教程：鬼市专属版 —— 固定三符 + 法宝货位，未买齐【斩妖剑】【招魂幡】不能走 */
+  
   if(G.tutorial && G.tutorial.on){ renderTutShop(); return; }
   const cards=G.shopWares.map((c,i)=>{ const p=priceFor(c); const ok=G.gold>=p; return `<div class="card has-frame ${RCOLOR[c.rarity]} ${ok?'':'disabled'}" data-ri="${i}" onclick="askBuyCard(${i})">${cardBody(c)}<div class="card-extra" style="color:${ok?'var(--gold)':'var(--red)'};font-weight:bold">${p} 金币${ok?'':' · 金币不足'}</div></div>`; }).join('') || '<p style="color:var(--dim)">货已售罄</p>';
-  /* 聚宝盆（蓝）：灵汁 7 折 —— 界面把**原价划掉**、新价加亮，让折扣「看得见」（用户定稿要求）。 */
+  
   const potions=(G.shopPotions||[]).map((p,i)=>{ const price=potionPrice(); const base=potionPriceBase(); const ok=G.gold>=price; const priceTxt=(price!==base)?`<s class="price-old">${base}</s> <b class="price-new">${price}</b>`:`${price}`; return `<div class="relic r-blue ${ok?'':'disabled'}" data-ri="${i}" onclick="askBuyPotion(${i})">${potionIcon(p)}<div class="cname">${p.name}</div><div class="cdesc">${p.desc}</div><div class="ctype" style="color:${ok?'var(--gold)':'var(--red)'}">${priceTxt} 金币</div></div>`; }).join('');
   showOverlay(`<h2>鬼 市</h2>${runStatusHTML()}<p>你带着 <b style="color:var(--gold)">${G.gold}</b> 金币。<br>买卡价格随购买递增，跨商店延续；灵汁每买一瓶更贵。</p>
     <div class="reward-cards">${cards}</div>
@@ -1712,9 +1421,7 @@ function renderShop(){
     <button class="btn ghost" onclick="hideOverlay(); showMap();">返回地图</button>
     <button class="btn" onclick="hideOverlay(); goNext();">继续前进</button>`);
 }
-/* ===================== v1.1.24 教程 · 鬼市专属版 =====================
-   固定三符（斩妖剑/火符/金刚符）+ 法宝货位（招魂幡 30 冥钱）；
-   未买齐【斩妖剑】+【招魂幡】前：删牌/继续前进都拦下（floatMsg「先听师父的话」）。 */
+/* 教程鬼市专属版 */
 function renderTutShop(){
   const N=TUT_NODES[G.tutorial.node];
   const F=G.tutorial.flags;
@@ -1745,11 +1452,7 @@ function tutBuyRelic(){
   if(typeof narrate==='function') narrate('tut_2e','tut_2f');
   renderShop();
 }
-/* ===================== v1.1.25r 教程 · 结尾奖励（试玩符纸） =====================
-   用户口径：「将新手教程的最后打完 boss 的锻造换成获得 3 张试玩符纸的奖励界面」；
-   「这个奖励就是之前新玩家登录送的，只是放到这里领取」「只能领取一次，避免玩家到设置中
-   重新体验教程卡 bug，不断刷这个试玩符纸」。⇒ 奖励图形沿用选角页的符纸风
-   （素材 ui/shiwanfuzhi.png），发放由 SAVE.trialGiftV1 守卫（与旧「首启赠送」同一旗标）。 */
+/* 教程结尾试玩符纸奖励 */
 function showTutTrialReward(){
   const n=TRIAL_GIFT_N;
   const cards=Array.from({length:n}).map(()=>`<div class="relic r-gold">${artImg('ui/shiwanfuzhi.png','','')}<div class="cname">试玩符纸</div><div class="cdesc">选角页对一名未解锁角色试玩一局</div><div class="ctype">符纸</div></div>`).join('');
@@ -1759,8 +1462,7 @@ function showTutTrialReward(){
     +`<div class="reward-cards">${cards}</div>`
     +`<button class="btn" onclick="claimTutTrial()">收下 · 正式入塔</button>`);
 }
-/* 只做「一次性发放」这件事（无 UI、无跳转）—— 供上面奖励界面与冒烟断言复用。
-   返回本次实发张数（已领过 ⇒ 0）。 */
+
 function grantTutTrialOnce(){
   if(!SAVE || SAVE.trialGiftV1) return 0;
   SAVE.trialTickets=trialTickets()+TRIAL_GIFT_N;
@@ -1768,51 +1470,50 @@ function grantTutTrialOnce(){
   persistSave();
   return TRIAL_GIFT_N;
 }
-/* 点「收下」：首次发 3 张（已领过则静默不发），然后推进到出师。 */
+
 function claimTutTrial(){
   const got=grantTutTrialOnce();
   if(got>0){ sfx('ui_reward'); floatMsg(`获得 ${got} 张【试玩符纸】 · 共 ${trialTickets()} 张`); log(`教程奖励：获得 ${got} 张试玩符纸`); }
   hideOverlay();
-  goNext();   // 教程局 ⇒ tutAdvance ⇒ 出师
+  goNext();   
 }
 function buyCard(i){
   const c=G.shopWares[i]; const p=priceFor(c);
   if(G.gold<p){ floatMsg(`金币不足（需 ${p}）`); log(`金币不足（需 ${p}）`); return; }
   G.gold-=p; G.deck.push(c); G.shopWares.splice(i,1); G.shopMarkup=(G.shopMarkup||0)+3; sfx('gold'); log(`购买【${c.name}】，商店剩余卡牌价格 +3`);
-  /* v1.1.24 教程：买到【斩妖剑】→ 讲解入袋 + 引向法宝货位 */
+  
   if(G.tutorial && G.tutorial.on && c.id==='zhanyaojian' && !G.tutorial.flags.swordBought){
     G.tutorial.flags.swordBought=true;
     if(typeof narrate==='function') narrate('tut_2c','tut_2d');
   }
 
-  // 购买商店卡牌后更新补偿值（商店属于shop类型）
+  
   updateGoldCompensation(c.rarity === 'gold');
 
-  /* v1.1.8（用户口径）：战局外买卡也要有「飞向牌堆」的收获动画（商店在战局外 ⇒ 落点 #outPile）。 */
+  
   let el=null; try{ el=document.querySelector('.reward-cards .card[data-ri="'+i+'"]'); }catch(e){}
-  /* v1.1.20r3（用户口径「emoji 全删」）：回落串由牌背 emoji 🂠 改文字「牌堆」—— 与战局外 HUD 两枚
-     图标同口径（图缺时显示的是看得懂的文字，不是一个随设备渲染成方块/彩色格的 emoji）。 */
+  
   flyToPile(el, iconTag('ui/card/back.png','牌堆'));
 
   saveRun(); renderShop();
 }
-/* 灵汁原价（未打折）。界面上要在聚宝盆在场时把它「划掉」再展示新价，所以必须留一个原价出口。 */
+
 function potionPriceBase(){ return 30 + 5*(G.potionBought||0); }
-/* 聚宝盆：商店灵汁打 7 折（向下取整，保底 1 金币）。buyPotion 走这里 ⇒ 只能按折后价扣钱。 */
+
 function potionPrice(){ const b=potionPriceBase(); return hasRelic('jubaopen') ? Math.max(1, Math.floor(b*0.7)) : b; }
 function buyPotion(i){
   const price=potionPrice();
   if(G.gold<price){ floatMsg(`金币不足（需 ${price}）`); return; }
   const p=G.shopPotions[i]; if(!p) return;
   G.gold-=price; G.potionBought=(G.potionBought||0)+1;
-  /* v1.1.8：来源取**被点击的那瓶灵汁**（战局外锦囊 = #outPouch）。 */
+  
   let pel=null; try{ pel=document.querySelector('.reward-cards .relic[data-ri="'+i+'"]'); }catch(e){}
   gainPotion(p, pel); G.shopPotions.splice(i,1);
   sfx('gold'); log(`花费 ${price} 金币购买灵汁【${p.name}】`); saveRun(); renderShop();
 }
 function removeCard(){
   if(G.deck.length<=1){ log('牌组只剩一张了'); return; }
-  /* v1.1.24 教程：未买齐斩妖剑+招魂幡前不许删牌（冥钱要花在对的地方） */
+  
   if(G.tutorial && G.tutorial.on){ const F=G.tutorial.flags; if(!(F.swordBought&&F.relicBought)){ floatMsg('先听师父的话'); return; } }
   renderRemoveList();
 }
@@ -1830,12 +1531,10 @@ function doRemove(i){
   G.gold-=p; G.deck.splice(i,1); G.removeCount++; log('删除一张牌'); saveRun(); renderRemoveList();
 }
 
-/* ===================== 志怪图鉴（收集 + 局外存档） ===================== */
+/* 志怪图鉴 */
 const KIND_LABEL = { ghost:'鬼', yao:'妖', jiangshi:'僵尸' };
 const KIND_ICON = { ghost:'👻', yao:'🦊', jiangshi:'🧟' };
-/* v1.0.16：iconTag 里**运行时拼串**取用的素材路径（唯一真相源）。
-   intent / kind / 词缀这几族的路径是拼出来的，打包闸按 id 规则扫不到 ⇒ 在这里显式列全，
-   verify_dist 取它进 want，免得这些「真在用」的图被误报成「从未被游戏请求 / 可考虑删掉」。 */
+/* 拼串取用的素材路径在这里显式列全，否则打包闸会误报未使用 */
 const TAG_ICON_PATHS = []
   .concat(['attack','heal','multi','discard','summon','qingsuan','wangyou','aoe','dormant'].map(n=>'ui/intent_'+n+'.png'))
   .concat(Object.keys(KIND_ICON).map(k=>'ui/kind_'+k+'.png'))
@@ -1887,8 +1586,7 @@ const STORIES = {
 const SAVE_KEY = 'zhiguaitower_save_v1';
 let SAVE = { unlocked:[] };
 function loadSave(){
-  /* v1.0.15：在**读取处一次性归一化** —— 老档没有 progress / mile 字段时补默认值，
-     此后全仓读 SAVE.progress.pts / SAVE.mile 都不必再到处判空（沿用旧版「无 unlocked 视为新档」的宽口径）。 */
+  
   try{
     const d=Store.getJSON(SAVE_KEY);
     SAVE = (d && typeof d==='object' && !Array.isArray(d)) ? d : {};
@@ -1896,9 +1594,7 @@ function loadSave(){
     if(!SAVE.progress || typeof SAVE.progress!=='object') SAVE.progress={};
     const p=SAVE.progress;
     p.pts=p.pts|0; p.runs=p.runs|0; p.wins=p.wins|0; p.bestAct=p.bestAct|0; p.kills=p.kills|0;
-    /* v1.0.24：里程**按角色分账**（用户口径「每角色肯定独立累积」）—— p.heroes[heroId]={pts,runs,wins}。
-       ⚠️ 本轮改动：删掉「老档全局点数归天师」的迁移 —— 用户报障旧测试期累积的 7000+ 里程
-          被并进天师轨，直接点亮 2400 全档。改为下面的一次性清零。 */
+    
     if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
     const hs=p.heroes;
     Object.keys(hs).forEach(k=>{
@@ -1906,9 +1602,7 @@ function loadSave(){
       if(!h || typeof h!=='object'){ hs[k]={pts:0,runs:0,wins:0}; return; }
       h.pts=h.pts|0; h.runs=h.runs|0; h.wins=h.wins|0;
     });
-    /* v1.1.x（用户口径「里程重置」）：一次性旗标 —— 旧测试期里程全部作废：
-       全局点数、分角色点数、已解锁档位、已领取奖励全清，此后从 0 重新累积。
-       mileResetV2 落盘后永不再触发，新档（本来全 0）不受影响。 */
+    
     if(!SAVE.mileResetV2){
       p.pts=0; p.heroes={};
       SAVE.mile=[]; SAVE.mileClaimed=[];
@@ -1916,54 +1610,39 @@ function loadSave(){
       persistSave();
     }
     if(!Array.isArray(SAVE.mile)) SAVE.mile=[];
-    /* v1.0.26：里程碑奖励的**领取位**（永久解锁）落盘 —— 未领取前专属牌/遗物不进任何池。 */
+    
     if(!Array.isArray(SAVE.mileClaimed)) SAVE.mileClaimed=[];
-    /* v1.1.8（用户 2026-10-13）：角色改由【入门符纸】解锁 ——
-       unlockedHeroes = 已用符纸解锁的角色 id 列表；mileTickets = 手上剩余的符纸张数。 */
+    
     if(!Array.isArray(SAVE.unlockedHeroes)) SAVE.unlockedHeroes=[];
     SAVE.mileTickets = Math.max(0, SAVE.mileTickets|0);
-    /* v1.1.21（用户 2026-10-16）：【试玩符纸】—— trialTickets = 手上张数（一张换「某角色试玩一次」）。 */
+    
     SAVE.trialTickets = Math.max(0, SAVE.trialTickets|0);
-    /* v1.1.25r：兑换码 —— 已兑换过的码（小写、去空格）列表，每个码只能兑一次。 */
+    
     if(!Array.isArray(SAVE.redeemedCodes)) SAVE.redeemedCodes=[];
   }
   catch(e){ SAVE={unlocked:[], progress:{pts:0,runs:0,wins:0,bestAct:0,kills:0,heroes:{}}, mile:[], mileClaimed:[], unlockedHeroes:[], mileTickets:0, trialTickets:0, trialGiftV1:false, redeemedCodes:[], mileResetV2:true}; }
-  /* v1.1.25r（用户口径「撤回开发者权限 / 里程数恢复正常值」）：v1.1.16 的「里程碑调试拉满」开关
-     （DEBUG_MAX_MILE / debugMaxMile）已整块删除（原位置改成下面的 mileCleanupDebugSentinel）。
-     但旧开关**每次加载都把 pts 写死哨兵值并落盘** ⇒ 真机上跑过它的存档里 pts 至今仍卡在那个哨兵值，
-     不清理的话「恢复正常值」不会生效。这里做一次**定向**清理：只把点数归零，已解锁档位 / 已领奖励 /
-     符纸一律不动（避免把玩家已到手的东西重新锁回去）。mileResetV3 落盘后永不再触发；新档（pts 本就 0）不受影响。 */
+  /* 旧调试开关把 pts 写死哨兵值：这里只归零点数，已解锁的不动 */
   if(!SAVE.mileResetV3){ mileCleanupDebugSentinel(); SAVE.mileResetV3=true; persistSave(); }
-  /* v1.1.25r：v1.1.21「首启自动发 3 张试玩符纸」的**一次性赠送已从这里撤走** ——
-     用户口径「这个奖励就是之前新玩家登录送的，只是放到（教程打完僵王的）奖励界面里领取」。
-     现改由教程末尾的 showTutTrialReward() / grantTutTrialOnce() 发放，**同一个 trialGiftV1 旗标**
-     继续做「只能领一次」的守卫（防止玩家到设置里重玩教程反复刷符纸）。 */
+  
   SAVE.trialGiftV1 = !!SAVE.trialGiftV1;
 }
 function persistSave(){
   try{ Store.setJSON(SAVE_KEY, SAVE); }catch(e){}
-  if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }   // v0.76.2 云存档：同上
+  if(typeof cloudMarkDirty === 'function'){ try{ cloudMarkDirty(); }catch(e){} }   
 }
-/* ==== v1.1.25r：v1.1.16 的「里程碑调试拉满」开关（DEBUG_MAX_MILE / DEBUG_MAX_MILE_PTS /
-   debugMaxMile）**已整块删除** —— 用户口径「撤回开发者权限 / 里程数恢复正常值」。
-   旧开关把 pts 写死哨兵值 999999 并落盘，故保留下面这个**一次性定向清理**：识别旧哨兵值 ⇒ 只归零点数
-   （调用点在 loadSave 里，由 mileResetV3 守卫、只跑一次；老档 pts 卡在 999999 时才会命中）。 */
+
 const MILE_DEBUG_SENTINEL = 999999;
 function mileCleanupDebugSentinel(){
   if(!SAVE || typeof SAVE!=='object') return;
   const p=SAVE.progress;
   if(!p || typeof p!=='object') return;
   if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
-  /* 只归零**命中哨兵**的那几项（旧开关把全局 + 每角色都写到哨兵值，故实际等于全清）；
-     任何正常小值原样保留，避免误伤。 */
+  
   if((p.pts|0)>=MILE_DEBUG_SENTINEL) p.pts=0;
   Object.keys(p.heroes).forEach(k=>{ const h=p.heroes[k]; if(h && (h.pts|0)>=MILE_DEBUG_SENTINEL) h.pts=0; });
 }
-/* ===================== 里程碑判定（渐进门禁制 · v1.0.15） =====================
-   真相源表在 js/20_data.js 的 MILESTONES；点数公式在 20_data.js 的 milePointsFor()。
-   本段与 SAVE 同侧（同文件、紧挨存档读写），四类内容入口统一调 mileOn() 过滤。 */
-/* 里程点数。**v1.0.24 起按角色分账**：milePts(heroId) 取该角色自己累积的里程；
-   不传参 = 全局累计 p.pts（老档 / 结算面板沿用，语义不变）。 */
+/* 里程碑判定 */
+
 function milePts(heroId){
   const p=(SAVE && SAVE.progress) || {};
   if(heroId){
@@ -1972,23 +1651,16 @@ function milePts(heroId){
   }
   return p.pts|0;
 }
-/* 某里程碑是否已永久解锁 */
+
 function mileDone(id){ return !!(SAVE && SAVE.mile && SAVE.mile.indexOf(id) >= 0); }
-/* v1.0.26：里程碑奖励**是否已领取**（领取后才真正解锁对应牌/遗物，见 MILE_CLAIMED → SAVE.mileClaimed）。
-   与 mileDone（按里程达标自动置位）不同：这里要玩家在里程界面点一次「领取」才落盘。 */
+
 function mileClaimed(id){ return !!(SAVE && SAVE.mileClaimed && SAVE.mileClaimed.indexOf(id) >= 0); }
-/* v1.1.8：【入门符纸】—— 领取第 6 档奖励后手上剩余的符纸张数（可花掉，故不是布尔）。 */
+
 function mileTickets(){ return Math.max(0, (SAVE && SAVE.mileTickets)|0); }
-/* v1.1.21（用户 2026-10-16）：【试玩符纸】—— 首启赠 TRIAL_GIFT_N 张（见 loadSave 的一次性赠送）。
-   一张 = 「某个未解锁角色试玩一次」：只把该角色**本局**临时放行（G.trialHero），
-   **不写 SAVE.unlockedHeroes**，故局末即失效、角色在选角页照旧显示上锁。 */
+
 const TRIAL_GIFT_N = 3;
 function trialTickets(){ return Math.max(0, (SAVE && SAVE.trialTickets)|0); }
-/* ===================== v1.1.25r 兑换码 =====================
-   用户口径：「兑换码的功能加入游戏，并且加入兑换码 hijjust666，可以获得一张『入门符纸』」。
-   · 码表内置（key 一律小写；输入时自动 trim + toLowerCase，大小写 / 空格都容错）。
-   · 每个码只能兑一次：已兑过的码记进 SAVE.redeemedCodes（与 mileTickets / trialGiftV1 同侧落盘）。
-   · 奖励走既有口径：kind='mileTicket' ⇒ SAVE.mileTickets + n（=1 张【入门符纸】，选角页解锁一名角色）。 */
+/* 兑换码 */
 const REDEEM_CODES = {
   'hijjust666': { label:'入门符纸', kind:'mileTicket', n:1,
                   desc:'选角页解锁一名未解锁角色' },
@@ -1999,7 +1671,7 @@ function redeemedCodes(){
   return SAVE.redeemedCodes;
 }
 function codeRedeemed(code){ return redeemedCodes().indexOf(code)>=0; }
-/* 兑换一个码。返回 'ok' | 'empty' | 'invalid' | 'used'。成功即发奖 + 落盘。 */
+
 function redeemCode(raw){
   const code=String(raw==null?'':raw).trim().toLowerCase();
   if(!code) return 'empty';
@@ -2012,7 +1684,7 @@ function redeemCode(raw){
   log(`兑换码 ${code} 生效：+${def.n|0} 张【${def.label}】`);
   return 'ok';
 }
-/* 兑换面板：设置页「兑换码」入口。成功后弹一张奖励卡（收下 → 回设置）。 */
+
 function showRedeemPanel(){
   showOverlay(`<h2>兑 换 码</h2>
     <p>输入兑换码，领取奖励：<br><small style="color:var(--dim);font-size:12px">每个码只能兑换一次</small></p>
@@ -2042,11 +1714,11 @@ function submitRedeem(){
   if(r==='used'){ floatMsg('该兑换码已兑换过'); return; }
   floatMsg('兑换码无效');
 }
-/* 本局是否正在试玩该角色（G.trialHero 只在试玩局里落定，回选角 / 开新局即清）。 */
+
 function trialHeroOn(id){ return !!(G && G.trialHero && id && G.trialHero===id); }
-/* 是否为「已用符纸解锁」的角色（tianshi 由 mileOn 单独恒开）。 */
+
 function heroUnlocked(id){ return !!(SAVE && SAVE.unlockedHeroes && SAVE.unlockedHeroes.indexOf(id)>=0); }
-/* 用 1 张【入门符纸】解锁一名角色。返回 true=成功。无符纸 / 已解锁 / 非角色 ⇒ false（不落盘）。 */
+
 function unlockHeroWithTicket(id){
   if(!id || id==='tianshi' || heroUnlocked(id)) return false;
   if(typeof HEROES!=='undefined' && !HEROES.some(h=>h && h.id===id)) return false;
@@ -2055,31 +1727,28 @@ function unlockHeroWithTicket(id){
   if(!Array.isArray(SAVE.unlockedHeroes)) SAVE.unlockedHeroes=[];
   SAVE.unlockedHeroes.push(id);
   persistSave();
-  /* v1.1.23：解锁角色 → 上报「解锁并拥有所有角色」(Get-all)。tianshi 恒开 ⇒ 计数 +1；4 名齐聚即达标。 */
+  
   tapAchieveProgress('Get-all', 1 + ((SAVE.unlockedHeroes||[]).length));
   return true;
 }
-/* v1.1.21（用户口径「只能使用角色一次 = 每局一次」）：用 1 张【试玩符纸】给该角色开一局试玩 ——
-   扣 1 张、把角色记进**本局**的 G.trialHero（mileOn('hero') 据此放行），**不写 SAVE.unlockedHeroes**。
-   返回 true=成功。无试玩符纸 / 已永久解锁 / 非角色 ⇒ false（不扣不落盘）。 */
+
 function unlockHeroWithTrialTicket(id){
   if(!id || id==='tianshi' || heroUnlocked(id)) return false;
   if(typeof HEROES!=='undefined' && !HEROES.some(h=>h && h.id===id)) return false;
   if(trialTickets() < 1) return false;
   SAVE.trialTickets = trialTickets() - 1;
   if(!G) return false;
-  G.trialHero = id;                 // 本局临时解锁；showHeroSelect() / 开新局（newState）即清
+  G.trialHero = id;                 
   persistSave();
   return true;
 }
-/* 依稀有度取卡/遗物的对象（key 可以是 id 字符串，也可以是对象本身） */
+
 function _mileObj(kind,key){
   const list = kind==='card' ? CARDS : RELICS;
   if(key && typeof key==='object') return key;
   return list.find(x=>x.id===key) || null;
 }
-/* v1.1.9（用户 2026-10-13）：里程节点上的**奖励配图** —— 按卡/遗物的 `mile` 字段反查该档的真实奖励，
-   返回 {rel,name,desc}（rel 为素材相对路径，卡 256×192 / 遗物 128×128）；纯机制档无对应对象 ⇒ null。 */
+
 function mileRewardOf(nodeId){
   if(!nodeId) return null;
   if(typeof CARDS!=='undefined' && CARDS && CARDS.length){
@@ -2092,118 +1761,89 @@ function mileRewardOf(nodeId){
   }
   return null;
 }
-/* 门禁核心：kind ∈ hero|card|relic|potion，返回该内容当前是否**可用**。
-   查不到条目 ⇒ 一律放行（绝不允许把内容静默蒸发）；老 4 瓶灵汁 / tianshi / 白·蓝卡遗物恒开。 */
+/* 门禁核心：查不到条目一律放行，绝不静默蒸发内容 */
 function mileOn(kind,key){
-  /* v1.0.26：里程碑**专属内容**（带 mile 字段的牌/遗物）走独立硬门禁 —— 未在里程界面「领取」前
-     不进任何池，**且不受测试期总开关影响**（否则测试期会白嫖到这些专属内容）。 */
+  
   if(kind==='card' || kind==='relic'){
     const o=_mileObj(kind,key);
     if(o && o.mile && !mileClaimed(o.mile)) return false;
   }
-  if(!MILE_GATE_ON) return true;                            // v1.0.16：总开关关掉 ⇒ 一律放行（测试期，见 20_data.js）
+  if(!MILE_GATE_ON) return true;                            
   if(kind==='hero'){
-    if(key==='tianshi') return true;                        // 初始角色恒开
-    /* v1.1.21：试玩局里该角色本局临时放行（G.trialHero 不落盘，回选角即失效）。 */
+    if(key==='tianshi') return true;                        
+    
     if(trialHeroOn(key)) return true;
-    /* v1.1.8（用户 2026-10-13）：角色**不再按里程自动放行**，改由【入门符纸】解锁
-       （选角页消耗 1 张，落 SAVE.unlockedHeroes）。未登记的 id 仍一律放行，不静默蒸发内容。 */
+    
     if(typeof HEROES!=='undefined' && !HEROES.some(h=>h && h.id===key)) return true;
     return !!(SAVE && SAVE.unlockedHeroes && SAVE.unlockedHeroes.indexOf(key)>=0);
   }
   if(kind==='card' || kind==='relic'){
     const o=_mileObj(kind,key);
     if(!o) return true;
-    if(o.rarity==='white' || o.rarity==='blue') return true;  // 基础内容恒开
-    const m=MILESTONES.find(x=> kind==='card' ? x.advCards : x.advRelics);   // 紫/金看进阶里程碑
+    if(o.rarity==='white' || o.rarity==='blue') return true;  
+    const m=MILESTONES.find(x=> kind==='card' ? x.advCards : x.advRelics);   
     return !m || mileDone(m.id);
   }
   if(kind==='potion'){
-    if(MILE_BASE_POTIONS.indexOf(key)>=0) return true;          // 老 4 瓶恒开
+    if(MILE_BASE_POTIONS.indexOf(key)>=0) return true;          
     const m=MILESTONES.find(x=>x.potions && x.potions.indexOf(key)>=0);
     return !m || mileDone(m.id);
   }
   return true;
 }
 const MILE_BASE_POTIONS=['huanyanglu','huangquanjiu','zhenhunshui','mengpotang'];
-/* 一局结束结算：把 milePointsFor(G) 累加进 SAVE.progress，并按阈值解锁新里程碑。
-   返回**本次新解锁的里程碑数组**。
-   v1.1.25r（用户 2026-10-17 口径「里程也要像分数一样，复活后要继承，之后一起算」）：
-   旧版靠 G._mileGiven 一局只发一次 ⇒ 先败拿了一份小的，复活后接着爬到更远、再败时**多出来的里程永远发不出去**
-   （结算画面还只显示第一次那份快照）。现拆成两段：
-     · **点数**：按 milePointsFor(G) 算**全量**，减去本局已发放额（G._mileGranted）⇒ 每次结算只补**增量**，
-       一局走完（败 / 胜 / 放弃）时合计恰等于全量，等价于「复活后继承 + 之后一起算」；
-     · **计数**（局数 / 胜场 / 击杀 / 最高幕 / 成就上报）：一局只记一次（G._mileCounted），与增量发放分开，免得复活后重复累加。 */
+/* 每次结算只补增量；复活后多出来的里程下次结清 */
 function grantRunMilestones(){
   if(!G) return [];
   if(!SAVE.progress || typeof SAVE.progress!=='object') SAVE.progress={};
   const p=SAVE.progress;
-  const full=milePointsFor(G);                              // 本局**累计应发**（随进度单调增）
+  const full=milePointsFor(G);                              
   const prev=(G._mileGranted|0);
-  const pts=Math.max(0, full-prev);                         // 本次只补**增量** ⇒ 复活后接着爬的里程在下次结算一次结清
+  const pts=Math.max(0, full-prev);                         
   G._mileGranted=full;
-  G._mileGain=(G._mileGain|0)+pts;                          // 本局累计**实际发放额**（=最终结算的里程）
-  G._mileParts=mileParts(G);                                // v1.1.25r：分项改**实时**（像分数）—— 复活后随进度涨，末次结算即全量
+  G._mileGain=(G._mileGain|0)+pts;                          
+  G._mileParts=mileParts(G);                                
   p.pts=(p.pts|0)+pts;
-  /* v1.0.24：里程**按角色分账** —— 同一局同时累加全局 p.pts（结算面板 / 老口径）与该角色自己的 p.heroes[id]。
-     v1.0.25：达标判定改由**该角色自己的 6 档轨**（MILE_TRACKS）驱动 —— 新体系取代旧的全局 MILESTONES 进度。 */
+  
   const heroId=(G.hero && typeof HEROES!=='undefined' && HEROES.some(h=>h.id===G.hero)) ? G.hero : 'tianshi';
   if(!p.heroes || typeof p.heroes!=='object' || Array.isArray(p.heroes)) p.heroes={};
   const hp=p.heroes[heroId] || (p.heroes[heroId]={pts:0,runs:0,wins:0});
   hp.pts=(hp.pts|0)+pts;
-  if(!G._mileCounted){                                       // 一次性计数：一局只记一次
+  if(!G._mileCounted){                                       
     G._mileCounted=true;
-    const won=!!G.finalBoss;                                // finalBoss 只在打穿最后一幕幕主时置真 ⇒ 通关
+    const won=!!G.finalBoss;                                
     p.runs=(p.runs|0)+1; if(won) p.wins=(p.wins|0)+1;
     p.bestAct=Math.max(p.bestAct|0, G.act|0);
     p.kills=(p.kills|0)+(G.totalKills|0);
     hp.runs=(hp.runs|0)+1; if(won) hp.wins=(hp.wins|0)+1;
-    /* v1.1.23：跨局成就「全能降魔者」(4 步) —— 按「已通关过的角色数」上报（4 名各通关一次即达标）。 */
+    
     tapAchieveProgress('No-matter-Who', Object.keys(p.heroes).filter(k => p.heroes[k] && (p.heroes[k].wins|0) > 0).length);
   }
   const fresh=[];
   if(!SAVE.mile) SAVE.mile=[];
-  mileNodesFor(heroId).forEach(n=>{                         // 只判**这个角色**的轨
+  mileNodesFor(heroId).forEach(n=>{                         
     if(n.need!=null && (hp.pts|0)>=n.need && SAVE.mile.indexOf(n.id)<0){
       SAVE.mile.push(n.id); fresh.push(n);
     }
   });
-  /* v1.1.8（用户 2026-10-13）：角色三条门禁已从 MILESTONES 表删除 ⇒ 这一段如今只推
-     adv_card / potion_new / adv_relic（紫金卡与紫金遗物的掉落池门禁）。
-     ⚠️ 这正是「每打一场就自动解锁下一名角色」的根因段：旧表里三条 `heroes:[...]` 会让
-        一局 ≈395 点就直接满足 need 120/380 而写入 hero_* id。删掉后不再发生。 */
+  /* 角色不再按里程自动放行（旧的 heroes 字段会让一局就解锁下个角色） */
   MILESTONES.forEach(m=>{
     if((p.pts|0)>=m.need && SAVE.mile.indexOf(m.id)<0){
       SAVE.mile.push(m.id); fresh.push(m);
     }
   });
   persistSave();
-  if(fresh.length) unlockSfx();                             // 新里程碑解锁音（与图鉴/成就同款）
+  if(fresh.length) unlockSfx();                             
   return fresh;
 }
-/* ===================== 独立的「解锁」界面（v1.0.16） =====================
-   主菜单的「解锁」入口调它。展示全部里程碑：阈值 / 累计点数 / 进度条 / 已解锁态。
-   ⚠️ 这是**独立的解锁 UI**（用户口径），不是只靠在选角页置灰——以后要加卡牌 / 遗物 /
-      成就等更多可解锁奖励，直接往 MILESTONES 表加行，这里自动多一条，不用改。 */
-/* v1.0.23（用户草图 · 整屏重做）/ v1.0.24（用户定稿口径）：
-   左列 = **4 张角色海报 + 1 张「神秘人」海报**（`素材/hero/<id>_poster.jpg`，3:1）：未选中只露
-   **左边 2/3**（右缘压一道暗渐变暗示还剩 1/3），点中展开全幅 + 厚边立体框；每张海报**下面挂一行
-   该角色自己的里程**（`.ml-hinfo`）—— 用户口径「里程可以显示在海报下面」，顶栏那块整块撤掉。
-   右侧 = **该角色自己的**横向里程轨：**6 档 + 1 个「敬请期待」尾节点**，节点**等距分布**，
-   里程数只作节点下方标注。轨可横向拖动（鼠标拖 / 触屏滑，v1.1.23 起滑动不再出声）。
-   音效：点海报 ui_poster / 领奖励 ui_reward（进界面那一层由 talisOpen 的 ui_curtain 负责）。
-   ⚠️ 6 档里**前 5 档的真实奖励内容与里程数、以及里程增长规则**都**待与用户定稿**（用户口径：
-      「先设计里程获得的全新规则和数值后计算平均每把的里程数后才能制定」）⇒ 现在渲染成**虚线待定框**，
-     「领取」是**占位交互、不落盘**。定稿后填 20_data.js 的 MILE_TRACKS 即可，这里一行都不用动。 */
-let MILE_HERO='';                       // 当前查看的角色（模块级：切换重渲染不丢）
-let MILE_NODES=[];                      // 当前轨上渲染的节点（给 mileClaim 用）
-/* v1.0.26：领取记录改**落盘** SAVE.mileClaimed（永久解锁位）—— 旧的模块级 MILE_CLAIMED 已废弃。 */
-/* 节点定位：**等距槽位**百分比。i = 槽位序号，slots = 总槽数（6 档 + 尾节点 = 7）。
-   ⚠️ 旧版按 `need/总里程` 线性映射 ⇒ 前几档挤成一团、白框互相重叠（用户报的 bug），故改等距。 */
+/* 解锁界面 */
+
+let MILE_HERO='';                       
+let MILE_NODES=[];                      
+
+/* 节点按等距槽位定位：线性映射会让前几档挤成一团 */
 function mileSlotPct(i, slots){ return slots>0 ? ((i + .5) / slots * 100) : 0; }
-/* 该角色的档位骨架（定稿前的兜底）：
-   · 神秘人 ⇒ 6 个「未知」节点（黑色系 ? 图标盖住，不透露任何内容）
-   · 其余角色 ⇒ 6 档：前 5 档「奖励待定」（内容与里程数待定稿），第 6 档【入门符纸】（任选一名角色解锁） */
+
 function mileNodesFor(heroId){
   const t=(typeof MILE_TRACKS!=='undefined') ? MILE_TRACKS[heroId] : null;
   if(t && t.nodes && t.nodes.length) return t.nodes.slice();
@@ -2222,22 +1862,17 @@ function mileNodesFor(heroId){
   }
   return out;
 }
-/* 填充进度：**随里程数连续变化**（v1.1.14，用户 2026-10-14 报障「蓝色进度要到下一档才跳」）。
-   旧版是「走到最后一个已达标档位」⇒ 只有跨过 need 才跳一格。现按分段线性插值：
-     锚点 0   = (里程 0  → 0%)
-     锚点 i+1 = (第 i 档 need → 该档槽心 %)
-   当前 pts 落在哪一段就按比例插值；超过最后一档 need ⇒ 停在尾槽心（后续档位未定稿）。
-   ⚠️ need 为 null 的档位（骨架/神秘人）不参与 —— 它们的锚点直接跳过，天然不会出现。 */
+
 function mileFillPct(nodes, pts){
   const slots=nodes.length+1;
   const p0=Math.max(0, pts|0);
   if(p0<=0) return 0;
   const anchors=[{p:0, x:0}];
   nodes.forEach((n,i)=>{ if(n.need!=null) anchors.push({p:n.need, x:mileSlotPct(i, slots)}); });
-  if(anchors.length<2) return 0;                    // 没有任何真实档位 ⇒ 无锚点，停在 0
+  if(anchors.length<2) return 0;                    
   for(let k=0;k<anchors.length;k++){
     const a=anchors[k], b=anchors[k+1];
-    if(!b) return a.x;                              // 越过最后一档 ⇒ 停在尾槽
+    if(!b) return a.x;                              
     if(p0 < b.p){
       const span=(b.p-a.p)||1;
       const t=Math.max(0, Math.min(1, (p0-a.p)/span));
@@ -2246,20 +1881,18 @@ function mileFillPct(nodes, pts){
   }
   return anchors[anchors.length-1].x;
 }
-/* 点奖励白框 = 领取。到点（pts>=need）且未领 ⇒ 记一次 + 领取音；未到点 ⇒ 报错音。
-   待定 / 未知 / 尾节点一律不可领（还没定稿，也没有里程数可比）。
-   ⚠️ 真奖励（牌 / 遗物 / 被动 / 新角色）等定稿后再在这里发放，现在只演示交互。 */
+
 function mileClaim(nodeId){
-  if(_mlPressFired){ _mlPressFired=false; return; }   // v1.1.9：长按看详情后抬手，别顺手再领一次
+  if(_mlPressFired){ _mlPressFired=false; return; }   
   const n=MILE_NODES.filter(x=>x.id===nodeId)[0];
   if(!n || n.pending || n.unknown || n.tail) return;
   const pts=milePts(MILE_HERO);
   if(pts<n.need){ sfx('error'); floatMsg('里程不足：还差 '+(n.need-pts)+' 点'); return; }
-  /* v1.0.26：领取落盘（永久解锁位）—— 带 mile 标记的牌/遗物此刻才真正进该角色的奖励池。 */
+  
   if(mileClaimed(nodeId)) return;
   if(!Array.isArray(SAVE.mileClaimed)) SAVE.mileClaimed=[];
   SAVE.mileClaimed.push(nodeId);
-  /* v1.1.8：第 6 档【入门符纸】领取 ⇒ 手头符纸 +1（选角页消耗 1 张解锁一名角色）。 */
+  
   if(n.ticket){ SAVE.mileTickets = mileTickets() + 1; }
   persistSave();
   sfx('ui_reward'); sfx('ui_unlock');
@@ -2267,17 +1900,14 @@ function mileClaim(nodeId){
   const el=document.querySelector('.ml-node[data-mid="'+nodeId+'"]');
   if(el&&el.classList){
     el.classList.remove('can'); el.classList.add('claimed','claiming');
-    /* v1.1.1：领取特效 —— 白框弹一下 + 节点处扩散一圈金色光环，动画完自行撤掉（不常驻）。
-       只在 DOM 存在时挂（headless / 无该节点时自动跳过，不影响落盘与门禁）。 */
+    
     const fx=document.createElement('span'); fx.className='ml-claimfx'; el.appendChild(fx);
     setTimeout(function(){ el.classList.remove('claiming'); if(fx.parentNode) fx.parentNode.removeChild(fx); }, 900);
-    /* v1.1.9（用户口径「所有里程碑奖励领取时必须添加特效动画」）：奖励图**从节点位置竖直上飞 + 淡出消散**。 */
+    
     mileFlyOff(el);
   }
 }
-/* v1.1.9：领取时奖励图向上飘散 —— 克隆节点里的奖励缩略图（纯机制档无图 ⇒ 符纸字形兜底），
-   以 `.ml-root` 为定位上下文，竖直上飞 + 透明度 1→0 消散，动画完自行摘掉。
-   ⚠️ 无 DOM（冒烟沙箱 querySelector 恒 null）或无节点时**同步 return**，绝不在无头下挂定时器。 */
+
 function mileFlyOff(el){
   try{
     if(!el || !el.getBoundingClientRect) return;
@@ -2295,8 +1925,7 @@ function mileFlyOff(el){
     setTimeout(function(){ if(fly.parentNode) fly.parentNode.removeChild(fly); }, 1250);
   }catch(e){}
 }
-/* v1.1.9（用户口径）：里程节点**长按 550ms 看详情** —— 弹一张居中的奖励详情卡（图 + 名 + 说明 + 里程），
-   点任意处关闭。与 mileClaim 的单击互补：长按后抬手不再触发领取（_mlPressFired 挡一下）。 */
+
 let _mlPress=null, _mlPressFired=false;
 function milePressStart(e,nodeId){
   milePressEnd();
@@ -2310,7 +1939,7 @@ function mileDetail(nodeId){
   const n=(MILE_NODES||[]).filter(x=>x.id===nodeId)[0];
   if(!n) return;
   const host=document.querySelector('.ml-root');
-  if(!host || !host.querySelector) return;                 // 无 DOM ⇒ 静默返回（不挂定时器）
+  if(!host || !host.querySelector) return;                 
   const old=host.querySelector('.ml-detail');
   if(old && old.parentNode) old.parentNode.removeChild(old);
   const rw=mileRewardOf(nodeId);
@@ -2332,22 +1961,17 @@ function mileDetail(nodeId){
     if(d.parentNode) d.parentNode.removeChild(d);
     try{ host.removeEventListener('pointerdown', close, true); }catch(e){}
   };
-  /* 稍后再挂关闭监听，避免**开启它的那一次 pointerdown 冒泡上来**把它当场关掉。 */
+  
   setTimeout(function(){ try{ host.addEventListener('pointerdown', close, true); }catch(e){} }, 80);
 }
-/* 里程轨横向拖动（鼠标：按住拖 + **松手惯性 + 停稳缓出**；触屏走原生 overflow 滚动 ——
-   原生滚动自带惯性/缓出，别用自定义方案去抢它的手势）。
-   v1.1.18（用户口径「里程碑的滑动要有轻微惯性」）：鼠标松手后用 rAF 衰减，
-   衰减参数对齐 样式预览.html 的轨道 demo（速度 <30px/s 后衰减陡增 = 缓出，<1.2px/s 归零）。
-   v1.1.23（用户口径「把里程碑的滑动音效删了」）：拖动/惯性阶段原本节流播 `ui_drag`（布面摩擦），
-   现已整条移除 —— 手感（惯性 / 缓出）原样不动，滑动**全程无音**。 */
+
 const _mlDrag={on:false,x:0,sl:0,el:null,v:0,raf:0,pt:0,px:0};
 function _mlNow(){ return (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now(); }
 function _mlStopInertia(){
   if(_mlDrag.raf){ try{ cancelAnimationFrame(_mlDrag.raf); }catch(err){} _mlDrag.raf=0; }
   _mlDrag.v=0;
 }
-/* 惯性循环：把速度按 dt 衰减着写进 scrollLeft。撞到两端（浏览器钳制后 scrollLeft 不再变）立刻收。 */
+
 function _mlInertia(){
   _mlDrag.raf=0;
   let last=_mlNow();
@@ -2357,8 +1981,8 @@ function _mlInertia(){
     if(!el||!_mlDrag.v){ _mlDrag.raf=0; return; }
     const before=el.scrollLeft;
     el.scrollLeft=before + _mlDrag.v*dt/1000;
-    if(el.scrollLeft===before){ _mlDrag.v=0; _mlDrag.raf=0; return; }   // 到头/到尾：停
-    const k=Math.abs(_mlDrag.v)<30 ? 0.00002 : 0.02;                    // 慢速段陡增衰减 ⇒ 缓出
+    if(el.scrollLeft===before){ _mlDrag.v=0; _mlDrag.raf=0; return; }   
+    const k=Math.abs(_mlDrag.v)<30 ? 0.00002 : 0.02;                    
     _mlDrag.v*=Math.pow(k, dt/1000);
     if(Math.abs(_mlDrag.v)<1.2) _mlDrag.v=0;
     _mlDrag.raf=Math.abs(_mlDrag.v)?requestAnimationFrame(step):0;
@@ -2366,10 +1990,10 @@ function _mlInertia(){
   _mlDrag.raf=requestAnimationFrame(step);
 }
 function mileDragStart(e){
-  if(e&&e.pointerType&&e.pointerType!=='mouse') return;      // 触屏交给原生滚动，别抢手势
+  if(e&&e.pointerType&&e.pointerType!=='mouse') return;      
   const sc=e&&e.currentTarget; if(!sc) return;
-  if(e.target&&e.target.closest&&e.target.closest('.ml-box')) return;   // 点奖励白框不算拖动
-  _mlStopInertia();                                          // 再次按住 ⇒ 先掐掉上一次的惯性
+  if(e.target&&e.target.closest&&e.target.closest('.ml-box')) return;   
+  _mlStopInertia();                                          
   _mlDrag.on=true; _mlDrag.x=e.clientX; _mlDrag.sl=sc.scrollLeft; _mlDrag.el=sc;
   _mlDrag.pt=_mlNow(); _mlDrag.px=sc.scrollLeft;
   if(sc.classList) sc.classList.add('grabbing');
@@ -2379,7 +2003,7 @@ function mileDragMove(e){
   if(!_mlDrag.on||!_mlDrag.el) return;
   const dx=e.clientX-_mlDrag.x;
   _mlDrag.el.scrollLeft=_mlDrag.sl-dx;
-  /* 顺带估个「松手速度」（scrollLeft 每秒变化量）：dt≥12ms 才更新，避免除零/高频抖动。 */
+  
   const now=_mlNow(), dt=now-_mlDrag.pt;
   if(dt>=12){ _mlDrag.v=(_mlDrag.el.scrollLeft-_mlDrag.px)/dt*1000; _mlDrag.pt=now; _mlDrag.px=_mlDrag.el.scrollLeft; }
   if(e.preventDefault) e.preventDefault();
@@ -2387,22 +2011,22 @@ function mileDragMove(e){
 function mileDragEnd(){
   if(_mlDrag.el&&_mlDrag.el.classList) _mlDrag.el.classList.remove('grabbing');
   _mlDrag.on=false;
-  /* 轻放（速度 <30px/s，含「按住不动再松」）不起惯性，免得自己滑走；只有像样的甩动才滑。 */
+  
   if(_mlDrag.v && Math.abs(_mlDrag.v)>=30 && typeof requestAnimationFrame==='function') _mlInertia();
   else { _mlDrag.v=0; _mlDrag.el=null; }
 }
 function viewMilestones(heroId){
   const heroes=(typeof HEROES!=='undefined'?HEROES:[]).filter(h=>h&&h.id);
   const cards=heroes.slice();
-  if(typeof MILE_MYSTERY!=='undefined') cards.push(MILE_MYSTERY);   // 第 5 张：神秘人 · 敬请期待
-  /* 用户口径「点击右上角符纸进入该界面默认海报展示天师」⇒ 不带参数进入时一律回到首位角色。 */
+  if(typeof MILE_MYSTERY!=='undefined') cards.push(MILE_MYSTERY);   
+  
   MILE_HERO=(heroId && cards.some(h=>h.id===heroId)) ? heroId : (heroes[0]?heroes[0].id:'');
   const cur=MILE_HERO;
   const myst=(typeof MILE_MYSTERY!=='undefined') && cur===MILE_MYSTERY.id;
   const nodes=mileNodesFor(cur);
   MILE_NODES=nodes;
   const pts=milePts(cur);
-  const slots=nodes.length+1;                                // +1 = 轨尾「敬请期待」占位节点
+  const slots=nodes.length+1;                                
   const rail=cards.map(h=>{
     const on=h.id===cur;
     const isM=!!h.teaser;
@@ -2427,22 +2051,21 @@ function viewMilestones(heroId){
     const pct=mileSlotPct(i, slots);
     const done=(n.need!=null && pts>=n.need);
     const got=mileClaimed(n.id);
-    const rw=mileRewardOf(n.id);                          // v1.1.9：该档真实奖励（纯机制档 ⇒ null，不画缩略图）
+    const rw=mileRewardOf(n.id);                          
     let cls='ml-node';
     if(n.unknown) cls+=' unknown'; else if(n.pending) cls+=' pending';
     if(done) cls+=' done';
-    if(rw) cls+=' has-rw';                                // 仅作样式钩子（配图已移到白框**下方**）
+    if(rw) cls+=' has-rw';                                
     if(!n.unknown && !n.pending) cls+= got?' claimed':(done?' can':'');
     const needTxt=(n.need!=null) ? n.need : '?';
     const state=n.unknown ? '未来角色'
       : n.pending ? (n.ticket ? '解锁角色' : '待定稿')
       : (got ? '已领取' : (done ? (n.ticket ? '点击领取符纸' : '点击领取') : '未达成'));
     const click=(n.unknown||n.pending) ? '' : ` onclick="mileClaim('${n.id}')"`;
-    /* v1.1.9：长按 550ms 看详情（单击仍是领取）。 */
+    
     const press=` onpointerdown="milePressStart(event,'${n.id}')" onpointerup="milePressEnd()"`
       + ` onpointerleave="milePressEnd()" onpointercancel="milePressEnd()"`;
-    /* v1.1.9（用户口径）：奖励配图放在**奖励标记的下方**（里程数下面），不再塞在白框顶部 ——
-       原来白框靠上，手机横屏档白框顶会被顶部海报横排浮层压住，配图直接被盖掉。 */
+    
     const thumb=rw ? `<div class="ml-rw">${artImg(rw.rel,'','ml-rwimg')}</div>` : '';
     return `<div class="${cls}" data-mid="${n.id}" style="left:${pct}%">`
       + `<div class="ml-box"${click}${press}><b>${n.name}</b><span>${n.desc||''}</span>`
@@ -2450,14 +2073,13 @@ function viewMilestones(heroId){
       + `<div class="ml-stem"></div><div class="ml-dot"></div>`
       + `<div class="ml-need">${needTxt}</div>${thumb}</div>`;
   }).join('');
-  /* 轨尾「敬请期待」：里程不设上限（用户口径），后续版本继续加档 ⇒ 虚线占位、不可领。 */
+  
   const tailMark=`<div class="ml-node ml-end" style="left:${mileSlotPct(nodes.length, slots)}%">`
     + `<div class="ml-box"><b>敬请期待</b><span>里程不设上限，后续版本继续加档。</span></div>`
     + `<div class="ml-stem"></div><div class="ml-dot"></div>`
     + `<div class="ml-need">∞</div></div>`;
   const fillPct=mileFillPct(nodes, pts);
-  /* 轨宽 = 槽数 × 间距（桌面 200 / 窄屏 158），**比白框宽**（130）⇒ 相邻档位不再重叠；
-     又比旧值（235/185）紧一些，让一屏里能多看一档（用户口径「占比整齐均衡」）。 */
+  
   const narrow=((window.innerWidth||0)<=520 || (window.innerHeight||0)<=560);
   const spacing=narrow?158:200;
   const trackW=Math.max(560, Math.round(slots*spacing));
@@ -2486,15 +2108,13 @@ function viewMilestones(heroId){
     </div>
   </div>`, true, 'mile-scene');
 }
-/* v0.61.32：解锁音单独成函数 —— 冒烟里 unlockBestiary 被换成空函数，
-   写在它体内验不到（同 overlaySfx 的理由）。调用点：图鉴新条目 / 里程碑解锁。
-   v1.1.22：成就系统删除后，原 unlockAchievement 那个调用点一并消失。 */
+
 function unlockSfx(){ sfx('ui_unlock'); }
 function unlockBestiary(key){
   if(!key || !ENEMIES[key]) return;
   if(SAVE.unlocked.includes(key)) return;
   SAVE.unlocked.push(key); persistSave();
-  unlockSfx();   // v0.61.32：图鉴新条目
+  unlockSfx();   
   floatMsg('图鉴 · ' + ENEMIES[key].name);
   log(`【图鉴】收录「${ENEMIES[key].name}」`);
 }
@@ -2505,8 +2125,7 @@ function viewBestiary(){
     const e=ENEMIES[k];
     const have=SAVE.unlocked.includes(k);
     const tag=e.boss?'👹 Boss':(e.elite?'☠ 精英':'');
-    /* v1.0.19：用户口径「图鉴要有敌人立绘，你自己布局好」—— 复用战斗里那张 `素材/enemy/<key>.png`
-       （34 张立绘的命名与敌人 key 完全一致）。未收录的用同一张图压暗成剪影，留白预告而不剧透。 */
+    
     const art=artImg('enemy/'+k+'.png','','bportrait');
     if(!have){
       return `<div class="bcard locked">${art}<div class="bbody"><div class="bname">？？？</div><div class="bmeta">${tag||'未收录'}</div><div class="bstory">尚未收录——在战斗中击败它，即可解锁它的志怪故事。</div></div></div>`;
@@ -2515,18 +2134,15 @@ function viewBestiary(){
   }).join('');
   showOverlay(`<h2>志 怪 图 鉴</h2><p style="font-size:13px;color:var(--dim)">已收录 <b style="color:var(--gold)">${got}</b> / ${total} · 击败妖怪，把它们的志怪故事收进你的百鬼谱。</p><div id="bestiary-grid">${cards}</div>`, true, 'scroll-scene');
 }
-/* v1.1.22（用户口径）：成就 · 收藏（卡背 / 头像框）整块系统**已删除** ——
-   原 COSMETICS / ACHIEVEMENTS / hasAchievement / showAchievementToast / unlockAchievement /
-   applyCosmetics / equipCosmetic / viewAchievements 全部移除，卡背与头像框的 CSS / SAVE 键同批清掉。
-   成就改由 TapTap 平台侧承载（见 55_cloud.js 的 tapAchieve 上报）。 */
 
-/* ===================== 每日签到 + 广告占位（局外留存） ===================== */
+
+/* 每日签到 / 广告占位 */
 function todayStr(){
   const d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function signedToday(){ return SAVE.lastSignIn===todayStr(); }
-function adPlaceholder(name, reward){ AdSlot.request(name, reward); } // v0.61.06：转发到统一入口
+function adPlaceholder(name, reward){ AdSlot.request(name, reward); } 
 function doSignIn(){
   if(signedToday()){ floatMsg('今日已签到'); return; }
   const y=new Date(); y.setDate(y.getDate()-1);
@@ -2543,7 +2159,7 @@ function doAdDouble(){
   adPlaceholder('签到翻倍', ()=>{ SAVE.signInBonus=(SAVE.signInBonus||0)+5; persistSave(); });
   showStartScreen();
 }
-/* ===================== 数据埋点（局外统计，正式版接统计 SDK） ===================== */
+/* 埋点 */
 function track(event){
   if(!SAVE.stats) SAVE.stats = {};
   const s = SAVE.stats;
@@ -2560,7 +2176,7 @@ function trackLaunch(){
   s.lastSeen = d;
   persistSave();
 }
-/* ===================== 牌库 & 关键词 ===================== */
+/* 牌库 / 关键词 */
 function viewKeywords(){
   const html=`<h2>关键词说明</h2><div class="kwlist">${KEYWORDS.map(([k,d])=>`<p style="margin-bottom:10px"><b>${k}</b>　<span>${d}</span></p>`).join('')}</div>`;
   showOverlay(html, true);
@@ -2576,44 +2192,15 @@ function viewRelics(){
   html+=`</div>`;
   showOverlay(html, true);
 }
-/* —— v1.1.x 锦囊（用户口径「顶部栏不再显示灵汁和遗物，相关内容移入锦囊」）——
-   几乎整屏、左右均分：左=灵汁（图标+数量+信息，点击即用）、右=遗物（图标+信息，可滑动）。
-   ⚠️ 两块都挂 `touch-action:pan-y`（.pouch-item / .pouch-scroll）——
-      否则手机上「点一下用灵汁」与「滑动看更多」互相打架（商店/锻造那几处同一处理）。
-   ⚠️ 灵汁走 usePotionByName（**保留既有调用链**，与旧顶栏芯片同一个口），用掉后就地重开本面板刷新数量。 */
-/* v1.1.16（用户报障「锻造界面点锦囊再返回，落到不可互动的战斗场景」）——
-   战局外**所有**场景（地图 / 营地 / 商店 / 事件房 / 锻造…）都渲染在 #overlay 里，
-   而 showOverlay 是**整块覆写** #overlayContent ⇒ 开锦囊的一瞬间，底下那层面板就被冲掉了，
-   返回时无从还原 ⇒ 落到 #app 的战斗骨架。
-   解法：开锦囊**之前**把「#overlay 的 class 名 + #overlayContent 内容」整份快照，
-   返回时原样贴回 —— 一处机制覆盖锻造(篝火/道观) / 商店 / 事件房 / 地图全部路径，
-   不必为每个场景各写一条还原分支（那种写法必然随场景增减而漂）。
-   ⚠️ 只在「当前确实压着一块面板」时快照（overlay 非 hidden）：战斗里锦囊挂在 #app 顶上，
-      overlay 是 hidden 的，快照了反而会把上一块战斗面板(如奖励)重新贴到屏幕上。
-   ⚠️ 锦囊自身在面板里「用一瓶灵汁」后会重开本面板（showJinnang）⇒ 那一次不能再快照，
-      否则快照被自己的 pouch 面板顶掉，返回就回到锦囊页而不是底下的场景。 */
+/* 锦囊两块都挂 touch-action:pan-y，否则点灵汁与滑动看更多会打架 */
+/* 开锦囊前整份快照 overlay 的 class 与内容，返回原样贴回 */
 let JINNANG_SNAP=null;
-/* v1.1.23（用户报障「篝火等场景进锦囊**或牌库/牌堆**，返回后跳进战斗场面」）：
-   锦囊自 v1.1.16 起有快照还原，但它的返回有**两个出口** —— 面板内「返回」走 jinnangBack、
-   右上 ✕ 走 closeOverlay，只有前者认快照，点 ✕ 照样掉进 #app；而 viewDeck（#outPile「牌堆」）
-   与 showPile 两条路径**连快照都没有** ⇒ 返回必然露出背后的战斗骨架。
-   把「快照 / 还原」抽成一对共用函数：
-     · 战局外场景（地图 / 营地 / 商店 / 事件房 / 锻造…）都渲染在 #overlay 里，showOverlay 是
-       **整块覆写** #overlayContent ⇒ 开子面板后原场景无从还原，只能靠快照整体贴回（含 ✕ 的显隐态）；
-     · 子面板自己（pouch / pile / deck）不快照，避免把自己顶成快照、返回时停在子面板而不是原场景；
-     · **v1.1.25r**：不再「只在压着面板时」才快照 —— overlay 隐藏（#app 战斗层）也记 `{hidden:true}`，
-       返回时按来处还原（见下面两函数注释），根治「战斗里点锦囊返回跳地图」。 */
+/* 子面板自身不快照，免得把自己顶成快照 */
 const OUT_SUB_SCENES=['pouch-scene','pile-scene','deck-scene'];
 function outPanelSnap(){
   const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
   if(!(ov && oc && ov.classList)) return;
-  /* v1.1.25r（用户报障「战斗里点锦囊返回，有时候会跳到地图界面」）——
-     旧版只在「当前压着一块面板」时快照：战斗里 #overlay 是 hidden 的 ⇒ 一个字都不记，
-     返回时只能靠 jinnangBack / closeOverlay 里的 `SCENE==='map'` 去**猜**来处；一旦那一刻
-     SCENE 不是理想值（读档过渡、结算前后、云同步…），就被误判成地图 ⇒ showMap() 掉进地图。
-     现在**无论 overlay 显不显示都记一笔来处**：hidden 记 `{hidden:true}`（来处是 #app 战斗层），
-     非 hidden 照旧记整块面板 ⇒ 返回时按来处还原，不再猜 SCENE。
-     · 子面板自身（pouch / pile / deck）不快照，免得把自己顶成来处（返回会停在子面板而非原场景）。 */
+  /* 无论 overlay 显不显示都记一笔来处，返回时按来处还原，别猜 SCENE */
   if(ov.classList.contains('hidden')){ JINNANG_SNAP={ hidden:true }; return; }
   for(let i=0;i<OUT_SUB_SCENES.length;i++) if(ov.classList.contains(OUT_SUB_SCENES[i])) return;
   const x=document.getElementById('overlayCloseX');
@@ -2622,11 +2209,9 @@ function outPanelSnap(){
 function outPanelRestore(){
   const snap=JINNANG_SNAP; JINNANG_SNAP=null;
   if(!snap) return false;
-  /* v1.1.25r：来处是 #app 战斗层（开子面板时 overlay 是 hidden）⇒ 只把面板收回，**不碰 SCENE、
-     更不 showMap** —— 这就是「战斗里点锦囊返回却跳到地图」的根治点。 */
+  /* 来处是战斗层（overlay hidden）：只收面板，不碰 SCENE 不 showMap */
   if(snap.hidden){ hideOverlay(); return true; }
-  /* v1.1.25r：来处是地图 ⇒ 必须**重画**（bindMapDrag 的拖拽监听绑在元素上，贴回 innerHTML
-     只会得到一张点不动的死图）—— 所以地图走 showMap 而不是还原 HTML。 */
+  /* 来处是地图要重画：贴回 innerHTML 会得到一张拖不动的死图 */
   if(/map-scene/.test(snap.cls||'')){ showMap(); return true; }
   const ov=document.getElementById('overlay'), oc=document.getElementById('overlayContent');
   if(!(ov && oc)) return false;
@@ -2666,40 +2251,22 @@ function showJinnang(){
     </div>
     <button class="btn ghost" onclick="jinnangBack()">返回</button>`, true, 'pouch-scene');
 }
-/* v1.1.x（用户报障「地图进锦囊后返回，卡进战斗界面」）——
-   地图本身就渲染在 #overlay 里（showMap→showOverlay+map-scene），而锦囊返回原先写死
-   hideOverlay() ⇒ 摘掉 overlay 露出背后的 #app 战斗版面。
-   v1.1.16：改为**优先还原开锦囊前的快照**（见 showJinnang 顶部注释），一处覆盖全部战局外场景。
-   v1.1.25r：来处完全交给快照（含战斗层 {hidden:true}），不再按 SCENE 分流兜底。 */
+
 function jinnangBack(){
-  /* v1.1.25r：来处由快照记（outPanelRestore 按它还原：战斗→收面板、地图→重画、其它面板→贴回），
-     不再用 SCENE 猜。快照缺失（理论上不该有）也只是兜底收面板，**绝不 showMap()** ——
-     免得在战斗里被误判跳进地图。 */
+  /* 锦囊返回的来处完全交给快照，不再按 SCENE 分流兜底 */
   if(outPanelRestore()) return;
   hideOverlay();
 }
 function viewDeck(){
-  if(!G){ floatMsg('开局后可查看牌库'); return; } // v0.61 B11：原本静默无反应
+  if(!G){ floatMsg('开局后可查看牌库'); return; } 
   if(!G.deck.length){ floatMsg('牌库为空'); return; }
-  /* v1.1.14（用户口径「删掉目前的文字列表布局，采用 6 列分布一行一行展示所有牌面，大致铺满横屏」）：
-     每张牌直接渲染 cardBody（唯一牌面渲染器），不再按 id 合并成文字清单。
-     容器 .deck-grid（CSS 里 6 列网格）+ deck-scene（与 forge/pile 同一条加宽口径）。 */
+  
   const cards=G.deck.map(c=>`<div class="card has-frame ${RCOLOR[c.rarity]}">${cardBody(c)}</div>`).join('');
-  outPanelSnap();   // v1.1.23：战局外（营地/商店/事件房…）打开「牌库」前先快照，返回才回得去原场景
+  outPanelSnap();   
   showOverlay(`<h2>我的牌库（共 ${G.deck.length} 张）</h2><div class="deck-grid">${cards}</div>`, true, 'deck-scene');
 }
 
-/* v0.76.0：点抽牌堆 / 弃牌堆看牌堆内容。
-   形态照用户口径：「显示界面参考锻造界面，只是不要显示升级情况」——
-   ⇒ 复用锻造页的**容器与排列**（加宽的 #overlayWrap + 同一个 grid，CSS 里与 forge-scene
-      共用分组选择器），卡是**单张**（不是锻造那个 .forge-pair 左右对照），
-      因此没有 .upgrade-preview、没有箭头、没有红色升级描述。
-   ⚠️ 两个堆的**信息口径刻意不同**（这是本项的设计决定，不是随手写的）：
-      抽牌堆**乱序**展示 —— 否则等于把「下一张是什么」白送给玩家；
-      弃牌堆**保序、堆顶在前** —— 它本来就是公开信息（刚打出的牌就在第一格）。
-   ⚠️ `shuffle(src.slice())` 里那个 `.slice()` 是硬要求：shuffle 就地打乱。
-      少了它就是「点开看一眼，抽牌堆顺序就变了」—— 与易物候选池那个坑同源。
-   ⚠️ 卡片**不带 onclick**：这一层不需要点击，带上反而会与长按放大（showCardZoom）抢事件。 */
+/* 抽牌堆乱序展示（shuffle 前先 slice），弃牌堆保序顶在前 */
 function showPile(kind){
   if(!G){ floatMsg('开局后可查看牌堆'); return; }
   const isDraw=(kind==='draw');
@@ -2710,82 +2277,62 @@ function showPile(kind){
   const head=isDraw
     ? `<h2>抽牌堆 · ${src.length} 张</h2><p>顺序已打乱（不泄露下一张）。</p>`
     : `<h2>弃牌堆 · ${src.length} 张</h2><p>堆顶在前 —— 最近打出的牌在第一格。</p>`;
-  outPanelSnap();   // v1.1.23：若当前压着战局外面板（理论上牌堆入口多在战斗内），返回才回得去
+  outPanelSnap();   
   showOverlay(`${head}<div class="reward-cards">${cards}</div>`, true, 'pile-scene');
 }
 
-/* ===================== 覆盖层 ===================== */
-/* v0.61.32：面板开合音单独成函数 —— 冒烟里 showOverlay/hideOverlay 会被整体换成空函数
-   （与 startBGM 同一个处境），写在这两个函数体里就永远验不到。拆出来才验得到，
-   两个调用点只剩一行转发（那两行不可达，已如实记在更新日志里）。 */
+/* 覆盖层 */
+
 function overlaySfx(){ sfx('ui_panel'); }
-/* v0.65.0：新增可选第 3 参 scene（'menu-scene'），并加 .ov-enter 入场门闩。
-   ⚠️ 「同类场景内刷新不重播入场」只能靠**移除类**实现，不能靠「加一次就留着」——
-      因为下面这行 innerHTML= 每次都重建 DOM，**新元素一定会跑匹配到的 CSS 动画**。
-   ⚠️ wasOpen 必须在摘 'hidden' 之前读，否则永远是 false。 */
-/* v0.68.2 —— `.ov-enter` 门闩补「**换场景**也算新进场」这一条。
-   ⚠️ 起因：用户要的「拉下鬼录 → 卷轴从屏幕上方坠落」在**真实路径上根本没播**。
-      图鉴/排行榜/设置的唯一入口是主菜单，而点它们时 overlay **本来就开着**（就是主菜单）
-      ⇒ wasOpen=true ⇒ ov-enter 被摘 ⇒ `#overlay.scroll-scene.ov-enter #overlayWrap`
-      这条选择器永远匹配不上。冒烟测不到（它看不见 CSS 与 classList 的实际取值），
-      `_drvmenu3.js --q &pull=1` 一量就露：class=scroll-scene 但 `wrap an=none`。
-   ⚠️ 不能图省事把选择器里的 `.ov-enter` 删掉：那样「设置面板里拨一下音量开关」会重跑
-      showOverlay ⇒ 面板再掉一次，比不播更烦人。**判据必须是"换了场景"而不是"开了面板"**。 */
-function showOverlay(html, closable, scene){ overlaySfx();   // v0.61.32：面板开合（设置/图鉴/成就/牌库/结算）
+/* ov-enter 门闩靠移除类实现；wasOpen 要在摘 hidden 之前读 */
+/* 门闩判据是换了场景而不是开了面板，否则拨个开关就重播 */
+function showOverlay(html, closable, scene){ overlaySfx();   // 面板场景类靠第三实参判出来，各调用点必须显式传
   document.getElementById('overlayContent').innerHTML=html;
   const ov=document.getElementById('overlay');
   const wasOpen = !!(ov && !ov.classList.contains('hidden'));
-  // v0.68.2：摘之前先记下"原来挂的是哪个场景" —— 下一行的 remove 之后就问不出来了。
-  // v0.71.0：+ hero-scene（选英雄屏专属的 700px 放宽限宽）。
-  // v0.72.0：+ pick-scene（战斗里的**选牌小窗**：去掉纯色底、卡牌 1.25 倍，只桌面档）。
-  //   六处调用（忘忧 / 焚符 / 火符 / 易物·选出手牌 / 易物·选入牌 / 守一）**都必须显式传第三实参**
-  //   —— sceneChanged 是拿它比出来的：不传就没有场景类，从火符直接进易物也不会重播进场动画。
-  // v0.75.0：+ forge-scene（锻造页：面板加宽到满屏 + 六列对照。**保留纯色底** —— 与 pick-scene
-  //   刻意相反：锻造页里是整屏卡牌与说明文字，那层底是可读性的依托）。
-  //   两处调用（道观 unknownForge / 篝火·营地 showForgePicker）**都必须显式传第三实参**。
-  // v0.76.0：+ pile-scene（点抽牌堆/弃牌堆看牌堆内容）。**与 forge-scene 共用同一份 grid 与加宽规则**
-  //   —— CSS 里那三条已经改成分组选择器，不复制第二份（复制出来的必然漂）。
-  //   两处调用（`showPile('draw')` / `showPile('discard')`）**都必须显式传第三实参**：
-  //   否则从「抽牌堆」切到「弃牌堆」时 sceneChanged 判不出来，进场动画不重播。
-  // v0.76.0：+ result-scene（胜负结算面板「自下升起」的那一套 keyframe）。
-  //   三条结算路径（showBattleResult / loseGame / showVictory）**都必须显式传第三实参**；
-  //   漏传不会报错，只会让面板退回通用的 overlayIn（10px 下滑），而这一条没有任何闸看得见。
-  // v1.0.23：+ mile-scene（里程碑「里程轨」整屏界面：4 张角色海报 + 蓝色里程轨）。
-  // v1.1.x：+ rank-scene（风云榜「皇榜卷轴」整屏界面：左六类导航 + 前三甲 + 十名榜单 + 我的战绩）。
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   const SCENES=['map-scene','menu-scene','scroll-scene','hero-scene','pick-scene','forge-scene','pile-scene','deck-scene','result-scene','mile-scene','pouch-scene','rank-scene'];
   const wasScene = (ov && ov.classList) ? (SCENES.filter(c=>ov.classList.contains(c))[0]||'') : '';
-  // v0.61.42：任何面板开之前先摘掉 .map-scene（地图专属的半透明底）——
-  // 否则 showMap 之后直接 showOverlay 的奖励/商店面板会继承半透明底，白白透出背景。
-  // v0.65.0：.menu-scene 同理（主菜单整屏场景）。
-  // v0.66.0：.scroll-scene 同理（图鉴/排行榜/设置的卷轴落下）—— 漏摘的话，从主菜单看完图鉴
-  // 再回战斗，奖励面板也会带着卷轴动画从顶上掉下来。
+  
+  
+  
+  
+  
   if(ov && ov.classList){ ov.classList.remove('map-scene'); ov.classList.remove('menu-scene');
     ov.classList.remove('scroll-scene'); ov.classList.remove('hero-scene'); ov.classList.remove('pick-scene');
     ov.classList.remove('forge-scene'); ov.classList.remove('pile-scene'); ov.classList.remove('result-scene');
     ov.classList.remove('mile-scene'); ov.classList.remove('pouch-scene'); ov.classList.remove('rank-scene'); ov.classList.remove('deck-scene'); }
   ov.classList.remove('hidden');
-  // 主菜单→图鉴（menu-scene→scroll-scene）算换场景 ⇒ 补 ov-enter ⇒ 卷轴真的落下来；
-  // 图鉴里翻页/设置里拨开关（scroll-scene→scroll-scene）不算 ⇒ 不重播。
-  // 无场景的普通面板（战斗奖励/商店）行为与 v0.65.0 完全一致（只有 !wasOpen 才播）。
+  
+  
+  
   const sceneChanged = !!scene && scene !== wasScene;
   if(ov && ov.classList) ov.classList.toggle('ov-enter', !wasOpen || sceneChanged);
   if(scene && ov.classList) ov.classList.add(scene);
   const x=document.getElementById('overlayCloseX'); if(x) x.style.display = closable ? '' : 'none';
   ovMarkCornerBtns();
-  /* v1.1.8：商店 / 锻造 / 营地等面板都在战局外 ⇒ 常驻 HUD 要跟着显隐、并压在面板之上。 */
+  
   if(typeof outHudSync==='function') outHudSync(); }
-/* v1.0.12（用户 2026-10-05：「所有界面的返回/确认按钮放到左上角跟右上角，方便按」）——
-   小屏横屏时，把面板**末尾**那一串直接子级行动按钮钉到屏幕两上角（拇指区）：
-     · 文本以 返回/放弃/跳过 开头 → 左上；其余（继续/离开/确定…）→ 右上（close-x 左边）。
-   门槛（三条同时成立才打标，防误伤）：
-     ① 末尾存在连续的直接子级 button.btn（反应面板「看完内容点底部按钮」的结构）；
-     ② 面板**全部**直接子级按钮都在这串里 —— 设置菜单（7 枚按钮被 <p> 隔断）、
-        篝火选项屏（锻造/休息按钮在中段）整体是按钮流，钉走一枚边角会割烂布局 ⇒ 跳过；
-     ③ 主菜单壳（body.at-menu）整体跳过 —— menu-root / 存档面板有自己的排版。
-   打标只加类：桌面与冒烟档 CSS 不理会 ⇒ 逐像素不变；手机横屏档由 CSS 接管（见 原型.html）。 */
+
 function ovMarkCornerBtns(){
   const oc=document.getElementById('overlayContent'); if(!oc || !oc.children) return;
-  /* v1.1.x：每次重判前先摘掉上一块面板留下的 padding 标记（oc 元素常驻，类会粘住）。 */
+  
   if(oc.classList) oc.classList.remove('ov-corner');
   const kids=oc.children; let i=kids.length-1; const run=[];
   while(i>=0 && kids[i].tagName==='BUTTON' && kids[i].classList.contains('btn')){ run.unshift(kids[i]); i--; }
@@ -2794,70 +2341,41 @@ function ovMarkCornerBtns(){
     if(kids[j].tagName==='BUTTON' && kids[j].classList.contains('btn') && run.indexOf(kids[j])<0) return;
   }
   if(document.body && document.body.classList && document.body.classList.contains('at-menu')) return;
-  /* v1.1.x：真的钉了角按钮 ⇒ 给 #overlayContent 打 ov-corner，矮屏档靠它补顶部留白
-     （取代旧的逐场景字面量规则，见 原型.html 的 @media(max-height:560px)）。 */
+  
   if(oc.classList) oc.classList.add('ov-corner');
   run.forEach(b=>{
     const t=(b.textContent||'').trim();
     b.classList.add(/^(返回|放弃|跳过)/.test(t) ? 'ov-act-l' : 'ov-act-r');
   });
 }
-function hideOverlay(){ overlaySfx();   // v0.61.32：与 showOverlay 成对
-  if(typeof settleVidDrop==='function') settleVidDrop();   // v1.1.x：结局视频停在末帧，收面板时一并摘掉
+function hideOverlay(){ overlaySfx();   
+  if(typeof settleVidDrop==='function') settleVidDrop();   
   document.getElementById('overlay').classList.add('hidden');
   if(typeof outHudSync==='function') outHudSync(); }
-/* v1.0.20（用户 2026-10-08：「有时候从图鉴或者排行榜等界面回到主界面会卡住」）——
-   旧判据只有 `if(!G)`，但 G 退局后**并不清空**（quitToMenu / showVictory / loseGame 都只调
-   showStartScreen，没把 G 置空）。于是「本会话玩过一局 → 回主菜单 → 开图鉴/榜单/引导 → 返回」时
-   `!G` 为假 ⇒ 只摘掉 #overlay，而 `body.at-menu` 仍把 `#app{display:none}` ⇒ 整屏全黑，表现为卡死。
-   正确判据是「屏幕背后不是战局」，该状态由 setBg 挂的 `body.at-menu` 唯一 owning。
-   ⚠️ 不要再加「场景类必须是 menu-scene/scroll-scene」之类的守卫：新手引导、卡牌详情等面板
-      **不带场景类**（showOverlay 不传第三参），加了守卫它们就漏网（用户 2026-10-08 报的
-      「查看新手引导后返回卡住」正是这条漏网路径）。at-menu 本身就足以判定。 */
+/* 回主菜单判据是 body.at-menu（背后不是战局），别再叠场景类守卫 */
 function closeOverlay(){
   const atMenu=!!(document.body && document.body.classList && document.body.classList.contains('at-menu'));
-  /* v1.1.x（用户 2026-10-11「手机端从图鉴 / 排行榜 / 设置回主界面会卡住」）：
-     旧顺序是「先 hideOverlay() 摘掉 #overlay，再 showStartScreen()」。一旦 showStartScreen
-     中途出岔子（如音频 I/O 抛异常），就停在「#overlay 已收 + body.at-menu 仍在 ⇒ #app 也不渲染」
-     —— 整屏只剩 #bg 底图，正是用户截图里那一屏。showOverlay 自己会 remove('hidden')，
-     所以回主菜单这一支**直接交给 showStartScreen 收口**：异常时最坏也只是留着上一块面板，
-     不会掉进全空状态。 */
+  /* 回主菜单交给 showStartScreen 收口，别先 hideOverlay 免得异常时全空 */
   if(atMenu || !G){ showStartScreen(); return; }
-  /* v1.1.23（用户报障「篝火等场景进锦囊/牌库返回后跳进战斗场面」）：
-     战局外场景面板是被 showOverlay **整块覆写**掉的，直接 hideOverlay() 只会露出背后的
-     #app 战斗骨架。右上 ✕ 与 ESC 都走这里 ⇒ 必须先认快照把原场景贴回，快照不在时才收面板。
-     ⚠️ 这一支**必须**排在 atMenu 判定**之后**：showStartScreen 不复位 SCENE，打完一局回主菜单后
-        SCENE 仍是 'map'，若先判 SCENE，点里程碑的 ✕ 就会拿一局已废的存档 showMap() 直接进地图
-        （用户 2026-10-12 报的「里程碑 ✕ 返回 → 直接进地图、没角色、没手牌」正是这条顺序错误）。
-     v1.1.25r：来处改由快照记（战斗层 {hidden:true} / 地图 map-scene / 其它面板），
-       快照缺失且**确实**在地图时才重画兜底 —— 根治「战斗里点锦囊返回跳地图」。 */
+  /* 右上 ✕ 与 ESC 走这里：先认快照贴回，且必须排在 atMenu 判定之后 */
   if(outPanelRestore()) return;
   if(SCENE==='map'){ showMap(); return; }
   hideOverlay();
 }
-/* v1.0.20：设置/榜单等卷轴页的「返回菜单」不能写死 openMenu()（那是**局内**菜单）——
-   从主菜单进来的话会被绕进局内菜单（继续游戏/退出到主菜单），玩家以为卡住了。
-   按 at-menu 判定来处：在主菜单体系内就回主菜单，否则回局内菜单。 */
+/* 卷轴页返回菜单按 at-menu 判断，不能写死 openMenu（那是局内菜单） */
 function menuBack(){
   const atMenu=!!(document.body && document.body.classList && document.body.classList.contains('at-menu'));
   if(atMenu) showStartScreen(); else openMenu();
 }
 
-/* ===================== 选择确认条（是 / 否 图标） =====================
-   v1.1.2（用户口径）：「商店 / 锻造 / 净坛 / 开局抉择」四处**点选之后**要先过一道「是 / 否」图标抉择才生效。
-   ⚠️ 只在**渲染出来的 onclick 包装层**（askBuyCard / askForgeCard / …）里问，原函数
-      （buyCard / forgeCard / doRemove / doUnknownRemove / pickOpening）的语义一个字都不动 ——
-      冒烟测试直接调它们（smoke_runner.js:153/157/1178/4029），改了当场变红。
-   ⚠️ 落地条 #ovConfirm 挂 document.body（见 原型.html），与 #overlay 并列、z-index 更高。 */
+/* 是/否 确认条 */
 let CONFIRM_CB=null, CONFIRM_ALT=null;
-/* v1.1.21（用户口径「试玩符纸」）：askConfirm 增加**可选第三选项** —— 传 opt 时弹窗切毛笔风
-   （`.ovc-brush`）、确认 / 取消圆钮换成文字（yesLabel / noLabel），并显露 #ovc-alt 作为第二个出口
-   （opt.label + opt.cb，没给就隐藏）。**不传 opt 时行为与旧版完全一致**（✓/✗ 圆钮、方块字体）。 */
+/* 是/否只在渲染出的 onclick 包装层问，原函数语义一个字不动 */
 function askConfirm(msg, cb, opt){
   CONFIRM_CB=(typeof cb==='function')?cb:null;
   CONFIRM_ALT=(opt && typeof opt.cb==='function')?opt.cb:null;
   const el=document.getElementById('ovConfirm');
-  if(!el){ const f=CONFIRM_CB; CONFIRM_CB=null; CONFIRM_ALT=null; if(f) f(); return; }   // 无头/异常兜底：直接生效
+  if(!el){ const f=CONFIRM_CB; CONFIRM_CB=null; CONFIRM_ALT=null; if(f) f(); return; }   
   const q=(sel)=>el.querySelector ? el.querySelector(sel) : null;
   const m=q('.ovc-msg'); if(m) m.innerHTML=msg;
   const box=q('.ovc-box'); if(box && box.classList) box.classList.toggle('ovc-brush', !!(opt && opt.brush));
@@ -2877,22 +2395,22 @@ function resolveConfirm(ok){
   if(ok && cb){ sfx('ui_unlock'); try{ cb(); }catch(e){} }
   else sfx('ui_flip');
 }
-/* 第三个出口（仅 v1.1.21 试玩符纸弹窗里显露：窗内明示「永久解锁」，故不再二次确认）。 */
+
 function resolveConfirmAlt(){
   const el=document.getElementById('ovConfirm'); if(el) el.classList.add('hidden');
   const cb=CONFIRM_ALT; CONFIRM_ALT=null; CONFIRM_CB=null;
   if(cb){ sfx('ui_unlock'); try{ cb(); }catch(e){} }
   else sfx('ui_flip');
 }
-/* —— 六处 onclick 包装：前置校验不通过就直接飘字，通过才问「是/否」 —— */
+
 function askUnknownRemove(i){
-  if(CARD_ACT_BUSY) return;                        // v1.1.19：演出期不再弹确认框（见 CARD_ACT_BUSY 注释）
+  if(CARD_ACT_BUSY) return;                        
   const c=G.deck[i]; if(!c) return;
   if(c.id==='shi_wang'){ floatMsg('【尸王】不可删除'); log('【尸王】不可删除'); return; }
   askConfirm(`焚掉【${c.name}】？<br>它将离开你的牌组。`, ()=>doUnknownRemove(i));
 }
 function askForgeCard(i){
-  if(CARD_ACT_BUSY) return;                        // v1.1.19：演出期不再弹确认框（见 CARD_ACT_BUSY 注释）
+  if(CARD_ACT_BUSY) return;                        
   const c=G.deck[i]; if(!c) return;
   if(c.up){ floatMsg('这张牌已升级过'); log('这张牌已经升级过了'); return; }
   if(!canUpgrade(c)){ floatMsg('不可升级'); log(`【${c.name}】没有可升级的变化，无法锻造`); return; }
@@ -2922,76 +2440,42 @@ function askPickOpening(i){
   askConfirm(`将【${c.name}】加入起始牌组？`, ()=>pickOpening(i));
 }
 
-/* ===================== 渲染 ===================== */
-/* 消耗牌判定：牌自带 exhaust，或 heroExhaust 指定的英雄专属消耗 */
+/* 渲染 */
+
 function isOneUse(c){
   if(!c) return false;
-  if(c.exhaustOnly) return c.exhaustOnly.indexOf(G.hero)>=0; // 仅指定英雄视为消耗牌（如附灵术：只有赶尸人是消耗牌）
+  if(c.exhaustOnly) return c.exhaustOnly.indexOf(G.hero)>=0; 
   return !!(c.exhaust || (c.heroExhaust && c.heroExhaust===G.hero));
 }
-/* 卡面标记（图形式卡） */
+
 function exhaustMark(c){
   if(!isOneUse(c)) return '';
   return `<div class="oneuse-bar"></div><div class="oneuse" data-tip="kw:消耗">消耗</div>`;
 }
-/* 文字列表用的小标签（牌库 / 放大镜等） */
+
 function exhaustChip(c){
   if(!isOneUse(c)) return '';
   return ` <span data-tip="kw:消耗" style="cursor:help;color:#fff;background:var(--red2);border-radius:4px;padding:0 5px;font-size:11px;letter-spacing:1px">消耗</span>`;
 }
-/* 阴司牒[金·赶尸人 里程碑 t5]：持有它时【尸王】自动进入「强化态」——
-   卡面加绿色升级箭头，并追加其专属效果（额外附加，仍打 10 伤 + 顺带 5 格挡）。
-   ⚠️ 只改**渲染层**：尸王本体不可升级（canUpgrade 恒 false），t()/ts() 一个字不动 ⇒
-      卡面短文案硬闸、canUpgrade、存档口径全不受影响；无阴司牒时输出与改前逐字节相同。 */
+
 function shiWangBoosted(c){ return !!(c && c.id==='shi_wang' && typeof hasRelic==='function' && hasRelic('yinsidie')); }
 function shiWangBoostTag(c){ return shiWangBoosted(c) ? '<div style="color:var(--green);margin-top:2px">阴司牒 · 每次尸王攻击后获得 5 点格挡</div>' : ''; }
-/* v1.1.x（用户交付 4 张属性图标 素材/ui/ct_*.png）：卡面左下角的分类标
-   （`.ct-corner`，手机横屏档显示）由「攻击／防御／技能／鬼怪」文字改成对应图标。
-   ⚠️ 走 iconTag：图没到时回落串仍是 TNAME[c.type]（与改动前逐字节相同），
-      探到图才变 <img>，每个路径只探一次（不每帧刷 404）。四个属主的图标是白色线稿、
-      透明底 ⇒ 正好压在 `.ct-corner` 那块深色小墨牌上（见 原型.html 的 .ct-corner .ct-icon）。 */
+
 const CT_ICON={ attack:'ui/ct_attack.png', defense:'ui/ct_defense.png', skill:'ui/ct_skill.png', spirit:'ui/ct_spirit.png' };
 function ctCorner(type){
   const rel=CT_ICON[type];
   return rel ? iconTag(rel, TNAME[type], 'ct-icon') : (TNAME[type]||'');
 }
 function cardBody(c){
-  /* v0.69.0：`.ctype` 从 `.cplate` **里面**移到闭标签**之后**。
-     原因见 原型.html 里 .card.has-frame .ctype 的注释：它现在是相对 .card 绝对定位的，
-     留在 .cplate 里会按 .cplate 的高度解析 top:48.02%（差 4 倍以上），且被 .cplate 的
-     overflow:hidden 裁掉。这三个模板（cardBody / forgeCardHTML / handCardHTML）必须一起改。
-     v1.0.6：再改一次版式 —— 卡名（.cname）也从 `.cplate` 里**挪到牌面顶部**（图窗上沿那条
-     标题带，见 原型.html `.card.has-frame .cname` 的推导）。铭牌窗因此**整块归描述**，
-     描述可用高度从约 34px（3 行）涨到约 49px（4 行），v0.69.0 那套「≤30 列」的长文案
-     不再擦着截断边缘。⚠️ 同样三个模板必须一起改，漏一处那张卡就还是旧版面。 */
-  /* v1.0.11：铭牌带的文字也拆成 type / 分隔符 / rarity 三个 span，并补上左下角的 `.ct-corner`。
-     为什么 —— 手牌（handCardHTML）早就是「三 span + 左下角小墨牌」，而**面板**里的卡
-     （锻造 / 易物 / 弃牌 / 商店 / 牌堆 / 奖励三选一 …）一直只有那条铭牌带：
-     手机横屏档把 `.ct-type/.ct-sep` 藏掉之后，手牌左下角有「攻击／防御」可辨，
-     面板里却什么都没有 ⇒ 玩家没法靠类型筛牌（用户 2026-10-05 报障）。
-     三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 桌面逐像素不变。 */
-  /* v1.1.16：绿底费用芯片的判据扩到「0 费减费牌」——断刃雷符，以及五雷法印置换出的
-     0 费【雷符】副本（`oneShot && id==='leifu'`，与 autoPlayWulei 的识别判据一致）。 */
+  
+  
+  
   return `${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}<div class="cost"${(c.id==='duanren_leifu'||(c.oneShot&&c.id==='leifu'))?' style="background:var(--green);color:#fff"':''}>${cardCost(c)}</div><div class="cplate" data-cardid="${c.id}" data-cardup="${c.up?1:0}"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div><div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${ctCorner(c.type)}</span>`;
 }
 function forgeCardHTML(c,i){
-  /* v0.75.0：锻造卡面从「一张卡 + 卡内一行红字预览」改成**一组两列对照** ——
-     左「当前」▸ 箭头 ▸ 右「升级后」。用户口径：「每两列展示一种卡牌，左边是初始状态
-     右边是升级状态，中间有个箭头来指示升级」。
-     ⚠️ 本函数必须**继续自包含**：冒烟 `String(forgeCardHTML).indexOf('cardText')` 查的是
-        **函数源码**（smoke_runner.js:6744-6746），把卡面拼装抽成模块级 helper 会让
-        cardText 从本函数源码里消失 ⇒ 当场变红。所以两张卡的模板字面量直接内联在下面
-        （cardBody / handCardHTML 也一直是各自自包含的）。下面的 face() 是**函数内**的
-        临时箭头函数，它仍在本函数的源码文本里，闸认。
-     ⚠️ `upgrade-preview` 必须落在**升级后那张**的 `.cdesc` 上（不是整张卡上）：
-        * 冒烟用子串钉「燃血术无预览 / 雷符有预览」（smoke_runner.js:878/881）；
-        * 原型.html 里 .upgrade-preview 的既有语汇就是**卡内红字**（红色 = 升级后的效果），
-          挂到 .cdesc 上正好复用那条语汇；挂到 .card 上会把它的边框/外边距也一起吃掉。
-        * ⚠️ 但 `.card .cdesc`（0,2,0）的 color **压得过** `.upgrade-preview`（0,1,0），
-          所以红色必须由 `#overlay.forge-scene .reward-cards .cdesc.upgrade-preview` 那条
-          高特异度规则给（见 原型.html 锻造段），不是自动生效的。 */
-  const lock = !c.up && !canUpgrade(c);   // 升级无变化的牌：置灰、不可锻造
-  /* 一张卡面。cls / badge / descCls 三个都是给「左」「右」两张卡分身的差异入口。 */
+  
+  const lock = !c.up && !canUpgrade(c);   
+  
   const face = (cc, cls, badge, descCls) => `<div class="card has-frame ${RCOLOR[cc.rarity]}${cls}" data-fi="${i}" onclick="askForgeCard(${i})">
     ${cardFrame()}<div class="cname">${cc.name}${cc.up?'<span class="up-mark" title="已升级">↑</span>':''}${badge}</div>
     ${cardArt(cc)}${exhaustMark(cc)}
@@ -3000,22 +2484,16 @@ function forgeCardHTML(c,i){
     <div class="cdesc${descCls}">${wrapKw(cardText(cc,cc.up))}</div>
     </div><div class="ctype"><span class="ct-type">${TNAME[cc.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[cc.rarity]}</span></div><span class="ct-corner">${ctCorner(cc.type)}</span>
   </div>`;
-  /* 已升级 / 不可升级：本来就**没有「升级后」可看**（前者已经是终态、后者升了也不变），
-     维持单张卡的原样，不配箭头也不配右卡。 */
+  
   if(c.up || lock) return face(c, lock?' locked':'', lock?'<span class="noup">不可升级</span>':'', '');
-  /* 内联 SVG 箭头：不引外部资源、不赌字体有没有「▸」字形（与 .pstat-preblock 的内联
-     SVG 同一手法）。aria-hidden —— 它是纯装饰，读屏念「箭头」没意义。
-     ⚠️ 描边/填充色写在 CSS 里（原型.html 的 .forge-arrow path），**不写在这里的属性上**：
-        SVG 的表现属性（presentation attribute）**不吃 var()** —— 写 stroke="var(--gold)"
-        会被当成非法值丢掉，实拍出来是一支暗红色的箭头（不是金）。 */
+  /* 箭头颜色的 var() 要写在 CSS 里：SVG 表现属性不吃 var() */
   const arrow = `<div class="forge-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12h13M11 6l6 6-6 6"/></svg></div>`;
-  /* ⚠️ onclick **只留在两张卡上，不放到 .forge-pair 容器上**：放容器上会与内层卡的 onclick
-     一起冒泡 ⇒ forgeCard(i) 被调两次，第二次读到 c.up 已真，弹「这张牌已升级过」。 */
+  /* onclick 只留两张卡上，放容器上会冒泡调两次 forgeCard */
   const up = Object.assign({}, c, {up:true});
   return `<div class="forge-pair">${face(c,'','','')}${arrow}${face(up,'','',' upgrade-preview')}</div>`;
 }
 function groupHand(){
-  // 相同牌相邻摆放（按首次出现的顺序稳定分组）
+  
   const order={};
   for(const c of G.hand){ if(!(c.id in order)) order[c.id]=Object.keys(order).length; }
   G.hand.sort((a,b)=>order[a.id]-order[b.id]);
@@ -3023,47 +2501,25 @@ function groupHand(){
 function handCardHTML(c, disabled, i, n){
   const eff=effectiveCost(c);
   const costHtml = (eff<cardCost(c) || c.id==='duanren_leifu' || (c.oneShot&&c.id==='leifu')) ? `<div class="cost" style="background:var(--green);color:#fff">${eff}</div>` : `<div class="cost">${eff}</div>`;
-  /* v0.61.33：删除卡面「预伤徽章」（含数值 / 落空 / 诅咒×N 等标签）。
-     原因：徽章按「上次锁定的敌人」算，拖动改指向另一只时数字不跟着变，会显示错伤害。
-     预伤改为只在拖拽时浮在**目标敌人头顶**（60_boot.js showDragPreview），并跟随所指目标变化。 */
+  
   const sealed = c.sealed>0;
-  /* v0.69.0：文案缩到「封印 N」（封条只有 16px 高、横跨图窗，放不下「忘忧封印 N 回合」）。
-     完整语义在长按放大弹窗与关键词说明里，牌面只留一眼可辨的记号。 */
+  
   const sealTag = sealed ? `<div class="exhaust-tag">封印 ${c.sealed}</div>` : '';
   const rot=((i-(n-1)/2)*3).toFixed(1);
-  /* v0.72.0：这张牌正被抽牌动画「飞进来」⇒ 终态那张先隐形（透明度由动画层收尾时还原）。
-     判据是**对象身份**（NEW_CARDS 是 WeakSet），不是「手牌最后一张」—— groupHand() 会重排 G.hand，
-     按下标找必然找错。无头下 animDrawQueued 早退、根本不往 NEW_CARDS 里写 ⇒ 这里恒为空串，
-     输出与今天**逐字节相同**（冒烟只查 class="cost" / card/leifu.png / cardPointerDown，本就安全）。 */
+  
   const newAttr = NEW_CARDS.has(c) ? ' data-new' : '';
-  /* v1.0.1（手机端重影）：正在「飞进来」的牌，并把隐身**写进 HTML 本身**（`;opacity:0`）。
-     原先只由动画层在开播那一刻给**当前那个元素**写内联 opacity —— 而 render() 会把 #hand
-     整块重写：手机上 340ms 的飞行窗口里一旦再跑一次 render，旧元素连同它的 opacity:0 一起被丢掉、
-     新元素正常显形 ⇒ 画面里同时有飞行的克隆与已落位的手牌，就是用户报的「重影」。
-     写进 HTML 后，无论中途重渲染几次，终态那张都是隐形的；收尾由 Anim 的 settle 恢复
-     （它同时会去找**当前 DOM 里**那张牌，不是只恢复它记下的旧元素）。
-     判据是 FLYING_CARDS（**真正在本层飞**的牌，开播登记 / 收尾摘掉），不是 NEW_CARDS ——
-     后者是「本次抽到的」，settle 前一直挂着，拿它判断万一有残留就会把牌永久藏住。
-     ⚠️ 首抽那一刻本集合还是空的（play 在 render 尾部才登记），所以**首抽不靠这行**隐身 ——
-        那一路仍是动画层自己写 opacity，与今天完全一致。无头下集合恒空 ⇒ 输出**逐字节相同**。 */
+  
   const flying = (typeof FLYING_CARDS!=='undefined') && FLYING_CARDS.has(c);
-  /* v1.0.14（P3-7）：血魔刀·攻击牌火环 —— 阴差持有血魔刀且生命低于 30%（= +25% 真正生效中）时，
-     手牌里的攻击牌边框挂 .xue-fire（CSS 画一圈渐变橙红火线，微微波动）。
-     摆在 handCardHTML（手牌）而不是 cardBody（全站共用）：这一圈是「该牌此刻吃加成」的战斗信号，
-     只对手里要打出去的牌有意义。门槛带 fx()：流畅模式不挂 ⇒ 无头冒烟里恒为空串，输出逐字节不变。 */
+  
   const xueFire = (fx() && G && G.hero==='yincha' && hasRelic('xuemodao') && G.hp < G.maxHp*0.3 && c.type==='attack') ? ' xue-fire' : '';
-  /* sealTag 与 ctype 都在 .cplate **之后**（两者都是相对 .card 绝对定位的）——
-     .exhaust-tag 改绝对定位后不再吃 ~16px 行高，这才是「被封印的牌描述看不全」的根因。 */
-  /* v1.0.3：铭牌窗那条木带的文字拆成三个 span（type / 分隔符 / rarity）。
-     桌面档三个 span 连起来的文本与原来的 `${TNAME} · ${RNAME}` **逐字相同** ⇒ 逐像素不变；
-     手机横屏档（原型.html 的 ⑦ 块）藏掉 type 与分隔符、只留稀有度，
-     类型改由卡片左下角的 `.ct-corner` 小墨牌显示（同样是 TNAME[c.type]）。 */
+  
+  
   return `<div class="card has-frame ${RCOLOR[c.rarity]} ${(disabled||sealed)?'disabled':''}${xueFire}"${newAttr} style="--rot:${rot}deg${flying?';opacity:0':''}" onpointerdown="cardPointerDown(event, ${i})">${cardFrame()}<div class="cname">${c.name}${(c.up||shiWangBoosted(c))?'<span class="up-mark" title="已升级">↑</span>':''}</div>${cardArt(c)}${exhaustMark(c)}${costHtml}<div class="cplate"><div class="cdesc">${wrapKw(cardText(c,c.up))}${shiWangBoostTag(c)}</div></div>${sealTag}<div class="ctype"><span class="ct-type">${TNAME[c.type]}</span><span class="ct-sep"> · </span><span class="ct-rar">${RNAME[c.rarity]}</span></div><span class="ct-corner">${ctCorner(c.type)}</span></div>`;
 }
 function intentText(e){
-  const st=(e.strength||0); // v0.61 C2：力量每点 +1
-  const atkPlain=e.intent.v+st; // v0.61.01：不吃蓄力的意图（连击 / 群体 / 攻击并格挡）
-  const atk=e.intent.v+(e.pendingDamage||0)+st; // v0.61.01：只有单体「攻击」会消费蓄力
+  const st=(e.strength||0); 
+  const atkPlain=e.intent.v+st; 
+  const atk=e.intent.v+(e.pendingDamage||0)+st; 
   switch(e.intent.type){
     case 'attack': return `⚔️ 攻击 ${atk}`;
     case 'charge': return `⏳ 蓄力（下回合单体攻击 +${e.intent.v}）`;
@@ -3073,9 +2529,9 @@ function intentText(e){
     case 'gouhun': return '🔗 勾魂（少抽1张）';
     case 'burn': return `🔥 灼烧 +${e.intent.v}（每回合 -${e.intent.v*2} 生命）`;
     case 'strength': return e.intent.weak ? `💪 力量 +${e.intent.v} · 施加虚弱` : e.intent.sealHeal ? `💪 力量 +${e.intent.v} · 回血` : `💪 力量 +${e.intent.v}`;
-    case 'multi': return `⚔️ 连击 ${e.intent.n}×${atkPlain}`; // v0.61 C2/C2.01：连击不吃蓄力加值（与实际结算一致，原先预览偏高）
+    case 'multi': return `⚔️ 连击 ${e.intent.n}×${atkPlain}`; 
     case 'discard': return '🗑️ 下回合随机弃你 1 张牌';
-    case 'attackBlock': return `⚔️ 攻击 ${atkPlain} · 🛡️ 格挡 ${e.intent.block}`; // v0.61.01：该意图既不叠加也不消耗蓄力（原预览虚高）
+    case 'attackBlock': return `⚔️ 攻击 ${atkPlain} · 🛡️ 格挡 ${e.intent.block}`; 
     case 'summon': return `👥 召唤 ${e.intent.n} 只${ENEMIES[e.intent.unit||'xiaojianshi'].name}`;
     case 'jiming': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return lan?`📜 记名（记录伤害 · 词缀「${lan}」）`:'📜 记名（记录你打出的伤害）'; }
     case 'qingsuan': { const la=e.ledgerAffix; const lan=la?AFFIXES.find(a=>a.id===la.id).name:''; return `⚖️ 清算（反弹 ${Math.min(24, Math.floor((e.ledgerDmg||0)*0.3))}${lan?` · 打出「${lan}」`:''}）`; }
@@ -3086,23 +2542,14 @@ function intentText(e){
     default: return '…';
   }
 }
-/* v1.0.14：敌人意图改「图标 + 数字」。
-   原来立绘下那一行是整句中文（`⚠ 意图：攻击 12 · 施加虚弱`），窄屏会折行、占地大；
-   现在只留一枚图标 + 必要的数字，完整释义挪进 `.intent` 的 title（悬停可看）。
-   ⚠️ `intentText()` **一个字都不能改**：冒烟 :2803/:2805/:2855/:2857/:2860 按中文整句断言。
-   ⚠️ 图标走 `iconTag`：`ui/intent_*.png` 到了自动换图，没图逐字节回落成原 emoji。
-      能复用的直接借用 `buff/` 已交付的那几张（格挡/虚弱/蓄力/灼烧/勾魂/力量/记名/业火）。 */
+
 function intentChip(e){
   const st=(e.strength||0);
   const atkPlain=e.intent.v+st;
   const atk=e.intent.v+(e.pendingDamage||0)+st;
   const I=(n,fb)=>iconTag('ui/intent_'+n+'.png', fb);
   const B=(n,fb)=>iconTag('buff/'+n+'.png', fb);
-  /* v1.1.8（用户：「又要攻击又要勾魂等情况，要有多个意图图标」）：
-     带【勾魂】等**攻击触发词缀**的敌人，攻击那一下会**顺带**触发词缀效果（见 30_engine 的
-     dealDamageToPlayer：judu 追加伤害 / shixue 吸血 / gouhun 勾魂 / feipai 塞废牌）。
-     以前只画一枚攻击图标 ⇒ 玩家看不出这一击还附送勾魂。这里给攻击类意图**追加词缀图标**，
-     一招多效时并排显示。词缀图标就是 deliverable 里那套 buff/<id>.png。 */
+  
   const affixChips=(function(){
     let s='';
     if(e && e.affixes){
@@ -3135,40 +2582,19 @@ function intentChip(e){
     default: return '…';
   }
 }
-// v0.60 的纵深错落表。v0.72.0 起它**不再决定敌人抬多高**（纵向改由 SLOT_SHAPE 的弧线
-// 主导），但仍以「净空下限」的身份活着：battleHeadroom() 拿它算 --headroom 的下界。
-// ⚠️ 这个数组与 battleHeadroom() 本身一个字都不能改（冒烟逐条钉死）。
+// RISE_LIFT 与 battleHeadroom 一个字都不能改（冒烟逐条钉死）
+
+
 const RISE_LIFT=[0,42,20,60,30];
-// 当前场上「后排上抬」的最大幅度 —— 用作 #enemy-panel 的 padding-top，
-// 保证被抬起的后排敌人不会越过 .battle 上沿去盖住 #topbar（v0.60 修）
+
+
 function battleHeadroom(){
   let mx=0;
   (G.enemies||[]).forEach((e,i)=>{ if(alive(e)||e.dying) mx=Math.max(mx, RISE_LIFT[i%RISE_LIFT.length]); });
   return mx;
 }
-/* v0.70.0：后排上抬幅度的**倍率**。基准档 =1（与 v0.69.0 逐像素相同），
-   矮屏档由 CSS 的 --rise-unit 压小 —— 390px 高的屏上抬 60px 会把后排顶进顶栏。
-   ⚠️ RISE_LIFT 与 battleHeadroom() 本身**一个字都不能改**：冒烟逐条钉死了
-      0/42/60/20 与 max(RISE_LIFT[i%len]) —— 倍率只能加在调用点。
-   ⚠️ 必须带 window.getComputedStyle 守卫（照 mapCamRange 的写法）：冒烟宿主里
-      既没有它也没有 innerWidth，漏了守卫会算出 NaN，而 NaN 会一路写进
-      内联 transform 与 z-index。 */
-/* v0.72.0：弧线振幅的**横纵两个倍率**。
-   `--rise-unit` 管纵向（敌人往上抬多少），`--slot-dx-k` 管横向（向左拉向玩家多远）。
-   `--rise-unit` 是 v0.70.0 就有的旋钮，那时它乘的是 RISE_LIFT（后排上抬幅度）；
-   v0.72.0 起纵向改由 SLOT_SHAPE 的 dy 主导，它乘的就是 dy —— 语义一个字没变
-   （「敌人往上抬多少」），换的只是被乘的那张表。所以名字不改成 --slot-dy-k：
-   两个名字一起看反而对不上，而它本来就是这个意思。
-   为什么做成 CSS 变量：矮屏档只要写一条同特异度、书写更后的同名变量就能压小，
-   **JS 完全不需要知道当前是哪个档**（所以也不需要 innerWidth，无头宿主里照样安全）。
-   ⚠️ 两个都必须容忍 0：窄屏档（≤520 / ≤360）要把弧线**整个归零**（那两档
-      .battle 是 flex-direction:column ⇒ 玩家在上、敌人在下，「玩家左下」本来就失效）。
-      所以判据是「有限且 ≥0」—— v0.70.0 写的是 `>0`，它会把 0 误判成非法而回落成 1，
-      窄屏当场长出弧线（v0.70.0 时 `--rise-unit` 的合法值域只有 >0，没有 0 这一档，
-      所以那时写 >0 是对的，现在不是了）。
-   ⚠️ isFinite 同样是硬要求：变量写空 ⇒ NaN ⇒ 一路写进 --ex/--ey ⇒
-      浏览器**丢弃整条 transform**（不是退回 0）⇒ 所有敌人塌回原点，静默无报错。
-   无头宿主里没有 getComputedStyle ⇒ 早退 ⇒ 两个倍率恒为 1。 */
+/* 倍率只能加在调用点；必须带 getComputedStyle 守卫，否则算出 NaN */
+/* 两个倍率必须容忍 0 且要求 isFinite：NaN 会让浏览器丢弃整条 transform */
 let _riseK=1;
 let _slotDxK=1;
 function refreshRiseK(){
@@ -3181,38 +2607,16 @@ function refreshRiseK(){
     _slotDxK=(isFinite(dxk) && dxk>=0) ? dxk : 1;
   }catch(e){ _riseK=1; _slotDxK=1; }
 }
-/* v0.72.0：弧线槽位表。下标 = 纵深秩 r，**r=0 是最前排（最浅 / 最低 / 最靠玩家）**。
-   秩由 enemyPanelHTML 里的 `rank = 存活数-1-pos` 算出（pos = filter 之后的位置）：
-   `#enemy-panel` 是 row-reverse ⇒ G.enemies[0] 落在**最右**，配 rank=n-1-pos 正好让
-   「数组首元素 = 最深 = 最高 = 最右」⇒ 斜向从右上（远）降到左下（贴近玩家），
-   就是用户要的「包围玩家 + 集中在右上角」。**不要动 G.enemies 的顺序** ——
-   30_engine.js 的 summon / boss 分裂都依赖数组序，秩只在 enemyPanelHTML 内部算。
-   dx ≤ 0：只向左（向玩家）拉，**不取正值**。为什么不能取正：row-reverse 下最右那只
-     **已经**贴着右缘，再给它正 dx 就会顶出 #enemy-panel 右缘，只能靠加大 padding-right
-     兜，而 padding-right 会直接吃掉可用宽（1280×720 下只有 818px），把 3 敌从一行挤成两行。
-     取负则只会把它从右缘往内收 —— 正好就是用户要的「不贴角」。
-   dx 的形状：**最浅那只恒为 0（不动），越深拉得越多**。
-     ⇒ 整组「压在右上方、朝玩家俯下」：越靠后的越往左下收，最前排那只留在原地
-       站在地平线上 = 「包围玩家」+「集中右上角」。
-     ⚠️ 反过来（浅的拉最多、深的归 0）试过，**实测撞车**：960×540 五敌（2 elite+3 normal）
-        那一行正好塞满面板（786/790），最前排那只的 flex 左边只余 4px，再往左拉 29px
-        就压进 #player-panel（左沿 131 vs 玩家面板右沿 146）。而「浅的归 0」把最前排
-        **钉死在 flex 位上**（它按定义就在面板内）⇒ 与玩家面板相交这条风险**由构造排除**，
-        不靠实拍撞出来。这一条是本表唯一不能随便调头的方向。
-     dy ≥ 0：只向上抬。抬高量由 #enemy-panel 的 padding-top（--headroom）兜住。
-   两个位移都**不参与 flex 布局**（transform 是纯绘制层）⇒ 弧线完全不改变换行判定。
-   ⚠️ dy 的振幅是本批的**预算命门**，它是照 --headroom 的封套定的、不是照参考图定的：
-     62 就是 v0.71.0 已有的净空上限（RISE_LIFT 最大值 60 + 2），所以基档高度零变化。
-     往上调只会让 .battle 变高、把竖滚放回来（见 slotHeadroom 那条注释）。 */
+/* 别动 G.enemies 顺序：召唤/分裂依赖数组序，秩只在 enemyPanelHTML 内算 */
 const SLOT_SHAPE = [
-  {dx:  0, dy: 0},   // ① 最前排：站在地平线上，与玩家同高（**横向钉在 flex 位上，不动**）
+  {dx:  0, dy: 0},   
   {dx:-14, dy:14},
   {dx:-28, dy:28},
   {dx:-42, dy:42},
-  {dx:-54, dy:54},   // 越深越往左下收 ⇒ 整组朝玩家俯下
-  {dx:-64, dy:62},   // ⑥ 满场（boss 分裂 / 召唤）
+  {dx:-54, dy:54},   
+  {dx:-64, dy:62},   
 ];
-/* 场上存活（含正在播死亡动画）的敌人数 —— 与 enemyPanelHTML 收到的 filter 同一口径。 */
+
 function slotCount(){
   let n=0;
   (G.enemies||[]).forEach(e=>{ if(alive(e)||e.dying) n++; });
@@ -3220,14 +2624,11 @@ function slotCount(){
 }
 function slotShift(r){
   const last=SLOT_SHAPE.length-1;
-  const i=Math.max(0, Math.min(last, r|0));   // `r|0` 顺手把 NaN / undefined / 越界一并收进 [0,last]
+  const i=Math.max(0, Math.min(last, r|0));   
   const s=SLOT_SHAPE[i];
   return { dx:Math.round(s.dx*_slotDxK), dy:Math.round(s.dy*_riseK) };
 }
-/* 弧线自身的最大上抬量 —— 与 battleHeadroom() 同构，由调用点取两者的 max 当 --headroom。
-   ⚠️ 必须**按当前敌人数**取最大，不能扫全表：单敌时 rank 只可能是 0 ⇒ 实际抬升 0，
-      扫全表却会返回 62 ⇒ --headroom=64 ⇒ 单敌也白吃 62px，`.battle` 从 290 涨到 345、
-      整页多 55px。表在 dy 上是单调的，所以「前 n 项取 max」正好等于实际会用到的最大 dy。 */
+
 function slotHeadroom(){
   const n=slotCount();
   if(n<=0) return 0;
@@ -3238,29 +2639,25 @@ function slotHeadroom(){
 function enemyPanelHTML(e, idx){
   const ehp=Math.max(0,e.hp/e.maxHp*100);
   const ehPrev=(ENEMY_HP_PREV[e.uid]===undefined)?ehp:ENEMY_HP_PREV[e.uid];
-  /* v1.0.12：与玩家血条同一套 —— 这一帧比上一帧涨了（敌人 heal / 再生 / 僵王吸血）就走「慢慢涨」慢档。 */
+  
   const ehGain=ehp>ehPrev+0.001;
   ENEMY_HP_PREV[e.uid]=ehp;
-  /* v0.61.33：删除「点击锁定」后不再有选中态 —— 目标只由拖拽落点决定（拖拽中的高亮是 .drag-target） */
-  // 纵深错落：纵向位移改由弧线槽位表主导（见 SLOT_SHAPE）。
-  // ⚠️ RISE_LIFT 不再决定这只敌人抬多高 —— 它是**非单调**的（0/42/20/60/30），
-  //    当斜向纵深的基线会让中间那只反而比最深的那只高。RISE_LIFT 与 battleHeadroom()
-  //    本身一个字没改，它们以「净空下限」的身份继续被 60_boot.js 调用（--headroom 取 max）。
+  
+  
+  
+  
+  
   const rank=(idx>=0 ? slotCount()-1-idx : 0);
   const edef=ENEMIES[e.key];
   const eSize=e.boss?'e-boss':e.elite?'e-elite':(edef&&edef.summon)?'e-summon':'e-normal';
-  /* v0.72.0：弧线位移。纵向与横向都由槽位表给（sh.dy / sh.dx），已经乘过矮屏倍率。
-     z-index 仍是 `2000-上抬量`：dy 在秩上是单调的 ⇒ 「越深越高 ⇒ 越深越靠后」，
-     也就是前排永远压住后排（命中的 z-index 决胜依赖这一条）。
-     内联 `--ex/--ey` 而不是内联 transform：见 原型.html 里 `.enemy` 那条注释。 */
+  /* z-index = 2000 - 上抬量：越深越高越靠后，前排压住后排 */
   const sh=slotShift(rank);
   const ex=sh.dx;
   const ey=sh.dy;
-  /* v1.0.13：徽章前那枚 emoji 走 iconTag —— 图到了（素材/buff/<id>.png）自动换图，没到逐字节输出原 emoji。
-     id 表见《美术设计要求.md》§4.3；词缀（AFFIXES 的 9 个 id）本来就是纯文字，图到了才多一枚图标。 */
+  
   let badges='';
-  if(e.curse>0){ const max=e.curse>=6 && (hasRelic('leifaxinjue') || hasRelic('taishangzhou')); badges+=`<span class="badge curse${max?' curse-max':''}" data-tip="kw:诅咒" style="cursor:help">${iconTag(max?'buff/curse_6.png':'buff/curse_1_5.png','☠️')}诅咒 ×${e.curse}</span>`; }   // v1.0.18：用户口径 —— 【雷法心诀】或【太上咒箓】**只要有任意一个**在身，叠满 6 层就换 curse_6.png，否则一律 curse_1_5.png
-  /* v1.0.14：腐骨散施加的【腐毒】（每回合开始按层数掉血、随后 -1 层）。 */
+  if(e.curse>0){ const max=e.curse>=6 && (hasRelic('leifaxinjue') || hasRelic('taishangzhou')); badges+=`<span class="badge curse${max?' curse-max':''}" data-tip="kw:诅咒" style="cursor:help">${iconTag(max?'buff/curse_6.png':'buff/curse_1_5.png','☠️')}诅咒 ×${e.curse}</span>`; }   
+  
   if(e.poison>0) badges+=`<span class="badge affix" data-tip="kw:腐毒" style="cursor:help">${iconTag('buff/fudu_badge.png','☠️')}腐毒 ×${e.poison}</span>`;
   if(e.charm>0) badges+=`<span class="badge charm" data-tip="kw:魅惑" style="cursor:help">${iconTag('buff/charm.png','💘')}魅惑 ×${e.charm}</span>`;
   if(e.strength>0) badges+=`<span class="badge strength" data-tip="kw:力量" style="cursor:help">${iconTag('buff/strength.png','💪')}力量 ×${e.strength}</span>`;
@@ -3281,13 +2678,11 @@ function enemyPanelHTML(e, idx){
   </div>`;
 }
 function summonHTML(s){
-  // 尸王在场时其他召唤单位伤害 +1（与 summonAct 结算一致：尸王自身不吃、无尸王不加）
-  // v1.0.21：补上群鬼乱舞[阴差]的「本回合每失 2 血 +N」增伤 —— 此前总伤提示变了、每个召唤物的显示却没跟着变（用户报）。
+  
+  
   const sw = (s.type!=='shi_wang' && G.summons.some(x=>x.type==='shi_wang' && x.dur>0)) ? 1 : 0;
   const bleed = G.bleedSummons ? Math.floor((G.hpLostTurn||0)/2)*(G.bleedSummonsBonus||1) : 0;
-  /* v1.1.5：增伤只给「有攻击力」的召唤物（纸人/小鬼/阴兵）。尸王走 s.v 原值；
-     五通神不打人（只给格挡/回血），**绝不能**被群鬼乱舞的失血增伤或尸王加成抬到回复量上
-     —— 与 wutongTick 的 `const b=s.v||3;` 严格同口径（用户报：五通神回血量被多算了）。 */
+  
   const v = (s.type==='shi_wang' || s.type==='wutong') ? s.v : (s.v + sw + bleed);
   const label = s.type==='zhiren'?(G.hero==='ganshiren'?`纸人：每回合末对随机敌人造成 ${v} 点伤害`
       :G.hero==='wuseng'?`纸人：每回合末造成 ${v} 点伤害；存活时每回合开始 +${s.up?3:2} 格挡`
@@ -3299,54 +2694,32 @@ function summonHTML(s){
     : s.type==='yinbing'?`阴兵：每回合末${G.hero==='tianshi'?'优先攻击🎯标记敌（上一次施咒的敌人）':'对随机敌人'}造成 ${v} 点伤害${G.hero==='wuseng'?`；存活时每回合开始 +${s.up?4:3} 格挡`:''}${G.hero==='yincha'?'；攻击时为你恢复 2 点生命':''}`
     : s.type==='shi_wang'?`尸王：每回合末对全体敌人造成 ${v} 点伤害`
     : (G.hero==='yincha'?`五通神：每回合开始你 +${v} 生命`:`五通神：每回合开始你 +${v} 格挡`);
-  /* v1.0.3：筹码条形式 —— 正文只留「短名 数值 · 剩 N」，完整机制描述进 title 与 .sb-long。
-     ⚠️ 完整描述**一个字都没删**：它同时出现在 title 与 .sb-long 里 ——
-        桌面档（含顶栏详情）显示 .sb-long 原文，与改动前逐字相同；
-        手机横屏档才换成 .sb-short（原型.html 的 ⑥ 块）。
-        冒烟 :506-513 / :1021-1023 / :2076-2078 都是按 indexOf 断言标签全文仍在 ⇒ 必须保留。
-     短名从 label 的「X：…」前半段取（下面每个分支的格式统一是「类型名：描述」）⇒ 不需要新名字表。 */
+  
   const name = label.slice(0, label.indexOf('：')) || label;
-  /* v1.0.21：名字前加一枚对应召唤物颜色的小圆点（纸人白 / 小鬼黑 / 五通神紫 / 阴兵金 / 尸王红）。 */
+  
   const dot = `<i class="summon-dot" style="background:${SUMMON_DOT[s.type]||'#a06be0'}"></i>`;
   return `<span class="summon" title="${label}"><span class="sb-long">${dot}${label} · 剩 ${s.dur} 回合</span><span class="sb-short">${dot}${name} ${v} · 剩 ${s.dur}</span></span>`;
 }
 
-/* ===================== 拖拽出牌（阶段② 骨架） ===================== */
-const AOE_CARDS = ['wanjian', 'baigui', 'leiqianfu'];   // 打全体：不需要拖拽箭头（咒雨不在此列 —— 它按机制随机分配，不是「全体」，见 P3；雷谴符 v1.1.0 改为群伤）
-/* v0.61.33：是否需要「拖出箭头指向单个敌人」改为**按机制**判定，不再只看 type==='attack'。
-   原先的判定漏掉 4 张真正要指定目标的牌，删掉「点击锁定」后它们会永远选不了目标：
-     · 钟馗镇魂 / 镇妖铃 —— type 是 spirit，但走 curEnemy() 打单体（镇妖铃还对带诅咒目标加伤）
-     · 画皮 —— 定向施加【魅惑】；咒印 —— 定向施加【诅咒】
-   攻击牌里 万剑归宗 / 百鬼夜行 打全体、无需箭头（已由 AOE_CARDS 排除）。 */
+/* 拖拽出牌 */
+const AOE_CARDS = ['wanjian', 'baigui', 'leiqianfu'];   
+/* 是否需要拖箭头按机制判，不看 type：钟馗/镇妖铃/画皮/咒印也要 */
 const TARGETED_CARDS = ['leifu','huofu','jianfu','zhanyaojian','tianlei','tiebushan','shihun','qungui',
   'taomufu','shihunzhou','shixue','zhongkui','zhenyaoling','huapi',
-  /* 断刃雷符：断刃遗物发的 0 费攻击牌，eff 走 curEnemy() ⇒ 同样要箭头（否则只能打最右那只） */
+  
   'duanren_leifu',
-  /* 罗汉伏虎（武僧里程碑 t1）：eff 走 curEnemy()，按指定敌人结算 ⇒ 要箭头 */
+  
   'luohanfuhu',
-  /* 饮血刃（阴差里程碑 t1）：eff 走 curEnemy() 打单体 ⇒ 要箭头 */
+  
   'yinxueren'];
 function needsTarget(c){
-  // 咒印：目标随角色变 —— 赶尸人=拿尸气、武僧=给自己挂吸血，都不指向敌人；天师/阴差才定向施咒
+  
   if(c.id==='zhouyin') return G.hero!=='ganshiren' && G.hero!=='wuseng';
-  /* v0.75.0：舍身 —— 天师列是「失去 4 血 + 抽牌 + 对目标施加 N 层【诅咒】」，
-     有对敌人施加效果却不带箭头。赶尸人（尸气）/ 武僧（格挡）/ 阴差（纯抽牌）三列
-     对敌人**零作用** ⇒ 只有天师列出箭头。同 zhouyin 的「按角色条件定向」先例。 */
+  
   if(c.id==='sheshen') return G.hero==='tianshi';
-  /* v1.0.21：群鬼乱舞按角色条件定向 —— 用户报「阴差里对敌人没有伤害，却有指向性箭头」。
-     核实 eff：赶尸人=消耗尸气触发召唤、阴差=失血+挂「召唤增伤」buff，**两列对敌人零直接作用**
-     ⇒ 拖出箭头指不到任何东西，必须去掉；只有真正打向指定敌人的天师（诅咒增伤）/ 武僧（召唤数增伤）保留箭头。 */
+  
   if(c.id==='qungui') return G.hero==='tianshi' || G.hero==='wuseng';
-  /* v0.75.0 复查结论（用户点名要复查「应该加上指示性的卡牌」）——
-     全仓把 curEnemy() / randomAlive() 逐点映射过一遍后的判定，**故意不加箭头**的四张：
-       · 附灵术：天师列「每触发 1 个召唤物，对随机敌人施咒」×N。文案明写「随机」，
-         且 N 取决于当场触发的召唤数、打出时算不出来；改成指定 = N 层全砸一只，是远大于舍身的加强。
-         （用户 2026-09-30 明确确认：说明写「随机」的就不要指向性。）
-       · 纸人 / 五通神：召唤物的**回合末**随机施咒 —— 不是出牌时点，无从指向。
-       · 洗髓经：持续被动，每回合随机施咒 —— 同上。
-       · 焚符：每弃 1 张的**副效应**随机施咒，且它是多步选牌弹窗 —— 副效应不是主目标。
-     攻击侧本来就完整：除 wanjian / baigui 外每张 type==='attack' 都在名单里，
-     那两张是 AoE、由 AOE_CARDS 明确豁免（冒烟有钉子）。**名单本身不动。** */
+  
   return TARGETED_CARDS.includes(c.id);
 }
 let DRAG = null;
@@ -3376,16 +2749,16 @@ function drawArrow(x1,y1,x2,y2){
   if(len<8){ path.setAttribute('d',''); return; }
   const ux=dx/len, uy=dy/len;
   let px=-uy, py=ux;
-  if(py<0){ px=-px; py=-py; }                 // 弓形朝下（抛物线轨迹）
-  const bow=len*0.24;                          // 弧度大小
+  if(py<0){ px=-px; py=-py; }                 
+  const bow=len*0.24;                          
   const mx=(x1+x2)/2+px*bow, my=(y1+y2)/2+py*bow;
-  const wT=2.2, wH=12;                         // 尾部细、箭头粗
+  const wT=2.2, wH=12;                         
   const t1x=x1+px*wT, t1y=y1+py*wT, t2x=x1-px*wT, t2y=y1-py*wT;
   const h1x=x2+px*wH, h1y=y2+py*wH, h2x=x2-px*wH, h2y=y2-py*wH;
   const wM=(wT+wH)/2;
   const c1x=mx+px*wM, c1y=my+py*wM, c2x=mx-px*wM, c2y=my-py*wM;
-  const hs=Math.max(16, Math.min(28, len*0.10));   // 箭头长度
-  const hh=wH*1.6;                                  // 箭头半宽（明显宽于箭身）
+  const hs=Math.max(16, Math.min(28, len*0.10));   
+  const hh=wH*1.6;                                  
   const bx=x2-ux*hs, by=y2-uy*hs;
   const a1x=bx+px*hh, a1y=by+py*hh, a2x=bx-px*hh, a2y=by-py*hh;
   const d='M '+t1x+' '+t1y+' Q '+c1x+' '+c1y+' '+h1x+' '+h1y+' L '+a1x+' '+a1y+' L '+x2+' '+y2+' L '+a2x+' '+a2y+' L '+h2x+' '+h2y+' Q '+c2x+' '+c2y+' '+t2x+' '+t2y+' Z';

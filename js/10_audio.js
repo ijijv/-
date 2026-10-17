@@ -1,16 +1,11 @@
 /* ============================================================================
- * 志怪塔 · js/10_audio.js —— 音频与素材层
- * Web Audio 音效合成 sfx() / BGM（外置优先·合成兜底）/ 素材映射与图片回退
- * ----------------------------------------------------------------------------
- * 由 原型.html 的整段内联脚本按原顺序切分而来（v0.61.05 三层重构，纯搬移）。
- * 拼接校验：本文件组去掉各自横幅后，应与切分前的内联脚本正文逐字节一致。
- * 加载：经典外链脚本（非 ES module），双击本地打开即可直接游玩。
+ * 志怪塔 音频层：音效合成 / BGM / 素材映射与图片回退
  * ============================================================================ */
-/* ===================== 音效（Web Audio 合成 + 外置采样可选） ===================== */
-let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1, lowSpec:false, endTurnHint:true, perfReadout:false }; // v0.61.20(P1)：endTurnHint 结束回合软提示开关；v1.0.5：perfReadout 真机性能读数（默认关）
+/* 音效：合成 + 可选外置采样 */
+let SETTINGS = { sound:true, musicVol:0.32, sfxVol:1, lowSpec:false, endTurnHint:true, perfReadout:false };
 function loadSettings(){ try{ const r=Store.getJSON('zhiguaitower_settings_v1'); if(r) SETTINGS=Object.assign(SETTINGS, r); }catch(e){} }
 function persistSettings(){ try{ Store.setJSON('zhiguaitower_settings_v1', SETTINGS); }catch(e){} }
-function fx(){ return !SETTINGS.lowSpec; }   // 流畅模式：关闭震屏/抖动/飘字等重特效
+function fx(){ return !SETTINGS.lowSpec; }   // 流畅模式：关重特效
 function applyLowSpec(){ document.body.classList.toggle('low-spec', !!SETTINGS.lowSpec); }
 let AC=null, NOISE=null;
 function ensureAudio(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC && AC.state==='suspended') AC.resume(); return AC; }
@@ -34,7 +29,7 @@ function noiseBuffer(){
   for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
   return NOISE;
 }
-/* 打击层：白噪声 + 低通下扫，模拟"砰"的冲击感 */
+/* 打击层：白噪下扫，砰一下 */
 function boom(dur, vol, from, to, when){
   const ac=ensureAudio(); if(!ac) return;
   const t=ac.currentTime+(when||0);
@@ -49,16 +44,9 @@ function boom(dur, vol, from, to, when){
   src.start(t); src.stop(t+dur);
 }
 
-/* ——— 音效分发表（v0.61.25 从 12 键 switch 扩成 71 键） ———
-   键名表就是外包/素材站的交付文件名，见项目根目录 素材清单.md 第一节（70 条复用组 + 遗留键 hit）。
-   表里三种写法：
-     ['t', freq, dur, type, vol, when, slideTo]   —— 单个振荡器
-     ['b', dur, vol, from, to, when]              —— 白噪 + 低通下扫
-     ['n', [f1,f2,…], dur, type, vol, step]       —— 一串音（琶音/音阶），相邻间隔 step 秒
-   转发一律用 .apply 原样透传，**绝不补默认值**：旧代码里 tone 有 4/5/6 参三种叫法，
-   补默认值会改变听感（冒烟里的 golden 快照会红）。顺序即听感，别随手重排。 */
+/* 音效分发表。三种写法：['t',freq,dur,type,vol,when,slide] 单个振荡器 / ['b',dur,vol,from,to,when] 白噪下扫 /
+   ['n',[...],dur,type,vol,step] 一串音。转发一律 .apply 原样透传，别补默认值，顺序就是听感别重排 */
 const SFX_TABLE = {
-  /* A 组 · 打击层（8） */
   hit_light:      [['b',.10,.32,2600,500],['t',300,.06,'triangle',.14]],
   hit_heavy:      [['b',.28,.55,1600,140],['t',120,.18,'square',.20,0,60]],
   hit_crit:       [['b',.34,.60,2400,200],['t',900,.10,'square',.16],['t',1400,.14,'triangle',.12,.05,700]],
@@ -67,14 +55,12 @@ const SFX_TABLE = {
   block:          [['t',300,.09,'triangle',.16,0,500]],
   death:          [['b',.3,.4,1200,100],['t',160,.18,'sawtooth',.18,0,60]],
   thorns:         [['t',1200,.08,'square',.16,0,2400],['b',.10,.22,3200,900]],
-  /* B 组 · 玩家输出细分（6） */
   atk_slash:      [['b',.14,.28,3600,900],['t',700,.10,'triangle',.10,0,1800]],
   atk_talisman:   [['t',300,.30,'sine',.12,0,900],['b',.12,.16,2200,700]],
   atk_blunt:      [['b',.30,.45,1100,180],['t',160,.16,'sine',.16,0,120]],
   atk_aoe:        [['b',.48,.50,2600,120],['t',180,.30,'sawtooth',.14,0,80]],
   atk_multi_each: [['b',.07,.24,3000,900]],
   atk_true:       [['t',420,.34,'sine',.16,0,90],['b',.24,.20,700,180]],
-  /* C 组 · 敌人出招（11）—— 锚在 intents[].type 上 */
   enemy_attack:   [['b',.16,.42,1800,220],['t',200,.10,'square',.16,0,90]],
   enemy_multi:    [['b',.10,.34,2200,400],['t',260,.06,'square',.13,0,140]],
   enemy_charge:   [['t',160,.42,'sawtooth',.16,0,420]],
@@ -86,7 +72,6 @@ const SFX_TABLE = {
   enemy_buff_self:[['t',180,.30,'triangle',.16,0,360],['t',270,.24,'sine',.12,.10,520]],
   enemy_qingsuan: [['b',.40,.55,1500,120],['t',140,.30,'sawtooth',.22,0,70],['t',900,.12,'square',.10,.10,400]],
   enemy_dormant:  [['t',300,.34,'sine',.10,0,180]],
-  /* D 组 · 卡牌机制（13） */
   card:           [['t',360,.06,'triangle',.18],['b',.04,.12,4000,800]],
   card_draw:      [['t',640,.09,'triangle',.14,0,900]],
   card_discard:   [['t',420,.12,'triangle',.13,0,180]],
@@ -100,7 +85,6 @@ const SFX_TABLE = {
   card_summon:    [['t',260,.26,'triangle',.14,0,620],['b',.16,.22,1000,260]],
   card_shiji:     [['b',.26,.28,600,160],['t',180,.24,'sawtooth',.12,0,240]],
   card_xuenu:     [['t',160,.24,'sawtooth',.18,0,300],['b',.18,.26,900,200]],
-  /* E 组 · 关键词与状态（10） */
   kw_burn:        [['b',.30,.30,900,200],['t',200,.24,'sawtooth',.13,0,120]],
   kw_curse:       [['t',210,.24,'square',.14,0,130]],
   kw_weak:        [['t',320,.26,'triangle',.13,0,150]],
@@ -111,22 +95,17 @@ const SFX_TABLE = {
   kw_regen:       [['t',460,.20,'sine',.13,0,700],['t',330,.18,'sine',.11,.10,520]],
   kw_linghua:     [['t',760,.26,'sine',.13,0,1100]],
   kw_junk:        [['t',220,.20,'square',.13,0,140],['b',.12,.18,800,260]],
-  /* F 组 · 敌人词缀通用触发（1） */
   affix_proc:     [['t',300,.16,'triangle',.13,0,420],['b',.12,.20,1600,400]],
-  /* G 组 · Boss 招牌机制（5） */
   boss:           [['b',.42,.5,800,110],['t',120,.34,'sawtooth',.22,0,58]],
   boss_phase2:    [['b',.50,.55,900,110],['t',110,.44,'sawtooth',.22,0,55],['t',330,.30,'square',.12,.18,660]],
   boss_split:     [['b',.34,.50,1600,180],['t',520,.20,'triangle',.16,0,260],['t',520,.20,'triangle',.14,.16,260]],
   boss_ledger:    [['t',600,.14,'triangle',.14],['b',.16,.30,1200,300]],
   boss_yehuo:     [['b',.46,.46,1200,150],['t',130,.36,'sawtooth',.20,0,50]],
-  /* H 组 · 系统与 UI（12） */
   ui_click:       [['t',720,.05,'triangle',.10]],
   error:          [['t',200,.12,'square',.18,0,120]],
   ui_panel:       [['t',380,.10,'sine',.10,0,520]],
   ui_map:         [['t',520,.12,'triangle',.13,0,700]],
   ui_reward:      [['t',660,.12,'triangle',.14,0,880],['t',990,.14,'sine',.11,.08,1100]],
-  /* v1.0.17：翻牌「翻开」专用音（用户交付 素材/sfx/ui_flip.mp3 的合成兜底）。
-     与 ui_reward（选中入牌组）分开：翻开是短促的「唰」一声，选走才给奖励音。 */
   ui_flip:        [['t',520,.09,'triangle',.12,0,900],['b',.10,.14,2200,700]],
   ui_levelup:     [['t',523,.14,'triangle',.14],['t',784,.16,'triangle',.12,.10,1046]],
   ui_unlock:      [['t',600,.14,'sine',.13,0,900],['t',900,.16,'sine',.11,.10,1200]],
@@ -134,46 +113,23 @@ const SFX_TABLE = {
   relic:          [['t',660,.12,'sine',.18],['t',990,.16,'sine',.14,.08]],
   win:            [['b',.3,.4,2000,300],['n',[523,659,784,1047],.16,'triangle',.16,.1]],
   lose:           [['b',.4,.45,1500,120],['n',[400,300,220,150],.2,'sawtooth',.14,.13]],
-  /* I 组 · 遗物分化（3） */
   relic_bell:     [['t',880,.40,'sine',.16],['t',1320,.36,'sine',.11,.10,1320]],
   relic_fu:       [['t',400,.20,'triangle',.14,0,760],['b',.12,.16,1800,500]],
   relic_mirror:   [['t',1100,.24,'sine',.12,0,1600]],
-  /* v1.0.17（P3-6 补）：道心破碎（用户交付 素材/sfx/glass_break.mp3 的合成兜底）。
-     玻璃碎裂：一记宽频噪声爆 + 三片越掉越低的碎音，短促、干脆。 */
   glass_break:    [['b',.16,.34,3200,900],['t',2600,.09,'triangle',.15,0,1400],['t',1900,.11,'triangle',.12,.05,1000],['t',1200,.14,'triangle',.10,.11,600]],
-  /* J 组 · 主菜单与里程碑（3）—— v1.0.23（用户口径「音效你自己配好」）。
-     入塔/续的石碑崩碎、三张符纸拉开、里程碑海报点选。
-     全是合成兜底：素材/sfx/ 里没有同名文件时照旧出声，日后补真采样即可自动接管。
-     v1.1.23（用户口径「把里程碑的滑动音效删了」）：里程轨横向拖动那条 ui_drag **整键移除** ——
-     触发点（mileDragStart/Move 的节流播声）已删，键位与素材一并清掉，不留休眠键。 */
   ui_stele:       [['b',.26,.55,1500,240],['t',150,.16,'square',.20,0,80],
                    ['t',430,.10,'triangle',.13,.07,320],['t',880,.08,'triangle',.10,.14,560]],
   ui_curtain:     [['b',.34,.30,2400,900],['t',620,.22,'sine',.10,0,1500],['t',1250,.14,'triangle',.08,.06,900]],
   ui_poster:      [['b',.13,.42,900,170],['t',250,.12,'triangle',.16,0,430],['t',430,.10,'sine',.10,.05,560]],
-  /* K 组 · v1.1.x（用户交付真采样：素材/sfx/<键名>.wav —— 在就用素材，不在就走下面的合成兜底）
-     number        结算滚字滴答（总分 / 里程逐条 + 大号浮字逐位）
-     stone_broken  主界面「入塔 / 续」石碑崩碎（与 ui_stele 同族，换成真采样）
-     rank          主界面点皇榜 → 风云榜入口
-     boom          腐毒发作跳伤（配已有 素材/fx/fudu_hit.png）
-     energy        罗汉伏虎 / 铁布衫：蓝色元气汇聚冲散 */
   number:         [['t',1180,.03,'triangle',.08]],
   stone_broken:   [['b',.30,.55,1700,220],['t',150,.16,'square',.20,0,80],['t',430,.10,'triangle',.13,.07,320]],
   rank:           [['t',660,.12,'triangle',.14,0,980],['t',990,.14,'sine',.12,.09,1320]],
   boom:           [['b',.30,.50,1400,120],['t',120,.24,'sawtooth',.20,0,60]],
   energy:         [['t',420,.26,'sine',.13,0,900],['t',640,.22,'sine',.11,.10,1200]],
-  /* L 组 · v1.1.x（用户交付真采样：素材/sfx/<键名>.wav —— 同 K 组机制，缺文件时走合成兜底）
-     spark      反伤 / 反震：金属火花迸溅（玩家反伤敌人、敌人反震玩家共用）
-     slash      饮血刃：利刃斩击
-     lightning  雷谴符：逐段落雷（按分段层数多段、紧凑连绵） */
   spark:          [['b',.12,.34,3600,1200],['t',2400,.10,'triangle',.14,0,900]],
   slash:          [['b',.10,.30,4000,1100],['t',1600,.09,'sawtooth',.12,0,1400]],
   lightning:      [['b',.30,.46,2600,300],['t',120,.28,'sawtooth',.20,0,70],['t',1800,.14,'square',.12,.06,600]]
 };
-/* M 组 · v1.1.10/11：boss_vfx 全部 9 幕 Boss 技能音效（28 个 = 前 6 幕 19 + 后 3 幕 9）。
-   真采样由用户交付（`素材/sfx/<键名>.mp3`，见 30_engine.js 的 BOSS_VFX）—— 下面这条只是
-   **采样没到位 / 解码失败时的合成兜底**，不写的话 sfx() 会走 sfxWarnUnknown 静默吞掉。
-   键名与 boss_vfx/README 的技能 key 一一对应（_cast / _self 播它；_hit 播通用 hit_light|hit_heavy。
-   v1.1.20：4 条 `_link` 连接段已按用户口径删除，故不再有 `_link` 后缀）。 */
 const BOSS_VFX_SFX_KEYS = [
   'b1_jiangwang_attack_claw','b1_jiangwang_drain_feed','b1_jiangwang_summon_minion',
   'b2_hanba_attack_flame_claw','b2_hanba_burn_apply','b2_hanba_burn_tick',
@@ -187,62 +143,27 @@ const BOSS_VFX_SFX_KEYS = [
 ];
 const _BOSS_SFX_FALLBACK = [['b',.18,.42,2200,320],['t',420,.12,'triangle',.10,.05,300]];
 BOSS_VFX_SFX_KEYS.forEach(function(k){ if(!SFX_TABLE[k]) SFX_TABLE[k]=_BOSS_SFX_FALLBACK; });
-/* v1.1.20（用户 2026-10-15 追加口径）：`b2_hanba_burn_tick` **引用到游戏中** ——
-   灼烧跳伤（30_engine.js:1194）由 kw_burn 改播它，素材/sfx/b2_hanba_burn_tick.mp3 从此真正发声。
-   （先前「删掉、不用这个」的口径作废；键位与 28 槽一一对应的断言不受影响。） */
-/* N 组 · v1.1.9（用户已交付真采样：素材/sfx/fx_forge.mp3、素材/sfx/fx_burn.mp3；
-   挂点在 50_ui.js 的 cardFxAnim —— fx_forge 锻造升级（火焰覆盖→风吹散），
-   fx_burn 净坛/篝火删牌（火焰左下烧到右上→化灰）。
-   不注册的话预加载不会取这两个键，真采样永远不响、还会让 verify_dist [2b] 报未知键名。
-   下面两条仅是采样缺失/解码失败时的合成兜底，与 K/L/M 组同机制。） */
 SFX_TABLE.fx_forge = [['b',.22,.32,2600,700],['b',.16,.22,500,2400]];
 SFX_TABLE.fx_burn  = [['b',.42,.34,2200,300],['t',180,.28,'sawtooth',.10,0,70]];
-/* O 组 · v1.1.13（用户已交付真采样：素材/sfx/<键名>.mp3 —— 挂点在选角界面 60_boot.js；
-   下面是采样缺失/解码失败时的合成兜底，与 K/L/M/N 组同机制）：
-     talisman_click      点符纸 = 选中
-     talisman_slide      符纸按下沉的移动
-     key_press           点「开始游戏 / 返回主菜单」
-     poster_bounce_land  背景立绘从顶部降落、落地弹一下 */
 SFX_TABLE.talisman_click     = [['t',560,.06,'triangle',.16,0,320],['b',.05,.14,3000,900]];
 SFX_TABLE.talisman_slide     = [['b',.14,.22,1800,500],['t',420,.10,'sine',.08,0,760]];
 SFX_TABLE.key_press          = [['t',520,.07,'triangle',.14,0,660],['t',780,.06,'sine',.10,.03,980]];
 SFX_TABLE.poster_bounce_land = [['b',.20,.42,1200,180],['t',180,.12,'triangle',.14,.06,90]];
-/* P 组 · v1.1.20（用户 txt「换个特效」批配套交付的真采样，文件由用户指定）：
-     万剑归宗 → 素材/sfx/wanjian.wav（用户 2026-10-15 追加指定的那一版，不是先前说的 blade_slash_x2）
-     勾魂      → 素材/sfx/gouhun.wav（原 boss_vfx/audio/hand_grab.wav）
-   与 N/O 组同机制：下面两条仅是采样缺失 / 解码失败时的**合成兜底**。
-   挂点：`wanjian` 走 CARD_SFX.wanjian（出牌即响）；`gouhun` 走 30_engine.js 勾魂意图的**非 Boss** 分支
-   （Boss 的勾魂仍走 BOSS_VFX 的 b4_xiebian_soul_hook，不另立键）。 */
 SFX_TABLE.wanjian = [['b',.16,.30,3400,900],['t',700,.10,'triangle',.12,0,1600]];
 SFX_TABLE.gouhun  = [['t',420,.30,'sine',.15,0,130],['b',.20,.24,1300,300]];
-/* Q 组 · v1.1.20（用户 txt「换个音效」批第二轮：3 条真采样，文件名即键名）：
-     tianlei      天雷正法（天师·天雷符）—— CARD_SFX.tianlei，出牌即响
-     lei          雷符 / 断刃雷符 —— CARD_SFX.leifu / duanren_leifu（同一张雷击精灵图）
-     zhenyaoling  镇妖铃 —— 走 sealEnemy 收口点（钟馗镇魂仍走 card_zhenhun，两者分开）
-   与 K~P 组同机制：下面三条仅是采样缺失 / 解码失败时的合成兜底。 */
 SFX_TABLE.tianlei     = [['b',.30,.46,2600,300],['t',180,.22,'sawtooth',.18,0,90]];
 SFX_TABLE.lei         = [['b',.20,.34,2400,400],['t',300,.12,'square',.16,0,120]];
 SFX_TABLE.zhenyaoling = [['t',880,.24,'sine',.16,0,520],['t',1320,.20,'triangle',.10,.10,760]];
-/* R 组 · v1.1.20（补登记）：遗物通用金光音 `relic_proc` —— 键名早在 30_engine.js:666
-   （金刚杵：累计格挡满 50 时）就在用，但此前**既无磁盘采样、也不在表内**，命中 sfxWarnUnknown 静默吞掉。
-   v1.1.20 用户补了真采样 `素材/sfx/relic_proc.wav` ⇒ 必须补一条合成兜底登记，
-   否则 verify_dist [2b] 会把磁盘上这个文件判成「未知键名」（176 个音效文件须键键登记在表）。
-   与 N~Q 组同机制：下面这条仅是采样缺失 / 解码失败时的合成兜底。 */
 SFX_TABLE.relic_proc = [['b',.18,.40,1900,320],['t',880,.20,'triangle',.11,.05,520]];
-/* S 组 · v1.1.20r（用户跨轮口径：指定两条真采样，文件名即键名）：
-     jinzhong  金钟罩 —— 挂点走 gainBlock 的「防御牌起盾」收口点（把该牌那一声从通用 card_defense 换成它自己）
-     wangyou  忘忧（孟婆·非 Boss 分支）—— 挂点走 30_engine.js 敌人【忘忧】意图分支（原来播的是通用 enemy_debuff）
-   与 N~R 组同机制：下面两条仅是采样缺失 / 解码失败时的**合成兜底**。 */
 SFX_TABLE.jinzhong = [['t',640,.30,'sine',.16,0,420],['b',.22,.30,1500,400]];
 SFX_TABLE.wangyou  = [['t',300,.34,'sine',.14,0,160],['b',.24,.28,1100,260]];
-const SFX_KEYS = Object.keys(SFX_TABLE);   // 124 个键名（v1.1.x 83 条 + boss_vfx 28 条 + 焚牌 2 条 + 选角 4 条 + v1.1.20：+wanjian/gouhun/tianlei/lei/zhenyaoling 5 条 +relic_proc 1 条，−删掉遗留键 hit + v1.1.20r：+jinzhong/wangyou 2 条）
+const SFX_KEYS = Object.keys(SFX_TABLE);
 const _sfxWarned = {};
 function sfxWarnUnknown(name){
   if(_sfxWarned[name]) return; _sfxWarned[name]=1;
   try{ console.warn('[sfx] 未知键名（已忽略）:', name); }catch(e){}
 }
-/* 同一键的最小间隔节流：给「一帧内会被连调很多次」的键用（如回合开始逐个召唤物加尸气），
-   免得同一个音叠成和弦。**不全局生效** —— 连击那种 60ms 一发是故意要密的。 */
+/* 同一键的最小间隔节流：只给帧内会连调很多次的键，不是全局 */
 const _sfxGate = {};
 function sfxOnce(name, ms){
   const now = (typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now();
@@ -250,23 +171,20 @@ function sfxOnce(name, ms){
   _sfxGate[name]=now; sfx(name); return true;
 }
 
-/* ——— 外置音效采样：有 素材/sfx/<键名>_<变体号>.<ext> 就用它，没有就回退合成 ——— */
+/* 外置音效采样：有 素材/sfx/<键名>_<变体号>.<ext> 就用它，没有回退合成 */
 const SFX_SAMPLE_DIR = 'sfx/';
-const SFX_VARIANTS_MAX = 3;      // 每个键最多几个变体（_1 _2 _3）
-const SFX_SAMPLE_MAX = 120;      // 最多预解码多少个键，防内存失控（v1.1.10：键数升到 102，留出余量）
-const SFX_LOAD_TIMEOUT = 8000;   // 单个键的解码总超时（ms），超了就当没有
-const SFX_RATE_MIN = 0.94, SFX_RATE_MAX = 1.22;   // 变调下限/上限（伤害越大音越亮）
-/* 采样不走单独的注入表：打包.py 的素材遍历本来就按相对路径收 AUD_MIME 文件，
-   所以 sfx/hit_light_1.mp3 这类 key 已在 ASSET_MAP 里。再注入一张重复表只会把 base64 翻倍。 */
-var SFX_BUF = {};                // 键名 -> [AudioBuffer,…]（预解码结果）
+const SFX_VARIANTS_MAX = 3;
+const SFX_SAMPLE_MAX = 120;
+const SFX_LOAD_TIMEOUT = 8000;
+const SFX_RATE_MIN = 0.94, SFX_RATE_MAX = 1.22;
+var SFX_BUF = {};
 var SFX_LOADED = false, SFX_LOADING = false, _sfxHinted = false;
 var _sfxLastVariant = {};
-let sfxMode = 'auto';            // auto | synth（强制合成）| sample（强制采样，调试用）
+let sfxMode = 'auto';
 try{ if(typeof SFX_SAMPLE_MODE==='string') sfxMode=SFX_SAMPLE_MODE; }catch(e){}
 var SFX_PROTO = (typeof location!=='undefined' && location && location.protocol) ? location.protocol : '';
 var SFX_FETCH_OK = (typeof fetch==='function') && SFX_PROTO!=='file:';  // file:// 下 fetch 会被浏览器拦，别白试
 
-/* 一个键的候选路径：变体 1 允许写成 <键名>.mp3 或 <键名>_1.mp3，2/3 必须带后缀 */
 function sfxCandidates(name){
   const out=[];
   for(let e=0;e<AUD_EXTS.length;e++){
@@ -276,9 +194,8 @@ function sfxCandidates(name){
     for(let e=0;e<AUD_EXTS.length;e++) out.push(SFX_SAMPLE_DIR+name+'_'+v+AUD_EXTS[e]);
   return out;
 }
-/* 候选路径 -> 可取的 URL：打包产物查注入表；开发期直接取相对路径（需 http 服务，见 更新日志.md） */
 function sampleURL(rel){
-  if(ASSET_MAP) return ASSET_MAP[rel] || null;   // 打包产物：没登记就是没有，不去试
+  if(ASSET_MAP) return ASSET_MAP[rel] || null;
   if(!SFX_FETCH_OK) return null;
   return ASSET_BASE + rel;
 }
@@ -288,13 +205,12 @@ function sfxRate(opt){
   if(!(r>0)) return 1;
   return Math.max(SFX_RATE_MIN, Math.min(SFX_RATE_MAX, r));
 }
-/* 伤害越大音越亮：16.8 点以上到顶（1.22），0 点略闷（0.94） */
 function sfxDamageRate(dmg){
   const d = +dmg || 0;
   return Math.max(SFX_RATE_MIN, Math.min(SFX_RATE_MAX, 0.94 + d/60));
 }
 function pickVariant(name, n){
-  let v = Math.floor(Math.random()*n);           // 故意用 Math.random：音效随机不能扰动可复现的 rng() 流
+  let v = Math.floor(Math.random()*n);           // 这里故意用 Math.random，别扰动可复现的 rng 流
   if(n>1 && v===_sfxLastVariant[name]-1) v=(v+1)%n;
   _sfxLastVariant[name]=v+1;
   return v;
@@ -310,14 +226,11 @@ function playSample(name, rate, frac){
     if(src.playbackRate) src.playbackRate.value = rate||1;
     const g=ac.createGain(); g.gain.value = (SETTINGS.sfxVol==null?1:SETTINGS.sfxVol);
     src.connect(g); g.connect(ac.destination);
-    /* v1.1.20：可选「只播前 frac 段」（用户 txt「音效保留前 N 分之 1」）。
-       frac∈(0,1) 时按 buf.duration*frac 截断真采样；合成兜底不截断（见 sfx）。 */
     if(frac>0 && frac<1 && buf && buf.duration) src.start(0, 0, buf.duration*frac);
     else src.start(0);
     return true;
   }catch(e){ return false; }
 }
-/* 单个键：并行试完所有候选（含 2/3 变体），成功的进 SFX_BUF[name] */
 function loadOneSample(ac, name, cb){
   const cands=sfxCandidates(name);
   let waiting=cands.length, got=0, finished=false, to=null;
@@ -335,12 +248,9 @@ function loadOneSample(ac, name, cb){
     }catch(e){ settle(null); }
   })(cands[i]);
 }
-/* 预解码全部键（最多 SFX_SAMPLE_MAX 个）：挂在 iOS 的一次性手势解锁点 unlockAudio 上，非阻塞 */
 function loadSfxSamples(){
   if(SFX_LOADED || SFX_LOADING || sfxMode==='synth') return;
   if(sfxMode==='auto' && !ASSET_MAP && !SFX_FETCH_OK){
-    /* 开发期双击本地打开：无注入表且取不到文件。这是**有意为之**（file:// 下 fetch 会被拦，试也是白试），
-       但以前完全静默 —— 玩家会以为「素材放进 素材/sfx/ 了却没生效」。这里说明一次。 */
     if(!_sfxHinted){ _sfxHinted=true;
       try{ console.info('[音效] 当前是 file:// 双击打开，浏览器会拦 fetch，'+
         '素材/sfx/ 下的外置音效探测已跳过，全部走 WebAudio 合成音。'+
@@ -350,7 +260,6 @@ function loadSfxSamples(){
     return;
   }
   const ac=ensureAudio();
-  /* 冒烟宿主/老浏览器没有 WebAudio（无 decodeAudioData）—— 直接跳过，不抛错 */
   if(!ac || typeof ac.decodeAudioData!=='function' || typeof ac.createBufferSource!=='function') return;
   SFX_LOADING=true;
   const keys=SFX_KEYS.slice(0, SFX_SAMPLE_MAX);
@@ -360,12 +269,10 @@ function loadSfxSamples(){
     loadOneSample(ac, keys[i++], ()=>{ try{ next(); }catch(e){ SFX_LOADING=false; } });
   })();
 }
-/* 调试用：当前采样状态（控制台 / 冒烟查状态） */
 function sfxSamples(){
   let files=0; for(const k in SFX_BUF) files+=SFX_BUF[k].length;
   return { mode:sfxMode, keys:Object.keys(SFX_BUF).length, files:files, loaded:SFX_LOADED, loading:SFX_LOADING, fetchOk:SFX_FETCH_OK };
 }
-/* 一步合成动作：rate===1 时原样透传（参数个数与旧实现逐字一致），仅变调时才改音高 */
 function sfxStep(s, rate){
   let i, arr;
   if(s[0]==='t'){
@@ -385,31 +292,21 @@ function sfxStep(s, rate){
     return;
   }
 }
-/* v1.1.20（用户 2026-10-15 txt「音效保留前 N 分之 1」）：**per-key 截断表**。
-   值 = 保留比例（0~1）；只有**真采样**会被截断，合成兜底照旧整段播（不截）。
-   键名 = 发射点实播的音效键（Boss 槽一律是 BOSS_VFX 槽基名，后缀不另立键）。
-   ⚠️ 本轮按用户口径把四条截断**全部回调**（txt「上述截断全部回调」）⇒ 下表清空；
-   机制保留（playSample 的 frac 形参 + 本表结构），日后要再截某条键填一行即可。
-   空表 ⇒ sfx() 里 SFX_FRAC[name] 恒为 undefined ⇒ 一律整段播。 */
 const SFX_FRAC = {
 };
-/* sfx(键名, 可选参数)：opt 可传 { rate:1.2 } 或直接传数字（播放速率）。
-   未知键名静默忽略（战斗中不能因拼错键名炸结算），开发期只 warn 一次。 */
 function sfx(name, opt){
   if(!SETTINGS.sound) return;
   let mul=SETTINGS.sfxVol; if(mul==null) mul=1;
-  // 0 是合法值（静音），必须真的静音；旧写法 (sfxVol||1) 会把 0 拉回 100%
+  // 0 是合法值，别写成 (sfxVol||1)
   if(!(mul>0)) return;
   const rate=sfxRate(opt);
-  if(playSample(name, rate, SFX_FRAC[name])) return;      // 有外置采样就用采样（按 SFX_FRAC 截断）
+  if(playSample(name, rate, SFX_FRAC[name])) return;
   const steps=SFX_TABLE[name];
   if(!steps){ sfxWarnUnknown(name); return; }
   for(let i=0;i<steps.length;i++) sfxStep(steps[i], rate);
 }
-/* 打击分级阈值（**单一来源**）：音效与浮字视觉共用，免得两处阈值日后各漂各的 */
 const HIT_HEAVY_DMG = 10, HIT_CRIT_DMG = 20;
 function isCritHit(dmg, killed){ return !!killed || dmg>=HIT_CRIT_DMG; }
-/* 按「打在什么上 / 打了多少 / 有没有打死」挑打击层 —— 让听感跟着数值走 */
 function pickHitSfx(dmg, blockedAll, killed){
   if(blockedAll) return 'hit_guard';
   if(isCritHit(dmg, killed)) return 'hit_crit';
@@ -417,23 +314,13 @@ function pickHitSfx(dmg, blockedAll, killed){
   return 'hit_light';
 }
 
-/* ===================== v1.1.25r 教程旁白配音（素材/voice/<id>.mp3） =====================
-   用户按 TUT_NARR 的 id 逐条交付了配音（52 条 = 39 条旁白 + 13 条互动对话），文件名 = id
-   （纯 ASCII、一律 .mp3、无变体）。挂点：50_ui.js 的 narrateShow（气泡一出即发声）与
-   narrateDrop / narrateClear（收泡即掐声），以及 40_flow.js 的 tut_00 / tut_6e / tut_die 三处整屏面板。
-   为什么**不塞进 SFX_TABLE**：音效表要变调、要随机变体，且 SFX_KEYS 有预解码上限（SFX_SAMPLE_MAX）；
-   人声是**逐条唯一**的固定念白，既不随机也不该变调 —— 单开一条通路最省事，也最不容易和音效互漂。
-   取址一律走 assetURL('voice/<id>.mp3')：单文件产物查 ASSET_MAP（data URI，file:// 下 fetch 也通）、
-   拆包 / 开发树走 素材/voice/ 相对路径。file:// 双击开发树时 fetch 被拦 ⇒ 静默无配音
-   （与音效同一限制：用 试玩.py 起 http，或直接跑打包产物，即可听到）。
-   没就绪的缓冲**先取回再补播**（voiceLoad 的回调），且只在「此刻仍是这条」时才出声
-   —— 玩家点得快、旁白已翻页时，过期的那条不再补播，免得两句话叠在一起。 */
+/* 教程旁白配音：素材/voice/<id>.mp3，文件名就是 id。人声固定不变调，单开一条路，不走 SFX_TABLE */
 const VOICE_DIR='voice/';
 const VOICE_EXT='.mp3';
-var VOICE_BUF={};                       // id -> AudioBuffer（解码结果，一条只解一次）
-var VOICE_LOADING={};                   // id -> [待回补播的回调]
-var VOICE_SRC=null;                     // 当前发声的 BufferSource
-var VOICE_WANT=null;                    // 此刻该响的那条 id（异步入栈后据此判要不要补播）
+var VOICE_BUF={};
+var VOICE_LOADING={};
+var VOICE_SRC=null;
+var VOICE_WANT=null;
 function _voiceKill(){ if(VOICE_SRC){ try{ VOICE_SRC.stop(); }catch(e){} VOICE_SRC=null; } }
 function stopVoice(){ VOICE_WANT=null; _voiceKill(); }
 function voiceLoad(id, cb){
@@ -466,7 +353,6 @@ function playVoiceBuffer(buf){
     src.start(0); VOICE_SRC=src;
   }catch(e){}
 }
-/* 播一条旁白配音。id 即 素材/voice/<id>.mp3；音效关 / 音量为 0 时不响（与 sfx 同口径）。 */
 function playVoice(id){
   if(!id){ stopVoice(); return; }
   const vol=(SETTINGS.sfxVol==null?1:SETTINGS.sfxVol);
@@ -476,40 +362,15 @@ function playVoice(id){
   else voiceLoad(id, function(b){ if(b && VOICE_WANT===id) playVoiceBuffer(b); });
 }
 
-/* ===================== 外置素材（有则增强，无则优雅回退） ===================== */
+/* 外置素材：有则增强，无则回退 */
 const ASSET_BASE = '素材/';
-/* 音频扩展名的唯一真相源：打包.py 的 AUD_MIME 必须与此集合一致（漂移由 verify_dist 断言拦住）。
-   音效探测顺序 mp3 优先；BGM 沿用历史优先级 ogg 优先 —— 避免同名多格式并存时被选中的曲子变了。 */
+/* 音效用 mp3 优先、BGM 用 ogg 优先，顺序别动，同名多格式时选中的曲子会变 */
 const AUD_EXTS = ['.mp3','.ogg','.wav','.m4a'];
 const BGM_EXTS = ['.ogg','.mp3','.wav','.m4a'];
-/* 单文件打包：打包.py 把下面这行的 null 换成 { '相对路径': 'data:...' }；开发时保持 null，照常读本地 素材/ */
 var ASSET_MAP = null;
-/* 拆包（多文件、走 http 发布，见 打包.py --split）：图片已转成 WebP 落盘，打包.py 会把下面这行改成
-   true，assetURL 据此把 .png/.jpg 换名成 .webp。三种口径互不干扰：
-     单文件产物 —— 走 ASSET_MAP（键仍是原始 .png 名），根本走不到这一行；
-     拆包产物   —— ASSET_MAP=null + 本行 true ⇒ 取 素材/xxx.webp；
-     开发树     —— ASSET_MAP=null + 本行 false ⇒ 照常读原图。
-   ⚠️ 正则只认图片扩展名：BGM 的 .ogg/.mp3 也走 assetURL（见 startBGM），换名会把它们换没。 */
+/* 这条正则只认图片扩展名，BGM 的 .ogg/.mp3 也走 assetURL，别把后缀换没了 */
 var ASSET_WEBP = false;
-/* v1.0.1（手机端性能）：单文件产物的素材是 base64 data URI（单张卡图 10~72KB、立绘 84~118KB、
-   牌框 front.png 更是一张手牌一份）。而 render() 每次都把 #hand / #enemy-panel / #player-panel
-   整块 innerHTML 重建 ⇒ 一次操作要拼**上兆**的 base64 字符串再交给 HTML 解析器，
-   手机上就是「每点一下卡半拍、有延迟」。抽牌克隆更狠：每条克隆内嵌一整张卡图。
-   这里给**会被反复拼进 HTML 的图片**（artImg / cardFrame 这两条渲染热路径）提供一条短地址：
-   把 data URI 转成 blob: 对象地址并缓存（同一素材只转一次），拼进 HTML 的只剩几十字节，
-   浏览器还按地址复用已解码的图，不再反复解析同一串 base64。
-   ⚠️ 只对**热路径**开（`assetURL(rel, true)`）：音频与菜单背景这两条是**一次性赋值**、不进
-      render 循环，照旧拿 data URI —— 不为它们改变既有机制（那是「file:// 下也能拿到」的依据）。
-   v1.0.8（手机端性能）：**特效精灵图（playFx）、战斗背景（setBg）、地图卷轴（applyMapTextures）**
-      也改判为热路径。它们虽「每次只赋一次值」，但**每次出牌 / 每换一次场景就赋一次**，而单文件
-      产物（TapTap 包）里那些值都是几百 KB 的 base64 大字串 —— 塞进 CSS url() / `<img src>` 时，
-      浏览器要先逐字解析这串、再 base64 解码、再解图，真机上就是每次出牌 / 进关卡一次的
-      100~300ms 尖峰（录屏读数）。blob 已在卡面（artImg）/ 牌框（cardFrame）上跑了很久、
-      且 TapTap 容器里显示正常，所以扩用是安全的。
-   ⚠️ 不写回 ASSET_MAP：它仍是**内联表本身**（data URI 字面量），probe_dist/verify_dist 的
-      「值全是 data:」断言查的就是它，回填会把那种直读路径（sampleURL 等）一起改掉。
-   拆包产物（ASSET_MAP=null）与开发树根本走不到这一层；转换不可用（无 Blob/createObjectURL）
-   或不是 base64 时**原样返回 data URI**，行为与改动前逐字相同。 */
+/* 单文件产物素材是 base64，热路径图片转成 blob 短地址再拼 HTML；音频/一次性背景照旧 data URI */
 const ASSET_OBJ_URLS = {};
 function dataURItoBlobURL(uri){
   try{
@@ -517,7 +378,7 @@ function dataURItoBlobURL(uri){
     const comma=uri.indexOf(',');
     if(comma<0) return null;
     const head=uri.slice(5, comma);
-    if(head.indexOf('base64')<0) return null;      // 百分比编码的 data URI：本项目没有，不冒险
+    if(head.indexOf('base64')<0) return null;
     const bin=atob(uri.slice(comma+1));
     const n=bin.length, bytes=new Uint8Array(n);
     for(let i=0;i<n;i++) bytes[i]=bin.charCodeAt(i);
@@ -527,10 +388,10 @@ function dataURItoBlobURL(uri){
 function assetURL(rel, wantBlob){
   if(ASSET_MAP && ASSET_MAP[rel]){
     const v=ASSET_MAP[rel];
-    if(v.slice(0,5)!=='data:') return v;           // 本就是普通地址（拆包相对路径）⇒ 透传
-    if(!wantBlob) return v;                        // 音频 / 一次性背景：保持 data URI 原样
+    if(v.slice(0,5)!=='data:') return v;
+    if(!wantBlob) return v;
     const c=ASSET_OBJ_URLS[rel];
-    if(c) return c;                                // 同一素材只转一次
+    if(c) return c;
     const u=dataURItoBlobURL(v);
     if(!u) return v;
     ASSET_OBJ_URLS[rel]=u;
@@ -539,25 +400,13 @@ function assetURL(rel, wantBlob){
   return ASSET_BASE + (ASSET_WEBP ? rel.replace(/\.(png|jpe?g|bmp)$/i, '.webp') : rel);
 }
 function imgFail(el){ el.outerHTML = el.dataset.fallback || ''; }
-/* ⚠️ v0.64.1：`draggable="false"` 是修 bug 的，别删 —— <img> **默认就是可拖的**，左键按住一移，
-   浏览器会开始原生拖图并抛 pointercancel，把所有自绘的指针拖拽（地图滑动、出牌）**当场掐断**。
-   症状是「左键拖不动 / 一拖就断」，而中键反而正常（中键不触发原生拖拽）—— 这是最难联想到的一类。
-   全项目图片都从这里出，所以在这一处掐掉最省事；CSS 侧另有一道 -webkit-user-drag:none 兜底。 */
+/* draggable="false" 是修 bug 的，别删。
+   <img> 默认可拖，左键一拖就抛 pointercancel，把地图滑动/出牌当场掐断 */
 function artImg(src, fallback, cls){
   return `<img class="${cls||''}" src="${assetURL(src, true)}" draggable="false" data-fallback="${(fallback||'').replace(/"/g,'&quot;')}" onerror="imgFail(this)" alt="">`;
 }
-/* —— v1.0.13：图标换皮总接口（用户口径「所有图标的重做都由我来设计，你只要给我统筹」）——
-   同一个渲染点，**图没到就原样输出旧内容（emoji / 空），图到了自动变 <img>**，代码零改动接新素材。
-
-   ⚠️ 为什么不是直接 artImg：artImg 每次渲染都写一次 <img>，缺图时<每帧>都要发一次 404 请求 ——
-      手机端 24 个 buff 徽章 × 每拍 render 会变成请求风暴。这里改成**每个路径只探一次**：
-      首个用到它的 render 触发一次探测；探到就 render() 一次换成图，探不到就永久回落。
-   ⚠️ 回落串**必须与改动前逐字节相同**（fallback 参数原样返回）—— 五道闸与冒烟断言都靠这一条。
-   ⚠️ 冒烟沙箱（vm_host.js）里没有 Image 构造器 ⇒ 这里必然抛，被 try 吞掉 ⇒ 永久回落，闸不受影响。 */
 const ICON_PROBE = {};
 let ICON_RERENDER = false;
-/* 探到图之后**合并成一次 render**：34 枚图标各自 onload 都调一次 render 的话，
-   开机那一下会连着重排 34 遍手牌/敌阵（手机端白白卡一次）。 */
 function iconPokeRender(){
   if(ICON_RERENDER) return;
   ICON_RERENDER = true;
@@ -567,7 +416,7 @@ function iconAvail(rel){
   const st = ICON_PROBE[rel];
   if(st === 'yes') return true;
   if(st === undefined){
-    ICON_PROBE[rel] = 'no';                       // 先按「没图」渲染，探到再升级
+    ICON_PROBE[rel] = 'no';
     try{
       const im = new Image();
       im.onload = function(){ ICON_PROBE[rel] = 'yes'; iconPokeRender(); };
@@ -582,13 +431,7 @@ function iconTag(rel, fallback, cls){
   return `<img class="${cls||'bicon'}" src="${assetURL(rel, true)}" draggable="false" alt="">`;
 }
 function cardArt(c){ return `<div class="cart-wrap">${artImg('card/'+c.id+'.png', '', 'cart')}</div>`; }
-/* v0.68.0：真美术牌框（ui/card/front.png = 385x583 木框 + 上「图窗」下「铭牌窗」）。
-   三处独立渲染（cardBody / forgeCardHTML / handCardHTML）都从这里取，免得各写一份飘掉。
-
-   ⚠️ 加载失败必须**连 .has-frame 一起摘**。只摘 <img>（imgFail 的老行为）的话，
-   `.card.has-frame` 那套绝对定位还挂着，但底图没了 —— 卡面会散架：
-   图窗/铭牌窗都还在原位，却没有框兜住它们，文字和卡图会浮在纸底上错位。
-   摘掉类之后卡片原样退回 v0.67 的纯 CSS 版面（旧规则一条没删）。 */
+/* 加载失败要连 .has-frame 一起摘，只摘 <img> 卡面会散架 */
 function cardFrameFail(el){
   var p = el && el.parentNode;
   if(p && p.classList) p.classList.remove('has-frame');
@@ -597,17 +440,6 @@ function cardFrameFail(el){
 function cardFrame(){
   return `<img class="cframe" src="${assetURL('ui/card/front.png', true)}" draggable="false" onerror="cardFrameFail(this)" alt="">`;
 }
-/* v0.69.0：抽牌堆 / 弃牌堆的两张图（back.png 顶面、side.png 侧棱）。
-   走的是和 cardFrame() **同一条** assetURL 的路：把地址写进 CSS 变量，
-   由 .pile-face / .pile-slab 用 var() 取。
-
-   ⚠️ 为什么不在 原型.html 里直接写：那两张是 CSS 背景（不是 <img>），
-      在页内 CSS 写 `url(素材/ui/card/back.png)` 会被 verify_dist.py 的 _css_urls 闸判红
-      （打包后 素材/ 全变成 data: URI，页内写死的老路径会 404 成一片空白）。
-
-   ⚠️ 整个 try/catch 不是摆设：vm_host.js 的 DOM 桩里 `documentElement.style` 是个**纯对象**，
-      没有 setProperty ⇒ 冒烟沙箱里这行必然抛 TypeError。
-      吞掉它，冒烟才不红；浏览器里正常写进变量。 */
 function pileInit(){
   try{
     var r = document.documentElement && document.documentElement.style;
@@ -616,37 +448,18 @@ function pileInit(){
     r.setProperty('--pile-side-img', 'url("'+assetURL('ui/card/side.png')+'")');
   }catch(e){}
 }
-/* v0.69.0：抽牌堆 / 弃牌堆的计数徽章。
-   单独成一个函数是为了能在**不止 render()** 的地方刷新 —— 见 30_engine.js 的
-   finishEndTurn()：那里批量 concat 进弃牌堆之后紧接着就是 enemyAct()，
-   中间**没有 render()**，徽章会整整滞后一段敌人行动。 */
 function refreshPileCounts(){
   try{
     const dn=document.getElementById('pile-draw-n');    if(dn) dn.textContent=G.drawPile.length;
     const cn=document.getElementById('pile-discard-n'); if(cn) cn.textContent=G.discard.length;
   }catch(e){}
 }
-/* v0.67.0：有灵石图的 id 走 lingshi/（朱砂笔/护身符/返魂香），其余遗物照旧 relic/。
-   尺寸不另立类，**原样复用 .ricon** —— 它 `object-fit:contain` + 是 flex 列的子项，
-   「超出边框」和「压住文字」在结构上就不可能发生；与既有 9 个遗物卡也是同一套观感。 */
-/* v1.0.x：新遗物的图还没交付时不再「静默空白」—— 回落成写着名字末字的字牌（同 potionIcon 口径）。
-   ⚠️ **只给 ART_PENDING 名单里的**补兜底。已交付的图一律不带（裂了照旧走 imgFail）——
-      否则每条 relicIcon 的返回值里都会带上一段没用的 data-fallback，
-      「遗物图标没有被字牌化」那条冒烟钉子（v0.67.0）会被误伤。 */
 function relicIcon(r){
   const o = r || {};
   const src = lingshiSrc(o.id) || ('relic/'+o.id+'.png');
   const fb = (typeof ART_PENDING !== 'undefined' && ART_PENDING.indexOf(src) >= 0) ? String(o.name || '').slice(-1) : '';
   return artImg(src, fb ? `<div class="ricon ricon-fb">${fb}</div>` : '', 'ricon');
 }
-/* v0.67.0：灵汁图标。有贴图的出 <img>；**没贴图的出「字牌」占位**（.ricon-fb，写名字末字）。
-   为什么不是空串也不是空底框：
-     · 空串 —— 同排的 .reward-cards 是 `align-items:stretch`，一排放 4 张卡时，
-       有图的会把整行撑高，无图那张就只剩顶部两行字 + 一大片空白，像「图裂了」。
-     · 空底框（照常输出 <img> 但 onerror 后 outerHTML=''）—— 只剩 .ricon 那层
-       background:rgba(0,0,0,.2) 的暗底，读起来就是个空格子，比不出图更糟。
-   字牌把这块填满，四张卡等高且都有内容；用户哪天补上贴图，这里自动走 <img> 分支，
-   占位不再生成 —— 不必回来删代码。（`p` 为空时 name 取不到 ⇒ 末字为空 ⇒ 返回空串，不抛错。） */
 function potionIcon(p){
   var o = p || {};
   var s = lingshiSrc(o.id);
@@ -654,79 +467,31 @@ function potionIcon(p){
   var ch = String(o.name || '').slice(-1);
   return ch ? '<div class="ricon ricon-fb">' + ch + '</div>' : '';
 }
-/* v0.61.41：name 带扩展名（如 'map.jpg'）时只补 bg_ 前缀、**不再补 .png**，否则沿用 bg_<name>.png ——
-   用户给的地图背景是 .jpg，不想为了一个后缀去转码重压（转成 PNG 只会更大）。
-   路径拼法单独抽成 bgRel 是为了能被冒烟直接对拍（setBg 本体要真 DOM，沙箱里量不到）。
-   v0.76.0：主菜单那格改指 bg/menu/menu_3.png —— 它与原来的素材/bg/bg_menu.png **逐字节相同**
-   （同为 400323 字节、同一个 md5），而 menu_3.png 本来就是主菜单轮换背景 MENU_BGS 的第三张
-   ⇒ 同图挪位，零内容损失、零观感变化、少一份 400KB 重复体。
-   ⚠️ **不能**走下面 'bg/bg_'+name 那条通配：它拼出来的正是本批删掉的那个文件。 */
 function bgRel(name){
   if(name==='menu') return 'bg/menu/menu_3.png';
   return (/\.[A-Za-z0-9]+$/.test(name)) ? ('bg/bg_'+name) : ('bg/bg_'+name+'.png');
 }
-/* v0.74.0：**整屏专用背景**一览 —— 背景是这六张之一时，背后一定是一个「盖着面板的
-  独立场景」（商店/篝火/胜利/失败/选英雄/胜利奖励），与事件房同理 ⇒ #overlay 的黑幕要放松。
-  键取 setBg 的**入参原样**（带扩展名）：bgRel 对带扩展名的只补 bg_ 前缀。
-   ⚠️ 这张表与 js/50_ui.js 的 EVT_BG 是**两个方向的同一件事**，别合并：
-      EVT_BG 是「事件 id → 文件名」（由事件驱动），这张是「文件名 → 是不是整屏场景」
-      （由背景驱动）；存的是**判据**不是映射，方向反了就没法当判据用。
-   ⚠️ 只列**整屏**背景。地图/幕背景（map.jpg、act1..3）与 'menu' 不进来 ——
-      它们背后是真正的战局 HUD，`.88` 那层黑幕压的是面板自身，放松了反而让战场透上来。 */
 const SCENE_BG = { 'shop.jpg':1, 'campfire.jpg':1, 'victory.jpg':1, 'defeat.jpg':1,
                    'hero_select.jpg':1, 'victory_reward.jpg':1 };
-/* v0.74.0：**此刻还没进战局**的背景一览 —— at-menu 的正判据。
-   语义仍是 v0.68.2 那句「屏幕背后不是战局」⇒ `#app` 整块不渲染，只是从"只有主菜单"
-   扩到"主菜单 + 选英雄"。
-   ⚠️ 选英雄必须进来：v0.74.0 给它接了 bg_hero_select.jpg，而 setBg 一被调用就会按
-      老判据（name==='menu'）把 at-menu 摘掉 ⇒ `#app` 立刻显形。那一刻 run 还**没开始**
-      （G 刚 newState，从没 render 过），#app 里是空骨架/上一次的残影，
-      在 .55 的黑幕下正好透出来 —— 这就是 v0.68.2 花力气修掉的那个 bug，别放它回来。
-   ⚠️ 反过来**不能**把六张整屏背景一股脑放进来：胜负/商店/篝火/奖励都在战局**之内**，
-      背后本来就该是战场（与事件房同一处理）。 */
 const PRE_RUN_BG = { 'menu':1, 'hero_select.jpg':1 };
 function setBg(name){
-  /* v0.68.2：`body.at-menu` 的**唯一**开关（CSS: `body.at-menu #app{display:none}`）。
-     语义 = "屏幕背后不是战局"。setBg 本来就是「背后该铺什么」的 owner：只有主菜单与
-     选英雄这两张是在战局之外，其余每一张背景都意味着战局已经接管 ⇒ 清掉。
-     v0.74.0：判据由 `name==='menu'` 改成查 PRE_RUN_BG 表（上一条注释讲了为什么选英雄要进来）。
-     ⚠️ 别把这条挪进 showStartScreen：那样「图鉴/排行榜/设置」摘掉 .menu-scene 之后
-        战斗 HUD 又会透出来（它们只摘场景类，不重进主菜单）。挂在 setBg 上才与面板解耦。 */
   var _bgName=String(name||'');
   if(document.body && document.body.classList)
     document.body.classList.toggle('at-menu', !!PRE_RUN_BG[_bgName]);
-  /* v0.73.0：事件房背景（bg_evt_*.jpg）要**真的看得见**，光换图不够 ——
-     #overlay 常驻一层 88% 黑幕，任何深色场景图铺上去都只剩 12% 可见度，等于白铺。
-     这里只挂一个 body 类当开关（与上一行 .at-menu 同一范式，setBg 仍是「背后该铺什么」的
-     唯一 owner），黑幕的具体取值写在 原型.html 的 CSS 里。
-     v0.73.0 的判据是「名字以 evt_ 开头」，因为那时只有事件房有专用整屏图；
-     v0.74.0 把商店/篝火/胜利/失败/选英雄/胜利奖励六张也接上了 ⇒ 判据扩成「evt_ 前缀 或
-     在 SCENE_BG 表内」。**六张图全是 1920×1080，与事件房同一形态，道理完全一样**。
-     ⚠️ 类名仍叫 evt-bg —— 它现在的语义比名字宽一档，**改名是故意没做的**：
-        这个标识被四处无头夹具（含 8×8 事件房矩阵的 416 条断言）与更新日志逐字钉着，
-        为一个纯装饰性的名字去动已验收的产物与历史记录，风险大过收益。
-        **看代码时别被名字骗：挂在鬼市/通关屏上的 evt-bg 是正常的，不是串场。** */
+  /* 类名还叫 evt-bg，其实语义比名字宽，是故意没改的（被夹具钉着），别被名字骗 */
   if(document.body && document.body.classList)
     document.body.classList.toggle('evt-bg', /^evt_/.test(_bgName) || !!SCENE_BG[_bgName]);
   var el=document.getElementById('bg'); if(!el) return;
-  /* v1.0.8（手机端性能）：带 wantBlob=true —— 战斗背景**每换一次场景就重新赋值一次**，
-     而单文件产物里这是往 <img src> 塞一整串几百 KB 的 base64（要解析 + base64 解码 + 解图），
-     真机上就是「进关卡卡一下」。拆包产物返回短相对路径，带不带第二参都一样。 */
   var path=assetURL(bgRel(name), true);
   el.onload=function(){ document.body.classList.add('has-bg'); };
   el.onerror=function(){ el.style.display='none'; document.body.classList.remove('has-bg'); };
   el.src=path;
   el.style.display='block';
 }
-/* —— 背景音乐：优先 素材/music，缺失回退合成氛围音 —— */
+/* BGM：优先素材，缺失回退合成 */
 let BGM=null, BGM_TRACK=null, MUSIC_OK=null, CUR_BGM='menu';
-/* v1.1.23（用户报障「Boss 关 / 复活等场景会听到几首背景音乐叠在一起」）：
-   BGM_GEN = 「第几条 startBGM 探测链」的代号。startBGM 是**异步多候选探测**——
-   每个候选 new Audio + 1500ms 看门狗，若这条链的 `active` 只写成 startBGM 内部的
-   局部变量，那么 stopBGM（切轨 / 掐曲 / 复活终止）**只能暂停当前那个 Audio 元素**，
-   已经派出去的候选与待判超时并不知情 ⇒ 它们稍后照样 resolve(true) 并 a.play()，
-   于是新旧两条轨同时出声。修法是把「谁还有效」从局部闭包提到全局代计数：
-   任何一次 stopBGM 都 BGM_GEN++ ⇒ 所有旧链在下一个检查点静默退出，不再 play / 不再兜底合成。 */
+/* BGM_GEN：给每条 startBGM 探测链编号，stopBGM 时 ++ 让在途的旧链静默退出。
+   不然旧轨道稍后照样 play()，新旧两首叠在一起 */
 let BGM_GEN=0;
 function clearSynthBGM(){ if(SYNTH_BGM_TIMER){ clearInterval(SYNTH_BGM_TIMER); SYNTH_BGM_TIMER=null; } }
 function stopBGM(){ BGM_GEN++; if(BGM){ try{ BGM.pause(); }catch(e){} BGM=null; } BGM_TRACK=null; clearSynthBGM(); }
@@ -745,34 +510,16 @@ function startSynthBGM(track){
     step++;
   }, 2600);
 }
-/* v0.61.31：精英 / Boss / 商店三轨是「可选升级轨」—— 素材没交付就退回基础轨。
-   不退的后果很实在：Boss 房切 battle_boss 而文件不存在 → tryNext 耗尽扩展名 →
-   掉进 startSynthBGM('battle_boss')，**反而比普通战少了音乐**（合成器只给 'battle' 叠鼓）。
-   基础轨 menu/map/battle 不设回退项（它们没有可退的上级）。 */
-/* 已知轨名的**唯一真相源**：素材/music/ 下的每个文件都该是 bgm_<轨>.<ext>，
-   且 <轨> 落在这张表里。为什么值得单列一张表：BGM 文件是**人工按名交付**的，
-   拼错（bgm_elite.mp3 / bgm_battle_Elite.mp3）不会报任何错 —— 代码探不到文件就静默
-   走回退轨，你听到的是普通战斗曲，还以为「没接上」。_patch/verify_dist.py 的 [2c] 段
-   拿这张表逐文件核对磁盘（与 AUD_EXTS 同一套「真相源 + 断言」惯例）。 */
 const BGM_KNOWN_TRACKS = ['menu','map','battle','battle_elite','battle_boss','shop'];
 const BGM_FALLBACK = { battle_elite:'battle', battle_boss:'battle', shop:'map' };
-/* 打包产物里 ASSET_MAP 是权威清单：查得到就直接用，查不到当场退回（同步、可测、零空转）。
-   开发期（file:// 双击，打包.py 没注入 ASSET_MAP）无法预知磁盘上有什么，
-   返回原轨交给 tryNext 逐扩展名探测，探测耗尽后由 startBGM 内部兜底。 */
 function bgmTrackFor(track){
   if(!ASSET_MAP) return track;
   return BGM_EXTS.some(e=>ASSET_MAP['music/bgm_'+track+e]) ? track : (BGM_FALLBACK[track]||track);
 }
-/* startBGM 逐扩展名探测全部失败后，该退到哪条基础轨；返回 null = 没有可退的上级（照原轨走合成器）。
-   单独抽成纯函数是为了**可测**：冒烟宿主开头会把 startBGM 换成静音桩（见 smoke_runner.js 顶部），
-   startBGM 的函数体在沙箱里不可达，这条决策只能直接验函数本身。 */
 function bgmFallbackFor(track){
   const fb=BGM_FALLBACK[track];
-  return (fb && fb!==track) ? fb : null;   // fb===track 时返回 null，否则 startBGM 会自我递归
+  return (fb && fb!==track) ? fb : null;   // fb===track 返回 null，否则会自我递归
 }
-/* 从敌人列表判定该用哪条战斗轨：Boss > 精英 > 普通。
-   入参是数组而非直接读 G —— 这样读档续战（40_flow.js）和开局（30_engine.js）能共用，
-   也便于冒烟里直接喂假数据验证。 */
 function battleBgmFor(enemies){
   const l=enemies||[];
   if(l.some(e=>e&&e.boss)) return 'battle_boss';
@@ -782,8 +529,8 @@ function battleBgmFor(enemies){
 function startBGM(track){
   if(!SETTINGS.sound){ stopBGM(); return; }
   if(BGM_TRACK===track) return;
-  stopBGM();                 // 停旧轨；同时 BGM_GEN++ ⇒ 在途的旧探测链全部作废
-  const gen=++BGM_GEN;       // 本链代号：BGM_GEN 一变（切轨 / 掐曲 / 再进 startBGM）本链即静默退出
+  stopBGM();
+  const gen=++BGM_GEN;
   BGM_TRACK=track; MUSIC_OK=null;
   let exts=BGM_EXTS.slice();
   if(ASSET_MAP){ const _av=exts.filter(e=>ASSET_MAP['music/bgm_'+track+e]); if(_av.length) exts=_av; }
@@ -791,10 +538,6 @@ function startBGM(track){
   function tryNext(){
     if(gen!==BGM_GEN) return;
     if(idx>=exts.length){
-      /* v0.61.31：升级轨探测全 miss → 退回基础轨（否则 Boss 房比普通战还安静）。
-         兜底放在 startBGM 内部而不是加第二参数：这样所有直接调用点
-         （如 60_boot.js 声音开关重开时的 startBGM(CUR_BGM)）自动获得回退能力。
-         「退到哪条」的决策在 bgmFallbackFor 里（纯函数、冒烟可验），这一行只负责转发。 */
       const __fb=bgmFallbackFor(track);
       if(__fb) return startBGM(__fb);
       BGM=null; startSynthBGM(track); return;
@@ -803,27 +546,21 @@ function startBGM(track){
     a.loop=true; a.volume=(SETTINGS.musicVol==null?0.32:SETTINGS.musicVol);
     let resolved=false;
     const resolve=(ok)=>{
-      if(gen!==BGM_GEN) return;              // 本候选所属的链已被更晚的 stopBGM/startBGM 作废
+      if(gen!==BGM_GEN) return;
       if(resolved) return; resolved=true;
       if(ok){ MUSIC_OK=true; clearSynthBGM(); a.play().catch(()=>{}); }
-      /* 候选判失败时必须**显式掐掉它自己** —— 否则这个「判慢了」的元素仍可能在下一顺位
-         出声时跟着一起播（原先只换 BGM 引用，元素并不停）。 */
       else { try{ a.pause(); a.src=''; }catch(e){} tryNext(); }
     };
     a.onerror=()=>resolve(false);
     a.oncanplaythrough=()=>resolve(true);
     a.load(); BGM=a;
-    a.play().catch(()=>{}); // 同步尝试播放：处于用户手势内即可绕过自动播放限制
+    a.play().catch(()=>{}); // 手势里同步试播，绕过自动播放限制
     setTimeout(()=>resolve(false), 1500);
   }
   tryNext();
 }
-/* CUR_BGM 记的是**逻辑轨**（设置页/存档看到的是「该在哪首曲子」），
-   实际播放哪条由 bgmTrackFor 决定 —— 素材到货后无需改任何调用点，自动切回升级轨。 */
-let BGM_WARNED = {};   // 未登记的轨名只提醒一次，不刷屏
+let BGM_WARNED = {};
 function setBGM(track){
-  /* 轨名没登记 → 素材/music/bgm_<轨>.* 就算躺在磁盘上也不会被请求到（拼错 = 静默无声）。
-     战斗中不能因为一个轨名拼错就抛异常，所以只警告一次、照旧往下走（探测/合成兜底）。 */
   if(BGM_KNOWN_TRACKS.indexOf(track)<0 && !BGM_WARNED[track]){
     BGM_WARNED[track]=1;
     if(typeof console!=='undefined' && console.warn)
@@ -831,35 +568,24 @@ function setBGM(track){
   }
   CUR_BGM=track; startBGM(bgmTrackFor(track));
 }
-/* 首次交互解锁音频（浏览器禁止自动播放，需一次用户手势） */
+/* 首次交互解锁音频：浏览器禁止自动播放，得等一次用户手势 */
 function unlockAudio(){ ensureAudio(); loadSfxSamples(); if(BGM && SETTINGS.sound){ try{ BGM.play().catch(()=>{}); }catch(e){} } }
 document.addEventListener('pointerdown', unlockAudio, {once:true});
 document.addEventListener('keydown', unlockAudio, {once:true});
-/* ===================== v1.1.25r 切后台即静音，回前台自动续轨 =====================
-   切走（Trae 内置浏览器换标签、移动端 / 小游戏切后台、系统锁屏、离开页面）把声音全停：
-   两条 BGM 链（采样 BGM 对象 + 合成氛围音）由 stopBGM 一次停掉，正在念的旁白配音一并掐掉。
-   回前台（visible / pageshow）再把**刚才真在演的那条轨**续上 —— 判据是切走那一刻 BGM_TRACK 有值：
-   有值 = 演出确实在放（继续放）；为 null = 这段本来就没曲（过场 stopBGM、声音开关关着）⇒ 不续，
-   免得凭空起曲。续的轨就是切走那一刻实际在放的那条（BGM_TRACK，已经过 bgmTrackFor 解析），
-   再经 bgmTrackFor 复核一次：缺素材照旧走回退 / 合成兜底，与 setBGM 同一套口径。
-   两次「停」会先后到达（visibilitychange hidden 与 pagehide）⇒ 只有第一次记轨，
-   第二次 BGM_TRACK 已是 null，不覆盖，保证回前台还有得续。
-   （55_cloud.js 也挂在同一个 visibilitychange 上，那条只管存云，与此互不影响。） */
+/* 切后台停声、回前台续轨：记住切走那刻实际在放的轨 */
 let BGM_RESUME=null;
 function audioHiddenStop(){
-  if(BGM_TRACK) BGM_RESUME=BGM_TRACK;   // 只在「真有曲在放」时记轨，供 audioHiddenResume 续
+  if(BGM_TRACK) BGM_RESUME=BGM_TRACK;
   try{ stopVoice(); }catch(e){}
   try{ stopBGM(); }catch(e){}
 }
 function audioHiddenResume(){
-  const t=BGM_RESUME; BGM_RESUME=null;   // 无论续不续得上都先消费掉，别留下陈轨
+  const t=BGM_RESUME; BGM_RESUME=null;
   if(!t) return;
   if(typeof document!=='undefined' && document.visibilityState==='hidden') return;
-  if(!SETTINGS.sound || BGM_TRACK) return;   // 声音关着 / 已在播（别的路径先起了）就不重复起曲
+  if(!SETTINGS.sound || BGM_TRACK) return;
   try{ ensureAudio(); startBGM(bgmTrackFor(t)); }catch(e){}
 }
-/* 挂三处钩子：visibilitychange（换标签 / 切后台 / 锁屏 → 停；回前台 → 续）
-   + pagehide（离开页面 → 停）+ pageshow（bfcache 回退 → 续）。 */
 function audioHookHidden(){
   if(typeof document!=='undefined' && document.addEventListener){
     document.addEventListener('visibilitychange', function(){

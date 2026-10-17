@@ -1,45 +1,14 @@
 /* ============================================================================
- * 志怪塔 · js/55_cloud.js —— TapTap 小游戏云存档适配层
- * ----------------------------------------------------------------------------
- * 目标：把「本局断点续玩档 RUN_KEY」+「局外元数据档 SAVE_KEY」整体同步到
- *       TapTap 云存档，换设备 / 清缓存后能拉回来。
- *       非 TapTap 环境（浏览器 / PWA / 本地双击 / node 冒烟）下整个模块**自动降级
- *       为 no-op**：不写任何 Store 键、不发任何请求，既有 localStorage 体系一字不改。
- *
- * 接口依据（developer.taptap.cn → 小游戏 API → 开放接口 → 云存档，基础库 2.0.0+）：
- *   tap.getCloudSaveManager() → CloudSaveManager（全局单例，多次调用返回同一实例）
- *     · createArchive({archiveMetaData, archiveFilePath, archiveCoverPath?, success, fail, complete})
- *         → res { uuid, fileId }
- *     · updateArchive({archiveUUID, archiveMetaData, archiveFilePath, archiveCoverPath?, ...})
- *         → res { uuid, fileId }（uuid 不变，fileId 会更新）
- *     · getArchiveList({success, fail, complete}) → res.saves[ArchiveDetailData]
- *         ArchiveDetailData: uuid/fileId/name/summary/extra/playtime/saveSize/coverSize/createdTime/modifiedTime
- *     · getArchiveData({archiveUUID, archiveFileId, targetFilePath?, ...}) → res.filePath
- *     · getArchiveCover(...) → res.filePath（本模块不用封面）
- *     · deleteArchive({archiveUUID, ...}) → res.uuid
- *   文件读写：tap.getFileSystemManager()（writeFileSync / readFileSync）+ tap.env.USER_DATA_PATH
- *
- * ⚠️ 硬约束（照官方文档抄下来，改代码时别忘）：
- *   ① createArchive / updateArchive **一分钟之内最多调用一次**（errno 400001）。
- *      所以上传**绝不能**挂在 saveRun 上直发 —— 只 markDirty 排队，由节流器按 60s 放行。
- *      ⚠️ 官方公开文档（云存档功能介绍 / 开发指南 v4）写的是「每分钟最多 60 次、
- *         最多 10 个并发」，比这里的 60s 宽得多；小游戏 H5 那页要登录，原文没核到，
- *         故**保持保守值不动**（宁可慢，不会踩线）。真机冒烟时按实际报错再定。
- *   ② 不允许并发调用（errno 400007）⇒ 全部操作走单飞队列 _busy。
- *   ③ ArchiveMetaData.name ≤60 字节且**不允许汉字**（errno 400009，用 400009 判别）；
- *      summary ≤500 字节（必填，可中文）；extra ≤1000 字节；playtime 为秒。
- *   ④ 存档文件 ≤10MB（本模块只存两个 JSON，几十 KB 量级）。
- *
- * ⚠️ **不往 RUN_KEY / SAVE_KEY 里塞字段**：saveRun 的快照形状被冒烟闸盯着。
- *    云端的「新旧」判据走本模块自己的 Store 键 zhiguaitower_cloudmeta_v1。
+ * 55_cloud.js：云存档 / 排行榜 / 成就的 TapTap 适配
+ * 小游戏接口一分钟只能传一次、还不让并发；非小游戏环境整层降级成空实现
  * ============================================================================ */
 
-const CLOUD_NAME = 'zhiguaitower';                  // 云端存档名：ASCII、≤60 字节
-const CLOUD_FILE = 'zhiguaitower_cloud.json';       // 云端存档文件名（写在 USER_DATA_PATH 下）
-const CLOUD_META_KEY = 'zhiguaitower_cloudmeta_v1'; // 本模块自己的簿记（时间戳 / 云 uuid / 累计时长）
-const CLOUD_MIN_GAP = 60 * 1000;                    // 官方频控：createArchive / updateArchive 一分钟一次
+const CLOUD_NAME = 'zhiguaitower';                  // 存档名只能用 ASCII
+const CLOUD_FILE = 'zhiguaitower_cloud.json';       // 云端存档文件名
+const CLOUD_META_KEY = 'zhiguaitower_cloudmeta_v1'; // 本模块自己的簿记，别塞进那两个存档键
+const CLOUD_MIN_GAP = 60 * 1000;                    // 官方频控，一分钟一次
 
-/* ===================== 环境探测 ===================== */
+
 function cloudEnv(){
   try{
     if(typeof tap === 'undefined' || !tap) return { ok:false, why:'非 TapTap 小游戏环境' };
@@ -56,7 +25,7 @@ function cloudMgr(){
   return _cloudMgr;
 }
 
-/* ===================== 本模块簿记（独立 Store 键，不污染两个存档键） ===================== */
+// 云端的“新旧”判据走这里，别往那俩存档键里塞字段
 function cloudMeta(){
   const d = Store.getJSON(CLOUD_META_KEY);
   return (d && typeof d === 'object') ? d : {};
@@ -67,7 +36,7 @@ function cloudMetaSave(patch){
   return m;
 }
 
-/* ===================== 小工具 ===================== */
+
 let _cloudSessionStart = Date.now();
 function cloudTimeStr(sec){
   const d = new Date((sec || 0) * 1000);
@@ -84,7 +53,7 @@ function cloudSizeStr(n){
   if(n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
   return (n / 1024 / 1024).toFixed(2) + ' MB';
 }
-/* 错误码 → 人话（官方错误码表，createArchive/updateArchive/getArchiveList/getArchiveData/deleteArchive 合并） */
+
 const CLOUD_ERR = {
   400000:'非法的存档文件/封面大小', 400001:'上传频率超限（一分钟只能传一次）', 400002:'指定的存档不存在',
   400003:'单应用下存档数量超限', 400005:'总存储空间超限', 400006:'操作令牌非法（网络卡顿）',
@@ -99,7 +68,7 @@ function cloudErrText(e){
   return word ? (word + '（errno ' + no + '）') : (raw + (no ? '（errno ' + no + '）' : ''));
 }
 
-/* ===================== 单飞调用（官方不允许并发 400007） ===================== */
+// 官方不让并发(400007)，所有调用走单飞
 let _cloudBusy = false;
 function cloudGuard(fn){
   if(_cloudBusy) return Promise.reject(new Error('云存档正在忙，请稍候'));
@@ -125,25 +94,23 @@ function cloudFind(list){
                      .sort((x, y) => (y.modifiedTime || 0) - (x.modifiedTime || 0))[0] || null;
 }
 
-/* ===================== 组装云端存档内容 ===================== */
-/* 存档文件本体：两个本地存档 JSON 原样打包，不做二次加工 —— 恢复时直接回写 Store，
-   这样「续档 / 局外解锁」两条既有路径完全不用改。 */
+// 两个本地存档原样打包，恢复时直接回写 Store
 function cloudPayload(){
   return {
     app: 'zhiguaitower',
-    v: 2,                                   // v1.0.1：多存档 —— 多带一个 runs 数组（3 槽）
+    v: 2,                                   // 多存档：多带一个 runs 数组（3 槽）
     ts: Math.floor(Date.now() / 1000),
     runs: RUN_SLOTS.map(function(k){ return Store.getJSON(k); }),
     run: Store.getJSON(RUN_KEY),            // 兼容：旧版读取方只看 run（= 1 号槽）
     save: Store.getJSON(SAVE_KEY)
   };
 }
-/* 云端摘要用「第一个非空的存档槽」——多存档后不能再假定 1 号槽就是进行中的那局。 */
+// 取第一个非空的槽；多存档后不能假定 1 号槽就是进行中那局
 function cloudPrimaryRun(){
   for(let i=0;i<RUN_SLOTS.length;i++){ const d=Store.getJSON(RUN_SLOTS[i]); if(d) return d; }
   return null;
 }
-/* ArchiveMetaData：name 必须 ASCII；summary / extra 有字节上限，超了要截 */
+// summary 有字节上限，超了要截
 function cloudMetadata(){
   const run = cloudPrimaryRun();
   const now = cloudTimeStr(Math.floor(Date.now() / 1000));
@@ -160,13 +127,9 @@ function cloudMetadata(){
   return { name: CLOUD_NAME, summary: summary, extra: extra.slice(0, 990), playtime: cloudPlaytime() };
 }
 
-/* ===================== 文件系统适配 ===================== */
-/* 为什么不能直接写 fs.writeFileSync：真机（TapTap H5，2026-10-01）上传直接报
-   「_0x13bd35[...] is not a function」，报错变量就是 tap.getFileSystemManager() 的返回值
-   ⇒ 宿主给的 FileSystemManager **没有 writeFileSync**。小游戏宿主的这套接口与微信小程序
-   **不完全同构**（官方 H5 文档页要登录，原文核不到），所以这里不猜具体名字：
-   运行时按候选清单探测同步 / 异步两套写法，都挑不到就把**真实可用的方法名清单**塞进错误信息，
-   下次真机报错即可自报家门，不用再靠猜。 */
+
+// 真机的 FileSystemManager 不一定有 writeFileSync（报过 is not a function）
+// 所以按候选名单探测，挑不到就把可用方法名塞进错误里，让真机自己报
 function cloudFsMethods(fs){
   const out = [];
   try{ for(const k in fs){ try{ if(typeof fs[k] === 'function') out.push(k); }catch(e){} } }catch(e){}
@@ -228,7 +191,7 @@ function cloudReadText(path){
   throw cloudFsNoApi('读', a);
 }
 
-/* ===================== 上传 ===================== */
+
 function cloudUpload(force){
   const env = cloudEnv();
   if(!env.ok) return Promise.reject(new Error(env.why));
@@ -237,8 +200,7 @@ function cloudUpload(force){
     return Promise.reject(new Error('距上次上传不足 1 分钟（官方频控），请稍后再试'));
   return cloudGuard(() => {
     const path = tap.env.USER_DATA_PATH + '/' + CLOUD_FILE;
-    /* 先把存档内容落成本地文件 —— createArchive / updateArchive 传的是**文件路径**，不是内容。
-       ⚠️ 写文件放在**发请求之前**：写不了就立刻失败，别白烧掉「一分钟一次」的配额。 */
+    // 先把内容落成本地文件再发请求，写不了就立刻失败，别白烧一分钟一次的配额
     return cloudWriteText(path, JSON.stringify(cloudPayload()))
       .then(() => _cloudListRaw())
       .then(list => {
@@ -261,17 +223,17 @@ function cloudUpload(force){
   });
 }
 
-/* ===================== 下载 / 恢复 ===================== */
+
 function cloudApplyToStore(data){
   if(!data || data.app !== 'zhiguaitower') throw new Error('云端存档不是本游戏的数据');
   if(Array.isArray(data.runs)){
-    /* v1.0.1 多存档：按槽位整体覆盖（空槽要删掉本地残留，否则云端的「空」恢复不回来） */
+    // 空槽要删本地残留，不然云端恢复不出“空”
     RUN_SLOTS.forEach(function(k, i){
       const d = data.runs[i];
       if(d) Store.setJSON(k, d); else Store.del(k);
     });
   } else if(data.run){
-    /* 旧版云档（v1：只有单档 run）⇒ 落进 1 号槽 */
+    // 旧云档只有一个 run，落进 1 号槽
     Store.setJSON(RUN_KEY, data.run);
   }
   if(data.save) Store.setJSON(SAVE_KEY, data.save);
@@ -298,16 +260,15 @@ function cloudRemove(uuid){
 }
 function cloudList(){ return cloudGuard(_cloudListRaw); }
 
-/* ===================== 脏标记 + 节流队列 ===================== */
-/* 调用点只有两个：saveRun()（本局存档）与 persistSave()（局外元数据）。
-   它们只是「记一笔」，真正的上传由这里按 60s 节流放行。 */
+
+// saveRun / persistSave 只管记一笔，真正上传在这里按 60s 节流
 let _cloudDirty = false, _cloudTimer = null, _cloudUploading = false, _cloudFails = 0;
 function cloudMarkDirty(){
   if(!cloudEnv().ok) return;                     // 非 TapTap 环境：一个字节都不写
   cloudHookHide();                               // 确认 tap 在之后再挂退出兜底（模块加载时可能还没注入）
   cloudMetaSave({ lastLocalTs: Date.now() });
   _cloudDirty = true;
-  _cloudFails = 0;                               // 玩家又存档了 ⇒ 重新给三次机会
+  _cloudFails = 0;                               // 又存档了，重新给三次机会
   cloudPump();
 }
 function cloudPump(){
@@ -326,20 +287,15 @@ function cloudPump(){
       _cloudUploading = false;
       _cloudFails++;
       cloudMetaSave({ lastError: String((e && e.message) || e), lastErrorTs: Date.now() });
-      /* 连败 3 次就不再自动重试（比如名不合法这类永久错），免得每分钟白打一次请求；
-         玩家下一次存档会重置计数，也可以去设置面板手动「立即上传」。 */
+      // 连败三次就停自动重试，免得每分钟白打一次
       if(_cloudFails >= 3){ _cloudDirty = false; return; }
       _cloudDirty = true;
       if(typeof setTimeout === 'function') setTimeout(() => cloudPump(), CLOUD_MIN_GAP);
     }
   );
 }
-/* ===================== 退出 / 切后台兜底 ===================== */
-/* 为什么非有不可：脏标记只在**下一次存档**时才重排（cloudPump 的节流窗口最长 60s），
-   玩家存档后 60s 内退出游戏，那一笔进度就永远没机会上传 —— 换设备拉回来的是旧档。
-   所以隐藏时若有未同步的改动，**绕过 60s 节流**直发一次。
-   仍受官方频控兜底：真撞上频控会返回 400001，此时把 dirty 丢回 true，
-   等下一次存档或下一轮节流再补，不会把这一笔吞掉。 */
+// 存档后 60s 内退出，这笔进度就没机会传，所以隐藏时绕过节流直发一次
+// 真撞上频控(400001)就把 dirty 丢回去，等下次存档再补，别吞这一笔
 function cloudFlush(){
   if(!cloudEnv().ok || !_cloudDirty || _cloudUploading) return;
   _cloudDirty = false; _cloudUploading = true;
@@ -347,13 +303,12 @@ function cloudFlush(){
     () => { _cloudUploading = false; },
     e => {
       _cloudUploading = false;
-      _cloudDirty = true;                        // 没传成 ⇒ 还原脏标记，别丢这一笔
+      _cloudDirty = true;                        // 没传成，还原脏标记，别丢这一笔
       cloudMetaSave({ lastError: String((e && e.message) || e), lastErrorTs: Date.now() });
     }
   );
 }
-/* 两个钩子分开记 —— 模块加载时 tap 可能还没注入，那时只挂得上 visibilitychange；
-   等第一次真的同步（cloudMarkDirty）再补上 tap.onHide。 */
+// 两个钩子分开挂：加载时 tap 可能还没注入，只挂得上 visibilitychange
 let _cloudTapHideHooked = false, _cloudVisHooked = false;
 function cloudHookHide(){
   try{
@@ -381,7 +336,7 @@ function cloudStatus(){
   };
 }
 
-/* ===================== 开屏比对（云端更新 ⇒ 提示拉回） ===================== */
+
 function cloudBootCheck(){
   if(!cloudEnv().ok) return;
   if(typeof setTimeout !== 'function') return;
@@ -390,7 +345,7 @@ function cloudBootCheck(){
       const mine = cloudFind(list);
       if(!mine) return;
       const localTs = Math.floor((cloudMeta().lastLocalTs || 0) / 1000);
-      /* 判据：云端 modifiedTime 比「本地最近一次落档」还新 60 秒以上 ⇒ 疑似换了设备/清了缓存 */
+      // 云端比本地最近落档还新 60 秒以上，疑似换设备或清了缓存
       if((mine.modifiedTime || 0) > localTs + 60) cloudPromptRestore(mine);
     }).catch(() => {});
   }, 2000);
@@ -402,11 +357,10 @@ function cloudPromptRestore(a){
     <p style="color:var(--dim);font-size:12px">恢复后本机进度会被云端覆盖。</p>
     <button class="btn" onclick="cloudAcceptRestore('${a.uuid}','${a.fileId}')">恢复云端存档</button>
     <button class="btn ghost" onclick="showStartScreen()">稍后再说</button>`);
-  /* ⚠️ 「稍后再说」必须走 showStartScreen 而不是 hideOverlay：showOverlay 不带第三实参时
-     会把 menu-scene 摘掉（换成通用墨底 panel），直接藏掉会留下一块空屏。 */
+  // “稍后再说”走 showStartScreen，直接 hideOverlay 会留下一块空屏
 }
 
-/* ===================== 界面 ===================== */
+
 function showCloudPanel(){
   const env = cloudEnv();
   if(!env.ok){
@@ -457,8 +411,7 @@ function cloudPanelUpload(){
   cloudUpload(false).then(
     res => { cloudMetaSave({ lastError: '' }); floatMsg('已上传到云端'); if(btn){ btn.disabled = false; btn.textContent = '立即上传到云端'; } cloudPanelRefresh(); },
     e => {
-      /* 手动上传的失败也要落进簿记 —— 面板底部那行红字读的就是它，
-         否则修好之后仍然挂着上一次的旧报错（用户看到的"上传失败"就是这么残留的）。 */
+      // 手动上传失败也得写进簿记，不然面板底部一直挂着上次的旧报错
       const msg = String((e && e.message) || e);
       cloudMetaSave({ lastError: msg, lastErrorTs: Date.now() });
       floatMsg(msg);
@@ -485,7 +438,7 @@ function cloudAcceptRestore(uuid, fileId){
     e => floatMsg(String((e && e.message) || e))
   );
 }
-/* 恢复之后：内存里的 G 已经过期，必须先丢开、重读局外档，再回主菜单（「续」按钮会自己亮起来） */
+// 恢复后内存里的 G 已过期，先丢开、重读存档，再回主菜单
 function cloudAcceptRestoreAfterRestore(){
   try{ loadSave(); }catch(e){}
   try{ G = null; }catch(e){}
@@ -495,44 +448,12 @@ function cloudAcceptRestoreAfterRestore(){
     <button class="btn" onclick="showStartScreen()">回到主菜单</button>`);
 }
 
-/* 模块加载即挂一次：这一步能挂上的只有 visibilitychange（tap 往往还没注入），
-   补上 tap.onHide 的那次在 cloudMarkDirty 里。非 TapTap 环境两个钩子都是死的
-   （cloudFlush 开头就判环境），不会白跑请求。 */
+// 模块加载先挂一次（一般只挂得上 visibilitychange），tap.onHide 等首次同步再补
 try{ cloudHookHide(); }catch(e){}
 
-/* ============================================================================
- * 通关计时榜 · TapTap 全平台排行榜适配层（v1.0.17b）
- * ----------------------------------------------------------------------------
- * 用户口径：「通关计时榜是要连接taptap的排行榜供全平台的玩家比较」，并已在 TapTap
- * 开发者中心建好榜（排行榜 ID = dgakiqz3gn7lb847ss；排序 ascending + 更新策略 better
- * ⇒ 值取「通关用时**毫秒**」，越短越靠前，better 自动保留个人最好成绩）。
- * ⚠️ v1.0.20：用时按**毫秒**提交（TapTap 的时间类型榜收毫秒并自动格式化成「X 秒/分」）。
- *   早先按「秒」提交 ⇒ 1800 被当成 1800ms，官方榜把 30 分钟的对局显示成「1.8 秒」。
- *
- * ⚠️ v1.0.19 纠正（上一版这里写错了，是真机报错「未发现排行榜接口」的根源）：
- *   当时核的是 **原生 SDK** 文档（Unity / Android / iOS 的 TapTapLeaderboard），
- *   于是误判「H5 小游戏没有排行榜接口」。实际上小游戏/H5 **有**排行榜 API，
- *   只是不在同一份文档里 —— 见 `developer.taptap.cn/minigameapidoc/dev/api/open-api/leaderboard/`：
- *     tap.getLeaderboardManager()（**基础库 ≥ 1.8.0**）→ LeaderboardManager
- *       · submitScores({ scores:[{leaderboardId, score}], callback:{onSuccess,onFailure} })
- *       · openLeaderboard({ leaderboardId, callback })                       —— 打开 TapTap 官方榜单 UI
- *       · loadLeaderboardScores({ leaderboardId, maxSize, nextPage, periodToken, callback })
- *           → callback.onSuccess(res => res.scores)                          —— 自绘榜单走这条
- *       · loadCurrentPlayerLeaderboardScore({ leaderboardId, callback })     —— 我的排名
- *   ⚠️ 两个坑：
- *     ① 回调形状是 `callback:{onSuccess,onFailure(code,message)}`，**不是** `{success, fail}`；
- *     ② 管理器的方法挂在**原型**上（且非枚举）—— 老的 `rankMethodNames` 只看自身 ⇒ 收出来是空数组
- *        ⇒ 早先一直报「未发现排行榜接口」。现已沿原型链收（见 rankMethodNames）。
- *   ⚠️ 后台还需在「小游戏管理 → 基础配置 → 协议配置 → 小游戏隐私保护指引」勾选「好友关系」，
- *      否则回调直接失败（错误码）。
- *
- * 兜底口径（保持原设计）：拿不到管理器 / 管理器上没有这套方法 ⇒ 整层降级为 no-op，
- *   通关计时榜回落本机榜（既有逻辑一字不改）；失败时把诊断串（真实可用方法名）塞进错误信息，
- *   真机回报一次即可定位是「权限没开」还是「基础库太低」。 */
-/* v1.0.19：**6 个榜**（1 个通关计时总榜 + 4 个角色通关计时分榜 + 1 个整局总分榜）。
-   排序口径在 TapTap 开发者中心建榜时设定，客户端只提交数值：
-     · clear_*   = ascending + better（值 = 通关用时**毫秒**，越短越前）
-     · total_score = descending + better（值 = 整局**得分**，越高越前） */
+/* 通关计时榜：TapTap 全平台排行榜适配
+ * 用时按毫秒提交；回调是 callback:{onSuccess,onFailure}，不是 {success,fail} */
+// 6 个榜：通关总榜 + 4 个角色分榜 + 1 个总分榜；排序口径在后台建榜时定
 const RANK_IDS = {
   clear_total:     'dgakiqz3gn7lb847ss',
   clear_tianshi:   'xc3t2r13go0t8ykcma',
@@ -542,8 +463,7 @@ const RANK_IDS = {
   total_score:     'k74rffqopia2pn6tsb'
 };
 const RANK_ID = RANK_IDS.clear_total;              // 兼容旧引用（默认榜 = 通关计时总榜）
-/* 榜单元数据：UI 切换页与提交/展示共用。kind:'clear' 走用时升序；'score' 走得分降序。
-   hero 非空 ⇒ 只统计该角色的记录（本机兜底榜按 hero 过滤；全平台榜靠独立榜 ID 天然隔离）。 */
+// 榜单元数据，UI 和提交共用；hero 非空就只算该角色
 const RANK_BOARDS = [
   {id:'clear_total',     name:'通关计时 · 总榜',  kind:'clear', hero:''},
   {id:'clear_tianshi',   name:'通关计时 · 天师',  kind:'clear', hero:'tianshi'},
@@ -563,14 +483,8 @@ function rankEnv(){
     return { ok:true, why:'' };
   }catch(e){ return { ok:false, why:'排行榜探测失败：' + ((e && e.message) || e) }; }
 }
-/* 一个对象「连原型链一起」的函数名清单。
-   v1.0.19：**这是「未发现排行榜接口」的真根因** —— 旧实现先 `for..in`（只看可枚举，
-   包含了原型上的可枚举属性但漏掉非枚举），退化分支又只做 `Object.getOwnPropertyNames(obj)`
-   （**只看自身**，原型上的一个都收不到）。真机 `tap.getLeaderboardManager()` 返回的是一个
-   由宿主类构造的实例，方法全挂在**原型**上（且多为非枚举）⇒ 收出来是空数组 ⇒ cands 为空
-   ⇒ 整层误判「接口不存在」，用户截图那条报错就是这么来的。
-   ⇒ 改为逐级 `getPrototypeOf` 收每一层的 `getOwnPropertyNames`，跳过 constructor、去重。
-      （止步于 Object.prototype，免得把 toString/hasOwnProperty 这类通用方法混进候选。） */
+// 方法名要连原型链一起收：旧的只看自身，收出来是空的，才一直报「未发现排行榜接口」
+// 逐层 getPrototypeOf，跳过 constructor，收到 Object.prototype 为止
 function rankMethodNames(obj){
   const out = [], seen = Object.create(null);
   try{
@@ -584,7 +498,7 @@ function rankMethodNames(obj){
   }catch(e){}
   return out;
 }
-/* 探测（懒加载 + 缓存）：{ ok, why, names, cands } */
+
 function rankProbe(){
   if(_rankProbe) return _rankProbe;
   const env = rankEnv();
@@ -592,32 +506,23 @@ function rankProbe(){
   const names = rankMethodNames(tap);
   return (_rankProbe = { ok:true, why:'', names:names, cands:names.filter(n => RANK_CAND_RE.test(n)) });
 }
-/* v1.0.19：判据改成「**真拿到了排行榜管理器、且管理器上有这套方法**」。
-   旧判据只数 tap 自身名字像排行榜的方法，既数不到管理器（原型上挂方法）里的候选，
-   也可能被 tap 上同名的无关方法误判成「有接口」⇒ 出现「说有接口、一调就报未发现」的自相矛盾。 */
+// 判据：真拿到管理器、且管理器上有这套方法
 function rankAvailable(){
   const m = rankManager();
   if(!m || m.via !== 'manager') return false;
   return typeof m.ctx.loadLeaderboardScores === 'function' || typeof m.ctx.submitScores === 'function';
 }
-/* 诊断串：真机回报时直接把它发出来（把真实可用方法名亮在台面上） */
+// 诊断串，真机回报时直接发出来
 function rankDiag(){
   const p = rankProbe();
   if(!p.ok) return p.why;
   let s = 'TapTap 可用方法：' + (p.names.join(' / ') || '一个都没有')
         + '；排行榜候选：' + (p.cands.join(' / ') || '无');
-  /* v1.0.18：**把排行榜管理器自己的方法名也亮出来**。
-     v1.0.19：顺手把「管理器到底有没有拿到」也写死 —— 否则管理器在、但方法名收出来为空时
-     这段会被整段省略，真机回报里就分不清「没有管理器」和「管理器方法没收到」。
-     （方法名收不齐的根因已修在 rankMethodNames：改为沿原型链收。） */
   const m = rankManager();
   if(m && m.via === 'manager') s += '；排行榜管理器方法：' + (m.all.join(' / ') || '（管理器在，但方法名收不到）');
   return s;
 }
-/* 取出「排行榜管理器」：优先 tap.getLeaderboardManager()，退回 tap 自身。都没有就 null。
-   v1.0.18：**候选为空时回退用管理器的全部方法** —— 官方没公开 H5 排行榜接口名，
-     管理器上到底叫 submitScore / getLeaderboard 还是别的，只能运行时挨个试。
-     过滤命中就用过滤后的（更精准），一个都不命中就用全量（至少有机会试出来）。 */
+// 管理器优先 getLeaderboardManager()，退回 tap 自身；候选全没命中就退回全量硬试
 function rankManager(){
   try{
     if(typeof tap.getLeaderboardManager === 'function'){
@@ -632,11 +537,7 @@ function rankManager(){
   const p = rankProbe();
   return p.ok ? { ctx:tap, cands:p.cands, all:p.names, via:'tap' } : null;
 }
-/* 一次排行榜管理器调用。**回调形状是 `callback:{onSuccess,onFailure(code,message)}`**——
-   v1.0.19 照真实 API 改：早先猜的 `{success, fail}` 不是这套接口的写法，所以就算方法名猜中了也永远失败
-   （TapTap 小游戏排行榜 API 见 developer.taptap.cn/minigameapidoc 的 LeaderboardManager：
-     openLeaderboard / submitScores / loadLeaderboardScores / loadCurrentPlayerLeaderboardScore，
-     全部走 `callback` 对象；基础库需 ≥ 1.8.0）。 */
+// 回调是 callback:{onSuccess,onFailure}；早先猜的 {success,fail} 永远失败
 function rankCall(ctx, name, payload, what, timeoutMs){
   what = what || '排行榜';
   const T = timeoutMs || 15000;
@@ -650,42 +551,33 @@ function rankCall(ctx, name, payload, what, timeoutMs){
       const onFail = (code, message) => bad(new Error((message || what + '调用失败') + (code != null ? ('（code ' + code + '）') : '')));
       fn.call(ctx, Object.assign({
         callback: { onSuccess: good, onFailure: onFail },
-        /* v1.1.8：**两套回调形状一起下发**。「6 个榜一直没变」的可疑点之一就是回调形状对不上：
-           官方 H5 文档页要登录、原文核不到，不同基础库版本可能走 `{success, fail}` 而非
-           `callback:{onSuccess, onFailure}`（早先 v1.0.19 正是从 `{success,fail}` 改过来的）。
-           两套键同时给：SDK 认哪套用哪套，多出来的键会被忽略；任一先回调，good/bad 的 done 闸保证只结算一次。 */
+        // 两套回调形状一起下发，SDK 认哪套用哪套；done 闸保证只结算一次
         success: good,
         fail: e => bad(new Error((e && (e.errMsg || e.message)) || what + '调用失败'))
       }, payload));
-      /* 兜底：SDK 静默不回调时别把界面永远钉在「读取中…」。
-         v1.1.22：`what` / `timeoutMs` 参数化 —— 成就层要试多个候选方法名，超时必须短（4 秒），
-         否则一个不认的方法挂住 15 秒会把「挨个试」拖成几十秒。 */
+      // 超时兜底，别把界面钉在“读取中”；成就层要试多个方法名，超时得短
       if(typeof setTimeout === 'function') timer = setTimeout(() => bad(new Error(what + '接口无响应（' + Math.round(T/1000) + ' 秒）')), T);
     }catch(e){ bad(e); }
   });
 }
-/* 管理器实例（真拿到 `tap.getLeaderboardManager()` 才算；回落 tap 自身的那种只用于诊断，不能当接口调） */
+
 function rankCtx(){
   const m = rankManager();
   return (m && m.via === 'manager') ? m.ctx : null;
 }
-/* 提交成绩：value = 该榜的**统计值**（clear_* 传用时**毫秒**；total_score 传**得分**）。
-   boardId 缺省 = 通关计时总榜（RANK_ID）。接口是**批量**形状 ⇒ scores 传单元素数组。 */
+// 提交该榜的统计值：clear 榜传毫秒，总分榜传得分
 function rankSubmit(value, boardId){
   const ctx = rankCtx();
   if(!ctx || typeof ctx.submitScores !== 'function') return Promise.reject(new Error('未发现排行榜接口。' + rankDiag()));
   const bid = rankBoardId(boardId);
   const v = Math.max(0, Math.round(value || 0));
   return rankCall(ctx, 'submitScores', { scores: [{ leaderboardId: bid, score: v }] }).then(
-    /* v1.1.23r（用户 2026-10-16 纠正口径）：成就「Nice-encounter」= **6 个榜单（RANK_BOARDS）任意一榜入围**。
-       放在**提交成功**这一处（任何榜、任何入口：通关计时总/分榜、整局总分榜都走本函数）⇒ 首次成功上榜即报一次；
-       tapAchieve 内部 _tapAchSent 去重 ⇒ 不必担心重复打平台。 */
+    // 提交成功就报 Nice-encounter 成就；_tapAchSent 去重
     () => { tapAchieve('Nice-encounter'); return { ok:true, value:v, board:bid, via:'submitScores' }; },
     e => { throw new Error('排行榜提交失败（' + ((e && e.message) || e) + '）。' + rankDiag()); }
   );
 }
-/* 拉取前排数据：loadLeaderboardScores → res.scores（boardId 缺省 = 通关计时总榜）。
-   返回的是 { rank, score, nickname, avatar, leaderboardId } 数组。 */
+// 拉前排数据，返回 rank/score/nickname/avatar
 function rankFetch(limit, boardId){
   const ctx = rankCtx();
   if(!ctx || typeof ctx.loadLeaderboardScores !== 'function') return Promise.reject(new Error('未发现排行榜接口。' + rankDiag()));
@@ -697,19 +589,14 @@ function rankFetch(limit, boardId){
     e => { throw new Error('排行榜读取失败（' + ((e && e.message) || e) + '）。' + rankDiag()); }
   );
 }
-/* 打开 TapTap 自带的排行榜页面（官方 UI，只认排行榜 ID）。
-   这是「展示全平台榜」的另一条路：自绘列表要等 loadLeaderboardScores 权限到位，官方 UI 更稳。 */
+// 打开 TapTap 自带榜页，只认排行榜 ID
 function rankOpenBoard(boardId){
   const ctx = rankCtx();
   if(!ctx || typeof ctx.openLeaderboard !== 'function') return Promise.reject(new Error('未发现排行榜接口。' + rankDiag()));
   return rankCall(ctx, 'openLeaderboard', { leaderboardId: rankBoardId(boardId) });
 }
-/* v1.1.x：取「当前玩家」的 TapTap **真实昵称 / 头像**（自绘榜不再写「道友」「无名道人」）。
-   ⚠️ H5 小游戏没有公开统一的「取用户信息」接口名，故做 best-effort 多点探测：
-     ① 依次试 tap 上常见的取用户信息方法名（见 RANK_SELF_METHODS）；
-     ② 兼容两种返回形态 —— 同步 return（值 / Promise）、或走 `callback:{onSuccess,onFailure}`；
-     ③ 3 秒兜底：都没拿到就落空（调用方回落「我」），绝不把界面钉死。
-   结果 **缓存一次**（_rankSelf），同一局里后续调用直接复用。 */
+// 取当前玩家真实昵称/头像：没有公开的接口名，只好挨个方法名试
+// 兼容同步 return 和 callback 两种形态，3 秒拿不到就落空；结果缓存一次
 const RANK_SELF_METHODS = ['getUserInfo','getUserProfile','getUser','getPlayerInfo','getAccountInfo','getLoginInfo','getMyInfo'];
 let _rankSelf = null;
 function rankSelfShape(o){
@@ -745,9 +632,7 @@ function rankSelf(){
     if(typeof setTimeout === 'function') setTimeout(() => done(null), 3000); else done(null);
   });
 }
-/* v1.1.x：取「我在某榜的当前名次」（官方 loadCurrentPlayerLeaderboardScore）——
-   返回 { rank, score, nickname, avatar }。既用来给自绘榜标出「本账号」那一行，
-   也是 rankSelf 拿不到昵称时的备用真名来源。没接口就 reject（调用方 catch 掉即可）。 */
+// 取我在某榜的名次，拿不到昵称时也用它补真名
 function rankSelfScore(boardId){
   const ctx = rankCtx();
   if(!ctx || typeof ctx.loadCurrentPlayerLeaderboardScore !== 'function')
@@ -755,51 +640,8 @@ function rankSelfScore(boardId){
   return rankCall(ctx, 'loadCurrentPlayerLeaderboardScore', { leaderboardId: rankBoardId(boardId) });
 }
 
-/* ============================================================================
- * 成就 · TapTap 平台成就适配层（v1.1.22）
- * ----------------------------------------------------------------------------
- * 用户口径（2026-10-16）：「『成就/卡背头像框』删了，然后连接 taptap 成就」。
- *   ⇒ 游戏内**不再自持成就系统**（无解锁 toast / 无卡背 / 无头像框 / 无收藏页；
- *     50_ui.js 的 COSMETICS / ACHIEVEMENTS / hasAchievement / showAchievementToast /
- *     unlockAchievement / applyCosmetics / equipCosmetic / viewAchievements 已整块删除），
- *     局内那 5 个触发点只做一件事：把成就**上报给 TapTap 平台侧**（玩家在 TapTap 游戏页看到点亮）。
- *
- * 接口依据：与小游戏排行榜**同源同一份文档域**
- *   （developer.taptap.cn/minigameapidoc/dev/api/open-api/）—— 小游戏「生态能力 → 成就」是公开能力
- *   （教程页 dev/tutorial/open-capabilities/achievement/）。
- *   ⚠️ 但该文档页**要登录**，接口名 / 载荷键原文核不到 —— 与 v1.0.19 那次排行榜同一处境。
- *   故本层沿用排行榜那套 best-effort 多点探测（rankMethodNames / rankCall）：
- *     ① 优先 `tap.getAchievementManager()`（与 getCloudSaveManager / getLeaderboardManager 同构），
- *        管理器方法挂在**原型**上 ⇒ 沿原型链收方法名；
- *     ② 拿不到管理器就退回 tap 自身（有的基础库把方法直接挂 tap 上）；
- *     ③ 调用形状：`callback:{onSuccess,onFailure}` 与 `{success,fail}` **两套一起下发**；
- *     ④ 载荷键**多套一起给** —— 官方 *服务端* API 用的键是 `achievement_open_id`
- *        （= 开发者在后台建成就时自定义的 open id），小游戏 SDK 的键名可能不同，故
- *        achievementOpenId / openId / achievement_open_id / achievementId / id 全给；
- *        累计型成就（百战不殆）再加 steps / progress / completed_step 等键。
- *
- * ⚠️ 后台前置（CLI 做不了）：必须在 TapTap 开发者中心 →「游戏服务 / 成就」里**创建成就**，
- *   每条成就的**成就 ID（即上报用的成就 open id）用下表 TAP_ACHIEVEMENTS 的 openId**。
- *   v1.1.23（用户 2026-10-16 口径）：用户已在后台建好 6 条成就 ⇒ 本表按后台那 6 条**逐一对应**：
- *   Beginning / Hard-three / All-unlocked / No-matter-Who / Get-all / Nice-encounter。
- *   原游戏内自拟的 5 条（wushang / lingfu / zuzhou / tushen / baizhan）**作废、不再上报**。
- *   成就服务若未开通，需按官方「成就系统功能介绍 → 接入准备」先提工单申请开通。
- *   taptap-cli 目前**没有**成就相关命令（已核 2026.10.14 版命令表），这部分只能在网页后台做。
- *
- * ⚠️ 局内触发点映射（v1.1.23，名字语义由助手按后台名推断，**供用户核对 / 纠正**）：
- *   登塔！！！(Beginning)         ← 新局开始（confirmNewGame）
- *   初入第三幕(Hard-three)        ← advanceAct 推进到第 3 幕（act>=3）
- *   全部图鉴解锁(All-unlocked, 34) ← **志怪图鉴全面收录**：unlockBestiary 后按「已收录条数 / BESTIARY_ORDER 全长 34」上报
- *   全能降魔者(No-matter-Who, 4)  ← 局末按「已通关过的角色数」上报
- *   解锁并拥有所有(Get-all, 4)    ← 解锁角色（unlockHeroWithTicket）时按「已解锁角色数」上报
- *   风云榜相聚(Nice-encounter)    ← **6 个榜单（RANK_BOARDS）任意一榜入围**：rankSubmit 提交成功后即上报
- *
- *   v1.1.23r（用户 2026-10-16 纠正两处口径）：All-unlocked 由「累计击杀 34」改为「图鉴全面解锁」；
- *     Nice-encounter 由「仅总分榜」放宽为「6 榜任一入围」。⚠️ 后台中文名以用户后台为准，上表 name 仅语义化替身。
- *
- * 兜底口径（同排行榜层）：非 TapTap 环境 / 拿不到成就对象 / 候选方法全失败 ⇒ 整层 no-op，
- *   浏览器 / PWA / 本地双击 / node 冒烟**逐字节不受影响**；失败原因（含方法名诊断串）只写进返回值，
- *   **不弹窗、不打断战斗** —— 成就上报绝不该影响局内节奏。 */
+/* 成就：TapTap 平台成就适配
+ * 内容全部交给平台侧点亮，游戏内不再自持成就系统 */
 const TAP_ACHIEVEMENTS = [
   {id:'Beginning',      openId:'Beginning',      name:'登塔！！！',        desc:'开始一局爬塔（进入第一幕）',            steps:1},
   {id:'Hard-three',     openId:'Hard-three',     name:'初入第三幕',        desc:'爬塔推进到第三幕',                      steps:1},
@@ -808,12 +650,11 @@ const TAP_ACHIEVEMENTS = [
   {id:'Get-all',        openId:'Get-all',        name:'解锁并拥有所有角色', desc:'解锁全部 4 名角色（累计型）',            steps:4},
   {id:'Nice-encounter', openId:'Nice-encounter', name:'风云榜相聚',        desc:'6 个榜单中任意一榜入围',                steps:1}
 ];
-/* 候选方法名（按「最可能命中」排序）。只试**确实存在**的前 TAP_ACH_TRY 个，
-   每个 4 秒没回调就换下一个 ⇒ 最坏 16 秒，正常情况下第一个即中。 */
+// 候选方法名按最可能命中排序，只试前 4 个，每个 4 秒
 const TAP_ACH_METHODS = ['unlockAchievement','unlock','completeAchievement','submitAchievement',
                          'achieve','addAchievement','growSteps','addSteps','updateAchievement','setAchievement'];
 const TAP_ACH_TRY = 4;
-let _tapAchSent = null;         // 本次会话已上报过的 openId（免每场战斗重复打平台）
+let _tapAchSent = null;         // 已上报过的 openId，免重复打平台
 function tapAchById(id){ return TAP_ACHIEVEMENTS.find(a => a.id === id || a.openId === id) || null; }
 function tapAchieveEnv(){
   try{
@@ -821,7 +662,7 @@ function tapAchieveEnv(){
     return { ok:true, why:'' };
   }catch(e){ return { ok:false, why:'成就环境探测失败：' + ((e && e.message) || e) }; }
 }
-/* 成就对象：优先 tap.getAchievementManager()，退回 tap 自身；都没有 ⇒ null。 */
+
 function tapAchievementManager(){
   try{
     if(typeof tap.getAchievementManager === 'function'){
@@ -831,7 +672,7 @@ function tapAchievementManager(){
   }catch(e){}
   return tapAchieveEnv().ok ? { ctx:tap, all:rankMethodNames(tap), via:'tap' } : null;
 }
-/* 诊断串（同 rankDiag 的口径：把真机上真实可用的方法名亮出来，一次真机回报即可定位）。 */
+// 诊断串，把真机真实可用的方法名亮出来
 function tapAchieveDiag(){
   const env = tapAchieveEnv();
   if(!env.ok) return env.why;
@@ -840,8 +681,7 @@ function tapAchieveDiag(){
   return '成就对象（' + p.via + '）可用方法：' + (p.all.join(' / ') || '一个都收不到')
        + '；候选：' + TAP_ACH_METHODS.join(' / ');
 }
-/* 上报一条成就（best-effort）。steps 非空表示累计型成就（如「百战不殆」传累计击杀数）。
-   返回 Promise<{ok, openId?, via?, res?, cached?, why?, diag?}>；**永不 reject** ⇒ 调用点不必 try/catch。 */
+
 function tapAchieve(id, steps){
   const env = tapAchieveEnv();
   if(!env.ok) return Promise.resolve({ ok:false, why:env.why });
@@ -862,7 +702,7 @@ function tapAchieve(id, steps){
   }
   const cands = TAP_ACH_METHODS.filter(n => typeof p.ctx[n] === 'function').slice(0, TAP_ACH_TRY);
   if(!cands.length) return Promise.resolve({ ok:false, why:'成就对象上没有候选方法', diag:tapAchieveDiag() });
-  /* 挨个试：方法名对了但键名/回调形状不对会失败 ⇒ 换下一个候选再试。 */
+  // 挨个候选试，名字对了键名不对也会失败，换下一个
   let chain = Promise.reject(new Error('（未尝试）'));
   cands.forEach(n => { chain = chain.catch(() => rankCall(p.ctx, n, payload, '成就', 4000)); });
   return chain.then(
@@ -870,9 +710,7 @@ function tapAchieve(id, steps){
     e => ({ ok:false, openId:openId, why:(e && e.message) || String(e), diag:tapAchieveDiag() })
   );
 }
-/* 累计型成就的**达标才上报**封装（v1.1.23）：cur = 当前累计值，目标步数取 TAP_ACHIEVEMENTS.steps。
-   未达标 ⇒ 直接 no-op（不发请求）；达标 ⇒ 上报一次（steps 传目标值，避免每次击杀都打平台）。
-   返回 Promise，与 tapAchieve 一样**永不 reject** ⇒ 调用点无需 try/catch。 */
+// 累计型成就达标才上报，steps 传目标值，别每次击杀都打平台
 function tapAchieveProgress(id, cur){
   const a = tapAchById(id);
   const need = (a && a.steps) || 1;
