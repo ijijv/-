@@ -990,7 +990,11 @@ function outHudSync(){
     /* 选角屏不改 SCENE，判显隐必须显式排除 hero-scene */
     const ov=document.getElementById('overlay');
     const heroOn = !!(ov && ov.classList && ov.classList.contains('hero-scene'));
-    const show = (typeof G!=='undefined') && !!G && SCENE!=='menu' && SCENE!=='battle' && !heroOn;
+    /* 退回主菜单不改 SCENE，得看 body.at-menu（= 当前是局外背景）才收得住；
+       只看 SCENE 的话战局外的锦囊 / 牌堆会一直挂在菜单左下、右下角 */
+    const atMenu = !!(document.body && document.body.classList && document.body.classList.contains('at-menu'));
+    const menuOn = atMenu || !!(ov && ov.classList && ov.classList.contains('menu-scene'));
+    const show = (typeof G!=='undefined') && !!G && SCENE!=='menu' && SCENE!=='battle' && !heroOn && !menuOn;
     hud.style.display = show ? 'flex' : 'none';
     if(!show) return;
     /* HUD 图标每帧比对最新结果、变了才写；一次性闩锁会让回落串永远升不上来 */

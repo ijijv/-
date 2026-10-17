@@ -20,7 +20,7 @@ PORT = 9223
 URL = "http://localhost:8137/"
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '_out_软著', 'shots')
-PROFILE = os.path.join(os.environ.get('TEMP', '.'), 'cshot_cdp')
+PROFILE = os.path.join(os.environ.get('TEMP', '.'), 'cshot_cdp_%d' % os.getpid())
 
 
 class CDP:
@@ -32,6 +32,9 @@ class CDP:
         subprocess.Popen([
             CHROME, '--headless=new', '--disable-gpu', '--hide-scrollbars',
             '--no-first-run', '--no-default-browser-check', '--mute-audio',
+            '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding', '--disable-features=CalculateNativeWinOcclusion',
+            '--force-device-scale-factor=1',
             f'--remote-debugging-port={PORT}', '--remote-allow-origins=*',
             f'--user-data-dir={PROFILE}',
             '--window-size=1280,720', url,
@@ -73,7 +76,11 @@ class CDP:
 
     def shot(self, name):
         os.makedirs(OUT, exist_ok=True)
-        r = self.call('Page.captureScreenshot', format='png')
+        # 先同步两帧再截，否则并行跑过 Chrome 时会拿到上一屏的陈旧帧
+        self.call('Runtime.evaluate',
+                  expression='new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r(1))))',
+                  awaitPromise=True, returnByValue=True)
+        r = self.call('Page.captureScreenshot', format='png', fromSurface=True)
         path = os.path.join(OUT, name)
         with open(path, 'wb') as f:
             f.write(base64.b64decode(r['data']))
@@ -96,11 +103,17 @@ def probe(c):
 
 def shots(c):
     c.wait(4500)
+    # 首次启动会盖一层 z-index:80 的教程开屏 #tut-intro，压在主菜单 #overlay 之上。
+    # 采集前必须先摘掉它，否则后面每一屏都被这层挡住。
+    c.js("var t=document.getElementById('tut-intro'); if(t) t.remove();")
+    c.js("try{markTutorialSeen();}catch(e){console.log('markTutorialSeen:'+e.message);}")
+    c.js("showStartScreen()")
+    c.wait(1800)
     c.shot('01_menu.png')
 
     # 开始爬塔（建局）→ 角色选择
     c.js('startGame()')
-    c.wait(1500)
+    c.wait(1800)
     c.shot('02_hero_select.png')
 
     # 选符箓天师 → 开局三选一

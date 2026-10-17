@@ -153,6 +153,34 @@ const RUNNER = `
       chk(!cloudEnv().ok, '摘掉 tap 后环境探测判定为不可用');
       cloudMarkDirty();
       chk(Store.get('zhiguaitower_cloudmeta_v1') === before, '非 TapTap 环境下 markDirty 一个字节都不写');
+
+      /* ⑥ 账号隔离：本机存档按 TapTap 账号分开存 —— 同一台机换个号不该读到上一个号的进度 */
+      chk(ACC_NS === '', '没有账号标识时 ACC_NS 为空，浏览器端键名与从前一模一样');
+      Store.set('zhiguaitower_tutorial_v1', '1');
+      chk(localStorage.getItem('zhiguaitower_tutorial_v1') === '1', '没有账号时写的还是原键名');
+      chk(accBind('AAA', { openId:'AAA' }), 'accBind 拿到了账号标识');
+      chk(ACC_NS === 'uAAA:', '前缀切到 uAAA:（实际 ' + ACC_NS + '）');
+      chk(localStorage.getItem('uAAA:zhiguaitower_tutorial_v1') === '1'
+          && localStorage.getItem('zhiguaitower_tutorial_v1') === null,
+          '升级后第一次认领：旧的无前缀存档被搬进本账号，原键清掉');
+      Store.set(SAVE_KEY, 'A1');
+      Store.set(RUN_KEY, 'A2');
+      chk(localStorage.getItem('uAAA:' + SAVE_KEY) === 'A1', '账号 A 的写入带上了前缀');
+      chk(accBind('BBB', { openId:'BBB' }), '换到账号 B');
+      chk(Store.get(SAVE_KEY) === null && Store.get(RUN_KEY) === null,
+          '账号 B 读不到 A 的存档（同机换号不串进度）');
+      Store.set(SAVE_KEY, 'B1');
+      chk(accBind('AAA', { openId:'AAA' }) && Store.get(SAVE_KEY) === 'A1'
+          && Store.get(RUN_KEY) === 'A2' && Store.get('zhiguaitower_tutorial_v1') === '1',
+          '换回 A 后 A 的存档与旧存档都还在');
+      chk(/已绑定账号/.test(accDiag()), '诊断串报「已绑定账号」');
+      globalThis.tap = { getUserInfo: function(){ return { openId:'CCC' }; } };
+      chk(accTrySync() === 'CCC' && ACC_NS === 'uCCC:', '同步形态：直接从 getUserInfo 回包里取标识并切前缀');
+      delete globalThis.tap;
+      ACC_ID = ''; ACC_RAW = '';
+      globalThis.tap = { getUserInfo: function(){ return {}; } };
+      chk(accTrySync() === '' && /未取到账号标识/.test(accDiag()), '回包里没有标识时不硬猜，诊断串照实说明未取到');
+      delete globalThis.tap;
     }catch(e){
       R.fails.push('异常: ' + ((e && e.stack) || e));
     }

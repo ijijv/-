@@ -7,10 +7,15 @@ let _storeWarned=false;
 function _storeIsRunKey(k){
   try{ return typeof RUN_SLOTS!=='undefined' && RUN_SLOTS.indexOf(k)>=0; }catch(e){ return false; }
 }
+/* 本机存档按 TapTap 账号隔离：ACC_NS 是账号前缀，由 55_cloud 解析出账号标识后写入。
+   浏览器 / 未接入环境恒为空串，键名与从前一模一样，行为不变 */
+let ACC_NS='';
+function storeKey(k){ return ACC_NS ? (ACC_NS+k) : k; }
+
 const Store = {
-  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  get(k){ try{ return localStorage.getItem(storeKey(k)); }catch(e){ return null; } },
   set(k,v){
-    try{ localStorage.setItem(k,v); return true; }
+    try{ localStorage.setItem(storeKey(k),v); return true; }
     catch(e){
       if(!_storeWarned && _storeIsRunKey(k)){
         _storeWarned=true;
@@ -19,7 +24,7 @@ const Store = {
       return false;
     }
   },
-  del(k){ try{ localStorage.removeItem(k); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(storeKey(k)); }catch(e){} },
   getJSON(k){ const r=Store.get(k); if(r==null) return null; try{ return JSON.parse(r); }catch(e){ return null; } },
   setJSON(k,o){ return Store.set(k, JSON.stringify(o)); }
 };

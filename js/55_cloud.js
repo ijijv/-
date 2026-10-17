@@ -8,6 +8,127 @@ const CLOUD_FILE = 'zhiguaitower_cloud.json';       // 云端存档文件名
 const CLOUD_META_KEY = 'zhiguaitower_cloudmeta_v1'; // 本模块自己的簿记，别塞进那两个存档键
 const CLOUD_MIN_GAP = 60 * 1000;                    // 官方频控，一分钟一次
 
+/* —— TapTap 账号标识：本机存档按账号隔离 ——
+   不取账号标识时进度只按设备存（localStorage），同一台机换号会读到上一个号的进度。
+   加载期先同步试一次 getUserInfo，取不到就退回原样，浏览器端行为完全不变。 */
+const ACC_MARK_KEY = 'zhiguaitower_acct_v1';        // 记本次「认领」的账号前缀，裸键写，不带头缀
+const ACC_ID_FIELDS = ['openId','openid','userId','user_id','uid','unionId','unionid','accountId','account_id','playerId','id'];
+let ACC_ID = '', ACC_RAW = '';
+function accPickId(o){
+  if(!o || typeof o !== 'object') return '';
+  for(let i=0;i<ACC_ID_FIELDS.length;i++){
+    const v = o[ACC_ID_FIELDS[i]];
+    if(v !== undefined && v !== null && String(v) !== '') return String(v);
+  }
+  if(o.user && typeof o.user === 'object') return accPickId(o.user);
+  if(o.data && typeof o.data === 'object') return accPickId(o.data);
+  return '';
+}
+function accRawStr(o){
+  try{ return typeof o === 'string' ? o : JSON.stringify(o); }catch(e){ return '（无法序列化）'; }
+}
+/* 本游戏自己写进 localStorage 的键就这些，逐一点名搬，别去枚举整个 localStorage */
+function accLegacyKeys(){
+  const ks = ['zhiguaitower_settings_v1', 'zhiguaitower_tutorial_v1', CLOUD_META_KEY];
+  try{ if(typeof RUN_SLOTS !== 'undefined') ks.push.apply(ks, RUN_SLOTS); }catch(e){}
+  try{ if(typeof SAVE_KEY !== 'undefined') ks.push(SAVE_KEY); }catch(e){}
+  try{ if(typeof CLEAR_KEY !== 'undefined') ks.push(CLEAR_KEY); }catch(e){}
+  try{ if(typeof SCORE_KEY !== 'undefined') ks.push(SCORE_KEY); }catch(e){}
+  return ks;
+}
+/* 首次改走带前缀的键时，把旧的无前缀存档搬过去，免得老玩家进度看起来「没了」 */
+function accMigrate(){
+  try{
+    const ks = accLegacyKeys();
+    for(let i=0;i<ks.length;i++){
+      const k = ks[i];
+      const v = localStorage.getItem(k);
+      if(v === null) continue;
+      if(localStorage.getItem(ACC_NS + k) !== null) continue;   // 本案已有，别覆盖
+      localStorage.setItem(ACC_NS + k, v);
+      localStorage.removeItem(k);
+    }
+  }catch(e){}
+}
+function accBind(id, raw){
+  if(!id) return false;
+  if(ACC_ID === id) return true;
+  const safe = String(id).replace(/[^0-9A-Za-z_-]/g, '').slice(0, 40);
+  if(!safe) return false;
+  ACC_ID = id;
+  if(raw !== undefined) ACC_RAW = accRawStr(raw);
+  ACC_NS = 'u' + safe + ':';
+  let mark = '';
+  try{ mark = localStorage.getItem(ACC_MARK_KEY) || ''; }catch(e){}
+  /* mark 为空 = 升级后第一次认领：旧的无前缀存档归当前这个号 */
+  if(!mark) accMigrate();
+  try{ localStorage.setItem(ACC_MARK_KEY, ACC_NS); }catch(e){}
+  return true;
+}
+/* 同步形态：直接回用户对象；同步拿不到就不动，交给回调 / 重试 */
+function accTrySync(){
+  try{
+    if(typeof tap === 'undefined' || !tap || typeof tap.getUserInfo !== 'function') return '';
+    const r = tap.getUserInfo();
+    if(r && typeof r === 'object' && typeof r.then !== 'function'){
+      ACC_RAW = accRawStr(r);
+      const id = accPickId(r);
+      if(id) return accBind(id, r) ? id : '';
+    }
+  }catch(e){}
+  return '';
+}
+function accTryAsync(){
+  if(ACC_ID) return;
+  try{
+    if(typeof tap === 'undefined' || !tap || typeof tap.getUserInfo !== 'function') return;
+    let settled = false;
+    const good = o => {
+      if(settled) return; settled = true;
+      ACC_RAW = accRawStr(o);
+      const id = accPickId(o);
+      if(id && accBind(id, o)) accRefresh();
+    };
+    const r = tap.getUserInfo({ callback:{ onSuccess:good, onFailure:function(){} } });
+    if(r && typeof r.then === 'function') r.then(good, function(){});
+    else if(r && typeof r === 'object') good(r);
+  }catch(e){}
+}
+/* 换号后主菜单那颗「续」的可用状态跟着变，在菜单上就重画一次 */
+function accRefresh(){
+  try{
+    const ov = document.getElementById('overlay');
+    if(!(ov && ov.classList && ov.classList.contains('menu-scene'))) return;
+    if(typeof loadSettings === 'function') loadSettings();
+    if(typeof showStartScreen === 'function') showStartScreen();
+  }catch(e){}
+}
+function accBoot(){
+  if(ACC_ID) return true;
+  if(accTrySync()){ accRefresh(); return true; }
+  accTryAsync();
+  return !!ACC_ID;
+}
+function accDiag(){
+  if(ACC_ID){
+    const mask = ACC_ID.length > 6 ? (ACC_ID.slice(0,3) + '***' + ACC_ID.slice(-4)) : ACC_ID;
+    return '已绑定账号 ' + mask + '，本机存档按账号分开存';
+  }
+  if(typeof tap !== 'undefined' && tap && typeof tap.getUserInfo === 'function')
+    return '未取到账号标识 · getUserInfo 原始返回：' + (ACC_RAW || '（空）');
+  return '宿主没给 getUserInfo（浏览器 / 非 TapTap 容器），进度只存本机';
+}
+/* tap 可能晚于脚本注入：加载期试一次，DOMContentLoaded 与几个延迟点再补 */
+try{
+  if(typeof document !== 'undefined' && document.addEventListener)
+    document.addEventListener('DOMContentLoaded', function(){ accBoot(); });
+}catch(e){}
+accBoot();
+try{
+  if(typeof setTimeout === 'function')
+    [600, 1800, 4000].forEach(function(ms){ setTimeout(function(){ accBoot(); }, ms); });
+}catch(e){}
+
 
 function cloudEnv(){
   try{
